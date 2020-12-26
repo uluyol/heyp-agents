@@ -1,0 +1,23 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+cc_library(
+    name = "flow",
+    srcs = ["flow.cc"],
+    hdrs = ["flow.h"],
+)
+
+cc_library(
+    name = "flow-tracker",
+    srcs = ["flow-tracker.cc"],
+    hdrs = ["flow-tracker.h"],
+    deps = [
+        ":flow",
+        "//heyp/alg:demand-predictor",
+        "@boost//:process",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/functional:function_ref",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/synchronization",
+        "@glog",
+    ],
+)

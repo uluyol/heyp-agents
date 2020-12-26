@@ -1,0 +1,24 @@
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+
+package(
+    default_visibility = ["//heyp:__subpackages__"],
+)
+
+cc_library(
+    name = "demand-predictor",
+    srcs = ["demand-predictor.cc"],
+    hdrs = ["demand-predictor.h"],
+    deps = [
+        "@com_google_absl//absl/time",
+        "@com_google_absl//absl/types:span",
+    ],
+)
+
+cc_test(
+    name = "demand-predictor-test",
+    srcs = ["demand-predictor-test.cc"],
+    deps = [
+        ":demand-predictor",
+        "@gtest//:gtest_main",
+    ],
+)
