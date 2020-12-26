@@ -27,6 +27,7 @@ struct FlowTrackerInternal;
 class FlowTracker {
  public:
   struct Config {
+    std::string ss_binary_name = "ss";
     absl::Duration snapshot_period = absl::Seconds(5);
     absl::Duration usage_history_window = absl::Seconds(120);
   };

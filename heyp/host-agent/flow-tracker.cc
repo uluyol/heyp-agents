@@ -14,8 +14,8 @@ namespace bp = boost::process;
 namespace heyp {
 
 struct FlowTrackerInternal {
-  boost::process::child monitor_done_proc;
-  boost::process::ipstream monitor_done_out;
+  bp::child monitor_done_proc;
+  bp::ipstream monitor_done_out;
 };
 
 FlowTracker::~FlowTracker() {
@@ -120,7 +120,7 @@ void FlowTracker::GetSnapshotPeriodically() {
   while (!is_dead_.WaitForNotificationWithTimeout(config_.snapshot_period)) {
     try {
       bp::ipstream out;
-      bp::child c(bp::search_path("ss"), "-i", "-t", "-n", "-H", "-O",
+      bp::child c(bp::search_path(config_.ss_binary_name), "-i", "-t", "-n", "-H", "-O",
                   bp::std_out > out);
 
       absl::Time now = absl::Now();
@@ -156,8 +156,8 @@ absl::StatusOr<std::unique_ptr<FlowTracker>> FlowTracker::Create(
       absl::WrapUnique(new FlowTracker(std::move(demand_predictor), config));
 
   try {
-    bp::child c(bp::search_path("ss"), "-E", "-i", "-t", "-n", "-H", "-O",
-                bp::std_out > tracker->internal_->monitor_done_out);
+    bp::child c(bp::search_path(config.ss_binary_name), "-E", "-i", "-t", "-n",
+                "-H", "-O", bp::std_out > tracker->internal_->monitor_done_out);
     tracker->internal_->monitor_done_proc = std::move(c);
   } catch (const std::system_error &e) {
     return absl::UnknownError(

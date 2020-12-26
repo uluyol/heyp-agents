@@ -1,4 +1,4 @@
-load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
 
 cc_library(
     name = "flow",
@@ -19,5 +19,15 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/synchronization",
         "@glog",
+    ],
+)
+
+cc_test(
+    name = "flow-tracker-test",
+    srcs = ["flow-tracker-test.cc"],
+    deps = [
+        ":flow-tracker",
+        "//heyp/alg:demand-predictor",
+        "@gtest//:gtest_main",
     ],
 )
