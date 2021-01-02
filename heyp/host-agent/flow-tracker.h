@@ -3,12 +3,10 @@
 
 #include <memory>
 #include <thread>
+#include <vector>
 
-#include "absl/base/thread_annotations.h"
-#include "absl/container/flat_hash_map.h"
 #include "absl/functional/function_ref.h"
 #include "absl/status/statusor.h"
-#include "absl/synchronization/notification.h"
 #include "heyp/alg/demand-predictor.h"
 #include "heyp/host-agent/flow.h"
 
@@ -21,8 +19,6 @@ struct FlowState {
   int64_t ewma_usage_bps = 0;
   std::vector<UsageHistoryEntry> usage_history;
 };
-
-struct FlowTrackerInternal;
 
 class FlowTracker {
  public:
@@ -45,19 +41,8 @@ class FlowTracker {
   void MonitorDone();
   void GetSnapshotPeriodically();
 
-  const Config config_;
-  std::unique_ptr<DemandPredictor> demand_predictor_;
-  std::unique_ptr<FlowTrackerInternal> internal_;
-
-  absl::Notification is_dead_;
-  std::thread monitor_done_thread_;
-  std::thread periodic_snapshot_thread_;
-
-  absl::Mutex mu_;
-  uint64_t next_flow_id_ ABSL_GUARDED_BY(mu_);
-  absl::flat_hash_map<Flow, FlowState> active_flows_
-      ABSL_GUARDED_BY(mu_);  // key has zero flow id, value has correct flow id
-  std::vector<FlowState> done_flows_ ABSL_GUARDED_BY(mu_);
+  struct Impl;
+  std::unique_ptr<Impl> impl_;
 };
 
 }  // namespace heyp

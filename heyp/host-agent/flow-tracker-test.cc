@@ -15,5 +15,8 @@ TEST(FlowTrackerTest, BadSSBinary) {
           .ok());
 }
 
+// TODO: Test race: new flow comes and is seen before removal of old flow.
+// In this case, we should avoid having a negative usage bps.
+
 }  // namespace
 }  // namespace heyp
