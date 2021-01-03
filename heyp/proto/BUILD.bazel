@@ -1,0 +1,44 @@
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_proto_library")
+load("@rules_proto//proto:defs.bzl", "proto_library")
+load("@com_github_grpc_grpc//bazel:cc_grpc_library.bzl", "cc_grpc_library")
+
+package(default_visibility = ["//heyp:__subpackages__"])
+
+proto_library(
+    name = "heyp_proto",
+    srcs = ["heyp.proto"],
+    deps = [
+        "@com_google_protobuf//:timestamp_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "heyp_cc_proto",
+    deps = [":heyp_proto"],
+)
+
+cc_grpc_library(
+    name = "heyp_cc_grpc",
+    srcs = [":heyp_proto"],
+    grpc_only = True,
+    deps = [":heyp_cc_proto"],
+)
+
+cc_library(
+    name = "alg",
+    srcs = ["alg.cc"],
+    hdrs = ["alg.h"],
+    deps = [
+        ":heyp_cc_proto",
+        "@com_google_absl//absl/hash",
+    ],
+)
+
+cc_library(
+    name = "constructors",
+    hdrs = ["constructors.h"],
+    deps = [
+        ":heyp_cc_proto",
+        "@com_google_absl//absl/time",
+    ],
+)

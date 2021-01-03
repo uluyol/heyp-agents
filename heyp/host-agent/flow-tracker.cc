@@ -30,69 +30,44 @@ void FlowTracker::ForEachActiveFlow(
 
 namespace {
 
-FlowState CreateFlowState(const Flow &f, uint64_t id) {
-  auto fs = FlowState{.flow = f};
-  fs.flow.unique_id = id;
-  return fs;
-}
-
-void UpdateFlowState(absl::Time now, int64_t usage_bps,
-                     const DemandPredictor &demand_predictor,
-                     absl::Duration time_window, FlowState &fs) {
-  bool is_first_entry = fs.usage_history.empty();
-  fs.usage_history.push_back({now, usage_bps});
-
-  // Garbage collect old entries, but allow some delay.
-  if (now - fs.usage_history.front().time > 2 * time_window) {
-    absl::Time min_time = now - time_window;
-    auto first_to_keep =
-        std::find_if(fs.usage_history.begin(), fs.usage_history.end(),
-                     [min_time](const UsageHistoryEntry &entry) {
-                       return entry.time >= min_time;
-                     });
-    size_t n = std::distance(fs.usage_history.begin(), first_to_keep);
-    std::move(first_to_keep, fs.usage_history.end(), fs.usage_history.begin());
-    fs.usage_history.resize(n);
-  }
-
-  fs.predicted_demand_bps = demand_predictor.FromUsage(now, fs.usage_history);
-
-  if (is_first_entry) {
-    fs.ewma_usage_bps = usage_bps;
-  } else {
-    constexpr double alpha = 0.3;
-    fs.ewma_usage_bps = alpha * (usage_bps) + (1 - alpha) * fs.ewma_usage_bps;
-  }
+FlowState CreateFlowState(const proto::FlowMarker &f, uint64_t id) {
+  proto::FlowMarker flow = f;
+  flow.set_host_unique_id(id);
+  return FlowState(flow);
 }
 
 }  // namespace
 
 void FlowTracker::UpdateFlows(
     absl::Time timestamp,
-    absl::Span<const std::pair<Flow, int64_t>> flow_usage_bps_batch) {
+    absl::Span<const std::pair<proto::FlowMarker, int64_t>>
+        flow_usage_bps_batch) {
   absl::MutexLock lock(&mu_);
   for (const auto &pair : flow_usage_bps_batch) {
-    const Flow &f = pair.first;
+    const proto::FlowMarker &f = pair.first;
     if (!active_flows_.contains(f)) {
-      active_flows_[f] = CreateFlowState(f, ++next_flow_id_);
+      active_flows_.emplace(f, CreateFlowState(f, ++next_flow_id_));
     }
-    UpdateFlowState(timestamp, pair.second, *demand_predictor_,
-                    config_.usage_history_window, active_flows_[f]);
+    active_flows_.at(f).UpdateUsage(timestamp, pair.second,
+                                    config_.usage_history_window,
+                                    demand_predictor_.get());
   }
 }
 
 void FlowTracker::FinalizeFlows(
     absl::Time timestamp,
-    absl::Span<const std::pair<Flow, int64_t>> flow_usage_bps_batch) {
+    absl::Span<const std::pair<proto::FlowMarker, int64_t>>
+        flow_usage_bps_batch) {
   absl::MutexLock lock(&mu_);
   for (const auto &pair : flow_usage_bps_batch) {
-    const Flow &f = pair.first;
+    const proto::FlowMarker &f = pair.first;
     if (!active_flows_.contains(f)) {
-      active_flows_[f] = CreateFlowState(f, ++next_flow_id_);
+      active_flows_.emplace(f, CreateFlowState(f, ++next_flow_id_));
     }
-    UpdateFlowState(timestamp, pair.second, *demand_predictor_,
-                    config_.usage_history_window, active_flows_[f]);
-    done_flows_.push_back(active_flows_[f]);
+    active_flows_.at(f).UpdateUsage(timestamp, pair.second,
+                                    config_.usage_history_window,
+                                    demand_predictor_.get());
+    done_flows_.push_back(active_flows_.at(f));
     active_flows_.erase(f);
   }
 }
@@ -123,7 +98,7 @@ SSFlowStateReporter::~SSFlowStateReporter() {
 
 namespace {
 
-absl::Status ParseLine(absl::string_view line, Flow &parsed,
+absl::Status ParseLine(absl::string_view line, proto::FlowMarker &parsed,
                        int64_t &usage_bps) {
   LOG(FATAL) << "not implemented";
 }
@@ -136,7 +111,7 @@ void SSFlowStateReporter::MonitorDone() {
   while (impl_->monitor_done_proc.running() &&
          std::getline(impl_->monitor_done_out, line) && !line.empty()) {
     absl::Time now = absl::Now();
-    Flow f;
+    proto::FlowMarker f;
     int64_t usage_bps = 0;
     auto status = ParseLine(line, f, usage_bps);
     if (!status.ok()) {
@@ -160,9 +135,9 @@ void SSFlowStateReporter::GetSnapshotPeriodically() {
 
       absl::Time now = absl::Now();
       std::string line;
-      std::vector<std::pair<Flow, int64_t>> flow_usage_bps;
+      std::vector<std::pair<proto::FlowMarker, int64_t>> flow_usage_bps;
       while (c.running() && std::getline(out, line) && !line.empty()) {
-        Flow f;
+        proto::FlowMarker f;
         int64_t usage_bps = 0;
         auto status = ParseLine(line, f, usage_bps);
         if (!status.ok()) {

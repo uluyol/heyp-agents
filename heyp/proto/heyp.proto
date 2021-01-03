@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package heyp.proto;
+
+import "google/protobuf/timestamp.proto";
+
+enum Protocol {
+    TCP = 0;
+    UDP = 1;
+}
+
+message FlowMarker {
+    string src_dc = 1;
+    string dst_dc = 2;
+    string src_addr = 3;
+    string dst_addr = 4;
+    Protocol protocol = 5;
+    int32 src_port = 6;
+    int32 dst_port = 7;
+    uint64 host_unique_id = 8; // unique flow id, per host
+}
+
+message FlowGroupUsage {
+    FlowMarker marker = 1;
+    int64 cum_usage_bytes = 2;
+}
+
+message HostInfo {
+    string addr = 1;
+    google.protobuf.Timestamp timestamp = 3;
+    repeated FlowGroupUsage fg_usages = 2;
+}
+
+message FlowGroupAlloc {
+    FlowMarker marker = 1;
+    int64 hipri_rate_limit_bps = 2;
+    int64 lopri_rate_limit_bps = 3;
+}
+
+message HostAlloc {
+    repeated FlowGroupAlloc fg_allocs = 1;
+}
+
+service ClusterAgent {
+    rpc RegisterHost(stream HostInfo) returns (stream HostAlloc) {}
+}

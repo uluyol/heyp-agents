@@ -10,17 +10,10 @@
 #include "absl/status/statusor.h"
 #include "absl/types/span.h"
 #include "heyp/alg/demand-predictor.h"
-#include "heyp/host-agent/flow.h"
+#include "heyp/flows/state.h"
+#include "heyp/proto/alg.h"
 
 namespace heyp {
-
-struct FlowState {
-  Flow flow;
-
-  int64_t predicted_demand_bps = 0;
-  int64_t ewma_usage_bps = 0;
-  std::vector<UsageHistoryEntry> usage_history;
-};
 
 class FlowTracker {
  public:
@@ -32,13 +25,19 @@ class FlowTracker {
 
   void ForEachActiveFlow(absl::FunctionRef<void(const FlowState&)> func) const;
 
-  void UpdateFlows(
-      absl::Time timestamp,
-      absl::Span<const std::pair<Flow, int64_t>> flow_usage_bps_batch);
+  // Updates the usage of the specified Flows.
+  // Each Flow should have a zero (i.e. unassigned unique_flow_id) because the
+  // FlowTracker will assign one.
+  void UpdateFlows(absl::Time timestamp,
+                   absl::Span<const std::pair<proto::FlowMarker, int64_t>>
+                       flow_usage_bytes_batch);
 
-  void FinalizeFlows(
-      absl::Time timestamp,
-      absl::Span<const std::pair<Flow, int64_t>> flow_usage_bps_batch);
+  // Updates the usage of the specified Flows and marks them as complete.
+  // Each Flow should have a zero (i.e. unassigned unique_flow_id) because the
+  // FlowTracker will assign one.
+  void FinalizeFlows(absl::Time timestamp,
+                     absl::Span<const std::pair<proto::FlowMarker, int64_t>>
+                         flow_usage_bytes_batch);
 
  private:
   const Config config_;
@@ -46,8 +45,10 @@ class FlowTracker {
 
   mutable absl::Mutex mu_;
   uint64_t next_flow_id_ ABSL_GUARDED_BY(mu_);
-  absl::flat_hash_map<Flow, FlowState> active_flows_
-      ABSL_GUARDED_BY(mu_);  // key has zero flow id, value has correct flow id
+  absl::flat_hash_map<proto::FlowMarker, FlowState, HashHostFlowNoId,
+                      EqHostFlowNoId>
+      active_flows_ ABSL_GUARDED_BY(
+          mu_);  // key has zero flow id, value has correct flow id
   std::vector<FlowState> done_flows_ ABSL_GUARDED_BY(mu_);
 };
 

@@ -13,6 +13,8 @@ cc_library(
     deps = [
         ":flow",
         "//heyp/alg:demand-predictor",
+        "//heyp/flows:state",
+        "//heyp/proto:alg",
         "@boost//:process",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/functional:function_ref",
@@ -28,6 +30,7 @@ cc_test(
     deps = [
         ":flow-tracker",
         "//heyp/alg:demand-predictor",
+        "//heyp/proto:constructors",
         "@gtest//:gtest_main",
     ],
 )
