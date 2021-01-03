@@ -2,8 +2,6 @@
 
 #include <algorithm>
 
-#include "absl/base/thread_annotations.h"
-#include "absl/container/flat_hash_map.h"
 #include "absl/status/status.h"
 #include "absl/synchronization/notification.h"
 #include "boost/process/child.hpp"
@@ -16,57 +14,21 @@ namespace bp = boost::process;
 
 namespace heyp {
 
-struct FlowTracker::Impl {
-  const Config config;
-  const std::unique_ptr<DemandPredictor> demand_predictor;
-
-  bp::child monitor_done_proc;
-  bp::ipstream monitor_done_out;
-
-  absl::Notification is_dead;
-  std::thread monitor_done_thread;
-  std::thread periodic_snapshot_thread;
-
-  absl::Mutex mu;
-  uint64_t next_flow_id ABSL_GUARDED_BY(mu);
-  absl::flat_hash_map<Flow, FlowState> active_flows
-      ABSL_GUARDED_BY(mu);  // key has zero flow id, value has correct flow id
-  std::vector<FlowState> done_flows ABSL_GUARDED_BY(mu);
-};
-
-FlowTracker::~FlowTracker() {
-  impl_->is_dead.Notify();
-  impl_->monitor_done_proc.terminate();
-
-  if (impl_->monitor_done_thread.joinable()) {
-    impl_->monitor_done_thread.join();
-  }
-  if (impl_->periodic_snapshot_thread.joinable()) {
-    impl_->periodic_snapshot_thread.join();
-  }
-}
+FlowTracker::FlowTracker(std::unique_ptr<DemandPredictor> demand_predictor,
+                         Config config)
+    : config_(config),
+      demand_predictor_(std::move(demand_predictor)),
+      next_flow_id_(0) {}
 
 void FlowTracker::ForEachActiveFlow(
-    absl::FunctionRef<void(const FlowState &)> func) {
-  absl::MutexLock l(&impl_->mu);
-  for (const auto &flow_state_pair : impl_->active_flows) {
+    absl::FunctionRef<void(const FlowState &)> func) const {
+  absl::MutexLock l(&mu_);
+  for (const auto &flow_state_pair : active_flows_) {
     func(flow_state_pair.second);
   }
 }
 
-FlowTracker::FlowTracker(std::unique_ptr<DemandPredictor> demand_predictor,
-                         Config config)
-    : impl_(absl::WrapUnique(new Impl{
-          .config = config,
-          .demand_predictor = std::move(demand_predictor),
-          .next_flow_id = 0,
-      })) {}
-
 namespace {
-absl::Status ParseLine(absl::string_view line, Flow &parsed,
-                       int64_t &usage_bps) {
-  LOG(FATAL) << "not implemented";
-}
 
 FlowState CreateFlowState(const Flow &f, uint64_t id) {
   auto fs = FlowState{.flow = f};
@@ -105,7 +67,70 @@ void UpdateFlowState(absl::Time now, int64_t usage_bps,
 
 }  // namespace
 
-void FlowTracker::MonitorDone() {
+void FlowTracker::UpdateFlows(
+    absl::Time timestamp,
+    absl::Span<const std::pair<Flow, int64_t>> flow_usage_bps_batch) {
+  absl::MutexLock lock(&mu_);
+  for (const auto &pair : flow_usage_bps_batch) {
+    const Flow &f = pair.first;
+    if (!active_flows_.contains(f)) {
+      active_flows_[f] = CreateFlowState(f, ++next_flow_id_);
+    }
+    UpdateFlowState(timestamp, pair.second, *demand_predictor_,
+                    config_.usage_history_window, active_flows_[f]);
+  }
+}
+
+void FlowTracker::FinalizeFlows(
+    absl::Time timestamp,
+    absl::Span<const std::pair<Flow, int64_t>> flow_usage_bps_batch) {
+  absl::MutexLock lock(&mu_);
+  for (const auto &pair : flow_usage_bps_batch) {
+    const Flow &f = pair.first;
+    if (!active_flows_.contains(f)) {
+      active_flows_[f] = CreateFlowState(f, ++next_flow_id_);
+    }
+    UpdateFlowState(timestamp, pair.second, *demand_predictor_,
+                    config_.usage_history_window, active_flows_[f]);
+    done_flows_.push_back(active_flows_[f]);
+    active_flows_.erase(f);
+  }
+}
+
+struct SSFlowStateReporter::Impl {
+  const Config config;
+  FlowTracker *flow_tracker;
+
+  bp::child monitor_done_proc;
+  bp::ipstream monitor_done_out;
+
+  absl::Notification is_dead;
+  std::thread monitor_done_thread;
+  std::thread periodic_snapshot_thread;
+};
+
+SSFlowStateReporter::~SSFlowStateReporter() {
+  impl_->is_dead.Notify();
+  impl_->monitor_done_proc.terminate();
+
+  if (impl_->monitor_done_thread.joinable()) {
+    impl_->monitor_done_thread.join();
+  }
+  if (impl_->periodic_snapshot_thread.joinable()) {
+    impl_->periodic_snapshot_thread.join();
+  }
+}
+
+namespace {
+
+absl::Status ParseLine(absl::string_view line, Flow &parsed,
+                       int64_t &usage_bps) {
+  LOG(FATAL) << "not implemented";
+}
+
+}  // namespace
+
+void SSFlowStateReporter::MonitorDone() {
   std::string line;
 
   while (impl_->monitor_done_proc.running() &&
@@ -119,20 +144,13 @@ void FlowTracker::MonitorDone() {
       continue;
     }
 
-    absl::MutexLock lock(&impl_->mu);
-    if (!impl_->active_flows.contains(f)) {
-      impl_->active_flows[f] = CreateFlowState(f, ++impl_->next_flow_id);
-    }
-    UpdateFlowState(now, usage_bps, *impl_->demand_predictor,
-                    impl_->config.usage_history_window, impl_->active_flows[f]);
-    impl_->done_flows.push_back(impl_->active_flows[f]);
-    impl_->active_flows.erase(f);
+    impl_->flow_tracker->FinalizeFlows(now, {{f, usage_bps}});
   }
 
   CHECK(impl_->is_dead.WaitForNotificationWithTimeout(absl::ZeroDuration()));
 }
 
-void FlowTracker::GetSnapshotPeriodically() {
+void SSFlowStateReporter::GetSnapshotPeriodically() {
   while (!impl_->is_dead.WaitForNotificationWithTimeout(
       impl_->config.snapshot_period)) {
     try {
@@ -142,7 +160,7 @@ void FlowTracker::GetSnapshotPeriodically() {
 
       absl::Time now = absl::Now();
       std::string line;
-      absl::MutexLock lock(&impl_->mu);
+      std::vector<std::pair<Flow, int64_t>> flow_usage_bps;
       while (c.running() && std::getline(out, line) && !line.empty()) {
         Flow f;
         int64_t usage_bps = 0;
@@ -151,14 +169,9 @@ void FlowTracker::GetSnapshotPeriodically() {
           LOG(ERROR) << "failed to parse snapshot line: " << status;
           continue;
         }
-
-        if (!impl_->active_flows.contains(f)) {
-          impl_->active_flows[f] = CreateFlowState(f, ++impl_->next_flow_id);
-        }
-        UpdateFlowState(now, usage_bps, *impl_->demand_predictor,
-                        impl_->config.usage_history_window,
-                        impl_->active_flows[f]);
+        flow_usage_bps.push_back({f, usage_bps});
       }
+      impl_->flow_tracker->UpdateFlows(now, flow_usage_bps);
       c.wait();
     } catch (const std::system_error &e) {
       LOG(ERROR) << "failed to get snapshot: "
@@ -168,10 +181,17 @@ void FlowTracker::GetSnapshotPeriodically() {
   }
 }
 
-absl::StatusOr<std::unique_ptr<FlowTracker>> FlowTracker::Create(
-    std::unique_ptr<DemandPredictor> demand_predictor, Config config) {
+SSFlowStateReporter::SSFlowStateReporter(Config config,
+                                         FlowTracker *flow_tracker)
+    : impl_(absl::WrapUnique(new Impl{
+          .config = config,
+          .flow_tracker = flow_tracker,
+      })) {}
+
+absl::StatusOr<std::unique_ptr<SSFlowStateReporter>>
+SSFlowStateReporter::Create(Config config, FlowTracker *flow_tracker) {
   auto tracker =
-      absl::WrapUnique(new FlowTracker(std::move(demand_predictor), config));
+      absl::WrapUnique(new SSFlowStateReporter(config, flow_tracker));
 
   try {
     bp::child c(bp::search_path(config.ss_binary_name), "-E", "-i", "-t", "-n",
@@ -183,9 +203,9 @@ absl::StatusOr<std::unique_ptr<FlowTracker>> FlowTracker::Create(
   }
 
   tracker->impl_->monitor_done_thread =
-      std::thread(&FlowTracker::MonitorDone, tracker.get());
+      std::thread(&SSFlowStateReporter::MonitorDone, tracker.get());
   tracker->impl_->periodic_snapshot_thread =
-      std::thread(&FlowTracker::GetSnapshotPeriodically, tracker.get());
+      std::thread(&SSFlowStateReporter::GetSnapshotPeriodically, tracker.get());
 
   return tracker;
 }
