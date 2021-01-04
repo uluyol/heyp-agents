@@ -1,4 +1,4 @@
-load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
 
 package(default_visibility = ["//heyp:__subpackages__"])
 
@@ -12,5 +12,14 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
         "@glog",
+    ],
+)
+
+cc_test(
+    name = "state-test",
+    srcs = ["state-test.cc"],
+    deps = [
+        ":state",
+        "@gtest//:gtest_main",
     ],
 )

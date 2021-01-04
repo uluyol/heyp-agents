@@ -58,14 +58,18 @@ void FlowState::UpdateUsage(absl::Time timestamp, int64_t cum_usage_bytes,
   // Garbage collect old entries, but allow some delay.
   if (timestamp - usage_history_.front().time > 2 * usage_history_window) {
     absl::Time min_time = timestamp - usage_history_window;
-    auto first_to_keep =
-        std::find_if(usage_history_.begin(), usage_history_.end(),
-                     [min_time](const UsageHistoryEntry& entry) {
-                       return entry.time >= min_time;
-                     });
-    size_t n = std::distance(usage_history_.begin(), first_to_keep);
-    std::move(first_to_keep, usage_history_.end(), usage_history_.begin());
-    usage_history_.resize(n);
+    size_t keep_from = usage_history_.size();
+    for (size_t i = 0; i < usage_history_.size(); i++) {
+      if (usage_history_[i].time >= min_time) {
+        keep_from = i;
+        break;
+      }
+    }
+    ssize_t num_keep = usage_history_.size() - keep_from;
+    for (ssize_t i = 0; i < num_keep; i++) {
+      usage_history_[i] = usage_history_[keep_from + i];
+    }
+    usage_history_.resize(num_keep);
   }
 
   if (demand_predictor == nullptr) {
