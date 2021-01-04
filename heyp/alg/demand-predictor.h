@@ -2,6 +2,7 @@
 #define HEYP_ALG_DEMAND_PREDICTOR_H_
 
 #include <cstdint>
+#include <ostream>
 
 #include "absl/time/time.h"
 #include "absl/types/span.h"
@@ -14,6 +15,8 @@ struct UsageHistoryEntry {
 };
 
 bool operator==(const UsageHistoryEntry& lhs, const UsageHistoryEntry& rhs);
+
+std::ostream& operator<<(std::ostream& os, const UsageHistoryEntry& e);
 
 class DemandPredictor {
  public:

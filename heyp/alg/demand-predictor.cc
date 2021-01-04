@@ -8,6 +8,10 @@ bool operator==(const UsageHistoryEntry& lhs, const UsageHistoryEntry& rhs) {
   return (lhs.time == rhs.time) && (lhs.bps == rhs.bps);
 }
 
+std::ostream& operator<<(std::ostream& os, const UsageHistoryEntry& e) {
+  return os << "(" << e.time << ", " << e.bps << ")";
+}
+
 BweDemandPredictor::BweDemandPredictor(absl::Duration time_window,
                                        double usage_multiplier,
                                        int64_t min_demand_bps)
