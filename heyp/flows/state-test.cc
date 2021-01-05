@@ -17,6 +17,18 @@ bool HistoryIsSorted(absl::Span<const UsageHistoryEntry> hist) {
       });
 }
 
+MATCHER_P(HasSuffixElements, suffix, "") {
+  if (arg.size() < suffix.size()) {
+    return false;
+  }
+  for (size_t i = 0; i < suffix.size(); i++) {
+    if (!(arg[arg.size() - 1 - i] == suffix[suffix.size() - 1 - i])) {
+      return false;
+    }
+  }
+  return true;
+}
+
 class MockDemandPredictor : public DemandPredictor {
  public:
   MOCK_METHOD(int64_t, FromUsage,
@@ -43,7 +55,7 @@ TEST(FlowStateTest, GarbageCollectsOldUsage) {
 }
 
 TEST(FlowStateTest, HistoryAndDemandTracksIncreases) {
-  absl::Time now = absl::Now();
+  const absl::Time now = absl::Now();
 
   FlowState state(ProtoFlowMarker({
       .src_port = 1234,
@@ -72,6 +84,58 @@ TEST(FlowStateTest, HistoryAndDemandTracksIncreases) {
       last_usage_bps = state.ewma_usage_bps();
     }
   }
+}
+
+TEST(FlowStateTest, CheckHistoryIsExpected) {
+  const absl::Time now = absl::UnixEpoch();
+
+  auto time = [now](int64_t sec) -> absl::Time {
+    return now + absl::Seconds(sec);
+  };
+
+  FlowState state({});
+  MockDemandPredictor predictor;
+
+  {
+    testing::InSequence seq;
+    EXPECT_CALL(predictor,
+                FromUsage(testing::Eq(time(1)),
+                          HasSuffixElements(std::vector<UsageHistoryEntry>{
+                              UsageHistoryEntry{time(1), 8000},
+                          })));
+    EXPECT_CALL(predictor,
+                FromUsage(testing::Eq(time(2)),
+                          HasSuffixElements(std::vector<UsageHistoryEntry>{
+                              UsageHistoryEntry{time(1), 8000},
+                              UsageHistoryEntry{time(2), 10400},
+                          })));
+    EXPECT_CALL(predictor,
+                FromUsage(testing::Eq(time(3)),
+                          HasSuffixElements(std::vector<UsageHistoryEntry>{
+                              UsageHistoryEntry{time(1), 8000},
+                              UsageHistoryEntry{time(2), 10400},
+                              UsageHistoryEntry{time(3), 12800},
+                          })));
+    EXPECT_CALL(predictor,
+                FromUsage(testing::Eq(time(4)),
+                          HasSuffixElements(std::vector<UsageHistoryEntry>{
+                              UsageHistoryEntry{time(2), 10400},
+                              UsageHistoryEntry{time(3), 12800},
+                              UsageHistoryEntry{time(4), 15200},
+                          })));
+  }
+
+  const int64_t cum_usage_bytes = absl::Uniform(absl::BitGen(), 0, 10'000'000);
+
+  state.UpdateUsage(time(0), cum_usage_bytes, absl::Seconds(2), &predictor);
+  state.UpdateUsage(time(1), cum_usage_bytes + 1000, absl::Seconds(2),
+                    &predictor);
+  state.UpdateUsage(time(2), cum_usage_bytes + 3000, absl::Seconds(2),
+                    &predictor);
+  state.UpdateUsage(time(3), cum_usage_bytes + 5300, absl::Seconds(2),
+                    &predictor);
+  state.UpdateUsage(time(4), cum_usage_bytes + 7900, absl::Seconds(2),
+                    &predictor);
 }
 
 }  // namespace
