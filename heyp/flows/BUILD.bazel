@@ -20,6 +20,8 @@ cc_test(
     srcs = ["state-test.cc"],
     deps = [
         ":state",
+        "//heyp/proto:constructors",
+        "@com_google_absl//absl/random",
         "@gtest//:gtest_main",
     ],
 )

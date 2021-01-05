@@ -53,6 +53,8 @@ void FlowState::UpdateUsage(absl::Time timestamp, int64_t cum_usage_bytes,
         alpha * (measured_usage_bps) + (1 - alpha) * ewma_usage_bps_;
   }
 
+  updated_time_ = timestamp;
+  cum_usage_bytes_ = cum_usage_bytes;
   usage_history_.push_back({timestamp, ewma_usage_bps_});
 
   // Garbage collect old entries, but allow some delay.
