@@ -25,6 +25,8 @@ class FlowTracker {
 
   void ForEachActiveFlow(absl::FunctionRef<void(const FlowState&)> func) const;
 
+  void ForEachFlow(absl::FunctionRef<void(const FlowState&)> func) const;
+
   // Updates the usage of the specified Flows.
   // Each Flow should have a zero (i.e. unassigned unique_flow_id) because the
   // FlowTracker will assign one.

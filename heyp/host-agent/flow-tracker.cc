@@ -28,6 +28,17 @@ void FlowTracker::ForEachActiveFlow(
   }
 }
 
+void FlowTracker::ForEachFlow(
+    absl::FunctionRef<void(const FlowState &)> func) const {
+  absl::MutexLock l(&mu_);
+  for (const auto &flow_state_pair : active_flows_) {
+    func(flow_state_pair.second);
+  }
+  for (const FlowState &state : done_flows_) {
+    func(state);
+  }
+}
+
 namespace {
 
 FlowState CreateFlowState(const proto::FlowMarker &f, uint64_t id) {
