@@ -41,16 +41,26 @@ FlowState CreateFlowState(const proto::FlowMarker &f, uint64_t id) {
 void FlowTracker::UpdateFlows(
     absl::Time timestamp,
     absl::Span<const std::pair<proto::FlowMarker, int64_t>>
-        flow_usage_bps_batch) {
+        flow_usage_bytes_batch) {
   absl::MutexLock lock(&mu_);
-  for (const auto &pair : flow_usage_bps_batch) {
-    const proto::FlowMarker &f = pair.first;
+  for (size_t i = 0; i < flow_usage_bytes_batch.size();) {
+    const proto::FlowMarker &f = flow_usage_bytes_batch[i].first;
+    const int64_t cum_usage_bytes = flow_usage_bytes_batch[i].second;
     if (!active_flows_.contains(f)) {
       active_flows_.emplace(f, CreateFlowState(f, ++next_flow_id_));
     }
-    active_flows_.at(f).UpdateUsage(timestamp, pair.second,
-                                    config_.usage_history_window,
-                                    demand_predictor_.get());
+    FlowState &state = active_flows_.at(f);
+    if (state.cum_usage_bytes() > cum_usage_bytes) {
+      // Got a race, new usage lower than old usage, so this must be a new flow
+      done_flows_.push_back(state);
+      active_flows_.erase(f);
+      // Rerun on this flow so we add a new state
+    } else {
+      active_flows_.at(f).UpdateUsage(timestamp, cum_usage_bytes,
+                                      config_.usage_history_window,
+                                      demand_predictor_.get());
+      ++i;
+    }
   }
 }
 
