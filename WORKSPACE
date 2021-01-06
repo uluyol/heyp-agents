@@ -42,3 +42,19 @@ http_archive(
 load("@com_github_nelhage_rules_boost//:boost/boost.bzl", "boost_deps")
 
 boost_deps()
+
+http_archive(
+    name = "com_github_grpc_grpc",
+    strip_prefix = "grpc-893466127810d97d8f9ce8f2b312423a11912b48",
+    urls = [
+        "https://github.com/grpc/grpc/archive/893466127810d97d8f9ce8f2b312423a11912b48.tar.gz",
+    ],
+)
+
+load("@com_github_grpc_grpc//bazel:grpc_deps.bzl", "grpc_deps")
+
+grpc_deps()
+
+load("@com_github_grpc_grpc//bazel:grpc_extra_deps.bzl", "grpc_extra_deps")
+
+grpc_extra_deps()
