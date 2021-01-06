@@ -1,12 +1,6 @@
 load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
 
 cc_library(
-    name = "flow",
-    srcs = ["flow.cc"],
-    hdrs = ["flow.h"],
-)
-
-cc_library(
     name = "flow-tracker",
     srcs = ["flow-tracker.cc"],
     hdrs = ["flow-tracker.h"],
