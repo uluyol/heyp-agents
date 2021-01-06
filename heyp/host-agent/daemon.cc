@@ -1,4 +1,3 @@
-
 #include "heyp/host-agent/daemon.h"
 
 #include "glog/logging.h"
