@@ -11,7 +11,6 @@ cc_library(
     srcs = ["flow-tracker.cc"],
     hdrs = ["flow-tracker.h"],
     deps = [
-        ":flow",
         "//heyp/alg:demand-predictor",
         "//heyp/flows:state",
         "//heyp/proto:alg",
@@ -20,6 +19,35 @@ cc_library(
         "@com_google_absl//absl/functional:function_ref",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/synchronization",
+        "@glog",
+    ],
+)
+
+cc_library(
+    name = "enforcer",
+    srcs = ["enforcer.cc"],
+    hdrs = ["enforcer.h"],
+    deps = [
+        ":flow-tracker",
+        "//heyp/proto:heyp_cc_proto",
+        "@com_google_absl//absl/types:span",
+        "@glog",
+    ],
+)
+
+cc_library(
+    name = "daemon",
+    srcs = ["daemon.cc"],
+    hdrs = ["daemon.h"],
+    deps = [
+        ":enforcer",
+        ":flow-tracker",
+        "//heyp/proto:heyp_cc_grpc",
+        "//heyp/proto:heyp_cc_proto",
+        "@com_github_grpc_grpc//:grpc++",
+        "@com_google_absl//absl/synchronization",
+        "@com_google_absl//absl/time",
+        "@com_google_absl//absl/types:span",
         "@glog",
     ],
 )
