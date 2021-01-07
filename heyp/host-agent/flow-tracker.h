@@ -67,6 +67,8 @@ class FlowTracker : public FlowStateProvider {
   std::vector<FlowState> done_flows_ ABSL_GUARDED_BY(mu_);
 };
 
+// TODO: collect usage bps in addition to cum usage to reduce measurement
+// delays.
 class SSFlowStateReporter {
  public:
   struct Config {
