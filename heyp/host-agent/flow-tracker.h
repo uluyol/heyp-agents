@@ -15,7 +15,18 @@
 
 namespace heyp {
 
-class FlowTracker {
+class FlowStateProvider {
+ public:
+  ~FlowStateProvider() = default;
+
+  virtual void ForEachActiveFlow(
+      absl::FunctionRef<void(const FlowState&)> func) const = 0;
+
+  virtual void ForEachFlow(
+      absl::FunctionRef<void(const FlowState&)> func) const = 0;
+};
+
+class FlowTracker : public FlowStateProvider {
  public:
   struct Config {
     absl::Duration usage_history_window = absl::Seconds(120);
@@ -23,9 +34,11 @@ class FlowTracker {
 
   FlowTracker(std::unique_ptr<DemandPredictor> demand_predictor, Config config);
 
-  void ForEachActiveFlow(absl::FunctionRef<void(const FlowState&)> func) const;
+  void ForEachActiveFlow(
+      absl::FunctionRef<void(const FlowState&)> func) const override;
 
-  void ForEachFlow(absl::FunctionRef<void(const FlowState&)> func) const;
+  void ForEachFlow(
+      absl::FunctionRef<void(const FlowState&)> func) const override;
 
   // Updates the usage of the specified Flows.
   // Each Flow should have a zero (i.e. unassigned unique_flow_id) because the

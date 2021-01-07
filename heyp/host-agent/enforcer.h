@@ -7,10 +7,18 @@
 
 namespace heyp {
 
-class HostEnforcer {
+class HostEnforcerInterface {
+ public:
+  ~HostEnforcerInterface() = default;
+
+  virtual void EnforceAllocs(const FlowTracker& flow_tracker,
+                             absl::Span<proto::FlowAlloc> flow_allocs) = 0;
+};
+
+class HostEnforcer : public HostEnforcerInterface {
  public:
   void EnforceAllocs(const FlowTracker& flow_tracker,
-                     absl::Span<proto::FlowAlloc> flow_allocs);
+                     absl::Span<proto::FlowAlloc> flow_allocs) override;
 };
 
 }  // namespace heyp

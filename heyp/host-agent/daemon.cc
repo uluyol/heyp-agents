@@ -4,19 +4,18 @@
 
 namespace heyp {
 
-HostDaemon::HostDaemon(std::unique_ptr<FlowTracker> flow_tracker,
-                       std::unique_ptr<HostEnforcer> enforcer,
-                       const std::shared_ptr<grpc::Channel>& channel,
-                       Config config)
+HostDaemon::HostDaemon(const std::shared_ptr<grpc::Channel>& channel,
+                       Config config, FlowStateProvider* flow_state_provider,
+                       HostEnforcerInterface* enforcer)
     : config_(config),
-      flow_tracker_(std::move(flow_tracker)),
-      enforcer_(std::move(enforcer)),
+      flow_state_provider_(flow_state_provider),
+      enforcer_(enforcer),
       stub_(proto::ClusterAgent::NewStub(channel)) {}
 
 namespace {
 
 void SendInfo(
-    FlowTracker* flow_tracker, absl::Notification* should_exit,
+    FlowStateProvider* flow_state_provider, absl::Notification* should_exit,
     grpc::ClientReaderWriter<proto::HostInfo, proto::HostAlloc>* io_stream) {
   // TODO loop
   proto::HostInfo info;
@@ -24,7 +23,7 @@ void SendInfo(
 }
 
 void EnforceAlloc(
-    HostEnforcer* enforcer, absl::Notification* should_exit,
+    HostEnforcerInterface* enforcer, absl::Notification* should_exit,
     grpc::ClientReaderWriter<proto::HostInfo, proto::HostAlloc>* io_stream) {
   proto::HostAlloc alloc;
   io_stream->Read(&alloc);
@@ -37,11 +36,11 @@ void HostDaemon::Run(absl::Notification* should_exit) {
 
   io_stream_ = stub_->RegisterHost(&context_);
 
-  info_thread_ =
-      std::thread(SendInfo, flow_tracker_.get(), should_exit, io_stream_.get());
+  info_thread_ = std::thread(SendInfo, flow_state_provider_, should_exit,
+                             io_stream_.get());
 
   enforcer_thread_ =
-      std::thread(EnforceAlloc, enforcer_.get(), should_exit, io_stream_.get());
+      std::thread(EnforceAlloc, enforcer_, should_exit, io_stream_.get());
 }
 
 HostDaemon::~HostDaemon() {

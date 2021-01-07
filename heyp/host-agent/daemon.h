@@ -19,9 +19,9 @@ class HostDaemon {
     absl::Duration inform_period = absl::Seconds(2);
   };
 
-  HostDaemon(std::unique_ptr<FlowTracker> flow_tracker,
-             std::unique_ptr<HostEnforcer> enforcer,
-             const std::shared_ptr<grpc::Channel>& channel, Config config);
+  HostDaemon(const std::shared_ptr<grpc::Channel>& channel, Config config,
+             FlowStateProvider* flow_state_provider,
+             HostEnforcerInterface* enforcer);
 
   ~HostDaemon();
 
@@ -29,8 +29,8 @@ class HostDaemon {
 
  private:
   const Config config_;
-  std::unique_ptr<FlowTracker> flow_tracker_;
-  std::unique_ptr<HostEnforcer> enforcer_;
+  FlowStateProvider* flow_state_provider_;
+  HostEnforcerInterface* enforcer_;
   std::unique_ptr<proto::ClusterAgent::Stub> stub_;
 
   grpc::ClientContext context_;
