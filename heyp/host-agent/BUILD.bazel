@@ -36,6 +36,7 @@ cc_library(
     deps = [
         ":enforcer",
         ":flow-tracker",
+        "//heyp/proto:constructors",
         "//heyp/proto:heyp_cc_grpc",
         "//heyp/proto:heyp_cc_proto",
         "@com_github_grpc_grpc//:grpc++",
