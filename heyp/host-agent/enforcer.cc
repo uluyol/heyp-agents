@@ -4,8 +4,8 @@
 
 namespace heyp {
 
-void HostEnforcer::EnforceAllocs(const FlowTracker& flow_tracker,
-                                 absl::Span<proto::FlowAlloc> flow_allocs) {
+void HostEnforcer::EnforceAllocs(const FlowStateProvider& flow_state_provider,
+                                 const proto::HostAlloc& host_alloc) {
   LOG(INFO) << "TODO: implement alloc enforcement";
 }
 
