@@ -98,6 +98,11 @@ class MockFlowStateProvider : public FlowStateProvider {
               (const override));
 };
 
+class MockFlowStateReporter : public FlowStateReporter {
+ public:
+  MOCK_METHOD(absl::Status, ReportState, (), (override));
+};
+
 class MockHostEnforcer : public HostEnforcerInterface {
  public:
   MOCK_METHOD(void, EnforceAllocs,
@@ -109,13 +114,15 @@ class MockHostEnforcer : public HostEnforcerInterface {
 TEST(HostDaemonTest, CreateAndTeardownNoRun) {
   InProcessTestServer server({});
   MockFlowStateProvider flow_state_provider;
+  MockFlowStateReporter flow_state_reporter;
   MockHostEnforcer enforcer;
   EXPECT_CALL(flow_state_provider, ForEachActiveFlow(testing::_)).Times(0);
+  EXPECT_CALL(flow_state_reporter, ReportState()).Times(0);
   EXPECT_CALL(enforcer, EnforceAllocs(testing::_, testing::_)).Times(0);
   {
     HostDaemon daemon(server.GetChannel(),
                       {.inform_period = absl::Milliseconds(100)},
-                      &flow_state_provider, &enforcer);
+                      &flow_state_provider, &flow_state_reporter, &enforcer);
   }
   server.Teardown();
 }
@@ -123,15 +130,17 @@ TEST(HostDaemonTest, CreateAndTeardownNoRun) {
 TEST(HostDaemonTest, CreateAndTeardownNoActions) {
   InProcessTestServer server({});
   MockFlowStateProvider flow_state_provider;
+  MockFlowStateReporter flow_state_reporter;
   MockHostEnforcer enforcer;
   EXPECT_CALL(flow_state_provider, ForEachActiveFlow(testing::_))
       .Times(testing::AtLeast(0));
+  EXPECT_CALL(flow_state_reporter, ReportState()).Times(testing::AtLeast(0));
   EXPECT_CALL(enforcer, EnforceAllocs(testing::_, testing::_))
       .Times(testing::AtLeast(0));
   {
     HostDaemon daemon(server.GetChannel(),
                       {.inform_period = absl::Milliseconds(100)},
-                      &flow_state_provider, &enforcer);
+                      &flow_state_provider, &flow_state_reporter, &enforcer);
     absl::Notification exit;
     exit.Notify();
     daemon.Run(&exit);
@@ -188,9 +197,12 @@ TEST(HostDaemonTest, CallsIntoHostEnforcer) {
 
   InProcessTestServer server(allocs);
   MockFlowStateProvider flow_state_provider;
+  MockFlowStateReporter flow_state_reporter;
+
   MockHostEnforcer enforcer;
   EXPECT_CALL(flow_state_provider, ForEachActiveFlow(testing::_))
       .Times(testing::AtLeast(0));
+  EXPECT_CALL(flow_state_reporter, ReportState()).Times(testing::AtLeast(0));
   {
     testing::InSequence seq;
     for (const auto& entry : allocs) {
@@ -203,7 +215,7 @@ TEST(HostDaemonTest, CallsIntoHostEnforcer) {
   {
     HostDaemon daemon(server.GetChannel(),
                       {.inform_period = absl::Milliseconds(10)},
-                      &flow_state_provider, &enforcer);
+                      &flow_state_provider, &flow_state_reporter, &enforcer);
     absl::Notification exit;
     daemon.Run(&exit);
     absl::SleepFor(absl::Milliseconds(150));

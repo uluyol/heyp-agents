@@ -7,9 +7,11 @@ namespace heyp {
 
 HostDaemon::HostDaemon(const std::shared_ptr<grpc::Channel>& channel,
                        Config config, FlowStateProvider* flow_state_provider,
+                       FlowStateReporter* flow_state_reporter,
                        HostEnforcerInterface* enforcer)
     : config_(config),
       flow_state_provider_(flow_state_provider),
+      flow_state_reporter_(flow_state_reporter),
       enforcer_(enforcer),
       stub_(proto::ClusterAgent::NewStub(channel)) {}
 
@@ -17,11 +19,17 @@ namespace {
 
 void SendInfo(
     absl::Duration inform_period, const std::string& host_addr,
-    FlowStateProvider* flow_state_provider, absl::Notification* should_exit,
+    FlowStateProvider* flow_state_provider,
+    FlowStateReporter* flow_state_reporter, absl::Notification* should_exit,
     grpc::ClientReaderWriter<proto::HostInfo, proto::HostAlloc>* io_stream) {
   do {
     proto::HostInfo info;
     info.set_addr(host_addr);
+    absl::Status report_status = flow_state_reporter->ReportState();
+    if (!report_status.ok()) {
+      LOG(ERROR) << "failed to report flow state: " << report_status;
+      continue;
+    }
     flow_state_provider->ForEachActiveFlow([&info](const FlowState& state) {
       proto::FlowInfo* flow_info = info.add_flow_infos();
       *flow_info->mutable_marker() =
@@ -58,9 +66,9 @@ void HostDaemon::Run(absl::Notification* should_exit) {
 
   io_stream_ = stub_->RegisterHost(&context_);
 
-  info_thread_ =
-      std::thread(SendInfo, config_.inform_period, "TODO_FILL_OUT",
-                  flow_state_provider_, should_exit, io_stream_.get());
+  info_thread_ = std::thread(SendInfo, config_.inform_period, "TODO_FILL_OUT",
+                             flow_state_provider_, flow_state_reporter_,
+                             should_exit, io_stream_.get());
 
   enforcer_thread_ = std::thread(EnforceAlloc, flow_state_provider_, enforcer_,
                                  io_stream_.get());

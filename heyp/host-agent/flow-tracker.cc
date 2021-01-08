@@ -3,7 +3,6 @@
 #include <algorithm>
 
 #include "absl/status/status.h"
-#include "absl/synchronization/notification.h"
 #include "boost/process/child.hpp"
 #include "boost/process/io.hpp"
 #include "boost/process/pipe.hpp"
@@ -100,20 +99,16 @@ struct SSFlowStateReporter::Impl {
   bp::child monitor_done_proc;
   bp::ipstream monitor_done_out;
 
-  absl::Notification is_dead;
   std::thread monitor_done_thread;
-  std::thread periodic_snapshot_thread;
+  bool is_dying;
 };
 
 SSFlowStateReporter::~SSFlowStateReporter() {
-  impl_->is_dead.Notify();
+  impl_->is_dying = true;
   impl_->monitor_done_proc.terminate();
 
   if (impl_->monitor_done_thread.joinable()) {
     impl_->monitor_done_thread.join();
-  }
-  if (impl_->periodic_snapshot_thread.joinable()) {
-    impl_->periodic_snapshot_thread.join();
   }
 }
 
@@ -143,38 +138,34 @@ void SSFlowStateReporter::MonitorDone() {
     impl_->flow_tracker->FinalizeFlows(now, {{f, usage_bps}});
   }
 
-  CHECK(impl_->is_dead.WaitForNotificationWithTimeout(absl::ZeroDuration()));
+  CHECK(impl_->is_dying);
 }
 
-void SSFlowStateReporter::GetSnapshotPeriodically() {
-  while (!impl_->is_dead.WaitForNotificationWithTimeout(
-      impl_->config.snapshot_period)) {
-    try {
-      bp::ipstream out;
-      bp::child c(bp::search_path(impl_->config.ss_binary_name), "-i", "-t",
-                  "-n", "-H", "-O", bp::std_out > out);
+absl::Status SSFlowStateReporter::ReportState() {
+  try {
+    bp::ipstream out;
+    bp::child c(bp::search_path(impl_->config.ss_binary_name), "-i", "-t", "-n",
+                "-H", "-O", bp::std_out > out);
 
-      absl::Time now = absl::Now();
-      std::string line;
-      std::vector<std::pair<proto::FlowMarker, int64_t>> flow_usage_bps;
-      while (c.running() && std::getline(out, line) && !line.empty()) {
-        proto::FlowMarker f;
-        int64_t usage_bps = 0;
-        auto status = ParseLine(line, f, usage_bps);
-        if (!status.ok()) {
-          LOG(ERROR) << "failed to parse snapshot line: " << status;
-          continue;
-        }
-        flow_usage_bps.push_back({f, usage_bps});
+    absl::Time now = absl::Now();
+    std::string line;
+    std::vector<std::pair<proto::FlowMarker, int64_t>> flow_usage_bps;
+    while (c.running() && std::getline(out, line) && !line.empty()) {
+      proto::FlowMarker f;
+      int64_t usage_bps = 0;
+      auto status = ParseLine(line, f, usage_bps);
+      if (!status.ok()) {
+        return status;
       }
-      impl_->flow_tracker->UpdateFlows(now, flow_usage_bps);
-      c.wait();
-    } catch (const std::system_error &e) {
-      LOG(ERROR) << "failed to get snapshot: "
-                 << absl::UnknownError(absl::StrCat(
-                        "failed to start ss subprocess: ", e.what()));
+      flow_usage_bps.push_back({f, usage_bps});
     }
+    impl_->flow_tracker->UpdateFlows(now, flow_usage_bps);
+    c.wait();
+  } catch (const std::system_error &e) {
+    return absl::InternalError(
+        absl::StrCat("failed to start ss subprocess: ", e.what()));
   }
+  return absl::OkStatus();
 }
 
 SSFlowStateReporter::SSFlowStateReporter(Config config,
@@ -182,6 +173,7 @@ SSFlowStateReporter::SSFlowStateReporter(Config config,
     : impl_(absl::WrapUnique(new Impl{
           .config = config,
           .flow_tracker = flow_tracker,
+          .is_dying = false,
       })) {}
 
 absl::StatusOr<std::unique_ptr<SSFlowStateReporter>>
@@ -200,8 +192,6 @@ SSFlowStateReporter::Create(Config config, FlowTracker *flow_tracker) {
 
   tracker->impl_->monitor_done_thread =
       std::thread(&SSFlowStateReporter::MonitorDone, tracker.get());
-  tracker->impl_->periodic_snapshot_thread =
-      std::thread(&SSFlowStateReporter::GetSnapshotPeriodically, tracker.get());
 
   return tracker;
 }

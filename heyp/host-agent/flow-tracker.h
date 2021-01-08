@@ -8,6 +8,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/functional/function_ref.h"
 #include "absl/status/statusor.h"
+#include "absl/synchronization/mutex.h"
 #include "absl/types/span.h"
 #include "heyp/alg/demand-predictor.h"
 #include "heyp/flows/state.h"
@@ -24,6 +25,13 @@ class FlowStateProvider {
 
   virtual void ForEachFlow(
       absl::FunctionRef<void(const FlowState&)> func) const = 0;
+};
+
+class FlowStateReporter {
+ public:
+  ~FlowStateReporter() = default;
+
+  virtual absl::Status ReportState() = 0;
 };
 
 class FlowTracker : public FlowStateProvider {
@@ -69,11 +77,10 @@ class FlowTracker : public FlowStateProvider {
 
 // TODO: collect usage bps in addition to cum usage to reduce measurement
 // delays.
-class SSFlowStateReporter {
+class SSFlowStateReporter : public FlowStateReporter {
  public:
   struct Config {
     std::string ss_binary_name = "ss";
-    absl::Duration snapshot_period = absl::Seconds(5);
   };
 
   ~SSFlowStateReporter();
@@ -81,9 +88,10 @@ class SSFlowStateReporter {
   static absl::StatusOr<std::unique_ptr<SSFlowStateReporter>> Create(
       Config config, FlowTracker* flow_tracker);
 
+  absl::Status ReportState() override;
+
  private:
   void MonitorDone();
-  void GetSnapshotPeriodically();
 
   SSFlowStateReporter(Config config, FlowTracker* flow_tracker);
 
