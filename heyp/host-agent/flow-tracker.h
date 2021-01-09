@@ -18,7 +18,7 @@ namespace heyp {
 
 class FlowStateProvider {
  public:
-  ~FlowStateProvider() = default;
+  virtual ~FlowStateProvider() = default;
 
   virtual void ForEachActiveFlow(
       absl::FunctionRef<void(const FlowState&)> func) const = 0;
@@ -29,7 +29,7 @@ class FlowStateProvider {
 
 class FlowStateReporter {
  public:
-  ~FlowStateReporter() = default;
+  virtual ~FlowStateReporter() = default;
 
   virtual absl::Status ReportState() = 0;
 };
@@ -80,6 +80,7 @@ class FlowTracker : public FlowStateProvider {
 class SSFlowStateReporter : public FlowStateReporter {
  public:
   struct Config {
+    std::string host_addr;
     std::string ss_binary_name = "ss";
   };
 

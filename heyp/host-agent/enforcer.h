@@ -9,7 +9,7 @@ namespace heyp {
 
 class HostEnforcerInterface {
  public:
-  ~HostEnforcerInterface() = default;
+  virtual ~HostEnforcerInterface() = default;
 
   virtual void EnforceAllocs(const FlowStateProvider& flow_state_provider,
                              const proto::HostAlloc& host_alloc) = 0;
