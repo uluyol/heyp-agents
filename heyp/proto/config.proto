@@ -1,0 +1,30 @@
+syntax = "proto2";
+
+package heyp.proto;
+
+message DemandPredictorConfig {
+  optional string time_window_dur = 1 [default = "10s"];
+  optional double usage_multiplier = 2 [default = 1.1];
+  optional int64 min_demand_bps = 3 [default = 5000000];
+}
+
+message HostFlowTrackerConfig {
+  optional DemandPredictorConfig demand_predictor = 1;
+}
+
+message HostFlowStateReporterConfig {
+  optional string ss_binary_name = 1 [default = "ss"];
+}
+
+message HostDaemonConfig {
+  optional string inform_period_dur = 1 [default = "2s"];
+  optional string cluster_agent_addr = 2;
+  optional string cluster_agent_connection_timeout_dur = 3 [default = "10s"];
+}
+
+message HostAgentConfig {
+  optional string this_host_addr = 1;
+  optional HostFlowTrackerConfig flow_tracker = 2;
+  optional HostFlowStateReporterConfig flow_state_reporter = 3;
+  optional HostDaemonConfig daemon = 4;
+}

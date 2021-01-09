@@ -24,6 +24,16 @@ cc_grpc_library(
     deps = [":heyp_cc_proto"],
 )
 
+proto_library(
+    name = "config_proto",
+    srcs = ["config.proto"],
+)
+
+cc_proto_library(
+    name = "config_cc_proto",
+    deps = [":config_proto"],
+)
+
 cc_library(
     name = "alg",
     srcs = ["alg.cc"],
@@ -50,4 +60,11 @@ cc_library(
         "@com_google_protobuf//:protobuf",
         "@glog",
     ],
+)
+
+cc_library(
+    name = "fileio",
+    srcs = ["fileio.cc"],
+    hdrs = ["fileio.h"],
+    deps = ["@com_google_protobuf//:protobuf"],
 )
