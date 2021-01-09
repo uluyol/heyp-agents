@@ -1,5 +1,6 @@
 #include "heyp/host-agent/daemon.h"
 
+#include "absl/time/clock.h"
 #include "glog/logging.h"
 #include "heyp/proto/constructors.h"
 
@@ -17,10 +18,19 @@ HostDaemon::HostDaemon(const std::shared_ptr<grpc::Channel>& channel,
 
 namespace {
 
+bool FlaggedOrWaitFor(absl::Duration dur, std::atomic<bool>* exit_flag) {
+  absl::Time start = absl::Now();
+  absl::Duration piece = std::min(dur / 10, absl::Milliseconds(100));
+  while (!exit_flag->load() && absl::Now() - start < dur) {
+    absl::SleepFor(piece);
+  }
+  return exit_flag->load();
+}
+
 void SendInfo(
-    absl::Duration inform_period, const std::string& host_addr,
+    absl::Duration inform_period, std::string host_addr,
     FlowStateProvider* flow_state_provider,
-    FlowStateReporter* flow_state_reporter, absl::Notification* should_exit,
+    FlowStateReporter* flow_state_reporter, std::atomic<bool>* should_exit,
     grpc::ClientReaderWriter<proto::HostInfo, proto::HostAlloc>* io_stream) {
   do {
     proto::HostInfo info;
@@ -40,7 +50,7 @@ void SendInfo(
     });
     *info.mutable_timestamp() = ToProtoTimestamp(absl::Now());
     io_stream->Write(info);
-  } while (!should_exit->WaitForNotificationWithTimeout(inform_period));
+  } while (!FlaggedOrWaitFor(inform_period, should_exit));
 
   io_stream->WritesDone();
 }
@@ -61,12 +71,12 @@ void EnforceAlloc(
 
 }  // namespace
 
-void HostDaemon::Run(absl::Notification* should_exit) {
+void HostDaemon::Run(std::atomic<bool>* should_exit) {
   CHECK(io_stream_ == nullptr);
 
   io_stream_ = stub_->RegisterHost(&context_);
 
-  info_thread_ = std::thread(SendInfo, config_.inform_period, "TODO_FILL_OUT",
+  info_thread_ = std::thread(SendInfo, config_.inform_period, config_.host_addr,
                              flow_state_provider_, flow_state_reporter_,
                              should_exit, io_stream_.get());
 

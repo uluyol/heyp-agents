@@ -141,8 +141,7 @@ TEST(HostDaemonTest, CreateAndTeardownNoActions) {
     HostDaemon daemon(server.GetChannel(),
                       {.inform_period = absl::Milliseconds(100)},
                       &flow_state_provider, &flow_state_reporter, &enforcer);
-    absl::Notification exit;
-    exit.Notify();
+    std::atomic<bool> exit(true);
     daemon.Run(&exit);
   }
 
@@ -216,10 +215,10 @@ TEST(HostDaemonTest, CallsIntoHostEnforcer) {
     HostDaemon daemon(server.GetChannel(),
                       {.inform_period = absl::Milliseconds(10)},
                       &flow_state_provider, &flow_state_reporter, &enforcer);
-    absl::Notification exit;
+    std::atomic<bool> exit(false);
     daemon.Run(&exit);
     absl::SleepFor(absl::Milliseconds(150));
-    exit.Notify();
+    exit.store(true);
   }
 
   server.Teardown();

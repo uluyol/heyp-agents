@@ -1,9 +1,9 @@
 #ifndef HEYP_HOST_AGENT_DAEMON_H_
 #define HEYP_HOST_AGENT_DAEMON_H_
 
+#include <atomic>
 #include <thread>
 
-#include "absl/synchronization/notification.h"
 #include "absl/time/time.h"
 #include "grpcpp/grpcpp.h"
 #include "heyp/host-agent/enforcer.h"
@@ -16,6 +16,7 @@ namespace heyp {
 class HostDaemon {
  public:
   struct Config {
+    std::string host_addr;
     absl::Duration inform_period = absl::Seconds(2);
   };
 
@@ -26,7 +27,7 @@ class HostDaemon {
 
   ~HostDaemon();
 
-  void Run(absl::Notification* should_exit);
+  void Run(std::atomic<bool>* should_exit);
 
  private:
   const Config config_;
