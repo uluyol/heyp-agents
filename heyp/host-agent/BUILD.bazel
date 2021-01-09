@@ -1,4 +1,21 @@
-load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
+
+cc_binary(
+    name = "host-agent",
+    srcs = ["host-agent.cc"],
+    deps = [
+        ":daemon",
+        ":enforcer",
+        ":flow-tracker",
+        "//heyp/proto:config_cc_proto",
+        "//heyp/proto:fileio",
+        "@com_github_gflags_gflags//:gflags",
+        "@com_google_absl//absl/debugging:failure_signal_handler",
+        "@com_google_absl//absl/debugging:symbolize",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/time",
+    ],
+)
 
 cc_library(
     name = "flow-tracker",
@@ -40,7 +57,6 @@ cc_library(
         "//heyp/proto:heyp_cc_grpc",
         "//heyp/proto:heyp_cc_proto",
         "@com_github_grpc_grpc//:grpc++",
-        "@com_google_absl//absl/synchronization",
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:span",
         "@glog",
