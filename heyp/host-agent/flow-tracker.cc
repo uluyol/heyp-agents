@@ -19,7 +19,7 @@ FlowTracker::FlowTracker(std::unique_ptr<DemandPredictor> demand_predictor,
                          Config config)
     : config_(config),
       demand_predictor_(std::move(demand_predictor)),
-      next_flow_id_(0) {}
+      next_seqnum_(0) {}
 
 void FlowTracker::ForEachActiveFlow(
     absl::FunctionRef<void(const FlowState &)> func) const {
@@ -42,9 +42,9 @@ void FlowTracker::ForEachFlow(
 
 namespace {
 
-FlowState CreateFlowState(const proto::FlowMarker &f, uint64_t id) {
+FlowState CreateFlowState(const proto::FlowMarker &f, uint64_t seqnum) {
   proto::FlowMarker flow = f;
-  flow.set_host_unique_id(id);
+  flow.set_seqnum(seqnum);
   return FlowState(flow);
 }
 
@@ -59,7 +59,7 @@ void FlowTracker::UpdateFlows(
     const proto::FlowMarker &f = flow_usage_bytes_batch[i].first;
     const int64_t cum_usage_bytes = flow_usage_bytes_batch[i].second;
     if (!active_flows_.contains(f)) {
-      active_flows_.emplace(f, CreateFlowState(f, ++next_flow_id_));
+      active_flows_.emplace(f, CreateFlowState(f, ++next_seqnum_));
     }
     FlowState &state = active_flows_.at(f);
     if (state.cum_usage_bytes() > cum_usage_bytes) {
@@ -84,7 +84,7 @@ void FlowTracker::FinalizeFlows(
   for (const auto &pair : flow_usage_bps_batch) {
     const proto::FlowMarker &f = pair.first;
     if (!active_flows_.contains(f)) {
-      active_flows_.emplace(f, CreateFlowState(f, ++next_flow_id_));
+      active_flows_.emplace(f, CreateFlowState(f, ++next_seqnum_));
     }
     active_flows_.at(f).UpdateUsage(timestamp, pair.second,
                                     config_.usage_history_window,
@@ -116,8 +116,8 @@ SSFlowStateReporter::~SSFlowStateReporter() {
 
 namespace {
 
-absl::Status ParseLine(absl::string_view line, proto::FlowMarker &parsed,
-                       int64_t &cum_usage_bytes) {
+absl::Status ParseLine(uint64_t host_id, absl::string_view line,
+                       proto::FlowMarker &parsed, int64_t &cum_usage_bytes) {
   parsed.Clear();
 
   std::vector<absl::string_view> fields =
@@ -133,6 +133,7 @@ absl::Status ParseLine(absl::string_view line, proto::FlowMarker &parsed,
     return status;
   }
 
+  parsed.set_host_id(host_id);
   parsed.set_src_addr(std::string(src_addr));
   parsed.set_dst_addr(std::string(dst_addr));
   parsed.set_protocol(proto::TCP);
@@ -181,7 +182,8 @@ absl::Status ParseLine(absl::string_view line, proto::FlowMarker &parsed,
 }  // namespace
 
 bool SSFlowStateReporter::IgnoreFlow(const proto::FlowMarker &f) {
-  bool keep = f.src_addr() == impl_->config.host_addr;
+  bool keep = std::binary_search(impl_->config.my_addrs.begin(),
+                                 impl_->config.my_addrs.end(), f.src_addr());
   return !keep;
 }
 
@@ -192,7 +194,7 @@ void SSFlowStateReporter::MonitorDone() {
     absl::Time now = absl::Now();
     proto::FlowMarker f;
     int64_t usage_bps = 0;
-    auto status = ParseLine(line, f, usage_bps);
+    auto status = ParseLine(impl_->config.host_id, line, f, usage_bps);
     if (!status.ok()) {
       LOG(ERROR) << "failed to parse done line: " << status;
       continue;
@@ -219,7 +221,7 @@ absl::Status SSFlowStateReporter::ReportState() {
     while (std::getline(out, line) && !line.empty()) {
       proto::FlowMarker f;
       int64_t cum_usage_bytes = 0;
-      auto status = ParseLine(line, f, cum_usage_bytes);
+      auto status = ParseLine(impl_->config.host_id, line, f, cum_usage_bytes);
       if (!status.ok()) {
         return status;
       }
@@ -247,6 +249,9 @@ SSFlowStateReporter::SSFlowStateReporter(Config config,
 
 absl::StatusOr<std::unique_ptr<SSFlowStateReporter>>
 SSFlowStateReporter::Create(Config config, FlowTracker *flow_tracker) {
+  // Sort addresses
+  std::sort(config.my_addrs.begin(), config.my_addrs.end());
+
   auto tracker =
       absl::WrapUnique(new SSFlowStateReporter(config, flow_tracker));
 

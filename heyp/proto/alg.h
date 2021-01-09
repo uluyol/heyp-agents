@@ -11,16 +11,16 @@ struct CompareFlowOptions {
   // Include FlowGroup fields in comparison (src_dc, dst_dc)
   bool cmp_fg = true;
 
-  // Include source host address in comparison (src_addr)
+  // Include source host address in comparison (host_id)
   bool cmp_src_host = true;
 
   // Include host-level flow information in comparison
-  // (dst_addr, protocol, src_port, dst_port).
+  // (src_addr, dst_addr, protocol, src_port, dst_port).
   bool cmp_host_flow = true;
 
   // Include source host's unique identifier for the flow in the comparison
-  // (host_unique_id).
-  bool cmp_host_unique_id = true;
+  // (seqnum).
+  bool cmp_seqnum = true;
 };
 
 bool IsSameFlow(const proto::FlowMarker& lhs, const proto::FlowMarker& rhs,

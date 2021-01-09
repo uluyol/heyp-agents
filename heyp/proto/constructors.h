@@ -12,12 +12,13 @@ namespace heyp {
 struct FlowMarkerStruct {
   std::string src_dc;
   std::string dst_dc;
+  uint64_t host_id = 0;
   std::string src_addr;
   std::string dst_addr;
   proto::Protocol protocol = proto::Protocol::TCP;
   int32_t src_port = 0;
   int32_t dst_port = 0;
-  uint64_t host_unique_id = 0;
+  uint64_t seqnum = 0;
 };
 
 inline proto::FlowMarker ProtoFlowMarker(FlowMarkerStruct st);
@@ -33,12 +34,13 @@ inline proto::FlowMarker ProtoFlowMarker(FlowMarkerStruct st) {
   proto::FlowMarker p;
   p.set_src_dc(st.src_dc);
   p.set_dst_dc(st.dst_dc);
+  p.set_host_id(st.host_id);
   p.set_src_addr(st.src_addr);
   p.set_dst_addr(st.dst_addr);
   p.set_protocol(st.protocol);
   p.set_src_port(st.src_port);
   p.set_dst_port(st.dst_port);
-  p.set_host_unique_id(st.host_unique_id);
+  p.set_seqnum(st.seqnum);
   return p;
 }
 

@@ -67,7 +67,7 @@ class FlowTracker : public FlowStateProvider {
   const std::unique_ptr<DemandPredictor> demand_predictor_;
 
   mutable absl::Mutex mu_;
-  uint64_t next_flow_id_ ABSL_GUARDED_BY(mu_);
+  uint64_t next_seqnum_ ABSL_GUARDED_BY(mu_);
   absl::flat_hash_map<proto::FlowMarker, FlowState, HashHostFlowNoId,
                       EqHostFlowNoId>
       active_flows_ ABSL_GUARDED_BY(
@@ -80,7 +80,11 @@ class FlowTracker : public FlowStateProvider {
 class SSFlowStateReporter : public FlowStateReporter {
  public:
   struct Config {
-    std::string host_addr;
+    uint64_t host_id;
+    // my_addrs is a list of addresses that we should report flow state
+    // information for. Useful for accounting for both IPv4 and IPv6 addresses
+    // on the same interface.
+    std::vector<std::string> my_addrs;
     std::string ss_binary_name = "ss";
   };
 

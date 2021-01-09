@@ -2,6 +2,7 @@
 #define HEYP_HOST_AGENT_DAEMON_H_
 
 #include <atomic>
+#include <cstdint>
 #include <thread>
 
 #include "absl/time/time.h"
@@ -16,7 +17,7 @@ namespace heyp {
 class HostDaemon {
  public:
   struct Config {
-    std::string host_addr;
+    uint64_t host_id;
     absl::Duration inform_period = absl::Seconds(2);
   };
 

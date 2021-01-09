@@ -13,12 +13,13 @@ enum Protocol {
 message FlowMarker {
   string src_dc = 1;
   string dst_dc = 2;
-  string src_addr = 3;
-  string dst_addr = 4;
-  Protocol protocol = 5;
-  int32 src_port = 6;
-  int32 dst_port = 7;
-  uint64 host_unique_id = 8; // unique flow id, per host, nonzero if set
+  fixed64 host_id = 3;
+  string src_addr = 4;
+  string dst_addr = 5;
+  Protocol protocol = 6;
+  int32 src_port = 7;
+  int32 dst_port = 8;
+  uint64 seqnum = 9; // seq number to distinguish flows with same ports
 }
 
 message FlowInfo {
@@ -29,7 +30,7 @@ message FlowInfo {
 }
 
 message HostInfo {
-  string addr = 1;
+  int64 host_id = 1;
   google.protobuf.Timestamp timestamp = 3;
   repeated FlowInfo flow_infos = 2;
 }

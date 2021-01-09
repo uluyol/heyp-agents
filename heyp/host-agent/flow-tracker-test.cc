@@ -10,7 +10,7 @@ namespace heyp {
 namespace {
 
 MATCHER_P(EqFlowNoId, other, "") {
-  return IsSameFlow(arg, other, {.cmp_host_unique_id = false});
+  return IsSameFlow(arg, other, {.cmp_seqnum = false});
 }
 
 TEST(FlowTrackerTest, RaceNewFlowBeforeOldFlowFinalized) {
@@ -21,7 +21,7 @@ TEST(FlowTrackerTest, RaceNewFlowBeforeOldFlowFinalized) {
   const proto::FlowMarker flow = ProtoFlowMarker({
       .src_port = 1000,
       .dst_port = 2345,
-      .host_unique_id = 0,
+      .seqnum = 0,
   });
 
   const absl::Time epoch = absl::Now();
@@ -38,7 +38,7 @@ TEST(FlowTrackerTest, RaceNewFlowBeforeOldFlowFinalized) {
   tracker.ForEachActiveFlow([&](const FlowState& state) {
     ++times_called;
     ASSERT_THAT(state.flow(), EqFlowNoId(flow));
-    ASSERT_THAT(state.flow().host_unique_id(), testing::Eq(1));
+    ASSERT_THAT(state.flow().seqnum(), testing::Eq(1));
     EXPECT_THAT(state.ewma_usage_bps(), testing::Eq(800'000));
   });
   EXPECT_THAT(times_called, testing::Eq(1));
@@ -53,7 +53,7 @@ TEST(FlowTrackerTest, RaceNewFlowBeforeOldFlowFinalized) {
   tracker.ForEachActiveFlow([&](const FlowState& state) {
     ++times_called;
     ASSERT_THAT(state.flow(), EqFlowNoId(flow));
-    ASSERT_THAT(state.flow().host_unique_id(), testing::Eq(2));
+    ASSERT_THAT(state.flow().seqnum(), testing::Eq(2));
     EXPECT_THAT(state.ewma_usage_bps(), testing::Eq(160'000));
   });
   EXPECT_THAT(times_called, testing::Eq(1));
@@ -83,8 +83,8 @@ TEST(SSFlowStateReporterTest, CollectsExpectedOutput) {
 
   auto reporter_or = SSFlowStateReporter::Create(
       {
+          .my_addrs = {"140.197.113.99"},
           .ss_binary_name = "heyp/host-agent/fake-ss-for-test",
-          .host_addr = "140.197.113.99",
       },
       &tracker);
 

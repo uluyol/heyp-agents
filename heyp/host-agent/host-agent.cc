@@ -2,6 +2,8 @@
 
 #include "absl/debugging/failure_signal_handler.h"
 #include "absl/debugging/symbolize.h"
+#include "absl/random/distributions.h"
+#include "absl/random/random.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
@@ -26,6 +28,11 @@ static void InterruptHandler(int signal) {
 
 namespace heyp {
 namespace {
+
+uint64_t GetUUID() {
+  absl::BitGen gen;
+  return absl::Uniform<uint64_t>(gen);
+}
 
 absl::StatusOr<absl::Duration> ParseAbslDuration(absl::string_view dur,
                                                  absl::string_view field_name) {
@@ -53,6 +60,10 @@ absl::Status Run(const proto::HostAgentConfig& c) {
   if (!cluster_agent_connection_timeout_or.ok()) {
     return cluster_agent_connection_timeout_or.status();
   }
+
+  const uint64_t host_id = GetUUID();
+  LOG(INFO) << "host assigned id: " << host_id;
+
   LOG(INFO) << "creating flow tracker";
   FlowTracker flow_tracker(
       absl::make_unique<BweDemandPredictor>(
@@ -63,7 +74,9 @@ absl::Status Run(const proto::HostAgentConfig& c) {
   LOG(INFO) << "creating flow state reporter";
   auto flow_state_reporter_or = SSFlowStateReporter::Create(
       {
-          .host_addr = c.this_host_addr(),
+          .host_id = host_id,
+          .my_addrs = {c.flow_state_reporter().this_host_addrs().begin(),
+                       c.flow_state_reporter().this_host_addrs().end()},
           .ss_binary_name = c.flow_state_reporter().ss_binary_name(),
       },
       &flow_tracker);
@@ -88,7 +101,7 @@ absl::Status Run(const proto::HostAgentConfig& c) {
   LOG(INFO) << "creating daemon";
   HostDaemon daemon(channel,
                     {
-                        .host_addr = c.this_host_addr(),
+                        .host_id = host_id,
                         .inform_period = *inform_period_or,
                     },
                     &flow_tracker, flow_state_reporter.get(), &enforcer);

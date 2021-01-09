@@ -19,29 +19,31 @@ bool IsSameFlow(const proto::FlowMarker& lhs, const proto::FlowMarker& rhs,
     SAME_OR_RETURN(dst_dc);
   }
   if (options.cmp_src_host) {
-    SAME_OR_RETURN(src_addr);
+    SAME_OR_RETURN(host_id);
   }
   if (options.cmp_host_flow) {
+    SAME_OR_RETURN(src_addr);
     SAME_OR_RETURN(dst_addr);
     SAME_OR_RETURN(protocol);
     SAME_OR_RETURN(src_port);
     SAME_OR_RETURN(dst_port);
   }
-  if (options.cmp_host_unique_id) {
-    SAME_OR_RETURN(host_unique_id);
+  if (options.cmp_seqnum) {
+    SAME_OR_RETURN(seqnum);
   }
   return true;
 }
 
 size_t HashHostFlowNoId::operator()(const proto::FlowMarker& marker) const {
-  return absl::Hash<std::tuple<absl::string_view, int32_t, int32_t, int32_t>>()(
-      {marker.dst_addr(), marker.protocol(), marker.src_port(),
-       marker.dst_port()});
+  return absl::Hash<std::tuple<absl::string_view, absl::string_view, int32_t,
+                               int32_t, int32_t>>()(
+      {marker.src_addr(), marker.dst_addr(), marker.protocol(),
+       marker.src_port(), marker.dst_port()});
 }
 
 bool EqHostFlowNoId::operator()(const proto::FlowMarker& lhs,
                                 const proto::FlowMarker& rhs) const {
-  return IsSameFlow(lhs, rhs, {.cmp_fg = false, .cmp_host_unique_id = false});
+  return IsSameFlow(lhs, rhs, {.cmp_fg = false, .cmp_seqnum = false});
 }
 
 }  // namespace heyp

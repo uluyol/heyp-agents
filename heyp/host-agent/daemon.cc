@@ -28,13 +28,13 @@ bool FlaggedOrWaitFor(absl::Duration dur, std::atomic<bool>* exit_flag) {
 }
 
 void SendInfo(
-    absl::Duration inform_period, std::string host_addr,
+    absl::Duration inform_period, uint64_t host_id,
     FlowStateProvider* flow_state_provider,
     FlowStateReporter* flow_state_reporter, std::atomic<bool>* should_exit,
     grpc::ClientReaderWriter<proto::HostInfo, proto::HostAlloc>* io_stream) {
   do {
     proto::HostInfo info;
-    info.set_addr(host_addr);
+    info.set_host_id(host_id);
     absl::Status report_status = flow_state_reporter->ReportState();
     if (!report_status.ok()) {
       LOG(ERROR) << "failed to report flow state: " << report_status;
@@ -76,7 +76,7 @@ void HostDaemon::Run(std::atomic<bool>* should_exit) {
 
   io_stream_ = stub_->RegisterHost(&context_);
 
-  info_thread_ = std::thread(SendInfo, config_.inform_period, config_.host_addr,
+  info_thread_ = std::thread(SendInfo, config_.inform_period, config_.host_id,
                              flow_state_provider_, flow_state_reporter_,
                              should_exit, io_stream_.get());
 
