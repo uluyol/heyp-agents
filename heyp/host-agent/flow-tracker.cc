@@ -3,11 +3,13 @@
 #include <algorithm>
 
 #include "absl/status/status.h"
+#include "absl/strings/str_split.h"
 #include "boost/process/child.hpp"
 #include "boost/process/io.hpp"
 #include "boost/process/pipe.hpp"
 #include "boost/process/search_path.hpp"
 #include "glog/logging.h"
+#include "heyp/host-agent/urls.h"
 
 namespace bp = boost::process;
 
@@ -115,23 +117,87 @@ SSFlowStateReporter::~SSFlowStateReporter() {
 namespace {
 
 absl::Status ParseLine(absl::string_view line, proto::FlowMarker &parsed,
-                       int64_t &usage_bps) {
-  LOG(FATAL) << "not implemented";
+                       int64_t &cum_usage_bytes) {
+  parsed.Clear();
+
+  std::vector<absl::string_view> fields =
+      absl::StrSplit(line, absl::ByAnyChar(" \t"), absl::SkipWhitespace());
+
+  absl::string_view src_addr;
+  absl::string_view dst_addr;
+  int32_t src_port;
+  int32_t dst_port;
+  absl::Status status = ParseHostPort(fields[3], &src_addr, &src_port);
+  status.Update(ParseHostPort(fields[4], &dst_addr, &dst_port));
+  if (!status.ok()) {
+    return status;
+  }
+
+  parsed.set_src_addr(std::string(src_addr));
+  parsed.set_dst_addr(std::string(dst_addr));
+  parsed.set_protocol(proto::TCP);
+  parsed.set_src_port(src_port);
+  parsed.set_dst_port(dst_port);
+
+  bool found_cum_usage_bytes = false;
+  bool found_usage_bps = false;
+  cum_usage_bytes = 0;
+  bool next_is_usage_bps = false;
+  int64_t usage_bps = 0;
+  for (absl::string_view field : fields) {
+    if (absl::StartsWith(field, "bytes_sent:")) {
+      field = absl::StripPrefix(field, "bytes_sent:");
+      if (!absl::SimpleAtoi(field, &cum_usage_bytes)) {
+        return absl::InvalidArgumentError("failed to parse 'bytes_sent' field");
+      }
+      found_cum_usage_bytes = true;
+    }
+    if (next_is_usage_bps) {
+      if (!absl::EndsWith(field, "bps")) {
+        return absl::InvalidArgumentError("failed to parse send bps field");
+      }
+      field = absl::StripSuffix(field, "bps");
+      if (!absl::SimpleAtoi(field, &usage_bps)) {
+        return absl::InvalidArgumentError("failed to parse send bps field");
+      }
+      next_is_usage_bps = false;
+      found_usage_bps = true;
+    }
+    if (field == "send") {
+      next_is_usage_bps = true;
+    }
+  }
+
+  if (!found_cum_usage_bytes) {
+    return absl::InvalidArgumentError("no 'bytes_sent' field");
+  }
+  if (!found_usage_bps) {
+    return absl::InvalidArgumentError("no send bps field");
+  }
+
+  return absl::OkStatus();
 }
 
 }  // namespace
 
+bool SSFlowStateReporter::IgnoreFlow(const proto::FlowMarker &f) {
+  bool keep = f.src_addr() == impl_->config.host_addr;
+  return !keep;
+}
+
 void SSFlowStateReporter::MonitorDone() {
   std::string line;
 
-  while (impl_->monitor_done_proc.running() &&
-         std::getline(impl_->monitor_done_out, line) && !line.empty()) {
+  while (std::getline(impl_->monitor_done_out, line) && !line.empty()) {
     absl::Time now = absl::Now();
     proto::FlowMarker f;
     int64_t usage_bps = 0;
     auto status = ParseLine(line, f, usage_bps);
     if (!status.ok()) {
       LOG(ERROR) << "failed to parse done line: " << status;
+      continue;
+    }
+    if (IgnoreFlow(f)) {
       continue;
     }
 
@@ -149,17 +215,20 @@ absl::Status SSFlowStateReporter::ReportState() {
 
     absl::Time now = absl::Now();
     std::string line;
-    std::vector<std::pair<proto::FlowMarker, int64_t>> flow_usage_bps;
-    while (c.running() && std::getline(out, line) && !line.empty()) {
+    std::vector<std::pair<proto::FlowMarker, int64_t>> flow_cum_usage_bytes;
+    while (std::getline(out, line) && !line.empty()) {
       proto::FlowMarker f;
-      int64_t usage_bps = 0;
-      auto status = ParseLine(line, f, usage_bps);
+      int64_t cum_usage_bytes = 0;
+      auto status = ParseLine(line, f, cum_usage_bytes);
       if (!status.ok()) {
         return status;
       }
-      flow_usage_bps.push_back({f, usage_bps});
+      if (IgnoreFlow(f)) {
+        continue;
+      }
+      flow_cum_usage_bytes.push_back({f, cum_usage_bytes});
     }
-    impl_->flow_tracker->UpdateFlows(now, flow_usage_bps);
+    impl_->flow_tracker->UpdateFlows(now, flow_cum_usage_bytes);
     c.wait();
   } catch (const std::system_error &e) {
     return absl::InternalError(

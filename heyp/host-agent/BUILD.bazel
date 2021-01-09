@@ -18,10 +18,21 @@ cc_binary(
 )
 
 cc_library(
+    name = "urls",
+    srcs = ["urls.cc"],
+    hdrs = ["urls.h"],
+    deps = [
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_library(
     name = "flow-tracker",
     srcs = ["flow-tracker.cc"],
     hdrs = ["flow-tracker.h"],
     deps = [
+        ":urls",
         "//heyp/alg:demand-predictor",
         "//heyp/flows:state",
         "//heyp/proto:alg",
@@ -64,8 +75,30 @@ cc_library(
 )
 
 cc_test(
+    name = "urls-test",
+    srcs = ["urls-test.cc"],
+    deps = [
+        ":urls",
+        "@gtest//:gtest_main",
+    ],
+)
+
+cc_binary(
+    name = "fake-ss-for-test",
+    testonly = 1,
+    srcs = ["fake-ss-for-test.cc"],
+    deps = [
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/time",
+    ],
+)
+
+cc_test(
     name = "flow-tracker-test",
     srcs = ["flow-tracker-test.cc"],
+    data = [
+        ":fake-ss-for-test",
+    ],
     deps = [
         ":flow-tracker",
         "//heyp/alg:demand-predictor",

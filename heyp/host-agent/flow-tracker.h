@@ -92,6 +92,7 @@ class SSFlowStateReporter : public FlowStateReporter {
   absl::Status ReportState() override;
 
  private:
+  bool IgnoreFlow(const proto::FlowMarker& f);
   void MonitorDone();
 
   SSFlowStateReporter(Config config, FlowTracker* flow_tracker);
