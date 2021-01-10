@@ -42,8 +42,8 @@ void SendInfo(
     }
     flow_state_provider->ForEachActiveFlow([&info](const FlowState& state) {
       proto::FlowInfo* flow_info = info.add_flow_infos();
-      *flow_info->mutable_marker() =
-          state.flow();  // TODO: where do we classify?
+      LOG(INFO) << "TODO: classify to FG-level info";
+      *flow_info->mutable_marker() = state.flow();
       flow_info->set_cum_usage_bytes(state.cum_usage_bytes());
       flow_info->set_usage_bps(state.ewma_usage_bps());
       flow_info->set_demand_bps(state.predicted_demand_bps());

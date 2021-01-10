@@ -48,19 +48,23 @@ class FlowTracker : public FlowStateProvider {
   void ForEachFlow(
       absl::FunctionRef<void(const FlowState&)> func) const override;
 
+  struct Update {
+    proto::FlowMarker flow;
+    int64_t instantaneous_usage_bps;
+    int64_t cum_usage_bytes;
+  };
+
   // Updates the usage of the specified Flows.
   // Each Flow should have a zero (i.e. unassigned unique_flow_id) because the
   // FlowTracker will assign one.
   void UpdateFlows(absl::Time timestamp,
-                   absl::Span<const std::pair<proto::FlowMarker, int64_t>>
-                       flow_usage_bytes_batch);
+                   absl::Span<const Update> flow_update_batch);
 
   // Updates the usage of the specified Flows and marks them as complete.
   // Each Flow should have a zero (i.e. unassigned unique_flow_id) because the
   // FlowTracker will assign one.
   void FinalizeFlows(absl::Time timestamp,
-                     absl::Span<const std::pair<proto::FlowMarker, int64_t>>
-                         flow_usage_bytes_batch);
+                     absl::Span<const Update> flow_update_batch);
 
  private:
   const Config config_;
@@ -75,8 +79,6 @@ class FlowTracker : public FlowStateProvider {
   std::vector<FlowState> done_flows_ ABSL_GUARDED_BY(mu_);
 };
 
-// TODO: collect usage bps in addition to cum usage to reduce measurement
-// delays.
 class SSFlowStateReporter : public FlowStateReporter {
  public:
   struct Config {

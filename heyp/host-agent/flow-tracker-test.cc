@@ -29,10 +29,10 @@ TEST(FlowTrackerTest, RaceNewFlowBeforeOldFlowFinalized) {
     return epoch + absl::Seconds(sec);
   };
 
-  tracker.UpdateFlows(time(0), {{flow, 100'000}});
-  tracker.UpdateFlows(time(1), {{flow, 200'000}});
-  tracker.UpdateFlows(time(2), {{flow, 300'000}});
-  tracker.UpdateFlows(time(3), {{flow, 400'000}});
+  tracker.UpdateFlows(time(0), {{flow, 0, 100'000}});
+  tracker.UpdateFlows(time(1), {{flow, 0, 200'000}});
+  tracker.UpdateFlows(time(2), {{flow, 0, 300'000}});
+  tracker.UpdateFlows(time(3), {{flow, 0, 400'000}});
 
   int times_called = 0;
   tracker.ForEachActiveFlow([&](const FlowState& state) {
@@ -46,8 +46,8 @@ TEST(FlowTrackerTest, RaceNewFlowBeforeOldFlowFinalized) {
   // RACE: the current flow dies, but before that is registered, a new flow
   // appears with the same src/dst port.
 
-  tracker.UpdateFlows(time(5), {{flow, 50'000}});
-  tracker.UpdateFlows(time(6), {{flow, 70'000}});
+  tracker.UpdateFlows(time(5), {{flow, 0, 50'000}});
+  tracker.UpdateFlows(time(6), {{flow, 0, 70'000}});
 
   times_called = 0;
   tracker.ForEachActiveFlow([&](const FlowState& state) {
@@ -58,7 +58,7 @@ TEST(FlowTrackerTest, RaceNewFlowBeforeOldFlowFinalized) {
   });
   EXPECT_THAT(times_called, testing::Eq(1));
 
-  tracker.FinalizeFlows(time(6), {{flow, 500'000}});
+  tracker.FinalizeFlows(time(6), {{flow, 0, 500'000}});
 
   times_called = 0;
   tracker.ForEachActiveFlow([&](const FlowState& state) { ++times_called; });
@@ -137,22 +137,24 @@ TEST(SSFlowStateReporterTest, CollectsExpectedOutput) {
     });
 
     if (active_usage_bps_cum_bytes.size() == 1) {
-      ASSERT_THAT(active_usage_bps_cum_bytes,
-                  testing::UnorderedElementsAre(testing::Pair(
-                      EqFlowNoId(marker2),
-                      testing::Pair(testing::Eq(0), testing::Eq(9999)))));
-      ASSERT_THAT(dead_usage_bps_cum_bytes,
-                  testing::UnorderedElementsAre(testing::Pair(
-                      EqFlowNoId(marker1), testing::Pair(testing::Ge(8 * 3900),
-                                                         testing::Eq(4140)))));
-    } else {
       ASSERT_THAT(
           active_usage_bps_cum_bytes,
-          testing::UnorderedElementsAre(
-              testing::Pair(EqFlowNoId(marker1),
-                            testing::Pair(testing::Eq(0), testing::Eq(240))),
-              testing::Pair(EqFlowNoId(marker2),
-                            testing::Pair(testing::Eq(0), testing::Eq(9999)))));
+          testing::UnorderedElementsAre(testing::Pair(
+              EqFlowNoId(marker2),
+              testing::Pair(testing::Eq(999'999'999), testing::Eq(9999)))));
+      ASSERT_THAT(dead_usage_bps_cum_bytes,
+                  testing::UnorderedElementsAre(testing::Pair(
+                      EqFlowNoId(marker1), testing::Pair(testing::Ge(1'358'943),
+                                                         testing::Eq(4140)))));
+    } else {
+      ASSERT_THAT(active_usage_bps_cum_bytes,
+                  testing::UnorderedElementsAre(
+                      testing::Pair(EqFlowNoId(marker1),
+                                    testing::Pair(testing::Eq(458'943),
+                                                  testing::Eq(240))),
+                      testing::Pair(EqFlowNoId(marker2),
+                                    testing::Pair(testing::Eq(999'999'999),
+                                                  testing::Eq(9999)))));
       ASSERT_THAT(dead_usage_bps_cum_bytes, testing::IsEmpty());
     }
   }

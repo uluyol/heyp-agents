@@ -50,7 +50,7 @@ TEST(FlowStateTest, GarbageCollectsOldUsage) {
   absl::Time now = absl::Now();
   FlowState state({});
   for (int i = 0; i < 20; i++) {
-    state.UpdateUsage(now + absl::Seconds(i), 100, window, &predictor);
+    state.UpdateUsage(now + absl::Seconds(i), 0, 100, window, &predictor);
   }
 }
 
@@ -71,7 +71,7 @@ TEST(FlowStateTest, HistoryAndDemandTracksIncreases) {
   int64_t last_usage_bps = 0;
   for (int i = 0; i < 20; i++) {
     cum_usage_bytes += 100 * i;
-    state.UpdateUsage(now + absl::Seconds(i), cum_usage_bytes,
+    state.UpdateUsage(now + absl::Seconds(i), 0, cum_usage_bytes,
                       absl::Seconds(100), &demand_predictor);
     EXPECT_THAT(state.updated_time(), testing::Eq(now + absl::Seconds(i)));
     EXPECT_THAT(state.cum_usage_bytes(), testing::Eq(cum_usage_bytes));
@@ -127,14 +127,14 @@ TEST(FlowStateTest, CheckHistoryIsExpected) {
 
   const int64_t cum_usage_bytes = absl::Uniform(absl::BitGen(), 0, 10'000'000);
 
-  state.UpdateUsage(time(0), cum_usage_bytes, absl::Seconds(2), &predictor);
-  state.UpdateUsage(time(1), cum_usage_bytes + 1000, absl::Seconds(2),
+  state.UpdateUsage(time(0), 0, cum_usage_bytes, absl::Seconds(2), &predictor);
+  state.UpdateUsage(time(1), 0, cum_usage_bytes + 1000, absl::Seconds(2),
                     &predictor);
-  state.UpdateUsage(time(2), cum_usage_bytes + 3000, absl::Seconds(2),
+  state.UpdateUsage(time(2), 0, cum_usage_bytes + 3000, absl::Seconds(2),
                     &predictor);
-  state.UpdateUsage(time(3), cum_usage_bytes + 5300, absl::Seconds(2),
+  state.UpdateUsage(time(3), 0, cum_usage_bytes + 5300, absl::Seconds(2),
                     &predictor);
-  state.UpdateUsage(time(4), cum_usage_bytes + 7900, absl::Seconds(2),
+  state.UpdateUsage(time(4), 20'800, cum_usage_bytes + 2, absl::Seconds(2),
                     &predictor);
 }
 

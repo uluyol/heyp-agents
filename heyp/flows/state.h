@@ -22,8 +22,8 @@ class FlowState {
   absl::Time updated_time() const;
   int64_t cum_usage_bytes() const;
 
-  void UpdateUsage(absl::Time timestamp, int64_t cum_usage_bytes,
-                   absl::Duration usage_history_window,
+  void UpdateUsage(absl::Time timestamp, int64_t instantaneous_usage_bps,
+                   int64_t cum_usage_bytes, absl::Duration usage_history_window,
                    DemandPredictor* demand_predictor);
 
  private:

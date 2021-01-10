@@ -21,9 +21,12 @@ absl::Time FlowState::updated_time() const { return updated_time_; }
 
 int64_t FlowState::cum_usage_bytes() const { return cum_usage_bytes_; }
 
-void FlowState::UpdateUsage(absl::Time timestamp, int64_t cum_usage_bytes,
+void FlowState::UpdateUsage(absl::Time timestamp,
+                            int64_t instantaneous_usage_bps,
+                            int64_t cum_usage_bytes,
                             absl::Duration usage_history_window,
                             DemandPredictor* demand_predictor) {
+  double measured_usage_bps = instantaneous_usage_bps;
   if (was_updated_) {
     if (timestamp < updated_time_) {
       LOG(WARNING) << absl::Substitute(
@@ -33,16 +36,20 @@ void FlowState::UpdateUsage(absl::Time timestamp, int64_t cum_usage_bytes,
           cum_usage_bytes_);
       return;
     }
+    const int64_t usage_bits = 8 * (cum_usage_bytes - cum_usage_bytes_);
+    const absl::Duration dur = timestamp - updated_time_;
+    const double measured_mean_usage_bps =
+        usage_bits / absl::ToDoubleSeconds(dur);
+    measured_usage_bps =
+        std::max<double>(measured_mean_usage_bps, measured_usage_bps);
   } else {
     was_updated_ = true;
     updated_time_ = timestamp;
     cum_usage_bytes_ = cum_usage_bytes;
-    return;  // need two bytes measurements to compute bps
+    if (measured_usage_bps == 0 /* == instantaneous_usage_bps */) {
+      return;  // likely no usage data => wait to estimate usage
+    }
   }
-
-  const int64_t usage_bits = 8 * (cum_usage_bytes - cum_usage_bytes_);
-  const absl::Duration dur = timestamp - updated_time_;
-  const double measured_usage_bps = usage_bits / absl::ToDoubleSeconds(dur);
 
   if (!have_bps_) {
     ewma_usage_bps_ = measured_usage_bps;

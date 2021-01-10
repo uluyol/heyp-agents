@@ -50,47 +50,41 @@ FlowState CreateFlowState(const proto::FlowMarker &f, uint64_t seqnum) {
 
 }  // namespace
 
-void FlowTracker::UpdateFlows(
-    absl::Time timestamp,
-    absl::Span<const std::pair<proto::FlowMarker, int64_t>>
-        flow_usage_bytes_batch) {
+void FlowTracker::UpdateFlows(absl::Time timestamp,
+                              absl::Span<const Update> flow_update_batch) {
   absl::MutexLock lock(&mu_);
-  for (size_t i = 0; i < flow_usage_bytes_batch.size();) {
-    const proto::FlowMarker &f = flow_usage_bytes_batch[i].first;
-    const int64_t cum_usage_bytes = flow_usage_bytes_batch[i].second;
-    if (!active_flows_.contains(f)) {
-      active_flows_.emplace(f, CreateFlowState(f, ++next_seqnum_));
+  for (size_t i = 0; i < flow_update_batch.size();) {
+    const Update &u = flow_update_batch[i];
+    if (!active_flows_.contains(u.flow)) {
+      active_flows_.emplace(u.flow, CreateFlowState(u.flow, ++next_seqnum_));
     }
-    FlowState &state = active_flows_.at(f);
-    if (state.cum_usage_bytes() > cum_usage_bytes) {
+    FlowState &state = active_flows_.at(u.flow);
+    if (state.cum_usage_bytes() > u.cum_usage_bytes) {
       // Got a race, new usage lower than old usage, so this must be a new flow
       done_flows_.push_back(state);
-      active_flows_.erase(f);
+      active_flows_.erase(u.flow);
       // Rerun on this flow so we add a new state
     } else {
-      active_flows_.at(f).UpdateUsage(timestamp, cum_usage_bytes,
-                                      config_.usage_history_window,
-                                      demand_predictor_.get());
+      active_flows_.at(u.flow).UpdateUsage(
+          timestamp, u.instantaneous_usage_bps, u.cum_usage_bytes,
+          config_.usage_history_window, demand_predictor_.get());
       ++i;
     }
   }
 }
 
-void FlowTracker::FinalizeFlows(
-    absl::Time timestamp,
-    absl::Span<const std::pair<proto::FlowMarker, int64_t>>
-        flow_usage_bps_batch) {
+void FlowTracker::FinalizeFlows(absl::Time timestamp,
+                                absl::Span<const Update> flow_update_batch) {
   absl::MutexLock lock(&mu_);
-  for (const auto &pair : flow_usage_bps_batch) {
-    const proto::FlowMarker &f = pair.first;
-    if (!active_flows_.contains(f)) {
-      active_flows_.emplace(f, CreateFlowState(f, ++next_seqnum_));
+  for (const Update &u : flow_update_batch) {
+    if (!active_flows_.contains(u.flow)) {
+      active_flows_.emplace(u.flow, CreateFlowState(u.flow, ++next_seqnum_));
     }
-    active_flows_.at(f).UpdateUsage(timestamp, pair.second,
-                                    config_.usage_history_window,
-                                    demand_predictor_.get());
-    done_flows_.push_back(active_flows_.at(f));
-    active_flows_.erase(f);
+    active_flows_.at(u.flow).UpdateUsage(
+        timestamp, u.instantaneous_usage_bps, u.cum_usage_bytes,
+        config_.usage_history_window, demand_predictor_.get());
+    done_flows_.push_back(active_flows_.at(u.flow));
+    active_flows_.erase(u.flow);
   }
 }
 
@@ -117,7 +111,8 @@ SSFlowStateReporter::~SSFlowStateReporter() {
 namespace {
 
 absl::Status ParseLine(uint64_t host_id, absl::string_view line,
-                       proto::FlowMarker &parsed, int64_t &cum_usage_bytes) {
+                       proto::FlowMarker &parsed, int64_t &usage_bps,
+                       int64_t &cum_usage_bytes) {
   parsed.Clear();
 
   std::vector<absl::string_view> fields =
@@ -144,7 +139,7 @@ absl::Status ParseLine(uint64_t host_id, absl::string_view line,
   bool found_usage_bps = false;
   cum_usage_bytes = 0;
   bool next_is_usage_bps = false;
-  int64_t usage_bps = 0;
+  usage_bps = 0;
   for (absl::string_view field : fields) {
     if (absl::StartsWith(field, "bytes_sent:")) {
       field = absl::StripPrefix(field, "bytes_sent:");
@@ -194,7 +189,9 @@ void SSFlowStateReporter::MonitorDone() {
     absl::Time now = absl::Now();
     proto::FlowMarker f;
     int64_t usage_bps = 0;
-    auto status = ParseLine(impl_->config.host_id, line, f, usage_bps);
+    int64_t cum_usage_bytes = 0;
+    auto status =
+        ParseLine(impl_->config.host_id, line, f, usage_bps, cum_usage_bytes);
     if (!status.ok()) {
       LOG(ERROR) << "failed to parse done line: " << status;
       continue;
@@ -203,7 +200,7 @@ void SSFlowStateReporter::MonitorDone() {
       continue;
     }
 
-    impl_->flow_tracker->FinalizeFlows(now, {{f, usage_bps}});
+    impl_->flow_tracker->FinalizeFlows(now, {{f, usage_bps, cum_usage_bytes}});
   }
 
   CHECK(impl_->is_dying);
@@ -217,20 +214,22 @@ absl::Status SSFlowStateReporter::ReportState() {
 
     absl::Time now = absl::Now();
     std::string line;
-    std::vector<std::pair<proto::FlowMarker, int64_t>> flow_cum_usage_bytes;
+    std::vector<FlowTracker::Update> flow_updates;
     while (std::getline(out, line) && !line.empty()) {
       proto::FlowMarker f;
+      int64_t usage_bps = 0;
       int64_t cum_usage_bytes = 0;
-      auto status = ParseLine(impl_->config.host_id, line, f, cum_usage_bytes);
+      auto status =
+          ParseLine(impl_->config.host_id, line, f, usage_bps, cum_usage_bytes);
       if (!status.ok()) {
         return status;
       }
       if (IgnoreFlow(f)) {
         continue;
       }
-      flow_cum_usage_bytes.push_back({f, cum_usage_bytes});
+      flow_updates.push_back({f, usage_bps, cum_usage_bytes});
     }
-    impl_->flow_tracker->UpdateFlows(now, flow_cum_usage_bytes);
+    impl_->flow_tracker->UpdateFlows(now, flow_updates);
     c.wait();
   } catch (const std::system_error &e) {
     return absl::InternalError(
