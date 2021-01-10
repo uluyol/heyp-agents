@@ -115,13 +115,14 @@ TEST(HostDaemonTest, CreateAndTeardownNoRun) {
   InProcessTestServer server({});
   MockFlowStateProvider flow_state_provider;
   MockFlowStateReporter flow_state_reporter;
+  StaticDCMapper dc_mapper;
   MockHostEnforcer enforcer;
   EXPECT_CALL(flow_state_provider, ForEachActiveFlow(testing::_)).Times(0);
   EXPECT_CALL(flow_state_reporter, ReportState()).Times(0);
   EXPECT_CALL(enforcer, EnforceAllocs(testing::_, testing::_)).Times(0);
   {
     HostDaemon daemon(server.GetChannel(),
-                      {.inform_period = absl::Milliseconds(100)},
+                      {.inform_period = absl::Milliseconds(100)}, &dc_mapper,
                       &flow_state_provider, &flow_state_reporter, &enforcer);
   }
   server.Teardown();
@@ -131,6 +132,7 @@ TEST(HostDaemonTest, CreateAndTeardownNoActions) {
   InProcessTestServer server({});
   MockFlowStateProvider flow_state_provider;
   MockFlowStateReporter flow_state_reporter;
+  StaticDCMapper dc_mapper;
   MockHostEnforcer enforcer;
   EXPECT_CALL(flow_state_provider, ForEachActiveFlow(testing::_))
       .Times(testing::AtLeast(0));
@@ -139,7 +141,7 @@ TEST(HostDaemonTest, CreateAndTeardownNoActions) {
       .Times(testing::AtLeast(0));
   {
     HostDaemon daemon(server.GetChannel(),
-                      {.inform_period = absl::Milliseconds(100)},
+                      {.inform_period = absl::Milliseconds(100)}, &dc_mapper,
                       &flow_state_provider, &flow_state_reporter, &enforcer);
     std::atomic<bool> exit(true);
     daemon.Run(&exit);
@@ -197,8 +199,9 @@ TEST(HostDaemonTest, CallsIntoHostEnforcer) {
   InProcessTestServer server(allocs);
   MockFlowStateProvider flow_state_provider;
   MockFlowStateReporter flow_state_reporter;
-
+  StaticDCMapper dc_mapper;
   MockHostEnforcer enforcer;
+
   EXPECT_CALL(flow_state_provider, ForEachActiveFlow(testing::_))
       .Times(testing::AtLeast(0));
   EXPECT_CALL(flow_state_reporter, ReportState()).Times(testing::AtLeast(0));
@@ -213,7 +216,7 @@ TEST(HostDaemonTest, CallsIntoHostEnforcer) {
   }
   {
     HostDaemon daemon(server.GetChannel(),
-                      {.inform_period = absl::Milliseconds(10)},
+                      {.inform_period = absl::Milliseconds(10)}, &dc_mapper,
                       &flow_state_provider, &flow_state_reporter, &enforcer);
     std::atomic<bool> exit(false);
     daemon.Run(&exit);

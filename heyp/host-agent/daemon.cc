@@ -7,16 +7,24 @@
 namespace heyp {
 
 HostDaemon::HostDaemon(const std::shared_ptr<grpc::Channel>& channel,
-                       Config config, FlowStateProvider* flow_state_provider,
+                       Config config, DCMapper* dc_mapper,
+                       FlowStateProvider* flow_state_provider,
                        FlowStateReporter* flow_state_reporter,
                        HostEnforcerInterface* enforcer)
     : config_(config),
+      dc_mapper_(dc_mapper),
       flow_state_provider_(flow_state_provider),
       flow_state_reporter_(flow_state_reporter),
       enforcer_(enforcer),
       stub_(proto::ClusterAgent::NewStub(channel)) {}
 
 namespace {
+
+proto::FlowMarker WithDCs(proto::FlowMarker marker, const DCMapper& dc_mapper) {
+  marker.set_src_dc(dc_mapper.HostDC(marker.src_addr()));
+  marker.set_dst_dc(dc_mapper.HostDC(marker.dst_addr()));
+  return marker;
+}
 
 bool FlaggedOrWaitFor(absl::Duration dur, std::atomic<bool>* exit_flag) {
   absl::Time start = absl::Now();
@@ -28,7 +36,7 @@ bool FlaggedOrWaitFor(absl::Duration dur, std::atomic<bool>* exit_flag) {
 }
 
 void SendInfo(
-    absl::Duration inform_period, uint64_t host_id,
+    absl::Duration inform_period, uint64_t host_id, const DCMapper* dc_mapper,
     FlowStateProvider* flow_state_provider,
     FlowStateReporter* flow_state_reporter, std::atomic<bool>* should_exit,
     grpc::ClientReaderWriter<proto::HostInfo, proto::HostAlloc>* io_stream) {
@@ -40,14 +48,14 @@ void SendInfo(
       LOG(ERROR) << "failed to report flow state: " << report_status;
       continue;
     }
-    flow_state_provider->ForEachActiveFlow([&info](const FlowState& state) {
-      proto::FlowInfo* flow_info = info.add_flow_infos();
-      LOG(INFO) << "TODO: classify to FG-level info";
-      *flow_info->mutable_marker() = state.flow();
-      flow_info->set_cum_usage_bytes(state.cum_usage_bytes());
-      flow_info->set_usage_bps(state.ewma_usage_bps());
-      flow_info->set_demand_bps(state.predicted_demand_bps());
-    });
+    flow_state_provider->ForEachActiveFlow(
+        [&info, dc_mapper](const FlowState& state) {
+          proto::FlowInfo* flow_info = info.add_flow_infos();
+          *flow_info->mutable_marker() = WithDCs(state.flow(), *dc_mapper);
+          flow_info->set_cum_usage_bytes(state.cum_usage_bytes());
+          flow_info->set_usage_bps(state.ewma_usage_bps());
+          flow_info->set_demand_bps(state.predicted_demand_bps());
+        });
     *info.mutable_timestamp() = ToProtoTimestamp(absl::Now());
     io_stream->Write(info);
   } while (!FlaggedOrWaitFor(inform_period, should_exit));
@@ -76,9 +84,10 @@ void HostDaemon::Run(std::atomic<bool>* should_exit) {
 
   io_stream_ = stub_->RegisterHost(&context_);
 
-  info_thread_ = std::thread(SendInfo, config_.inform_period, config_.host_id,
-                             flow_state_provider_, flow_state_reporter_,
-                             should_exit, io_stream_.get());
+  info_thread_ =
+      std::thread(SendInfo, config_.inform_period, config_.host_id, dc_mapper_,
+                  flow_state_provider_, flow_state_reporter_, should_exit,
+                  io_stream_.get());
 
   enforcer_thread_ = std::thread(EnforceAlloc, flow_state_provider_, enforcer_,
                                  io_stream_.get());

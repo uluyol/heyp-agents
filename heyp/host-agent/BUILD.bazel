@@ -7,6 +7,7 @@ cc_binary(
         ":daemon",
         ":enforcer",
         ":flow-tracker",
+        "//heyp/flows:dc-mapper",
         "//heyp/proto:config_cc_proto",
         "//heyp/proto:fileio",
         "@com_github_gflags_gflags//:gflags",
@@ -65,6 +66,7 @@ cc_library(
     deps = [
         ":enforcer",
         ":flow-tracker",
+        "//heyp/flows:dc-mapper",
         "//heyp/proto:constructors",
         "//heyp/proto:heyp_cc_grpc",
         "//heyp/proto:heyp_cc_proto",
@@ -113,6 +115,7 @@ cc_test(
     srcs = ["daemon-test.cc"],
     deps = [
         ":daemon",
+        "//heyp/flows:dc-mapper",
         "//heyp/proto:parse_text",
         "@com_github_grpc_grpc//:grpc++",
         "@com_google_absl//absl/container:flat_hash_map",

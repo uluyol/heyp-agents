@@ -12,6 +12,7 @@
 #include "glog/logging.h"
 #include "google/protobuf/text_format.h"
 #include "grpcpp/grpcpp.h"
+#include "heyp/flows/dc-mapper.h"
 #include "heyp/host-agent/daemon.h"
 #include "heyp/host-agent/enforcer.h"
 #include "heyp/host-agent/flow-tracker.h"
@@ -85,6 +86,8 @@ absl::Status Run(const proto::HostAgentConfig& c) {
   }
   std::unique_ptr<FlowStateReporter> flow_state_reporter =
       std::move(*flow_state_reporter_or);
+  LOG(INFO) << "creating dc mapper";
+  StaticDCMapper dc_mapper;
   LOG(INFO) << "creating host enforcer";
   HostEnforcer enforcer;
   LOG(INFO) << "connecting to cluster agent";
@@ -104,7 +107,8 @@ absl::Status Run(const proto::HostAgentConfig& c) {
                         .host_id = host_id,
                         .inform_period = *inform_period_or,
                     },
-                    &flow_tracker, flow_state_reporter.get(), &enforcer);
+                    &dc_mapper, &flow_tracker, flow_state_reporter.get(),
+                    &enforcer);
   LOG(INFO) << "running daemon main loop";
   daemon.Run(&should_exit_flag);
   return absl::OkStatus();
