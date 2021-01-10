@@ -5,7 +5,7 @@
 namespace heyp {
 
 std::string StaticDCMapper::HostDC(absl::string_view host) const {
-  LOG(INFO) << "StaticDCMapper not implemented";
+  LOG(INFO) << "TODO: implement StaticDCMapper";
   return "";
 }
 
