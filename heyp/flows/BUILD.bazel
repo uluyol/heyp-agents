@@ -3,9 +3,9 @@ load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
 package(default_visibility = ["//heyp:__subpackages__"])
 
 cc_library(
-    name = "dc-classifier",
-    srcs = ["dc-classifier.cc"],
-    hdrs = ["dc-classifier.h"],
+    name = "dc-mapper",
+    srcs = ["dc-mapper.cc"],
+    hdrs = ["dc-mapper.h"],
     deps = [
         "@com_google_absl//absl/strings",
         "@glog",
