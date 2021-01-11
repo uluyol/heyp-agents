@@ -2,6 +2,8 @@ syntax = "proto2";
 
 package heyp.proto;
 
+import "heyp/proto/heyp.proto";
+
 message DemandPredictorConfig {
   optional string time_window_dur = 1 [default = "10s"];
   optional double usage_multiplier = 2 [default = 1.1];
@@ -23,8 +25,13 @@ message HostDaemonConfig {
   optional string cluster_agent_connection_timeout_dur = 3 [default = "10s"];
 }
 
+message StaticDCMapperConfig {
+  optional DCMapping mapping = 1;
+}
+
 message HostAgentConfig {
-  optional HostFlowTrackerConfig flow_tracker = 2;
-  optional HostFlowStateReporterConfig flow_state_reporter = 3;
-  optional HostDaemonConfig daemon = 4;
+  optional HostFlowTrackerConfig flow_tracker = 1;
+  optional HostFlowStateReporterConfig flow_state_reporter = 2;
+  optional HostDaemonConfig daemon = 3;
+  optional StaticDCMapperConfig dc_mapper = 4;
 }

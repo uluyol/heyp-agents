@@ -87,7 +87,7 @@ absl::Status Run(const proto::HostAgentConfig& c) {
   std::unique_ptr<FlowStateReporter> flow_state_reporter =
       std::move(*flow_state_reporter_or);
   LOG(INFO) << "creating dc mapper";
-  StaticDCMapper dc_mapper;
+  StaticDCMapper dc_mapper(c.dc_mapper());
   LOG(INFO) << "creating host enforcer";
   HostEnforcer enforcer;
   LOG(INFO) << "connecting to cluster agent";

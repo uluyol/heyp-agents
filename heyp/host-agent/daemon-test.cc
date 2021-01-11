@@ -115,7 +115,7 @@ TEST(HostDaemonTest, CreateAndTeardownNoRun) {
   InProcessTestServer server({});
   MockFlowStateProvider flow_state_provider;
   MockFlowStateReporter flow_state_reporter;
-  StaticDCMapper dc_mapper;
+  StaticDCMapper dc_mapper({});
   MockHostEnforcer enforcer;
   EXPECT_CALL(flow_state_provider, ForEachActiveFlow(testing::_)).Times(0);
   EXPECT_CALL(flow_state_reporter, ReportState()).Times(0);
@@ -132,7 +132,7 @@ TEST(HostDaemonTest, CreateAndTeardownNoActions) {
   InProcessTestServer server({});
   MockFlowStateProvider flow_state_provider;
   MockFlowStateReporter flow_state_reporter;
-  StaticDCMapper dc_mapper;
+  StaticDCMapper dc_mapper({});
   MockHostEnforcer enforcer;
   EXPECT_CALL(flow_state_provider, ForEachActiveFlow(testing::_))
       .Times(testing::AtLeast(0));
@@ -199,7 +199,7 @@ TEST(HostDaemonTest, CallsIntoHostEnforcer) {
   InProcessTestServer server(allocs);
   MockFlowStateProvider flow_state_provider;
   MockFlowStateReporter flow_state_reporter;
-  StaticDCMapper dc_mapper;
+  StaticDCMapper dc_mapper({});
   MockHostEnforcer enforcer;
 
   EXPECT_CALL(flow_state_provider, ForEachActiveFlow(testing::_))
