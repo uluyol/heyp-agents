@@ -53,8 +53,9 @@ void SendInfo(
           proto::FlowInfo* flow_info = info.add_flow_infos();
           *flow_info->mutable_marker() = WithDCs(state.flow(), *dc_mapper);
           flow_info->set_cum_usage_bytes(state.cum_usage_bytes());
-          flow_info->set_usage_bps(state.ewma_usage_bps());
+          flow_info->set_ewma_usage_bps(state.ewma_usage_bps());
           flow_info->set_demand_bps(state.predicted_demand_bps());
+          // TODO: track HIPRI usage and LOPRI usage separately
         });
     *info.mutable_timestamp() = ToProtoTimestamp(absl::Now());
     io_stream->Write(info);
