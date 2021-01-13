@@ -42,6 +42,15 @@ class BweDemandPredictor : public DemandPredictor {
   const int64_t min_demand_bps_;
 };
 
+class NopDemandPredictor : public DemandPredictor {
+ public:
+  int64_t FromUsage(
+      absl::Time now,
+      absl::Span<const UsageHistoryEntry> usage_history) const override {
+    return 0;
+  }
+};
+
 }  // namespace heyp
 
 #endif  // HEYP_ALG_DEMAND_PREDICTOR_H_
