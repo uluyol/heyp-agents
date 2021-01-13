@@ -20,11 +20,23 @@ class FlowState {
   int64_t ewma_usage_bps() const;
 
   absl::Time updated_time() const;
-  int64_t cum_usage_bytes() const;
 
-  void UpdateUsage(absl::Time timestamp, int64_t instantaneous_usage_bps,
-                   int64_t cum_usage_bytes, absl::Duration usage_history_window,
-                   DemandPredictor* demand_predictor);
+  // cum_usage_bytes = cum_hipri_usage_bytes + cum_lopri_usage_bytes
+  int64_t cum_usage_bytes() const;
+  int64_t cum_hipri_usage_bytes() const;
+  int64_t cum_lopri_usage_bytes() const;
+
+  bool currently_lopri() const;
+
+  struct Update {
+    absl::Time time;
+    int64_t cum_usage_bytes = 0;
+    int64_t instantaneous_usage_bps = 0;  // optional
+    bool is_lopri = false;                // optional
+  };
+
+  void UpdateUsage(const Update u, absl::Duration usage_history_window,
+                   const DemandPredictor& demand_predictor);
 
  private:
   proto::FlowMarker flow_;
@@ -35,6 +47,9 @@ class FlowState {
 
   absl::Time updated_time_ = absl::InfinitePast();
   int64_t cum_usage_bytes_ = 0;
+  int64_t cum_hipri_usage_bytes_ = 0;
+  int64_t cum_lopri_usage_bytes_ = 0;
+  bool currently_lopri_ = false;
 
   bool was_updated_ = false;
   bool have_bps_ = false;

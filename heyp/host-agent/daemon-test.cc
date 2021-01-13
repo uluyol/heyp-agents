@@ -100,7 +100,9 @@ class MockFlowStateProvider : public FlowStateProvider {
 
 class MockFlowStateReporter : public FlowStateReporter {
  public:
-  MOCK_METHOD(absl::Status, ReportState, (), (override));
+  MOCK_METHOD(absl::Status, ReportState,
+              (absl::FunctionRef<bool(const proto::FlowMarker&)> is_lopri),
+              (override));
 };
 
 class MockHostEnforcer : public HostEnforcerInterface {
@@ -118,7 +120,7 @@ TEST(HostDaemonTest, CreateAndTeardownNoRun) {
   StaticDCMapper dc_mapper({});
   MockHostEnforcer enforcer;
   EXPECT_CALL(flow_state_provider, ForEachActiveFlow(testing::_)).Times(0);
-  EXPECT_CALL(flow_state_reporter, ReportState()).Times(0);
+  EXPECT_CALL(flow_state_reporter, ReportState(testing::_)).Times(0);
   EXPECT_CALL(enforcer, EnforceAllocs(testing::_, testing::_)).Times(0);
   {
     HostDaemon daemon(server.GetChannel(),
@@ -136,7 +138,8 @@ TEST(HostDaemonTest, CreateAndTeardownNoActions) {
   MockHostEnforcer enforcer;
   EXPECT_CALL(flow_state_provider, ForEachActiveFlow(testing::_))
       .Times(testing::AtLeast(0));
-  EXPECT_CALL(flow_state_reporter, ReportState()).Times(testing::AtLeast(0));
+  EXPECT_CALL(flow_state_reporter, ReportState(testing::_))
+      .Times(testing::AtLeast(0));
   EXPECT_CALL(enforcer, EnforceAllocs(testing::_, testing::_))
       .Times(testing::AtLeast(0));
   {
@@ -204,7 +207,8 @@ TEST(HostDaemonTest, CallsIntoHostEnforcer) {
 
   EXPECT_CALL(flow_state_provider, ForEachActiveFlow(testing::_))
       .Times(testing::AtLeast(0));
-  EXPECT_CALL(flow_state_reporter, ReportState()).Times(testing::AtLeast(0));
+  EXPECT_CALL(flow_state_reporter, ReportState(testing::_))
+      .Times(testing::AtLeast(0));
   {
     testing::InSequence seq;
     for (const auto& entry : allocs) {

@@ -16,6 +16,12 @@
 
 namespace heyp {
 
+enum class FlowPri {
+  kUnset,
+  kHi,
+  kLo,
+};
+
 class FlowStateProvider {
  public:
   virtual ~FlowStateProvider() = default;
@@ -31,7 +37,8 @@ class FlowStateReporter {
  public:
   virtual ~FlowStateReporter() = default;
 
-  virtual absl::Status ReportState() = 0;
+  virtual absl::Status ReportState(
+      absl::FunctionRef<bool(const proto::FlowMarker&)> is_lopri) = 0;
 };
 
 class FlowTracker : public FlowStateProvider {
@@ -52,6 +59,7 @@ class FlowTracker : public FlowStateProvider {
     proto::FlowMarker flow;
     int64_t instantaneous_usage_bps;
     int64_t cum_usage_bytes;
+    FlowPri used_priority;
   };
 
   // Updates the usage of the specified Flows.
@@ -95,7 +103,8 @@ class SSFlowStateReporter : public FlowStateReporter {
   static absl::StatusOr<std::unique_ptr<SSFlowStateReporter>> Create(
       Config config, FlowTracker* flow_tracker);
 
-  absl::Status ReportState() override;
+  absl::Status ReportState(
+      absl::FunctionRef<bool(const proto::FlowMarker&)> is_lopri) override;
 
  private:
   bool IgnoreFlow(const proto::FlowMarker& f);

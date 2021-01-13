@@ -50,7 +50,12 @@ TEST(FlowStateTest, GarbageCollectsOldUsage) {
   absl::Time now = absl::Now();
   FlowState state({});
   for (int i = 0; i < 20; i++) {
-    state.UpdateUsage(now + absl::Seconds(i), 0, 100, window, &predictor);
+    state.UpdateUsage(
+        {
+            .time = now + absl::Seconds(i),
+            .cum_usage_bytes = 100,
+        },
+        window, predictor);
   }
 }
 
@@ -71,8 +76,12 @@ TEST(FlowStateTest, HistoryAndDemandTracksIncreases) {
   int64_t last_usage_bps = 0;
   for (int i = 0; i < 20; i++) {
     cum_usage_bytes += 100 * i;
-    state.UpdateUsage(now + absl::Seconds(i), 0, cum_usage_bytes,
-                      absl::Seconds(100), &demand_predictor);
+    state.UpdateUsage(
+        {
+            .time = now + absl::Seconds(i),
+            .cum_usage_bytes = cum_usage_bytes,
+        },
+        absl::Seconds(100), demand_predictor);
     EXPECT_THAT(state.updated_time(), testing::Eq(now + absl::Seconds(i)));
     EXPECT_THAT(state.cum_usage_bytes(), testing::Eq(cum_usage_bytes));
     if (i >= 2) {
@@ -127,15 +136,105 @@ TEST(FlowStateTest, CheckHistoryIsExpected) {
 
   const int64_t cum_usage_bytes = absl::Uniform(absl::BitGen(), 0, 10'000'000);
 
-  state.UpdateUsage(time(0), 0, cum_usage_bytes, absl::Seconds(2), &predictor);
-  state.UpdateUsage(time(1), 0, cum_usage_bytes + 1000, absl::Seconds(2),
-                    &predictor);
-  state.UpdateUsage(time(2), 0, cum_usage_bytes + 3000, absl::Seconds(2),
-                    &predictor);
-  state.UpdateUsage(time(3), 0, cum_usage_bytes + 5300, absl::Seconds(2),
-                    &predictor);
-  state.UpdateUsage(time(4), 20'800, cum_usage_bytes + 2, absl::Seconds(2),
-                    &predictor);
+  state.UpdateUsage(
+      {
+          .time = time(0),
+          .cum_usage_bytes = cum_usage_bytes,
+      },
+      absl::Seconds(2), predictor);
+  state.UpdateUsage(
+      {
+          .time = time(1),
+          .cum_usage_bytes = cum_usage_bytes + 1000,
+          .instantaneous_usage_bps = 0,
+      },
+      absl::Seconds(2), predictor);
+  state.UpdateUsage(
+      {
+          .time = time(2),
+          .cum_usage_bytes = cum_usage_bytes + 3000,
+          .instantaneous_usage_bps = 0,
+      },
+      absl::Seconds(2), predictor);
+  state.UpdateUsage(
+      {
+          .time = time(3),
+          .cum_usage_bytes = cum_usage_bytes + 5300,
+          .instantaneous_usage_bps = 0,
+      },
+      absl::Seconds(2), predictor);
+  state.UpdateUsage(
+      {
+          .time = time(4),
+          .cum_usage_bytes = cum_usage_bytes + 2,
+          .instantaneous_usage_bps = 20'800,
+      },
+      absl::Seconds(2), predictor);
+}
+
+TEST(FlowStateTest, Priorities) {
+  NopDemandPredictor demand_predictor;
+
+  const absl::Time now = absl::Now();
+  auto time = [now](int64_t sec) -> absl::Time {
+    return now + absl::Seconds(sec);
+  };
+
+  FlowState state({});
+  constexpr absl::Duration kHistoryWindow = absl::Seconds(10);
+
+  EXPECT_EQ(state.cum_usage_bytes(), 0);
+  EXPECT_EQ(state.cum_hipri_usage_bytes(), 0);
+  EXPECT_EQ(state.cum_lopri_usage_bytes(), 0);
+  EXPECT_EQ(state.currently_lopri(), false);
+
+  state.UpdateUsage(
+      {
+          .time = time(0),
+          .cum_usage_bytes = 1000,
+          .is_lopri = false,
+      },
+      kHistoryWindow, demand_predictor);
+  EXPECT_EQ(state.cum_usage_bytes(), 1000);
+  EXPECT_EQ(state.cum_hipri_usage_bytes(), 1000);
+  EXPECT_EQ(state.cum_lopri_usage_bytes(), 0);
+  EXPECT_EQ(state.currently_lopri(), false);
+
+  state.UpdateUsage(
+      {
+          .time = time(0),
+          .cum_usage_bytes = 1200,
+          .is_lopri = false,
+      },
+      kHistoryWindow, demand_predictor);
+  EXPECT_EQ(state.cum_usage_bytes(), 1200);
+  EXPECT_EQ(state.cum_hipri_usage_bytes(), 1200);
+  EXPECT_EQ(state.cum_lopri_usage_bytes(), 0);
+  EXPECT_EQ(state.currently_lopri(), false);
+
+  state.UpdateUsage(
+      {
+          .time = time(0),
+          .cum_usage_bytes = 2000,
+          .is_lopri = true,
+      },
+      kHistoryWindow, demand_predictor);
+  EXPECT_EQ(state.cum_usage_bytes(), 2000);
+  EXPECT_EQ(state.cum_hipri_usage_bytes(), 1200);
+  EXPECT_EQ(state.cum_lopri_usage_bytes(), 800);
+  EXPECT_EQ(state.currently_lopri(), true);
+
+  state.UpdateUsage(
+      {
+          .time = time(0),
+          .cum_usage_bytes = 2700,
+          .is_lopri = false,
+      },
+      kHistoryWindow, demand_predictor);
+  EXPECT_EQ(state.cum_usage_bytes(), 2700);
+  EXPECT_EQ(state.cum_hipri_usage_bytes(), 1900);
+  EXPECT_EQ(state.cum_lopri_usage_bytes(), 800);
+  EXPECT_EQ(state.currently_lopri(), false);
 }
 
 }  // namespace

@@ -29,10 +29,10 @@ TEST(FlowTrackerTest, RaceNewFlowBeforeOldFlowFinalized) {
     return epoch + absl::Seconds(sec);
   };
 
-  tracker.UpdateFlows(time(0), {{flow, 0, 100'000}});
-  tracker.UpdateFlows(time(1), {{flow, 0, 200'000}});
-  tracker.UpdateFlows(time(2), {{flow, 0, 300'000}});
-  tracker.UpdateFlows(time(3), {{flow, 0, 400'000}});
+  tracker.UpdateFlows(time(0), {{flow, 0, 100'000, FlowPri::kHi}});
+  tracker.UpdateFlows(time(1), {{flow, 0, 200'000, FlowPri::kHi}});
+  tracker.UpdateFlows(time(2), {{flow, 0, 300'000, FlowPri::kHi}});
+  tracker.UpdateFlows(time(3), {{flow, 0, 400'000, FlowPri::kHi}});
 
   int times_called = 0;
   tracker.ForEachActiveFlow([&](const FlowState& state) {
@@ -46,8 +46,8 @@ TEST(FlowTrackerTest, RaceNewFlowBeforeOldFlowFinalized) {
   // RACE: the current flow dies, but before that is registered, a new flow
   // appears with the same src/dst port.
 
-  tracker.UpdateFlows(time(5), {{flow, 0, 50'000}});
-  tracker.UpdateFlows(time(6), {{flow, 0, 70'000}});
+  tracker.UpdateFlows(time(5), {{flow, 0, 50'000, FlowPri::kHi}});
+  tracker.UpdateFlows(time(6), {{flow, 0, 70'000, FlowPri::kHi}});
 
   times_called = 0;
   tracker.ForEachActiveFlow([&](const FlowState& state) {
@@ -92,7 +92,9 @@ TEST(SSFlowStateReporterTest, CollectsExpectedOutput) {
               testing::Property(&absl::Status::ok, testing::IsTrue()));
 
   std::unique_ptr<SSFlowStateReporter> reporter = std::move(*reporter_or);
-  ASSERT_THAT(reporter->ReportState(),
+  int i = 0;
+  ASSERT_THAT(reporter->ReportState(
+                  [&i](const proto::FlowMarker&) { return (++i % 2) == 0; }),
               testing::Property(&absl::Status::ok, testing::IsTrue()));
 
   constexpr absl::Duration kMaxWaitDur = absl::Seconds(2);

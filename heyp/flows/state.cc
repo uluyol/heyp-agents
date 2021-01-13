@@ -21,31 +21,45 @@ absl::Time FlowState::updated_time() const { return updated_time_; }
 
 int64_t FlowState::cum_usage_bytes() const { return cum_usage_bytes_; }
 
-void FlowState::UpdateUsage(absl::Time timestamp,
-                            int64_t instantaneous_usage_bps,
-                            int64_t cum_usage_bytes,
-                            absl::Duration usage_history_window,
-                            DemandPredictor* demand_predictor) {
-  double measured_usage_bps = instantaneous_usage_bps;
+int64_t FlowState::cum_hipri_usage_bytes() const {
+  return cum_hipri_usage_bytes_;
+}
+
+int64_t FlowState::cum_lopri_usage_bytes() const {
+  return cum_lopri_usage_bytes_;
+}
+
+bool FlowState::currently_lopri() const { return currently_lopri_; }
+
+void FlowState::UpdateUsage(const Update u, absl::Duration usage_history_window,
+                            const DemandPredictor& demand_predictor) {
+  double measured_usage_bps = u.instantaneous_usage_bps;
   if (was_updated_) {
-    if (timestamp < updated_time_) {
+    if (u.time < updated_time_) {
       LOG(WARNING) << absl::Substitute(
           "got update ($0, $1) older than last update ($2, $3)",
-          absl::FormatTime(timestamp, absl::UTCTimeZone()), cum_usage_bytes,
+          absl::FormatTime(u.time, absl::UTCTimeZone()), u.cum_usage_bytes,
           absl::FormatTime(updated_time_, absl::UTCTimeZone()),
           cum_usage_bytes_);
       return;
     }
-    const int64_t usage_bits = 8 * (cum_usage_bytes - cum_usage_bytes_);
-    const absl::Duration dur = timestamp - updated_time_;
+    const int64_t usage_bits = 8 * (u.cum_usage_bytes - cum_usage_bytes_);
+    const absl::Duration dur = u.time - updated_time_;
     const double measured_mean_usage_bps =
         usage_bits / absl::ToDoubleSeconds(dur);
     measured_usage_bps =
         std::max<double>(measured_mean_usage_bps, measured_usage_bps);
   } else {
     was_updated_ = true;
-    updated_time_ = timestamp;
-    cum_usage_bytes_ = cum_usage_bytes;
+    updated_time_ = u.time;
+    if (u.is_lopri) {
+      cum_lopri_usage_bytes_ += u.cum_usage_bytes - cum_usage_bytes_;
+      currently_lopri_ = true;
+    } else {
+      cum_hipri_usage_bytes_ += u.cum_usage_bytes - cum_usage_bytes_;
+      currently_lopri_ = false;
+    }
+    cum_usage_bytes_ = u.cum_usage_bytes;
     if (measured_usage_bps == 0 /* == instantaneous_usage_bps */) {
       return;  // likely no usage data => wait to estimate usage
     }
@@ -60,13 +74,20 @@ void FlowState::UpdateUsage(absl::Time timestamp,
         alpha * (measured_usage_bps) + (1 - alpha) * ewma_usage_bps_;
   }
 
-  updated_time_ = timestamp;
-  cum_usage_bytes_ = cum_usage_bytes;
-  usage_history_.push_back({timestamp, ewma_usage_bps_});
+  updated_time_ = u.time;
+  if (u.is_lopri) {
+    cum_lopri_usage_bytes_ += u.cum_usage_bytes - cum_usage_bytes_;
+    currently_lopri_ = true;
+  } else {
+    cum_hipri_usage_bytes_ += u.cum_usage_bytes - cum_usage_bytes_;
+    currently_lopri_ = false;
+  }
+  cum_usage_bytes_ = u.cum_usage_bytes;
+  usage_history_.push_back({u.time, ewma_usage_bps_});
 
   // Garbage collect old entries, but allow some delay.
-  if (timestamp - usage_history_.front().time > 2 * usage_history_window) {
-    absl::Time min_time = timestamp - usage_history_window;
+  if (u.time - usage_history_.front().time > 2 * usage_history_window) {
+    absl::Time min_time = u.time - usage_history_window;
     size_t keep_from = usage_history_.size();
     for (size_t i = 0; i < usage_history_.size(); i++) {
       if (usage_history_[i].time >= min_time) {
@@ -81,12 +102,7 @@ void FlowState::UpdateUsage(absl::Time timestamp,
     usage_history_.resize(num_keep);
   }
 
-  if (demand_predictor == nullptr) {
-    predicted_demand_bps_ = 0;
-  } else {
-    predicted_demand_bps_ =
-        demand_predictor->FromUsage(timestamp, usage_history_);
-  }
+  predicted_demand_bps_ = demand_predictor.FromUsage(u.time, usage_history_);
 }
 
 }  // namespace heyp

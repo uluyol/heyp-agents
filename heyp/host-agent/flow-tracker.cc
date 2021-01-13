@@ -65,9 +65,17 @@ void FlowTracker::UpdateFlows(absl::Time timestamp,
       active_flows_.erase(u.flow);
       // Rerun on this flow so we add a new state
     } else {
+      CHECK(u.used_priority != FlowPri::kUnset);
+      CHECK(u.used_priority == FlowPri::kHi || u.used_priority == FlowPri::kLo);
+      bool is_lopri = u.used_priority == FlowPri::kLo;
       active_flows_.at(u.flow).UpdateUsage(
-          timestamp, u.instantaneous_usage_bps, u.cum_usage_bytes,
-          config_.usage_history_window, demand_predictor_.get());
+          {
+              .time = timestamp,
+              .cum_usage_bytes = u.cum_usage_bytes,
+              .instantaneous_usage_bps = u.instantaneous_usage_bps,
+              .is_lopri = is_lopri,
+          },
+          config_.usage_history_window, *demand_predictor_);
       ++i;
     }
   }
@@ -80,10 +88,20 @@ void FlowTracker::FinalizeFlows(absl::Time timestamp,
     if (!active_flows_.contains(u.flow)) {
       active_flows_.emplace(u.flow, CreateFlowState(u.flow, ++next_seqnum_));
     }
-    active_flows_.at(u.flow).UpdateUsage(
-        timestamp, u.instantaneous_usage_bps, u.cum_usage_bytes,
-        config_.usage_history_window, demand_predictor_.get());
-    done_flows_.push_back(active_flows_.at(u.flow));
+    FlowState &state = active_flows_.at(u.flow);
+    bool is_lopri = u.used_priority == FlowPri::kLo;
+    if (u.used_priority == FlowPri::kUnset && state.currently_lopri()) {
+      is_lopri = true;
+    }
+    state.UpdateUsage(
+        {
+            .time = timestamp,
+            .cum_usage_bytes = u.cum_usage_bytes,
+            .instantaneous_usage_bps = u.instantaneous_usage_bps,
+            .is_lopri = is_lopri,
+        },
+        config_.usage_history_window, *demand_predictor_);
+    done_flows_.push_back(state);
     active_flows_.erase(u.flow);
   }
 }
@@ -200,13 +218,15 @@ void SSFlowStateReporter::MonitorDone() {
       continue;
     }
 
-    impl_->flow_tracker->FinalizeFlows(now, {{f, usage_bps, cum_usage_bytes}});
+    impl_->flow_tracker->FinalizeFlows(
+        now, {{f, usage_bps, cum_usage_bytes, FlowPri::kUnset}});
   }
 
   CHECK(impl_->is_dying);
 }
 
-absl::Status SSFlowStateReporter::ReportState() {
+absl::Status SSFlowStateReporter::ReportState(
+    absl::FunctionRef<bool(const proto::FlowMarker &)> is_lopri) {
   try {
     bp::ipstream out;
     bp::child c(bp::search_path(impl_->config.ss_binary_name), "-i", "-t", "-n",
@@ -227,7 +247,11 @@ absl::Status SSFlowStateReporter::ReportState() {
       if (IgnoreFlow(f)) {
         continue;
       }
-      flow_updates.push_back({f, usage_bps, cum_usage_bytes});
+      FlowPri pri = FlowPri::kHi;
+      if (is_lopri(f)) {
+        pri = FlowPri::kLo;
+      }
+      flow_updates.push_back({f, usage_bps, cum_usage_bytes, pri});
     }
     impl_->flow_tracker->UpdateFlows(now, flow_updates);
     c.wait();

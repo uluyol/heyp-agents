@@ -25,7 +25,6 @@ message FlowMarker {
 message FlowInfo {
   FlowMarker marker = 1;
   int64 ewma_usage_bps = 2;
-  int64 demand_bps = 3;
 
   // cum_usage_bytes = cum_hipri_usage_bytes + cum_lopri_usage_bytes
   int64 cum_usage_bytes = 4;
