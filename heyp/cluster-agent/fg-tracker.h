@@ -7,19 +7,12 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/time/time.h"
 #include "heyp/alg/demand-predictor.h"
+#include "heyp/flows/cluster-fg-state.h"
 #include "heyp/flows/state.h"
 #include "heyp/proto/alg.h"
 #include "heyp/proto/heyp.pb.h"
 
 namespace heyp {
-
-struct ClusterFGState {
-  // state has all demand marked as hipri.
-  FlowState state;
-  int64_t cum_hipri_usage_bytes;
-  int64_t cum_lopri_usage_bytes;
-  std::vector<FlowState> host_info;
-};
 
 template <typename ValueType>
 using ClusterFGMap = absl::flat_hash_map<proto::FlowMarker, ValueType,

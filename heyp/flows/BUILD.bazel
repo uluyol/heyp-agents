@@ -3,6 +3,12 @@ load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
 package(default_visibility = ["//heyp:__subpackages__"])
 
 cc_library(
+    name = "cluster-fg-state",
+    hdrs = ["cluster-fg-state.h"],
+    deps = [":state"],
+)
+
+cc_library(
     name = "dc-mapper",
     srcs = ["dc-mapper.cc"],
     hdrs = ["dc-mapper.h"],
