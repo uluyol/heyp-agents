@@ -35,6 +35,15 @@ struct EqHostFlowNoId {
                   const proto::FlowMarker& rhs) const;
 };
 
+struct HashClusterFlow {
+  size_t operator()(const proto::FlowMarker& marker) const;
+};
+
+struct EqClusterFlow {
+  bool operator()(const proto::FlowMarker& lhs,
+                  const proto::FlowMarker& rhs) const;
+};
+
 }  // namespace heyp
 
 #endif  // HEYP_PROTO_ALG_H_

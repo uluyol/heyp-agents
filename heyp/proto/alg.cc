@@ -46,4 +46,19 @@ bool EqHostFlowNoId::operator()(const proto::FlowMarker& lhs,
   return IsSameFlow(lhs, rhs, {.cmp_fg = false, .cmp_seqnum = false});
 }
 
+size_t HashClusterFlow::operator()(const proto::FlowMarker& marker) const {
+  return absl::Hash<std::tuple<absl::string_view, absl::string_view>>()(
+      {marker.src_dc(), marker.dst_dc()});
+}
+
+bool EqClusterFlow::operator()(const proto::FlowMarker& lhs,
+                               const proto::FlowMarker& rhs) const {
+  return IsSameFlow(lhs, rhs,
+                    {
+                        .cmp_src_host = false,
+                        .cmp_host_flow = false,
+                        .cmp_seqnum = false,
+                    });
+}
+
 }  // namespace heyp

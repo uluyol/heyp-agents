@@ -1,0 +1,17 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+cc_library(
+    name = "fg-tracker",
+    srcs = ["fg-tracker.cc"],
+    hdrs = ["fg-tracker.h"],
+    deps = [
+        "//heyp/alg:demand-predictor",
+        "//heyp/flows:state",
+        "//heyp/proto:alg",
+        "//heyp/proto:constructors",
+        "//heyp/proto:heyp_cc_proto",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/time",
+        "@glog",
+    ],
+)
