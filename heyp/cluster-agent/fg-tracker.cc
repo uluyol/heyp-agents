@@ -89,7 +89,7 @@ std::vector<ClusterFGState> ClusterFGTracker::CollectSnapshot(absl::Time time) {
          host_state_pair.second.agg_states) {
       AggState& agg_state = agg_states_.at(marker_agg_state_pair.first);
       agg_state.sum_ewma_usage_bps +=
-          marker_agg_state_pair.second.state.ewma_usage_bps();
+          marker_agg_state_pair.second.state.cur().ewma_usage_bps;
       agg_state.host_info.push_back(marker_agg_state_pair.second.state);
     }
   }

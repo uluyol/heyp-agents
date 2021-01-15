@@ -69,6 +69,8 @@ TEST(FlowStateTest, HistoryAndDemandTracksIncreases) {
 
   EXPECT_THAT(state.flow().src_port(), testing::Eq(1234));
   EXPECT_THAT(state.flow().dst_port(), testing::Eq(2345));
+  EXPECT_THAT(state.cur().flow.src_port(), testing::Eq(1234));
+  EXPECT_THAT(state.cur().flow.dst_port(), testing::Eq(2345));
 
   BweDemandPredictor demand_predictor(absl::Seconds(100), 1.1, 5'000);
 
@@ -82,15 +84,15 @@ TEST(FlowStateTest, HistoryAndDemandTracksIncreases) {
             .cum_usage_bytes = cum_usage_bytes,
         },
         absl::Seconds(100), demand_predictor);
-    EXPECT_THAT(state.updated_time(), testing::Eq(now + absl::Seconds(i)));
-    EXPECT_THAT(state.cum_usage_bytes(), testing::Eq(cum_usage_bytes));
+    EXPECT_THAT(state.cur().updated_time, testing::Eq(now + absl::Seconds(i)));
+    EXPECT_THAT(state.cur().cum_usage_bytes, testing::Eq(cum_usage_bytes));
     if (i >= 2) {
-      EXPECT_THAT(state.ewma_usage_bps(), testing::Gt(last_usage_bps));
-      EXPECT_THAT(state.predicted_demand_bps(),
+      EXPECT_THAT(state.cur().ewma_usage_bps, testing::Gt(last_usage_bps));
+      EXPECT_THAT(state.cur().predicted_demand_bps,
                   testing::Gt(1.1 * last_usage_bps));
     }
     if (i >= 1) {
-      last_usage_bps = state.ewma_usage_bps();
+      last_usage_bps = state.cur().ewma_usage_bps;
     }
   }
 }
@@ -183,10 +185,10 @@ TEST(FlowStateTest, Priorities) {
   FlowState state({});
   constexpr absl::Duration kHistoryWindow = absl::Seconds(10);
 
-  EXPECT_EQ(state.cum_usage_bytes(), 0);
-  EXPECT_EQ(state.cum_hipri_usage_bytes(), 0);
-  EXPECT_EQ(state.cum_lopri_usage_bytes(), 0);
-  EXPECT_EQ(state.currently_lopri(), false);
+  EXPECT_EQ(state.cur().cum_usage_bytes, 0);
+  EXPECT_EQ(state.cur().cum_hipri_usage_bytes, 0);
+  EXPECT_EQ(state.cur().cum_lopri_usage_bytes, 0);
+  EXPECT_EQ(state.cur().currently_lopri, false);
 
   state.UpdateUsage(
       {
@@ -195,10 +197,10 @@ TEST(FlowStateTest, Priorities) {
           .is_lopri = false,
       },
       kHistoryWindow, demand_predictor);
-  EXPECT_EQ(state.cum_usage_bytes(), 1000);
-  EXPECT_EQ(state.cum_hipri_usage_bytes(), 1000);
-  EXPECT_EQ(state.cum_lopri_usage_bytes(), 0);
-  EXPECT_EQ(state.currently_lopri(), false);
+  EXPECT_EQ(state.cur().cum_usage_bytes, 1000);
+  EXPECT_EQ(state.cur().cum_hipri_usage_bytes, 1000);
+  EXPECT_EQ(state.cur().cum_lopri_usage_bytes, 0);
+  EXPECT_EQ(state.cur().currently_lopri, false);
 
   state.UpdateUsage(
       {
@@ -207,10 +209,10 @@ TEST(FlowStateTest, Priorities) {
           .is_lopri = false,
       },
       kHistoryWindow, demand_predictor);
-  EXPECT_EQ(state.cum_usage_bytes(), 1200);
-  EXPECT_EQ(state.cum_hipri_usage_bytes(), 1200);
-  EXPECT_EQ(state.cum_lopri_usage_bytes(), 0);
-  EXPECT_EQ(state.currently_lopri(), false);
+  EXPECT_EQ(state.cur().cum_usage_bytes, 1200);
+  EXPECT_EQ(state.cur().cum_hipri_usage_bytes, 1200);
+  EXPECT_EQ(state.cur().cum_lopri_usage_bytes, 0);
+  EXPECT_EQ(state.cur().currently_lopri, false);
 
   state.UpdateUsage(
       {
@@ -219,10 +221,10 @@ TEST(FlowStateTest, Priorities) {
           .is_lopri = true,
       },
       kHistoryWindow, demand_predictor);
-  EXPECT_EQ(state.cum_usage_bytes(), 2000);
-  EXPECT_EQ(state.cum_hipri_usage_bytes(), 1200);
-  EXPECT_EQ(state.cum_lopri_usage_bytes(), 800);
-  EXPECT_EQ(state.currently_lopri(), true);
+  EXPECT_EQ(state.cur().cum_usage_bytes, 2000);
+  EXPECT_EQ(state.cur().cum_hipri_usage_bytes, 1200);
+  EXPECT_EQ(state.cur().cum_lopri_usage_bytes, 800);
+  EXPECT_EQ(state.cur().currently_lopri, true);
 
   state.UpdateUsage(
       {
@@ -231,10 +233,10 @@ TEST(FlowStateTest, Priorities) {
           .is_lopri = false,
       },
       kHistoryWindow, demand_predictor);
-  EXPECT_EQ(state.cum_usage_bytes(), 2700);
-  EXPECT_EQ(state.cum_hipri_usage_bytes(), 1900);
-  EXPECT_EQ(state.cum_lopri_usage_bytes(), 800);
-  EXPECT_EQ(state.currently_lopri(), false);
+  EXPECT_EQ(state.cur().cum_usage_bytes, 2700);
+  EXPECT_EQ(state.cur().cum_hipri_usage_bytes, 1900);
+  EXPECT_EQ(state.cur().cum_lopri_usage_bytes, 800);
+  EXPECT_EQ(state.cur().currently_lopri, false);
 }
 
 }  // namespace

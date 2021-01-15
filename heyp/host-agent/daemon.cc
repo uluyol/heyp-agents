@@ -52,13 +52,13 @@ void SendInfo(
     }
     // TODO: aggregate into src_dc, dst_dc, host_id
     flow_state_provider->ForEachActiveFlow(
-        [&info, dc_mapper](const FlowState& state) {
+        [&info, dc_mapper](const FlowStateSnapshot& s) {
           proto::FlowInfo* flow_info = info.add_flow_infos();
-          *flow_info->mutable_marker() = WithDCs(state.flow(), *dc_mapper);
-          flow_info->set_ewma_usage_bps(state.ewma_usage_bps());
-          flow_info->set_cum_usage_bytes(state.cum_usage_bytes());
-          flow_info->set_cum_hipri_usage_bytes(state.cum_hipri_usage_bytes());
-          flow_info->set_cum_lopri_usage_bytes(state.cum_lopri_usage_bytes());
+          *flow_info->mutable_marker() = WithDCs(s.flow, *dc_mapper);
+          flow_info->set_ewma_usage_bps(s.ewma_usage_bps);
+          flow_info->set_cum_usage_bytes(s.cum_usage_bytes);
+          flow_info->set_cum_hipri_usage_bytes(s.cum_hipri_usage_bytes);
+          flow_info->set_cum_lopri_usage_bytes(s.cum_lopri_usage_bytes);
         });
     *info.mutable_timestamp() = ToProtoTimestamp(absl::Now());
     io_stream->Write(info);

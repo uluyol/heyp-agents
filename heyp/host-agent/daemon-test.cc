@@ -91,10 +91,10 @@ class InProcessTestServer {
 class MockFlowStateProvider : public FlowStateProvider {
  public:
   MOCK_METHOD(void, ForEachActiveFlow,
-              (absl::FunctionRef<void(const FlowState&)> func),
+              (absl::FunctionRef<void(const FlowStateSnapshot&)> func),
               (const override));
   MOCK_METHOD(void, ForEachFlow,
-              (absl::FunctionRef<void(const FlowState&)> func),
+              (absl::FunctionRef<void(const FlowStateSnapshot&)> func),
               (const override));
 };
 

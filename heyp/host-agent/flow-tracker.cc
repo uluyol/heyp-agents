@@ -22,21 +22,21 @@ FlowTracker::FlowTracker(std::unique_ptr<DemandPredictor> demand_predictor,
       next_seqnum_(0) {}
 
 void FlowTracker::ForEachActiveFlow(
-    absl::FunctionRef<void(const FlowState &)> func) const {
+    absl::FunctionRef<void(const FlowStateSnapshot &)> func) const {
   absl::MutexLock l(&mu_);
   for (const auto &flow_state_pair : active_flows_) {
-    func(flow_state_pair.second);
+    func(flow_state_pair.second.cur());
   }
 }
 
 void FlowTracker::ForEachFlow(
-    absl::FunctionRef<void(const FlowState &)> func) const {
+    absl::FunctionRef<void(const FlowStateSnapshot &)> func) const {
   absl::MutexLock l(&mu_);
   for (const auto &flow_state_pair : active_flows_) {
-    func(flow_state_pair.second);
+    func(flow_state_pair.second.cur());
   }
   for (const FlowState &state : done_flows_) {
-    func(state);
+    func(state.cur());
   }
 }
 
@@ -59,7 +59,7 @@ void FlowTracker::UpdateFlows(absl::Time timestamp,
       active_flows_.emplace(u.flow, CreateFlowState(u.flow, ++next_seqnum_));
     }
     FlowState &state = active_flows_.at(u.flow);
-    if (state.cum_usage_bytes() > u.cum_usage_bytes) {
+    if (state.cur().cum_usage_bytes > u.cum_usage_bytes) {
       // Got a race, new usage lower than old usage, so this must be a new flow
       done_flows_.push_back(state);
       active_flows_.erase(u.flow);
@@ -90,7 +90,7 @@ void FlowTracker::FinalizeFlows(absl::Time timestamp,
     }
     FlowState &state = active_flows_.at(u.flow);
     bool is_lopri = u.used_priority == FlowPri::kLo;
-    if (u.used_priority == FlowPri::kUnset && state.currently_lopri()) {
+    if (u.used_priority == FlowPri::kUnset && state.cur().currently_lopri) {
       is_lopri = true;
     }
     state.UpdateUsage(

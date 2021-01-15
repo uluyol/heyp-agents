@@ -27,10 +27,10 @@ class FlowStateProvider {
   virtual ~FlowStateProvider() = default;
 
   virtual void ForEachActiveFlow(
-      absl::FunctionRef<void(const FlowState&)> func) const = 0;
+      absl::FunctionRef<void(const FlowStateSnapshot&)> func) const = 0;
 
   virtual void ForEachFlow(
-      absl::FunctionRef<void(const FlowState&)> func) const = 0;
+      absl::FunctionRef<void(const FlowStateSnapshot&)> func) const = 0;
 };
 
 class FlowStateReporter {
@@ -50,10 +50,10 @@ class FlowTracker : public FlowStateProvider {
   FlowTracker(std::unique_ptr<DemandPredictor> demand_predictor, Config config);
 
   void ForEachActiveFlow(
-      absl::FunctionRef<void(const FlowState&)> func) const override;
+      absl::FunctionRef<void(const FlowStateSnapshot&)> func) const override;
 
   void ForEachFlow(
-      absl::FunctionRef<void(const FlowState&)> func) const override;
+      absl::FunctionRef<void(const FlowStateSnapshot&)> func) const override;
 
   struct Update {
     proto::FlowMarker flow;
