@@ -7,7 +7,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/time/time.h"
 #include "heyp/alg/demand-predictor.h"
-#include "heyp/flows/cluster-fg-state.h"
+#include "heyp/flows/cluster-state.h"
 #include "heyp/flows/state.h"
 #include "heyp/proto/alg.h"
 #include "heyp/proto/heyp.pb.h"
@@ -32,7 +32,7 @@ class ClusterFGTracker {
   void UpdateHost(const proto::HostInfo& host_info);
   void RemoveHost(int64_t host_id);
 
-  std::vector<ClusterFGState> CollectSnapshot(absl::Time time);
+  std::vector<ClusterStateSnapshot> CollectSnapshot(absl::Time time);
 
  private:
   struct AggState {
@@ -42,7 +42,7 @@ class ClusterFGTracker {
 
     // Reset and used only in CollectSnapshot.
     int64_t sum_ewma_usage_bps = 0;
-    std::vector<FlowState> host_info;
+    std::vector<FlowStateSnapshot> host_info;
   };
 
   struct HostAggState {

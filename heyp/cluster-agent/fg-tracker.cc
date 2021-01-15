@@ -75,7 +75,8 @@ void ClusterFGTracker::UpdateHost(const proto::HostInfo& host_info) {
   }
 }
 
-std::vector<ClusterFGState> ClusterFGTracker::CollectSnapshot(absl::Time time) {
+std::vector<ClusterStateSnapshot> ClusterFGTracker::CollectSnapshot(
+    absl::Time time) {
   // agg_states_[.*].cum_[lo|hi]pri_usage_bytes are updated in UpdateHost.
   // Need to compute sum_ewma_usage_bps, update state, and collect per-host
   // states.
@@ -90,11 +91,11 @@ std::vector<ClusterFGState> ClusterFGTracker::CollectSnapshot(absl::Time time) {
       AggState& agg_state = agg_states_.at(marker_agg_state_pair.first);
       agg_state.sum_ewma_usage_bps +=
           marker_agg_state_pair.second.state.cur().ewma_usage_bps;
-      agg_state.host_info.push_back(marker_agg_state_pair.second.state);
+      agg_state.host_info.push_back(marker_agg_state_pair.second.state.cur());
     }
   }
 
-  std::vector<ClusterFGState> cluster_fg_states;
+  std::vector<ClusterStateSnapshot> cluster_states;
   for (auto& marker_agg_state_pair : agg_states_) {
     AggState& agg_state = marker_agg_state_pair.second;
     agg_state.state.UpdateUsage(
@@ -106,17 +107,17 @@ std::vector<ClusterFGState> ClusterFGTracker::CollectSnapshot(absl::Time time) {
         },
         config_.cluster_usage_history_window, *host_demand_predictor_);
     std::sort(agg_state.host_info.begin(), agg_state.host_info.end(),
-              [](const FlowState& lhs, const FlowState& rhs) {
-                return lhs.flow().host_id() < rhs.flow().host_id();
+              [](const FlowStateSnapshot& lhs, const FlowStateSnapshot& rhs) {
+                return lhs.flow.host_id() < rhs.flow.host_id();
               });
-    cluster_fg_states.push_back({
-        .state = agg_state.state,
+    cluster_states.push_back({
+        .state = agg_state.state.cur(),
         .cum_hipri_usage_bytes = agg_state.cum_hipri_usage_bytes,
         .cum_lopri_usage_bytes = agg_state.cum_lopri_usage_bytes,
         .host_info = std::move(agg_state.host_info),
     });
   }
-  return cluster_fg_states;
+  return cluster_states;
 }
 
 ClusterFGTracker::AggState& ClusterFGTracker::GetAggState(

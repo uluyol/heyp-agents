@@ -6,7 +6,7 @@ cc_library(
     hdrs = ["fg-tracker.h"],
     deps = [
         "//heyp/alg:demand-predictor",
-        "//heyp/flows:cluster-fg-state",
+        "//heyp/flows:cluster-state",
         "//heyp/flows:state",
         "//heyp/proto:alg",
         "//heyp/proto:constructors",
