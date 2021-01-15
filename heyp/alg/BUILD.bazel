@@ -14,6 +14,16 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "rate-limits",
+    srcs = ["rate-limits.cc"],
+    hdrs = ["rate-limits.h"],
+    deps = [
+        "//heyp/flows:cluster-state",
+        "@com_google_absl//absl/base",
+    ],
+)
+
 cc_test(
     name = "demand-predictor-test",
     srcs = ["demand-predictor-test.cc"],
