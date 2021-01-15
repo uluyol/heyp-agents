@@ -14,6 +14,9 @@ ClusterFGTracker::ClusterFGTracker(
       cluster_demand_predictor_(std::move(cluster_demand_predictor)),
       host_demand_predictor_(std::move(host_demand_predictor)) {}
 
+// TODO: check that we retain host info as long as it is incorporated into the
+// cluster demand.
+
 void ClusterFGTracker::RemoveHost(int64_t host_id) {
   host_states_.erase(host_id);
 }
