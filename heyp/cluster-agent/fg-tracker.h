@@ -49,12 +49,10 @@ class ClusterFGTracker {
     FlowState state;
     int64_t cum_hipri_usage_bytes = 0;
     int64_t cum_lopri_usage_bytes = 0;
-    int gen = 0;  // used to garbage collect old versions
   };
 
   struct HostState {
     ClusterFGMap<HostAggState> agg_states;
-    int gen = 1;
   };
 
   AggState& GetAggState(proto::FlowMarker flow_marker);

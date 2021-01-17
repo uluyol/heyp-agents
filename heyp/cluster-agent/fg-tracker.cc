@@ -24,7 +24,6 @@ void ClusterFGTracker::RemoveHost(int64_t host_id) {
 void ClusterFGTracker::UpdateHost(const proto::HostInfo& host_info) {
   const absl::Time timestamp = FromProtoTimestamp(host_info.timestamp());
   HostState& host_state = host_states_[host_info.host_id()];
-  ++host_state.gen;
   for (const proto::FlowInfo& flow_info : host_info.flow_infos()) {
     // TODO: check that host-agent aggregates
     CHECK_EQ(flow_info.marker().src_addr(), "");
@@ -65,11 +64,12 @@ void ClusterFGTracker::UpdateHost(const proto::HostInfo& host_info) {
 
     agg_state.cum_hipri_usage_bytes = flow_info.cum_hipri_usage_bytes();
     agg_state.cum_lopri_usage_bytes = flow_info.cum_lopri_usage_bytes();
-    agg_state.gen = host_state.gen;
   }
   std::vector<proto::FlowMarker> to_erase;
   for (auto& iter : host_state.agg_states) {
-    if (iter.second.gen < host_state.gen) {
+    if (iter.second.state.cur().last_updated +
+            config_.host_usage_history_window <
+        timestamp) {
       to_erase.push_back(iter.first);
     }
   }
