@@ -34,6 +34,20 @@ bool IsSameFlow(const proto::FlowMarker& lhs, const proto::FlowMarker& rhs,
   return true;
 }
 
+size_t HashFlow::operator()(const proto::FlowMarker& marker) const {
+  return absl::Hash<std::tuple<absl::string_view, absl::string_view, uint64_t,
+                               absl::string_view, absl::string_view, int32_t,
+                               int32_t, int32_t, uint64_t>>()(
+      {marker.src_dc(), marker.dst_dc(), marker.host_id(), marker.src_addr(),
+       marker.dst_addr(), marker.protocol(), marker.src_port(),
+       marker.dst_port(), marker.seqnum()});
+}
+
+bool EqFlow::operator()(const proto::FlowMarker& lhs,
+                        const proto::FlowMarker& rhs) const {
+  return IsSameFlow(lhs, rhs, {});
+}
+
 size_t HashHostFlowNoId::operator()(const proto::FlowMarker& marker) const {
   return absl::Hash<std::tuple<absl::string_view, absl::string_view, int32_t,
                                int32_t, int32_t>>()(

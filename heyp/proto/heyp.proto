@@ -23,17 +23,26 @@ message FlowMarker {
 }
 
 message FlowInfo {
-  FlowMarker marker = 1;
-  int64 ewma_usage_bps = 2;
+  FlowMarker flow = 1;
+  int64 predicted_demand_bps = 2;
+  int64 ewma_usage_bps = 3;
 
   // cum_usage_bytes = cum_hipri_usage_bytes + cum_lopri_usage_bytes
   int64 cum_usage_bytes = 4;
   int64 cum_hipri_usage_bytes = 5;
   int64 cum_lopri_usage_bytes = 6;
+
+  // currently_lopri indiciates whether a flow is exclusively using LOPRI bandwidth.
+  bool currently_lopri = 7;
 }
 
-message HostInfo {
-  int64 host_id = 1;
+message AggInfo {
+  FlowInfo parent = 1;
+  repeated FlowInfo children = 2;
+}
+
+message InfoBundle {
+  FlowMarker bundler = 1;
   google.protobuf.Timestamp timestamp = 3;
   repeated FlowInfo flow_infos = 2;
 }
@@ -44,7 +53,7 @@ message FlowAlloc {
   int64 lopri_rate_limit_bps = 3;
 }
 
-message HostAlloc {
+message AllocBundle {
   repeated FlowAlloc flow_allocs = 1;
 }
 
@@ -57,5 +66,5 @@ message DCMapping {
 }
 
 service ClusterAgent {
-  rpc RegisterHost(stream HostInfo) returns (stream HostAlloc) {}
+  rpc RegisterHost(stream InfoBundle) returns (stream AllocBundle) {}
 }

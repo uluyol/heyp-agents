@@ -3,9 +3,8 @@
 
 #include <cstdint>
 #include <ostream>
-#include <vector>
 
-#include "heyp/flows/cluster-state.h"
+#include "heyp/proto/heyp.pb.h"
 
 namespace heyp {
 
@@ -35,7 +34,7 @@ std::ostream& operator<<(std::ostream& os, const RateLimits& limits);
 //   obeying L on aggregate - assuming that the burstiness of demand remains
 //   constant over time.
 //
-double BweBurstinessFactor(const ClusterStateSnapshot& s);
+double BweBurstinessFactor(const proto::AggInfo& info);
 
 }  // namespace heyp
 

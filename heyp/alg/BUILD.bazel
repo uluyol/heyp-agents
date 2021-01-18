@@ -19,7 +19,7 @@ cc_library(
     srcs = ["rate-limits.cc"],
     hdrs = ["rate-limits.h"],
     deps = [
-        "//heyp/flows:cluster-state",
+        "//heyp/proto:heyp_cc_proto",
         "@com_google_absl//absl/base",
     ],
 )

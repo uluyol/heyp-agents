@@ -26,6 +26,15 @@ struct CompareFlowOptions {
 bool IsSameFlow(const proto::FlowMarker& lhs, const proto::FlowMarker& rhs,
                 CompareFlowOptions options = {});
 
+struct HashFlow {
+  size_t operator()(const proto::FlowMarker& marker) const;
+};
+
+struct EqFlow {
+  bool operator()(const proto::FlowMarker& lhs,
+                  const proto::FlowMarker& rhs) const;
+};
+
 struct HashHostFlowNoId {
   size_t operator()(const proto::FlowMarker& marker) const;
 };

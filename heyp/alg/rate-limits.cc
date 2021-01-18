@@ -9,11 +9,11 @@ std::ostream& operator<<(std::ostream& os, const RateLimits& limits) {
             << ")";
 }
 
-double BweBurstinessFactor(const ClusterStateSnapshot& s) {
-  double parent_demand_bps = s.state.predicted_demand_bps;
+double BweBurstinessFactor(const proto::AggInfo& info) {
+  double parent_demand_bps = info.parent().predicted_demand_bps();
   double sum_child_demand_bps = 0;
-  for (const FlowStateSnapshot& cs : s.host_info) {
-    sum_child_demand_bps += cs.predicted_demand_bps;
+  for (const proto::FlowInfo& c : info.children()) {
+    sum_child_demand_bps += c.predicted_demand_bps();
   }
 
   if (parent_demand_bps == 0) {

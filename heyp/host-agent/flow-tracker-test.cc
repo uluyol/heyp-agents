@@ -35,11 +35,11 @@ TEST(FlowTrackerTest, RaceNewFlowBeforeOldFlowFinalized) {
   tracker.UpdateFlows(time(3), {{flow, 0, 400'000, FlowPri::kHi}});
 
   int times_called = 0;
-  tracker.ForEachActiveFlow([&](const FlowStateSnapshot& s) {
+  tracker.ForEachActiveFlow([&](absl::Time time, const proto::FlowInfo& info) {
     ++times_called;
-    ASSERT_THAT(s.flow, EqFlowNoId(flow));
-    ASSERT_THAT(s.flow.seqnum(), testing::Eq(1));
-    EXPECT_THAT(s.ewma_usage_bps, testing::Eq(800'000));
+    ASSERT_THAT(info.flow(), EqFlowNoId(flow));
+    ASSERT_THAT(info.flow().seqnum(), testing::Eq(1));
+    EXPECT_THAT(info.ewma_usage_bps(), testing::Eq(800'000));
   });
   EXPECT_THAT(times_called, testing::Eq(1));
 
@@ -50,11 +50,11 @@ TEST(FlowTrackerTest, RaceNewFlowBeforeOldFlowFinalized) {
   tracker.UpdateFlows(time(6), {{flow, 0, 70'000, FlowPri::kHi}});
 
   times_called = 0;
-  tracker.ForEachActiveFlow([&](const FlowStateSnapshot& s) {
+  tracker.ForEachActiveFlow([&](absl::Time time, const proto::FlowInfo& info) {
     ++times_called;
-    ASSERT_THAT(s.flow, EqFlowNoId(flow));
-    ASSERT_THAT(s.flow.seqnum(), testing::Eq(2));
-    EXPECT_THAT(s.ewma_usage_bps, testing::Eq(160'000));
+    ASSERT_THAT(info.flow(), EqFlowNoId(flow));
+    ASSERT_THAT(info.flow().seqnum(), testing::Eq(2));
+    EXPECT_THAT(info.ewma_usage_bps(), testing::Eq(160'000));
   });
   EXPECT_THAT(times_called, testing::Eq(1));
 
@@ -62,7 +62,7 @@ TEST(FlowTrackerTest, RaceNewFlowBeforeOldFlowFinalized) {
 
   times_called = 0;
   tracker.ForEachActiveFlow(
-      [&](const FlowStateSnapshot& s) { ++times_called; });
+      [&](absl::Time, const proto::FlowInfo&) { ++times_called; });
 
   EXPECT_THAT(times_called, testing::Eq(0));
 }
@@ -106,22 +106,24 @@ TEST(SSFlowStateReporterTest, CollectsExpectedOutput) {
                         HashHostFlowNoId, EqHostFlowNoId>
         active_usage_bps_cum_bytes;
     tracker.ForEachActiveFlow(
-        [&active_usage_bps_cum_bytes](const FlowStateSnapshot& s) {
-          active_usage_bps_cum_bytes[s.flow] = {s.ewma_usage_bps,
-                                                s.cum_usage_bytes};
+        [&active_usage_bps_cum_bytes](absl::Time time,
+                                      const proto::FlowInfo& info) {
+          active_usage_bps_cum_bytes[info.flow()] = {info.ewma_usage_bps(),
+                                                     info.cum_usage_bytes()};
         });
 
     absl::flat_hash_map<proto::FlowMarker, std::pair<int64_t, int64_t>,
                         HashHostFlowNoId, EqHostFlowNoId>
         dead_usage_bps_cum_bytes;
-    tracker.ForEachFlow([&dead_usage_bps_cum_bytes, &active_usage_bps_cum_bytes,
-                         &saw_closing](const FlowStateSnapshot& s) {
-      if (!active_usage_bps_cum_bytes.contains(s.flow)) {
-        dead_usage_bps_cum_bytes[s.flow] = {s.ewma_usage_bps,
-                                            s.cum_usage_bytes};
-        saw_closing = true;
-      }
-    });
+    tracker.ForEachFlow(
+        [&dead_usage_bps_cum_bytes, &active_usage_bps_cum_bytes, &saw_closing](
+            absl::Time time, const proto::FlowInfo& info) {
+          if (!active_usage_bps_cum_bytes.contains(info.flow())) {
+            dead_usage_bps_cum_bytes[info.flow()] = {info.ewma_usage_bps(),
+                                                     info.cum_usage_bytes()};
+            saw_closing = true;
+          }
+        });
 
     const proto::FlowMarker marker1 = ProtoFlowMarker({
         .src_addr = "140.197.113.99",

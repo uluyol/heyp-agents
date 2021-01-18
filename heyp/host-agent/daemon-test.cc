@@ -9,7 +9,7 @@
 namespace heyp {
 namespace {
 
-MATCHER_P(HostAllocEq, other, "") {
+MATCHER_P(AllocBundleEq, other, "") {
   if (arg.flow_allocs_size() != other.flow_allocs_size()) {
     return false;
   }
@@ -31,25 +31,25 @@ MATCHER_P(HostAllocEq, other, "") {
 
 class TestClusterAgentService final : public proto::ClusterAgent::Service {
  public:
-  TestClusterAgentService(std::vector<proto::HostAlloc> responses)
+  TestClusterAgentService(std::vector<proto::AllocBundle> responses)
       : responses_(std::move(responses)), num_iters_(0) {}
 
   grpc::Status RegisterHost(
       grpc::ServerContext* context,
-      grpc::ServerReaderWriter<proto::HostAlloc, proto::HostInfo>* stream)
+      grpc::ServerReaderWriter<proto::AllocBundle, proto::InfoBundle>* stream)
       override {
     while (true) {
-      proto::HostInfo info;
-      if (!stream->Read(&info)) {
+      proto::InfoBundle infos;
+      if (!stream->Read(&infos)) {
         break;
       }
 
       int64_t i = num_iters_.load();
-      proto::HostAlloc alloc;
+      proto::AllocBundle bundle;
       if (i < responses_.size()) {
-        alloc = responses_[i];
+        bundle = responses_[i];
       }
-      stream->Write(alloc);
+      stream->Write(bundle);
       ++num_iters_;
     }
     return grpc::Status::OK;
@@ -58,13 +58,13 @@ class TestClusterAgentService final : public proto::ClusterAgent::Service {
   int64_t num_iters() { return num_iters_.load(); }
 
  private:
-  const std::vector<proto::HostAlloc> responses_;
+  const std::vector<proto::AllocBundle> responses_;
   std::atomic<int64_t> num_iters_;
 };
 
 class InProcessTestServer {
  public:
-  explicit InProcessTestServer(std::vector<proto::HostAlloc> responses)
+  explicit InProcessTestServer(std::vector<proto::AllocBundle> responses)
       : expected_num_iters_(responses.size()), service_(std::move(responses)) {
     server_ = grpc::ServerBuilder().RegisterService(&service_).BuildAndStart();
   }
@@ -90,12 +90,14 @@ class InProcessTestServer {
 
 class MockFlowStateProvider : public FlowStateProvider {
  public:
-  MOCK_METHOD(void, ForEachActiveFlow,
-              (absl::FunctionRef<void(const FlowStateSnapshot&)> func),
-              (const override));
-  MOCK_METHOD(void, ForEachFlow,
-              (absl::FunctionRef<void(const FlowStateSnapshot&)> func),
-              (const override));
+  MOCK_METHOD(
+      void, ForEachActiveFlow,
+      (absl::FunctionRef<void(absl::Time, const proto::FlowInfo&)> func),
+      (const override));
+  MOCK_METHOD(
+      void, ForEachFlow,
+      (absl::FunctionRef<void(absl::Time, const proto::FlowInfo&)> func),
+      (const override));
 };
 
 class MockFlowStateReporter : public FlowStateReporter {
@@ -109,7 +111,7 @@ class MockHostEnforcer : public HostEnforcerInterface {
  public:
   MOCK_METHOD(void, EnforceAllocs,
               (const FlowStateProvider& flow_state_provider,
-               const proto::HostAlloc& host_alloc),
+               const proto::AllocBundle& bundle),
               (override));
 };
 
@@ -154,8 +156,8 @@ TEST(HostDaemonTest, CreateAndTeardownNoActions) {
 }
 
 TEST(HostDaemonTest, CallsIntoHostEnforcer) {
-  const std::vector<proto::HostAlloc> allocs{
-      ParseTextProto<proto::HostAlloc>(R"(
+  const std::vector<proto::AllocBundle> allocs{
+      ParseTextProto<proto::AllocBundle>(R"(
         flow_allocs: {
           marker: {
             src_dc: "us-east",
@@ -175,7 +177,7 @@ TEST(HostDaemonTest, CallsIntoHostEnforcer) {
           lopri_rate_limit_bps: 200,
         }
       )"),
-      ParseTextProto<proto::HostAlloc>(R"(
+      ParseTextProto<proto::AllocBundle>(R"(
         flow_allocs: {
           marker: {
             src_dc: "us-east",
@@ -186,7 +188,7 @@ TEST(HostDaemonTest, CallsIntoHostEnforcer) {
           lopri_rate_limit_bps: 50,
         }
       )"),
-      ParseTextProto<proto::HostAlloc>(R"(
+      ParseTextProto<proto::AllocBundle>(R"(
         flow_allocs: {
           marker: {
             src_dc: "us-east",
@@ -212,7 +214,7 @@ TEST(HostDaemonTest, CallsIntoHostEnforcer) {
   {
     testing::InSequence seq;
     for (const auto& entry : allocs) {
-      EXPECT_CALL(enforcer, EnforceAllocs(testing::_, HostAllocEq(entry)))
+      EXPECT_CALL(enforcer, EnforceAllocs(testing::_, AllocBundleEq(entry)))
           .Times(1);
     }
     EXPECT_CALL(enforcer, EnforceAllocs(testing::_, testing::_))

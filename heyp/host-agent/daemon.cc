@@ -35,14 +35,15 @@ bool FlaggedOrWaitFor(absl::Duration dur, std::atomic<bool>* exit_flag) {
   return exit_flag->load();
 }
 
-void SendInfo(
-    absl::Duration inform_period, uint64_t host_id, const DCMapper* dc_mapper,
-    FlowStateProvider* flow_state_provider,
-    FlowStateReporter* flow_state_reporter, std::atomic<bool>* should_exit,
-    grpc::ClientReaderWriter<proto::HostInfo, proto::HostAlloc>* io_stream) {
+void SendInfo(absl::Duration inform_period, uint64_t host_id,
+              const DCMapper* dc_mapper, FlowStateProvider* flow_state_provider,
+              FlowStateReporter* flow_state_reporter,
+              std::atomic<bool>* should_exit,
+              grpc::ClientReaderWriter<proto::InfoBundle, proto::AllocBundle>*
+                  io_stream) {
   do {
-    proto::HostInfo info;
-    info.set_host_id(host_id);
+    proto::InfoBundle bundle;
+    bundle.mutable_bundler()->set_host_id(host_id);
     LOG(INFO) << "TODO: implement HIPRI/LOPRI tracking";
     absl::Status report_status = flow_state_reporter->ReportState(
         [](const proto::FlowMarker&) { return false; });
@@ -51,33 +52,29 @@ void SendInfo(
       continue;
     }
     // TODO: aggregate into src_dc, dst_dc, host_id
+    *bundle.mutable_timestamp() = ToProtoTimestamp(absl::Now());
     flow_state_provider->ForEachActiveFlow(
-        [&info, dc_mapper](const FlowStateSnapshot& s) {
-          proto::FlowInfo* flow_info = info.add_flow_infos();
-          *flow_info->mutable_marker() = WithDCs(s.flow, *dc_mapper);
-          flow_info->set_ewma_usage_bps(s.ewma_usage_bps);
-          flow_info->set_cum_usage_bytes(s.cum_usage_bytes);
-          flow_info->set_cum_hipri_usage_bytes(s.cum_hipri_usage_bytes);
-          flow_info->set_cum_lopri_usage_bytes(s.cum_lopri_usage_bytes);
+        [&bundle, dc_mapper](absl::Time time, const proto::FlowInfo& info) {
+          auto send_info = bundle.add_flow_infos();
+          *send_info = info;
+          *send_info->mutable_flow() = WithDCs(info.flow(), *dc_mapper);
         });
-    *info.mutable_timestamp() = ToProtoTimestamp(absl::Now());
-    io_stream->Write(info);
+    io_stream->Write(bundle);
   } while (!FlaggedOrWaitFor(inform_period, should_exit));
 
   io_stream->WritesDone();
 }
 
-void EnforceAlloc(
-    const FlowStateProvider* flow_state_provider,
-    HostEnforcerInterface* enforcer,
-    grpc::ClientReaderWriter<proto::HostInfo, proto::HostAlloc>* io_stream) {
+void EnforceAlloc(const FlowStateProvider* flow_state_provider,
+                  HostEnforcerInterface* enforcer,
+                  grpc::ClientReaderWriter<proto::InfoBundle,
+                                           proto::AllocBundle>* io_stream) {
   while (true) {
-    proto::HostAlloc alloc;
-    if (!io_stream->Read(&alloc)) {
+    proto::AllocBundle bundle;
+    if (!io_stream->Read(&bundle)) {
       break;
     }
-
-    enforcer->EnforceAllocs(*flow_state_provider, alloc);
+    enforcer->EnforceAllocs(*flow_state_provider, bundle);
   }
 }
 

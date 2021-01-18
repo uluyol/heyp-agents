@@ -40,7 +40,8 @@ class HostDaemon {
   std::unique_ptr<proto::ClusterAgent::Stub> stub_;
 
   grpc::ClientContext context_;
-  std::unique_ptr<grpc::ClientReaderWriter<proto::HostInfo, proto::HostAlloc>>
+  std::unique_ptr<
+      grpc::ClientReaderWriter<proto::InfoBundle, proto::AllocBundle>>
       io_stream_;
   std::thread info_thread_;
   std::thread enforcer_thread_;

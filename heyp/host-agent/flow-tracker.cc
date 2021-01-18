@@ -22,30 +22,30 @@ FlowTracker::FlowTracker(std::unique_ptr<DemandPredictor> demand_predictor,
       next_seqnum_(0) {}
 
 void FlowTracker::ForEachActiveFlow(
-    absl::FunctionRef<void(const FlowStateSnapshot &)> func) const {
+    absl::FunctionRef<void(absl::Time, const proto::FlowInfo &)> func) const {
   absl::MutexLock l(&mu_);
-  for (const auto &flow_state_pair : active_flows_) {
-    func(flow_state_pair.second.cur());
+  for (const auto &fs : active_flows_) {
+    func(fs.second.updated_time(), fs.second.cur());
   }
 }
 
 void FlowTracker::ForEachFlow(
-    absl::FunctionRef<void(const FlowStateSnapshot &)> func) const {
+    absl::FunctionRef<void(absl::Time, const proto::FlowInfo &)> func) const {
   absl::MutexLock l(&mu_);
-  for (const auto &flow_state_pair : active_flows_) {
-    func(flow_state_pair.second.cur());
+  for (const auto &fs : active_flows_) {
+    func(fs.second.updated_time(), fs.second.cur());
   }
-  for (const FlowState &state : done_flows_) {
-    func(state.cur());
+  for (const LeafState &state : done_flows_) {
+    func(state.updated_time(), state.cur());
   }
 }
 
 namespace {
 
-FlowState CreateFlowState(const proto::FlowMarker &f, uint64_t seqnum) {
+LeafState CreateLeafState(const proto::FlowMarker &f, uint64_t seqnum) {
   proto::FlowMarker flow = f;
   flow.set_seqnum(seqnum);
-  return FlowState(flow);
+  return LeafState(flow);
 }
 
 }  // namespace
@@ -56,10 +56,10 @@ void FlowTracker::UpdateFlows(absl::Time timestamp,
   for (size_t i = 0; i < flow_update_batch.size();) {
     const Update &u = flow_update_batch[i];
     if (!active_flows_.contains(u.flow)) {
-      active_flows_.emplace(u.flow, CreateFlowState(u.flow, ++next_seqnum_));
+      active_flows_.emplace(u.flow, CreateLeafState(u.flow, ++next_seqnum_));
     }
-    FlowState &state = active_flows_.at(u.flow);
-    if (state.cur().cum_usage_bytes > u.cum_usage_bytes) {
+    LeafState &state = active_flows_.at(u.flow);
+    if (state.cur().cum_usage_bytes() > u.cum_usage_bytes) {
       // Got a race, new usage lower than old usage, so this must be a new flow
       done_flows_.push_back(state);
       active_flows_.erase(u.flow);
@@ -86,11 +86,11 @@ void FlowTracker::FinalizeFlows(absl::Time timestamp,
   absl::MutexLock lock(&mu_);
   for (const Update &u : flow_update_batch) {
     if (!active_flows_.contains(u.flow)) {
-      active_flows_.emplace(u.flow, CreateFlowState(u.flow, ++next_seqnum_));
+      active_flows_.emplace(u.flow, CreateLeafState(u.flow, ++next_seqnum_));
     }
-    FlowState &state = active_flows_.at(u.flow);
+    LeafState &state = active_flows_.at(u.flow);
     bool is_lopri = u.used_priority == FlowPri::kLo;
-    if (u.used_priority == FlowPri::kUnset && state.cur().currently_lopri) {
+    if (u.used_priority == FlowPri::kUnset && state.cur().currently_lopri()) {
       is_lopri = true;
     }
     state.UpdateUsage(

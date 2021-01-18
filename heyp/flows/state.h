@@ -10,27 +10,42 @@
 
 namespace heyp {
 
-struct FlowStateSnapshot {
-  proto::FlowMarker flow;
-  int64_t predicted_demand_bps = 0;
-  int64_t ewma_usage_bps = 0;
-
-  absl::Time updated_time = absl::InfinitePast();
-
-  // cum_usage_bytes = cum_hipri_usage_bytes + cum_lopri_usage_bytes
-  int64_t cum_usage_bytes = 0;
-  int64_t cum_hipri_usage_bytes = 0;
-  int64_t cum_lopri_usage_bytes = 0;
-
-  bool currently_lopri = false;
-};
-
-class FlowState {
+class AggState {
  public:
-  explicit FlowState(const proto::FlowMarker& flow);
+  explicit AggState(const proto::FlowMarker& flow, bool smooth_usage = false);
 
   const proto::FlowMarker& flow() const;
-  const FlowStateSnapshot& cur() const;
+  absl::Time updated_time() const;
+  const proto::FlowInfo& cur() const;
+
+  struct Update {
+    absl::Time time;
+    int64_t sum_child_usage_bps = 0;
+    int64_t cum_hipri_usage_bytes = 0;
+    int64_t cum_lopri_usage_bytes = 0;
+  };
+
+  // UpdatesUpdate updates the demand and automatically sets currently_lopri
+  // when there is an increase in LOPRI usage but no increase for HIPRI.
+  void UpdateUsage(const Update u, absl::Duration usage_history_window,
+                   const DemandPredictor& demand_predictor);
+
+ protected:
+  std::vector<UsageHistoryEntry> usage_history_;
+  absl::Time updated_time_ = absl::InfinitePast();
+  proto::FlowInfo cur_;
+  const bool smooth_usage_ = false;
+  bool was_updated_ = false;
+  bool have_bps_ = false;
+};
+
+class LeafState {
+ public:
+  explicit LeafState(const proto::FlowMarker& flow);
+
+  const proto::FlowMarker& flow() const;
+  absl::Time updated_time() const;
+  const proto::FlowInfo& cur() const;
 
   struct Update {
     absl::Time time;
@@ -43,11 +58,7 @@ class FlowState {
                    const DemandPredictor& demand_predictor);
 
  private:
-  std::vector<UsageHistoryEntry> usage_history_;
-  FlowStateSnapshot cur_;
-
-  bool was_updated_ = false;
-  bool have_bps_ = false;
+  AggState impl_;
 };
 
 }  // namespace heyp

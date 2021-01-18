@@ -12,13 +12,13 @@ class HostEnforcerInterface {
   virtual ~HostEnforcerInterface() = default;
 
   virtual void EnforceAllocs(const FlowStateProvider& flow_state_provider,
-                             const proto::HostAlloc& host_alloc) = 0;
+                             const proto::AllocBundle& bundle) = 0;
 };
 
 class HostEnforcer : public HostEnforcerInterface {
  public:
   void EnforceAllocs(const FlowStateProvider& flow_state_provider,
-                     const proto::HostAlloc& host_alloc) override;
+                     const proto::AllocBundle& bundle) override;
 };
 
 }  // namespace heyp
