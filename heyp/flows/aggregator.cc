@@ -3,136 +3,197 @@
 #include <algorithm>
 
 #include "glog/logging.h"
+#include "heyp/proto/alg.h"
 #include "heyp/proto/constructors.h"
 
 namespace heyp {
+namespace {
 
-ClusterFGTracker::ClusterFGTracker(
+CompareFlowOptions HostFlowOptions() {
+  return CompareFlowOptions{
+      .cmp_fg = true,
+      .cmp_src_host = true,
+      .cmp_host_flow = false,
+      .cmp_seqnum = false,
+  };
+}
+
+CompareFlowOptions ClusterFlowOptions() {
+  return CompareFlowOptions{
+      .cmp_fg = true,
+      .cmp_src_host = false,
+      .cmp_host_flow = false,
+      .cmp_seqnum = false,
+  };
+}
+
+}  // namespace
+
+std::unique_ptr<FlowAggregator> NewConnToHostAggregator(
+    std::unique_ptr<DemandPredictor> host_demand_predictor,
+    absl::Duration usage_history_window) {
+  return absl::make_unique<FlowAggregator>(
+      std::move(host_demand_predictor),
+      FlowAggregator::Config{
+          .usage_history_window = usage_history_window,
+          .get_agg_flow_fn =
+              [](const proto::FlowMarker& c) -> proto::FlowMarker {
+            proto::FlowMarker h = c;
+            h.clear_src_addr();
+            h.clear_dst_addr();
+            h.clear_protocol();
+            h.clear_src_port();
+            h.clear_dst_port();
+            h.clear_seqnum();
+            return h;
+          },
+          .is_valid_parent = [](const proto::FlowMarker& h) -> bool {
+            return ExpectedFieldsAreSet(h, HostFlowOptions()) &&
+                   UnexpectedFieldsAreUnset(h, HostFlowOptions());
+          },
+          .is_valid_child = [](const proto::FlowMarker& c) -> bool {
+            return ExpectedFieldsAreSet(c, {});
+          },
+      });
+}
+
+std::unique_ptr<FlowAggregator> NewHostToClusterAggregator(
     std::unique_ptr<DemandPredictor> cluster_demand_predictor,
-    std::unique_ptr<DemandPredictor> host_demand_predictor, Config config)
-    : config_(config),
-      cluster_demand_predictor_(std::move(cluster_demand_predictor)),
-      host_demand_predictor_(std::move(host_demand_predictor)) {}
+    absl::Duration usage_history_window) {
+  return absl::make_unique<FlowAggregator>(
+      std::move(cluster_demand_predictor),
+      FlowAggregator::Config{
+          .usage_history_window = usage_history_window,
+          .get_agg_flow_fn =
+              [](const proto::FlowMarker& c) -> proto::FlowMarker {
+            proto::FlowMarker h = c;
+            h.clear_host_id();
+            h.clear_src_addr();
+            h.clear_dst_addr();
+            h.clear_protocol();
+            h.clear_src_port();
+            h.clear_dst_port();
+            h.clear_seqnum();
+            return h;
+          },
+          .is_valid_parent = [](const proto::FlowMarker& c) -> bool {
+            return ExpectedFieldsAreSet(c, ClusterFlowOptions()) &&
+                   UnexpectedFieldsAreUnset(c, ClusterFlowOptions());
+          },
+          .is_valid_child = [](const proto::FlowMarker& h) -> bool {
+            return ExpectedFieldsAreSet(h, HostFlowOptions());
+          },
+      });
+}
+
+FlowAggregator::FlowAggregator(
+    std::unique_ptr<DemandPredictor> agg_demand_predictor, Config config)
+    : config_(std::move(config)),
+      agg_demand_predictor_(std::move(agg_demand_predictor)) {}
 
 // TODO: check that we retain host info as long as it is incorporated into the
 // cluster demand.
 
-void ClusterFGTracker::RemoveHost(int64_t host_id) {
-  host_states_.erase(host_id);
-}
-
-void ClusterFGTracker::UpdateHost(const proto::HostInfo& host_info) {
-  const absl::Time timestamp = FromProtoTimestamp(host_info.timestamp());
-  HostState& host_state = host_states_[host_info.host_id()];
-  for (const proto::FlowInfo& flow_info : host_info.flow_infos()) {
-    // TODO: check that host-agent aggregates
-    CHECK_EQ(flow_info.marker().src_addr(), "");
-    CHECK_EQ(flow_info.marker().dst_addr(), "");
-    CHECK_EQ(flow_info.marker().protocol(), proto::Protocol::UNSET);
-    CHECK_EQ(flow_info.marker().src_port(), 0);
-    CHECK_EQ(flow_info.marker().dst_port(), 0);
-    CHECK_EQ(flow_info.marker().seqnum(), 0);
-
-    auto iter = host_state.agg_states.find(flow_info.marker());
-    if (iter == host_state.agg_states.end()) {
-      bool ok = false;
-      std::tie(iter, ok) = host_state.agg_states.insert(
-          {flow_info.marker(), HostAggState{
-                                   .state = FlowState(flow_info.marker()),
-                                   .cum_hipri_usage_bytes = 0,
-                                   .cum_lopri_usage_bytes = 0,
-                               }});
-      ABSL_ASSERT(ok);
+void FlowAggregator::Update(const proto::InfoBundle& bundle) {
+  const absl::Time timestamp = FromProtoTimestamp(bundle.timestamp());
+  BundleState& bs = bundle_states_[bundle.bundler()];
+  for (const proto::FlowInfo& fi : bundle.flow_infos()) {
+    if (config_.is_valid_child != nullptr) {
+      CHECK(config_.is_valid_child(fi.flow())) << fi.flow().ShortDebugString();
     }
 
-    HostAggState& agg_state = iter->second;
-    agg_state.state.UpdateUsage(
-        {
-            .time = timestamp,
-            .cum_usage_bytes = flow_info.cum_usage_bytes(),
-            .instantaneous_usage_bps = flow_info.ewma_usage_bps(),
-        },
-        config_.host_usage_history_window, *host_demand_predictor_);
-
-    {
-      AggState& cluster_state = GetAggState(flow_info.marker());
-      cluster_state.cum_hipri_usage_bytes +=
-          flow_info.cum_hipri_usage_bytes() - agg_state.cum_hipri_usage_bytes;
-      cluster_state.cum_lopri_usage_bytes +=
-          flow_info.cum_lopri_usage_bytes() - agg_state.cum_lopri_usage_bytes;
+    auto iter = bs.active.find(fi.flow());
+    if (iter == bs.active.end()) {
+      // Remove from the dead map (in case it exists)
+      bs.dead.erase(fi.flow());
+      bs.active[fi.flow()] = {timestamp, fi};
+    } else {
+      iter->second = {timestamp, fi};
     }
-
-    agg_state.cum_hipri_usage_bytes = flow_info.cum_hipri_usage_bytes();
-    agg_state.cum_lopri_usage_bytes = flow_info.cum_lopri_usage_bytes();
   }
   std::vector<proto::FlowMarker> to_erase;
-  for (auto& iter : host_state.agg_states) {
-    if (iter.second.state.cur().last_updated +
-            config_.host_usage_history_window <
-        timestamp) {
+  for (const auto& iter : bs.active) {
+    if (iter.second.first + config_.usage_history_window < timestamp) {
       to_erase.push_back(iter.first);
     }
   }
-  for (const proto::FlowMarker& marker : to_erase) {
-    host_state.agg_states.erase(marker);
+  for (const proto::FlowMarker& m : to_erase) {
+    bs.dead[m] = bs.active[m];
+    bs.active.erase(m);
   }
 }
 
-std::vector<ClusterStateSnapshot> ClusterFGTracker::CollectSnapshot(
-    absl::Time time) {
-  // agg_states_[.*].cum_[lo|hi]pri_usage_bytes are updated in UpdateHost.
-  // Need to compute sum_ewma_usage_bps, update state, and collect per-host
-  // states.
-  for (auto& marker_agg_state_pair : agg_states_) {
-    marker_agg_state_pair.second.sum_ewma_usage_bps = 0;
-    marker_agg_state_pair.second.host_info.clear();
+void FlowAggregator::ForEachAgg(
+    absl::FunctionRef<void(absl::Time, const proto::AggInfo&)> func) {
+  for (auto& p : agg_wips_) {
+    AggWIP& wip = p.second;
+    wip.oldest_active_time = absl::InfiniteFuture();
+    wip.newest_dead_time = absl::InfinitePast();
+    wip.cum_hipri_usage_bytes = 0;
+    wip.cum_lopri_usage_bytes = 0;
+    wip.sum_ewma_usage_bps = 0;
+    wip.children.clear();
   }
 
-  for (const auto& host_state_pair : host_states_) {
-    for (const auto& marker_agg_state_pair :
-         host_state_pair.second.agg_states) {
-      AggState& agg_state = agg_states_.at(marker_agg_state_pair.first);
-      agg_state.sum_ewma_usage_bps +=
-          marker_agg_state_pair.second.state.cur().ewma_usage_bps;
-      agg_state.host_info.push_back(marker_agg_state_pair.second.state.cur());
+  for (const auto& bundle_pair : bundle_states_) {
+    const BundleState& bs = bundle_pair.second;
+    for (const auto& flow_time_info : bs.active) {
+      AggWIP& wip = GetAggWIP(flow_time_info.first);
+      wip.oldest_active_time =
+          std::min(wip.oldest_active_time, flow_time_info.second.first);
+      wip.cum_hipri_usage_bytes +=
+          flow_time_info.second.second.cum_hipri_usage_bytes();
+      wip.cum_lopri_usage_bytes +=
+          flow_time_info.second.second.cum_lopri_usage_bytes();
+      wip.sum_ewma_usage_bps += flow_time_info.second.second.ewma_usage_bps();
+      wip.children.push_back(flow_time_info.second.second);
+    }
+
+    for (const auto& flow_time_info : bs.dead) {
+      AggWIP& wip = GetAggWIP(flow_time_info.first);
+      wip.newest_dead_time =
+          std::max(wip.newest_dead_time, flow_time_info.second.first);
+      wip.cum_hipri_usage_bytes +=
+          flow_time_info.second.second.cum_hipri_usage_bytes();
+      wip.cum_lopri_usage_bytes +=
+          flow_time_info.second.second.cum_lopri_usage_bytes();
     }
   }
 
-  std::vector<ClusterStateSnapshot> cluster_states;
-  for (auto& marker_agg_state_pair : agg_states_) {
-    AggState& agg_state = marker_agg_state_pair.second;
-    agg_state.state.UpdateUsage(
+  for (auto& p : agg_wips_) {
+    AggWIP& wip = p.second;
+    absl::Time time = absl::UnixEpoch();
+    if (wip.oldest_active_time != absl::InfiniteFuture()) {
+      time = wip.oldest_active_time;
+    } else if (wip.newest_dead_time != absl::InfinitePast()) {
+      time = wip.newest_dead_time;
+    } else {
+      LOG(ERROR) << "AggWIP for " << wip.state.flow().ShortDebugString()
+                 << " has no oldest active or newest dead time";
+    }
+    wip.state.UpdateUsage(
         {
             .time = time,
-            .cum_usage_bytes = agg_state.cum_hipri_usage_bytes +
-                               agg_state.cum_lopri_usage_bytes,
-            .instantaneous_usage_bps = agg_state.sum_ewma_usage_bps,
+            .sum_child_usage_bps = wip.sum_ewma_usage_bps,
+            .cum_hipri_usage_bytes = wip.cum_hipri_usage_bytes,
+            .cum_lopri_usage_bytes = wip.cum_lopri_usage_bytes,
         },
-        config_.cluster_usage_history_window, *host_demand_predictor_);
-    std::sort(agg_state.host_info.begin(), agg_state.host_info.end(),
-              [](const FlowStateSnapshot& lhs, const FlowStateSnapshot& rhs) {
-                return lhs.flow.host_id() < rhs.flow.host_id();
-              });
-    cluster_states.push_back({
-        .state = agg_state.state.cur(),
-        .cum_hipri_usage_bytes = agg_state.cum_hipri_usage_bytes,
-        .cum_lopri_usage_bytes = agg_state.cum_lopri_usage_bytes,
-        .host_info = std::move(agg_state.host_info),
-    });
+        config_.usage_history_window, *agg_demand_predictor_);
+
+    proto::AggInfo agg_info;
+    *agg_info.mutable_parent() = wip.state.cur();
+    *agg_info.mutable_children() = {wip.children.begin(), wip.children.end()};
+
+    func(time, agg_info);
   }
-  return cluster_states;
 }
 
-ClusterFGTracker::AggState& ClusterFGTracker::GetAggState(
-    proto::FlowMarker flow_marker) {
-  auto iter = agg_states_.find(flow_marker);
-  if (iter == agg_states_.end()) {
-    bool ok = false;
-    std::tie(iter, ok) = agg_states_.insert({
-        flow_marker,
-        AggState{.state = FlowState(flow_marker)},
-    });
-    ABSL_ASSERT(ok);
+FlowAggregator::AggWIP& FlowAggregator::GetAggWIP(
+    const proto::FlowMarker& child) {
+  proto::FlowMarker m = config_.get_agg_flow_fn(child);
+  auto iter = agg_wips_.find(m);
+  if (iter == agg_wips_.end()) {
+    iter = agg_wips_.insert({m, AggWIP{.state = AggState(m)}}).first;
   }
   return iter->second;
 }

@@ -23,6 +23,16 @@ struct CompareFlowOptions {
   bool cmp_seqnum = true;
 };
 
+// ExpectedFieldsAreSet checks that all field groups marked true in options are
+// set to a non-zero value.
+bool ExpectedFieldsAreSet(const proto::FlowMarker& marker,
+                          CompareFlowOptions options);
+
+// UnexpectedFieldsAreUnset checks that all fields groups marked false in
+// options are set to a zero value.
+bool UnexpectedFieldsAreUnset(const proto::FlowMarker& marker,
+                              CompareFlowOptions options);
+
 bool IsSameFlow(const proto::FlowMarker& lhs, const proto::FlowMarker& rhs,
                 CompareFlowOptions options = {});
 
