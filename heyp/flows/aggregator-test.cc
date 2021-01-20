@@ -69,7 +69,7 @@ bool operator==(const AggResult& lhs, const AggResult& rhs) {
 
 absl::Time TUnix(int64_t sec) { return absl::FromUnixSeconds(sec); }
 
-TEST(FlowAggregatorTest, OneBundleOneTime) {
+TEST(ConnToHostAggregatorTest, OneBundleOneTime) {
   const absl::Duration window = absl::Seconds(30);
   auto flow_agg = NewConnToHostAggregator(
       absl::make_unique<BweDemandPredictor>(window, 1.2, 100), window);
@@ -232,7 +232,7 @@ TEST(FlowAggregatorTest, OneBundleOneTime) {
             }));
 }
 
-TEST(FlowAggregatorTest, AliveThenDead) {
+TEST(ConnToHostAggregatorTest, AliveThenDead) {
   const absl::Duration window = absl::Seconds(30);
   auto flow_agg = NewConnToHostAggregator(
       absl::make_unique<BweDemandPredictor>(window, 1.2, 100), window);
@@ -325,6 +325,140 @@ TEST(FlowAggregatorTest, AliveThenDead) {
                               cum_usage_bytes: 12000
                               cum_hipri_usage_bytes: 10000
                               cum_lopri_usage_bytes: 2000
+                            }
+                          )")},
+            }));
+}
+
+TEST(HostToClusterAggregatorTest, Unaligned) {
+  const absl::Duration window = absl::Seconds(60);
+  auto flow_agg = NewHostToClusterAggregator(
+      absl::make_unique<BweDemandPredictor>(window, 1.1, 50), window);
+
+  flow_agg->Update(ParseTextProto<proto::InfoBundle>(R"(
+    bundler {
+      host_id: 2
+    }
+    timestamp {
+      seconds: 12
+    }
+      flow_infos {
+      flow {
+        src_dc: "east-us"
+        dst_dc: "west-us"
+        host_id: 2
+      }
+      predicted_demand_bps: 211
+      ewma_usage_bps: 200
+      cum_usage_bytes: 90000
+      cum_hipri_usage_bytes: 90000
+      cum_lopri_usage_bytes: 0
+      currently_lopri: false
+    }
+  )"));
+
+  flow_agg->Update(ParseTextProto<proto::InfoBundle>(R"(
+    bundler {
+      host_id: 1
+    }
+    timestamp {
+      seconds: 10
+    }
+    flow_infos {
+      flow {
+        src_dc: "east-us"
+        dst_dc: "west-us"
+        host_id: 1
+      }
+      predicted_demand_bps: 999
+      ewma_usage_bps: 600
+      cum_usage_bytes: 12000
+      cum_hipri_usage_bytes: 10000
+      cum_lopri_usage_bytes: 2000
+      currently_lopri: true
+    }
+    flow_infos {
+      flow {
+        src_dc: "east-us"
+        dst_dc: "central-us"
+        host_id: 1
+      }
+      predicted_demand_bps: 0
+      ewma_usage_bps: 10
+      cum_usage_bytes: 90000
+      cum_hipri_usage_bytes: 0
+      cum_lopri_usage_bytes: 90000
+      currently_lopri: true
+    }
+  )"));
+
+  EXPECT_EQ(GetResult(*flow_agg),
+            AggResult({
+                {TUnix(10), ParseTextProto<proto::AggInfo>(R"(
+                            parent {
+                              flow {
+                                src_dc: "east-us"
+                                dst_dc: "west-us"
+                              }
+                              predicted_demand_bps: 880
+                              ewma_usage_bps: 800
+                              cum_usage_bytes: 102000
+                              cum_hipri_usage_bytes: 100000
+                              cum_lopri_usage_bytes: 2000
+                              currently_lopri: false
+                            }
+                            children {
+                              flow {
+                                src_dc: "east-us"
+                                dst_dc: "west-us"
+                                host_id: 1
+                              }
+                              predicted_demand_bps: 999
+                              ewma_usage_bps: 600
+                              cum_usage_bytes: 12000
+                              cum_hipri_usage_bytes: 10000
+                              cum_lopri_usage_bytes: 2000
+                              currently_lopri: true
+                            }
+                            children {
+                              flow {
+                                src_dc: "east-us"
+                                dst_dc: "west-us"
+                                host_id: 2
+                              }
+                              predicted_demand_bps: 211
+                              ewma_usage_bps: 200
+                              cum_usage_bytes: 90000
+                              cum_hipri_usage_bytes: 90000
+                              cum_lopri_usage_bytes: 0
+                              currently_lopri: false
+                            }
+                          )")},
+                {TUnix(10), ParseTextProto<proto::AggInfo>(R"(
+                            parent {
+                              flow {
+                                src_dc: "east-us"
+                                dst_dc: "central-us"
+                              }
+                              predicted_demand_bps: 50
+                              ewma_usage_bps: 10
+                              cum_usage_bytes: 90000
+                              cum_hipri_usage_bytes: 0
+                              cum_lopri_usage_bytes: 90000
+                              currently_lopri: true
+                            }
+                            children {
+                              flow {
+                                src_dc: "east-us"
+                                dst_dc: "central-us"
+                                host_id: 1
+                              }
+                              predicted_demand_bps: 0
+                              ewma_usage_bps: 10
+                              cum_usage_bytes: 90000
+                              cum_hipri_usage_bytes: 0
+                              cum_lopri_usage_bytes: 90000
+                              currently_lopri: true
                             }
                           )")},
             }));
