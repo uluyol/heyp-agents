@@ -118,7 +118,7 @@ void FlowAggregator::Update(const proto::InfoBundle& bundle) {
     }
   }
   for (const proto::FlowMarker& m : to_erase) {
-    bs.dead[m] = bs.active[m];
+    bs.dead[m] = {timestamp, bs.active[m].second};
     bs.active.erase(m);
   }
 }
