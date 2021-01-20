@@ -20,7 +20,9 @@ void AggState::UpdateUsage(const Update u, absl::Duration usage_history_window,
                            const DemandPredictor& demand_predictor) {
   const int64_t cum_usage_bytes =
       u.cum_hipri_usage_bytes + u.cum_lopri_usage_bytes;
-  const bool is_lopri = u.cum_hipri_usage_bytes == cur_.cum_hipri_usage_bytes();
+  const bool is_lopri =
+      (u.cum_hipri_usage_bytes == cur_.cum_hipri_usage_bytes()) &&
+      (u.cum_lopri_usage_bytes > cur_.cum_lopri_usage_bytes());
 
   if (u.time < updated_time_) {
     LOG(WARNING) << absl::Substitute(
@@ -39,10 +41,12 @@ void AggState::UpdateUsage(const Update u, absl::Duration usage_history_window,
   if (was_updated_) {
     const int64_t usage_bits = 8 * (cum_usage_bytes - cur_.cum_usage_bytes());
     const absl::Duration dur = u.time - updated_time_;
-    const double measured_mean_usage_bps =
-        usage_bits / absl::ToDoubleSeconds(dur);
-    measured_usage_bps =
-        std::max<double>(measured_mean_usage_bps, measured_usage_bps);
+    if (dur > absl::ZeroDuration()) {
+      const double measured_mean_usage_bps =
+          usage_bits / absl::ToDoubleSeconds(dur);
+      measured_usage_bps =
+          std::max<double>(measured_mean_usage_bps, measured_usage_bps);
+    }
   } else {
     was_updated_ = true;
     updated_time_ = u.time;

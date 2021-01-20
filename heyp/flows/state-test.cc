@@ -61,6 +61,48 @@ TEST(AggStateTest, NoSmoothing) {
   }
 }
 
+TEST(AggStateTest, NoTimeChange) {
+  NopDemandPredictor demand_predictor;
+
+  const absl::Time now = absl::Now();
+
+  AggState state({}, /*smooth_usage=*/false);
+  constexpr absl::Duration kHistoryWindow = absl::Seconds(10);
+
+  EXPECT_EQ(state.cur().ewma_usage_bps(), 0);
+  EXPECT_EQ(state.cur().cum_hipri_usage_bytes(), 0);
+  EXPECT_EQ(state.cur().cum_lopri_usage_bytes(), 0);
+  EXPECT_EQ(state.cur().currently_lopri(), false);
+
+  state.UpdateUsage(
+      {
+          .time = now,
+          .sum_child_usage_bps = 900,
+          .cum_hipri_usage_bytes = 1000,
+      },
+      kHistoryWindow, demand_predictor);
+
+  EXPECT_EQ(state.cur().ewma_usage_bps(), 900);
+  EXPECT_EQ(state.cur().cum_usage_bytes(), 1000);
+  EXPECT_EQ(state.cur().cum_hipri_usage_bytes(), 1000);
+  EXPECT_EQ(state.cur().cum_lopri_usage_bytes(), 0);
+  EXPECT_EQ(state.cur().currently_lopri(), false);
+
+  state.UpdateUsage(
+      {
+          .time = now,  // no change in time
+          .sum_child_usage_bps = 0,
+          .cum_hipri_usage_bytes = 1000,
+      },
+      kHistoryWindow, demand_predictor);
+
+  EXPECT_EQ(state.cur().ewma_usage_bps(), 0);
+  EXPECT_EQ(state.cur().cum_usage_bytes(), 1000);
+  EXPECT_EQ(state.cur().cum_hipri_usage_bytes(), 1000);
+  EXPECT_EQ(state.cur().cum_lopri_usage_bytes(), 0);
+  EXPECT_EQ(state.cur().currently_lopri(), false);
+}
+
 TEST(AggStateTest, TracksPriority) {
   AggState state({}, /*smooth_usage=*/false);
   BweDemandPredictor demand_predictor(absl::Seconds(100), 1.1, 5'000);
@@ -279,7 +321,7 @@ TEST(LeafStateTest, Priorities) {
 
   state.UpdateUsage(
       {
-          .time = time(0),
+          .time = time(1),
           .cum_usage_bytes = 1200,
           .is_lopri = false,
       },
@@ -291,7 +333,7 @@ TEST(LeafStateTest, Priorities) {
 
   state.UpdateUsage(
       {
-          .time = time(0),
+          .time = time(2),
           .cum_usage_bytes = 2000,
           .is_lopri = true,
       },
@@ -303,7 +345,7 @@ TEST(LeafStateTest, Priorities) {
 
   state.UpdateUsage(
       {
-          .time = time(0),
+          .time = time(3),
           .cum_usage_bytes = 2700,
           .is_lopri = false,
       },
