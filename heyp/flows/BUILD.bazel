@@ -44,6 +44,16 @@ cc_library(
 )
 
 cc_test(
+    name = "aggregator-test",
+    srcs = ["aggregator-test.cc"],
+    deps = [
+        ":aggregator",
+        "//heyp/proto:parse_text",
+        "@gtest//:gtest_main",
+    ],
+)
+
+cc_test(
     name = "state-test",
     srcs = ["state-test.cc"],
     deps = [
