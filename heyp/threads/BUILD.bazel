@@ -1,0 +1,49 @@
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+
+package(
+    default_visibility = ["//heyp:__subpackages__"],
+)
+
+cc_library(
+    name = "executor",
+    srcs = ["executor.cc"],
+    hdrs = ["executor.h"],
+    linkopts = ["-pthread"],
+    deps = [
+        ":waitgroup",
+        "@com_google_absl//absl/base",
+        "@com_google_absl//absl/synchronization",
+        "@glog",
+    ],
+)
+
+cc_library(
+    name = "waitgroup",
+    srcs = ["waitgroup.cc"],
+    hdrs = ["waitgroup.h"],
+    linkopts = ["-pthread"],
+    deps = [
+        "@com_google_absl//absl/base",
+        "@com_google_absl//absl/synchronization",
+    ],
+)
+
+cc_test(
+    name = "executor-test",
+    srcs = ["executor-test.cc"],
+    args = ["--gtest_repeat=20"],
+    deps = [
+        ":executor",
+        "@gtest//:gtest_main",
+    ],
+)
+
+cc_test(
+    name = "waitgroup-test",
+    srcs = ["waitgroup-test.cc"],
+    args = ["--gtest_repeat=50"],
+    deps = [
+        ":waitgroup",
+        "@gtest//:gtest_main",
+    ],
+)
