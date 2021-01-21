@@ -4,11 +4,7 @@ package heyp.proto;
 
 import "google/protobuf/timestamp.proto";
 
-enum Protocol {
-  UNSET = 0;
-  TCP = 1;
-  UDP = 2;
-}
+enum Protocol { UNSET = 0; TCP = 1; UDP = 2; }
 
 message FlowMarker {
   string src_dc = 1;
@@ -19,7 +15,7 @@ message FlowMarker {
   Protocol protocol = 6;
   int32 src_port = 7;
   int32 dst_port = 8;
-  uint64 seqnum = 9; // seq number to distinguish flows with same ports
+  uint64 seqnum = 9;  // seq number to distinguish flows with same ports
 }
 
 message FlowInfo {
@@ -32,7 +28,8 @@ message FlowInfo {
   int64 cum_hipri_usage_bytes = 5;
   int64 cum_lopri_usage_bytes = 6;
 
-  // currently_lopri indiciates whether a flow is exclusively using LOPRI bandwidth.
+  // currently_lopri indiciates whether a flow is exclusively using LOPRI
+  // bandwidth.
   bool currently_lopri = 7;
 }
 
@@ -48,14 +45,12 @@ message InfoBundle {
 }
 
 message FlowAlloc {
-  FlowMarker marker = 1;
+  FlowMarker flow = 1;
   int64 hipri_rate_limit_bps = 2;
   int64 lopri_rate_limit_bps = 3;
 }
 
-message AllocBundle {
-  repeated FlowAlloc flow_allocs = 1;
-}
+message AllocBundle { repeated FlowAlloc flow_allocs = 1; }
 
 message DCMapping {
   message Entry {
@@ -66,5 +61,5 @@ message DCMapping {
 }
 
 service ClusterAgent {
-  rpc RegisterHost(stream InfoBundle) returns (stream AllocBundle) {}
+  rpc RegisterHost(stream InfoBundle) returns(stream AllocBundle) {}
 }

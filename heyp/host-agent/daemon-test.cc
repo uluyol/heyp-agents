@@ -16,7 +16,7 @@ MATCHER_P(AllocBundleEq, other, "") {
   for (int i = 0; i < arg.flow_allocs_size(); i++) {
     const proto::FlowAlloc& a = arg.flow_allocs(i);
     const proto::FlowAlloc& b = other.flow_allocs(i);
-    if (!IsSameFlow(a.marker(), b.marker())) {
+    if (!IsSameFlow(a.flow(), b.flow())) {
       return false;
     }
     if (a.hipri_rate_limit_bps() != b.hipri_rate_limit_bps()) {
@@ -159,7 +159,7 @@ TEST(HostDaemonTest, CallsIntoHostEnforcer) {
   const std::vector<proto::AllocBundle> allocs{
       ParseTextProto<proto::AllocBundle>(R"(
         flow_allocs: {
-          marker: {
+          flow {
             src_dc: "us-east",
             dst_dc: "us-central",
             protocol: TCP,
@@ -168,7 +168,7 @@ TEST(HostDaemonTest, CallsIntoHostEnforcer) {
           lopri_rate_limit_bps: 50,
         }
         flow_allocs: {
-          marker: {
+          flow {
             src_dc: "us-east",
             dst_dc: "us-west",
             protocol: TCP,
@@ -179,7 +179,7 @@ TEST(HostDaemonTest, CallsIntoHostEnforcer) {
       )"),
       ParseTextProto<proto::AllocBundle>(R"(
         flow_allocs: {
-          marker: {
+          flow {
             src_dc: "us-east",
             dst_dc: "us-central",
             protocol: TCP,
@@ -190,7 +190,7 @@ TEST(HostDaemonTest, CallsIntoHostEnforcer) {
       )"),
       ParseTextProto<proto::AllocBundle>(R"(
         flow_allocs: {
-          marker: {
+          flow {
             src_dc: "us-east",
             dst_dc: "us-central",
             protocol: TCP,
