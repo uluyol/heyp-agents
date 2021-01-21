@@ -58,3 +58,11 @@ grpc_deps()
 load("@com_github_grpc_grpc//bazel:grpc_extra_deps.bzl", "grpc_extra_deps")
 
 grpc_extra_deps()
+
+http_archive(
+    name = "com_github_uluyol_routing_algos",
+    strip_prefix = "routing-algos-a43ab38b70d0301e38f0114df651edbffa730d4c",
+    urls = [
+        "https://github.com/uluyol/routing-algos/archive/a43ab38b70d0301e38f0114df651edbffa730d4c.tar.gz",
+    ],
+)

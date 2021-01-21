@@ -35,3 +35,15 @@ message HostAgentConfig {
   optional HostDaemonConfig daemon = 3;
   optional StaticDCMapperConfig dc_mapper = 4;
 }
+
+enum ClusterAllocatorType {
+  BWE = 0;
+  HEYP_SIGCOMM20 = 1;
+}
+
+message ClusterAllocatorConfig {
+  optional ClusterAllocatorType type = 1 [default = BWE];
+  optional bool enable_burstiness = 2 [default = true];
+  optional bool enable_bonus = 3 [default = true];
+  optional double oversub_factor = 4 [default = 1.15];
+}

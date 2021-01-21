@@ -1,0 +1,18 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+cc_library(
+    name = "allocator",
+    srcs = ["allocator.cc"],
+    hdrs = ["allocator.h"],
+    deps = [
+        "//heyp/alg:rate-limits",
+        "//heyp/proto:alg",
+        "//heyp/proto:config_cc_proto",
+        "//heyp/proto:heyp_cc_proto",
+        "//heyp/threads:executor",
+        "@com_github_uluyol_routing_algos//routing-algos/alg:max-min-fairness",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/time",
+        "@glog",
+    ],
+)
