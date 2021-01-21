@@ -26,4 +26,14 @@ double BweBurstinessFactor(const proto::AggInfo& info) {
   return burstiness;
 }
 
+int64_t EvenlyDistributeExtra(int64_t admission,
+                              const std::vector<int64_t>& demands,
+                              int64_t waterlevel) {
+  for (int64_t d : demands) {
+    admission -= std::min(d, waterlevel);
+  }
+  admission = std::max<int64_t>(0, admission);
+  return admission / demands.size();
+}
+
 }  // namespace heyp
