@@ -3,6 +3,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/strings/str_format.h"
 #include "glog/logging.h"
+#include "heyp/alg/qos-degradation.h"
 #include "heyp/alg/rate-limits.h"
 #include "heyp/proto/alg.h"
 #include "routing-algos/alg/max-min-fairness.h"
@@ -106,41 +107,6 @@ class BweAggAllocator : public PerAggAllocator {
   const proto::ClusterAllocatorConfig config_;
   const FlowMap<proto::FlowAlloc> agg_admissions_;
 };
-
-struct AssignToMinimizeGapArgs {
-  int64_t cur_demand;
-  const int64_t want_demand;
-  const std::vector<size_t>& children_sorted_by_dec_demand;
-  const proto::AggInfo& agg_info;
-};
-
-// AssignToMinimizeGap is a greedy approach to partitioning children into bins
-// that have aggregate demand X and Y.
-//
-// - StateToIncrease specifies whether we need to increase HIPRI demand (false)
-//   or LOPRI (true).
-// - args.cur_demand is the sum of demands for children that currently belong to
-//   the bin.
-// - args.want_demand is the desired sum of demands for the bin.
-template <bool StateToIncrease>
-void AssignToMinimizeGap(AssignToMinimizeGapArgs args,
-                         std::vector<bool>& lopri_children) {
-  for (size_t child_i : args.children_sorted_by_dec_demand) {
-    if (lopri_children[child_i] != StateToIncrease) {
-      continue;  // child is HIPRI (LOPRI), want LOPRI (HIPRI)
-    }
-    // Try to flip child_i to our bin.
-    int64_t next_demand =
-        args.cur_demand +
-        args.agg_info.children(child_i).predicted_demand_bps();
-    if (next_demand > args.want_demand) {
-      continue;  // flipping child_i overshoots the goal
-    }
-    // Safe to flip child_i;
-    lopri_children[child_i] = StateToIncrease;
-    args.cur_demand = next_demand;
-  }
-}
 
 class HeypSigcomm20Allocator : public PerAggAllocator {
  private:
@@ -292,7 +258,7 @@ class HeypSigcomm20Allocator : public PerAggAllocator {
       // Move from LOPRI to HIPRI
       int64_t hipri_demand = total_demand - lopri_demand;
       int64_t want_demand = (1 - want_frac_lopri) * total_demand;
-      AssignToMinimizeGap<false>(
+      GreedyAssignToMinimizeGap<false>(
           {
               .cur_demand = hipri_demand,
               .want_demand = want_demand,
@@ -303,7 +269,7 @@ class HeypSigcomm20Allocator : public PerAggAllocator {
     } else {
       // Move from HIPRI to LOPRI
       int64_t want_demand = want_frac_lopri * total_demand;
-      AssignToMinimizeGap<true>(
+      GreedyAssignToMinimizeGap<true>(
           {
               .cur_demand = lopri_demand,
               .want_demand = want_demand,

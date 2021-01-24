@@ -5,6 +5,7 @@ cc_library(
     srcs = ["allocator.cc"],
     hdrs = ["allocator.h"],
     deps = [
+        "//heyp/alg:qos-degradation",
         "//heyp/alg:rate-limits",
         "//heyp/proto:alg",
         "//heyp/proto:config_cc_proto",
