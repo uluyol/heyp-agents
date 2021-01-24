@@ -48,7 +48,7 @@ cc_test(
     srcs = ["aggregator-test.cc"],
     deps = [
         ":aggregator",
-        "//heyp/proto:parse_text",
+        "//heyp/proto:parse-text",
         "@gtest//:gtest_main",
     ],
 )

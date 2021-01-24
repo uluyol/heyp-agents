@@ -55,8 +55,8 @@ cc_library(
 )
 
 cc_library(
-    name = "parse_text",
-    hdrs = ["parse_text.h"],
+    name = "parse-text",
+    hdrs = ["parse-text.h"],
     deps = [
         "@com_google_protobuf//:protobuf",
         "@glog",

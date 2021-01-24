@@ -116,7 +116,7 @@ cc_test(
     deps = [
         ":daemon",
         "//heyp/flows:dc-mapper",
-        "//heyp/proto:parse_text",
+        "//heyp/proto:parse-text",
         "@com_github_grpc_grpc//:grpc++",
         "@com_google_absl//absl/container:flat_hash_map",
         "@gtest//:gtest_main",

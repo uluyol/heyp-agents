@@ -3,7 +3,7 @@
 #include "gmock/gmock.h"
 #include "google/protobuf/util/message_differencer.h"
 #include "gtest/gtest.h"
-#include "heyp/proto/parse_text.h"
+#include "heyp/proto/parse-text.h"
 
 namespace heyp {
 namespace {
