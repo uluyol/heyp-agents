@@ -46,4 +46,6 @@ message ClusterAllocatorConfig {
   optional bool enable_burstiness = 2 [default = true];
   optional bool enable_bonus = 3 [default = true];
   optional double oversub_factor = 4 [default = 1.15];
+  optional double heyp_acceptable_measured_ratio_over_intended_ratio = 5
+      [default = 0.9];
 }
