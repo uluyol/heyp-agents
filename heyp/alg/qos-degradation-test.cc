@@ -15,6 +15,17 @@ proto::AggInfo ChildrenWithDemands(std::vector<int64_t> demands_bps) {
   return info;
 }
 
+proto::AggInfo ChildrenWithDemandsAndPri(
+    std::vector<std::pair<int64_t, bool>> demands_islopri_bps) {
+  proto::AggInfo info;
+  for (std::pair<int64_t, bool> p : demands_islopri_bps) {
+    auto cp = info.add_children();
+    cp->set_predicted_demand_bps(p.first);
+    cp->set_currently_lopri(p.second);
+  }
+  return info;
+}
+
 template <bool StateToIncrease>
 std::vector<bool> GreedyAssignToMinimizeGapWrapper(
     proto::AggInfo demands, const std::vector<bool> initial_lopri,
@@ -32,7 +43,7 @@ std::vector<bool> GreedyAssignToMinimizeGapWrapper(
   return lopri_children;
 }
 
-TEST(GreedyAssignToMinimizeGap, Directionality) {
+TEST(GreedyAssignToMinimizeGapTest, Directionality) {
   const proto::AggInfo demands = ChildrenWithDemands({200, 100, 300, 100});
   const std::vector<bool> initial_lopri = {true, false, false, true};
   const std::vector<size_t> sorted_by_demand{2, 0, 3, 1};
@@ -54,7 +65,7 @@ TEST(GreedyAssignToMinimizeGap, Directionality) {
   EXPECT_THAT(assign_hipri(600), testing::ElementsAre(f, f, f, t));
 }
 
-TEST(GreedyAssignToMinimizeGap, FlipCompletely) {
+TEST(GreedyAssignToMinimizeGapTest, FlipCompletely) {
   const proto::AggInfo demands = ChildrenWithDemands({200, 100, 300, 100});
   const std::vector<bool> initial_lopri = {true, false, false, true};
   const std::vector<size_t> sorted_by_demand{2, 0, 3, 1};
@@ -72,6 +83,44 @@ TEST(GreedyAssignToMinimizeGap, FlipCompletely) {
 
   EXPECT_THAT(assign_lopri(700), testing::ElementsAre(t, t, t, t));
   EXPECT_THAT(assign_hipri(700), testing::ElementsAre(f, f, f, f));
+}
+
+TEST(HeypSigcomm20PickLOPRIChildrenTest, Directionality) {
+  const proto::AggInfo info = ChildrenWithDemandsAndPri({
+      {200, true},
+      {100, false},
+      {300, false},
+      {100, true},
+  });
+
+  constexpr bool t = true;
+  constexpr bool f = false;
+
+  EXPECT_THAT(HeypSigcomm20PickLOPRIChildren(info, 0.28),
+              testing::ElementsAre(t, f, f, f));
+  EXPECT_THAT(HeypSigcomm20PickLOPRIChildren(info, 0.58),
+              testing::ElementsAre(t, t, f, t));
+  EXPECT_THAT(HeypSigcomm20PickLOPRIChildren(info, 0.71),
+              testing::ElementsAre(t, t, f, t));
+  EXPECT_THAT(HeypSigcomm20PickLOPRIChildren(info, 0.14),
+              testing::ElementsAre(f, f, f, t));
+}
+
+TEST(HeypSigcomm20PickLOPRIChildrenTest, FlipCompletely) {
+  const proto::AggInfo info = ChildrenWithDemandsAndPri({
+      {200, true},
+      {100, false},
+      {300, false},
+      {100, true},
+  });
+
+  constexpr bool t = true;
+  constexpr bool f = false;
+
+  EXPECT_THAT(HeypSigcomm20PickLOPRIChildren(info, 1),
+              testing::ElementsAre(t, t, t, t));
+  EXPECT_THAT(HeypSigcomm20PickLOPRIChildren(info, 0),
+              testing::ElementsAre(f, f, f, f));
 }
 
 }  // namespace
