@@ -6,8 +6,8 @@ template <bool StateToIncrease>
 void GreedyAssignToMinimizeGap(GreedyAssignToMinimizeGapArgs args,
                                std::vector<bool>& lopri_children) {
   for (size_t child_i : args.children_sorted_by_dec_demand) {
-    if (lopri_children[child_i] != StateToIncrease) {
-      continue;  // child is HIPRI (LOPRI), want LOPRI (HIPRI)
+    if (lopri_children[child_i] == StateToIncrease) {
+      continue;  // child already belongs to our bin, don't flip
     }
     // Try to flip child_i to our bin.
     int64_t next_demand =

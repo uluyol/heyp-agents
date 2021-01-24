@@ -41,3 +41,13 @@ cc_test(
         "@gtest//:gtest_main",
     ],
 )
+
+cc_test(
+    name = "qos-degradation-test",
+    srcs = ["qos-degradation-test.cc"],
+    deps = [
+        ":qos-degradation",
+        "@com_google_absl//absl/functional:bind_front",
+        "@gtest//:gtest_main",
+    ],
+)
