@@ -202,27 +202,12 @@ class HeypSigcomm20Allocator : public PerAggAllocator {
     cur_state.last_cum_lopri_usage_bytes = parent.cum_lopri_usage_bytes();
   }
 
-  // TODO: extract into heyp/alg and test.
-  void ReviseLOPRIFrac(const proto::FlowInfo& parent, PerAggState& cur_state) {
-    if (parent.predicted_demand_bps() >
-        cur_state.alloc.hipri_rate_limit_bps()) {
-      const double total_rate_limit_bps =
-          cur_state.alloc.hipri_rate_limit_bps() +
-          cur_state.alloc.lopri_rate_limit_bps();
-      const double total_admitted_demand_bps =
-          std::min<double>(parent.predicted_demand_bps(), total_rate_limit_bps);
-      cur_state.frac_lopri = 1 - (cur_state.alloc.hipri_rate_limit_bps() /
-                                  total_admitted_demand_bps);
-    } else {
-      cur_state.frac_lopri = 0;
-    }
-  }
-
   std::vector<proto::FlowAlloc> AllocAgg(
       absl::Time time, const proto::AggInfo& agg_info) override {
     PerAggState& cur_state = agg_states_.at(agg_info.parent().flow());
     MaybeReviseAdmission(time, agg_info.parent(), cur_state);
-    ReviseLOPRIFrac(agg_info.parent(), cur_state);
+    cur_state.frac_lopri =
+        FracAdmittedAtLOPRI(agg_info.parent(), cur_state.alloc);
     std::vector<bool> lopri_children =
         HeypSigcomm20PickLOPRIChildren(agg_info, cur_state.frac_lopri);
 

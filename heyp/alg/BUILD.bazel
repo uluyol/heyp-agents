@@ -47,6 +47,7 @@ cc_test(
     srcs = ["qos-degradation-test.cc"],
     deps = [
         ":qos-degradation",
+        "//heyp/proto:parse-text",
         "@com_google_absl//absl/functional:bind_front",
         "@gtest//:gtest_main",
     ],

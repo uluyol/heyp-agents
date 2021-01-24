@@ -3,6 +3,7 @@
 #include "absl/functional/bind_front.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "heyp/proto/parse-text.h"
 
 namespace heyp {
 namespace {
@@ -121,6 +122,47 @@ TEST(HeypSigcomm20PickLOPRIChildrenTest, FlipCompletely) {
               testing::ElementsAre(t, t, t, t));
   EXPECT_THAT(HeypSigcomm20PickLOPRIChildren(info, 0),
               testing::ElementsAre(f, f, f, f));
+}
+
+TEST(FracAdmittedAtLOPRITest, Basic) {
+  EXPECT_EQ(FracAdmittedAtLOPRI(
+                ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 1000"),
+                ParseTextProto<proto::FlowAlloc>(R"(
+                  hipri_rate_limit_bps: 600
+                  lopri_rate_limit_bps: 200
+                )")),
+            0.25);
+
+  EXPECT_EQ(FracAdmittedAtLOPRI(
+                ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 640"),
+                ParseTextProto<proto::FlowAlloc>(R"(
+                  hipri_rate_limit_bps: 600
+                  lopri_rate_limit_bps: 200
+                )")),
+            0.0625);
+
+  EXPECT_EQ(FracAdmittedAtLOPRI(
+                ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 500"),
+                ParseTextProto<proto::FlowAlloc>(R"(
+                  hipri_rate_limit_bps: 600
+                  lopri_rate_limit_bps: 200
+                )")),
+            0);
+
+  EXPECT_EQ(FracAdmittedAtLOPRI(
+                ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 1000"),
+                ParseTextProto<proto::FlowAlloc>(R"(
+                  hipri_rate_limit_bps: 600
+                  lopri_rate_limit_bps: 0
+                )")),
+            0);
+  EXPECT_EQ(FracAdmittedAtLOPRI(
+                ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 1000"),
+                ParseTextProto<proto::FlowAlloc>(R"(
+                  hipri_rate_limit_bps: 0
+                  lopri_rate_limit_bps: 900
+                )")),
+            1);
 }
 
 }  // namespace

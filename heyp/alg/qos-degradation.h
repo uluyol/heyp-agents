@@ -11,6 +11,9 @@ namespace heyp {
 std::vector<bool> HeypSigcomm20PickLOPRIChildren(const proto::AggInfo& agg_info,
                                                  const double want_frac_lopri);
 
+double FracAdmittedAtLOPRI(const proto::FlowInfo& parent,
+                           const proto::FlowAlloc& cur_alloc);
+
 // --- Following are mainly exposed for unit testing ---
 
 struct GreedyAssignToMinimizeGapArgs {

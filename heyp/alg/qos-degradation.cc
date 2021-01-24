@@ -94,4 +94,16 @@ std::vector<bool> HeypSigcomm20PickLOPRIChildren(const proto::AggInfo& agg_info,
   return lopri_children;
 }
 
+double FracAdmittedAtLOPRI(const proto::FlowInfo& parent,
+                           const proto::FlowAlloc& cur_alloc) {
+  if (parent.predicted_demand_bps() > cur_alloc.hipri_rate_limit_bps()) {
+    const double total_rate_limit_bps =
+        cur_alloc.hipri_rate_limit_bps() + cur_alloc.lopri_rate_limit_bps();
+    const double total_admitted_demand_bps =
+        std::min<double>(parent.predicted_demand_bps(), total_rate_limit_bps);
+    return 1 - (cur_alloc.hipri_rate_limit_bps() / total_admitted_demand_bps);
+  }
+  return 0;
+}
+
 }  // namespace heyp
