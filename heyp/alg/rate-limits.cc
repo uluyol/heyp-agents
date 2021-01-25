@@ -16,8 +16,7 @@ double BweBurstinessFactor(const proto::AggInfo& info) {
     sum_child_demand_bps += c.predicted_demand_bps();
   }
 
-  if (parent_demand_bps == 0) {
-    ABSL_ASSERT(sum_child_demand_bps == 0);
+  if (parent_demand_bps == 0 || sum_child_demand_bps == 0) {
     return 1;
   }
 
