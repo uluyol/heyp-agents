@@ -1,0 +1,25 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+package(default_visibility = ["//heyp:__subpackages__"])
+
+cc_library(
+    name = "init",
+    srcs = ["init.cc"],
+    hdrs = ["init.h"],
+    deps = [
+        "@com_github_gflags_gflags//:gflags",
+        "@com_google_absl//absl/debugging:failure_signal_handler",
+        "@com_google_absl//absl/debugging:symbolize",
+        "@glog",
+    ],
+)
+
+cc_library(
+    name = "test-main",
+    testonly = True,
+    srcs = ["test-main.cc"],
+    deps = [
+        ":init",
+        "@gtest",
+    ],
+)

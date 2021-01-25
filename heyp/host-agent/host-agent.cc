@@ -1,14 +1,11 @@
 #include <csignal>
 
-#include "absl/debugging/failure_signal_handler.h"
-#include "absl/debugging/symbolize.h"
 #include "absl/random/distributions.h"
 #include "absl/random/random.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
-#include "gflags/gflags.h"
 #include "glog/logging.h"
 #include "google/protobuf/text_format.h"
 #include "grpcpp/grpcpp.h"
@@ -16,6 +13,7 @@
 #include "heyp/host-agent/daemon.h"
 #include "heyp/host-agent/enforcer.h"
 #include "heyp/host-agent/flow-tracker.h"
+#include "heyp/init/init.h"
 #include "heyp/proto/config.pb.h"
 #include "heyp/proto/fileio.h"
 
@@ -118,10 +116,7 @@ absl::Status Run(const proto::HostAgentConfig& c) {
 }  // namespace heyp
 
 int main(int argc, char** argv) {
-  google::InitGoogleLogging(argv[0]);
-  absl::InitializeSymbolizer(argv[0]);
-  absl::InstallFailureSignalHandler(absl::FailureSignalHandlerOptions());
-  gflags::ParseCommandLineFlags(&argc, &argv, true);
+  heyp::MainInit(&argc, &argv);
 
   std::signal(SIGINT, InterruptHandler);
 

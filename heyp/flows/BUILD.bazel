@@ -48,8 +48,8 @@ cc_test(
     srcs = ["aggregator-test.cc"],
     deps = [
         ":aggregator",
+        "//heyp/init:test-main",
         "//heyp/proto:parse-text",
-        "@gtest//:gtest_main",
     ],
 )
 
@@ -58,8 +58,8 @@ cc_test(
     srcs = ["state-test.cc"],
     deps = [
         ":state",
+        "//heyp/init:test-main",
         "//heyp/proto:constructors",
         "@com_google_absl//absl/random",
-        "@gtest//:gtest_main",
     ],
 )

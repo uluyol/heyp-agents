@@ -3,16 +3,15 @@ load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
 cc_binary(
     name = "host-agent",
     srcs = ["host-agent.cc"],
+    visibility = ["//visibility:public"],
     deps = [
         ":daemon",
         ":enforcer",
         ":flow-tracker",
         "//heyp/flows:dc-mapper",
+        "//heyp/init",
         "//heyp/proto:config_cc_proto",
         "//heyp/proto:fileio",
-        "@com_github_gflags_gflags//:gflags",
-        "@com_google_absl//absl/debugging:failure_signal_handler",
-        "@com_google_absl//absl/debugging:symbolize",
         "@com_google_absl//absl/random",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
@@ -82,7 +81,7 @@ cc_test(
     srcs = ["urls-test.cc"],
     deps = [
         ":urls",
-        "@gtest//:gtest_main",
+        "//heyp/init:test-main",
     ],
 )
 
@@ -105,8 +104,8 @@ cc_test(
     deps = [
         ":flow-tracker",
         "//heyp/alg:demand-predictor",
+        "//heyp/init:test-main",
         "//heyp/proto:constructors",
-        "@gtest//:gtest_main",
     ],
 )
 
@@ -116,10 +115,10 @@ cc_test(
     deps = [
         ":daemon",
         "//heyp/flows:dc-mapper",
+        "//heyp/init:test-main",
         "//heyp/proto:parse-text",
         "//heyp/proto:testing",
         "@com_github_grpc_grpc//:grpc++",
         "@com_google_absl//absl/container:flat_hash_map",
-        "@gtest//:gtest_main",
     ],
 )

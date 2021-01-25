@@ -41,7 +41,7 @@ cc_test(
     srcs = ["demand-predictor-test.cc"],
     deps = [
         ":demand-predictor",
-        "@gtest//:gtest_main",
+        "//heyp/init:test-main",
     ],
 )
 
@@ -50,8 +50,8 @@ cc_test(
     srcs = ["qos-degradation-test.cc"],
     deps = [
         ":qos-degradation",
+        "//heyp/init:test-main",
         "//heyp/proto:parse-text",
         "@com_google_absl//absl/functional:bind_front",
-        "@gtest//:gtest_main",
     ],
 )

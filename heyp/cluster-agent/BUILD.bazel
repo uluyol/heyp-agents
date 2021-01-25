@@ -23,8 +23,8 @@ cc_test(
     srcs = ["allocator-test.cc"],
     deps = [
         ":allocator",
+        "//heyp/init:test-main",
         "//heyp/proto:parse-text",
         "//heyp/proto:testing",
-        "@gtest//:gtest_main",
     ],
 )

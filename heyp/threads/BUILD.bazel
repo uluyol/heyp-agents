@@ -34,7 +34,7 @@ cc_test(
     args = ["--gtest_repeat=20"],
     deps = [
         ":executor",
-        "@gtest//:gtest_main",
+        "//heyp/init:test-main",
     ],
 )
 
@@ -44,6 +44,6 @@ cc_test(
     args = ["--gtest_repeat=50"],
     deps = [
         ":waitgroup",
-        "@gtest//:gtest_main",
+        "//heyp/init:test-main",
     ],
 )
