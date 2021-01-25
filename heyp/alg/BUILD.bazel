@@ -20,6 +20,9 @@ cc_library(
     hdrs = ["qos-degradation.h"],
     deps = [
         "//heyp/proto:heyp_cc_proto",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/time",
+        "@glog",
     ],
 )
 

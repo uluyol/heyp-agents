@@ -165,5 +165,52 @@ TEST(FracAdmittedAtLOPRITest, Basic) {
             1);
 }
 
+class HeypSigcomm20MaybeReviseLOPRIAdmissionTest : public testing::Test {
+ protected:
+  struct State {
+    proto::FlowAlloc alloc;
+    double frac_lopri = 0;
+    absl::Time last_time = absl::UnixEpoch();
+    int64_t last_cum_hipri_usage_bytes = 0;
+    int64_t last_cum_lopri_usage_bytes = 0;
+  };
+
+  static State NewState(double frac_lopri, int64_t hipri_limit_bps,
+                        int64_t lopri_limit_bps) {
+    State st;
+    st.alloc.set_hipri_rate_limit_bps(hipri_limit_bps);
+    st.alloc.set_lopri_rate_limit_bps(lopri_limit_bps);
+    st.frac_lopri = frac_lopri;
+    return st;
+  }
+
+  static absl::Time T(int64_t sec) {
+    return absl::UnixEpoch() + absl::Seconds(sec);
+  }
+
+  static proto::FlowInfo NewInfo(int64_t cum_hipri_usage_bytes,
+                                 int64_t cum_lopri_usage_bytes) {
+    proto::FlowInfo info;
+    info.mutable_flow()->set_src_dc("x");
+    info.set_cum_hipri_usage_bytes(cum_hipri_usage_bytes);
+    info.set_cum_lopri_usage_bytes(cum_lopri_usage_bytes);
+    return info;
+  }
+};
+
+TEST_F(HeypSigcomm20MaybeReviseLOPRIAdmissionTest, Basic) {
+  EXPECT_EQ(HeypSigcomm20MaybeReviseLOPRIAdmission(1.0, T(1), NewInfo(900, 300),
+                                                   NewState(0.25, 7200, 7200)),
+            7200);
+  EXPECT_EQ(HeypSigcomm20MaybeReviseLOPRIAdmission(0.9, T(1), NewInfo(900, 271),
+                                                   NewState(0.25, 7200, 7200)),
+            7200);
+  EXPECT_EQ(HeypSigcomm20MaybeReviseLOPRIAdmission(0.9, T(1), NewInfo(900, 269),
+                                                   NewState(0.25, 7200, 7200)),
+            2152);
+}
+
+// TODO: HeypSigcomm20MaybeReviseLOPRIAdmissionTest edge cases
+
 }  // namespace
 }  // namespace heyp

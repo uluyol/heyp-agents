@@ -1,8 +1,6 @@
 #include "heyp/cluster-agent/allocator.h"
 
 #include "absl/container/flat_hash_map.h"
-#include "absl/strings/str_format.h"
-#include "glog/logging.h"
 #include "heyp/alg/qos-degradation.h"
 #include "heyp/alg/rate-limits.h"
 #include "heyp/proto/alg.h"
@@ -113,8 +111,6 @@ class HeypSigcomm20Allocator : public PerAggAllocator {
   struct PerAggState {
     proto::FlowAlloc alloc;
     double frac_lopri = 0;
-
-    // Used and maintained by MaybeReviseAdmission.
     absl::Time last_time = absl::UnixEpoch();
     int64_t last_cum_hipri_usage_bytes = 0;
     int64_t last_cum_lopri_usage_bytes = 0;
@@ -132,80 +128,20 @@ class HeypSigcomm20Allocator : public PerAggAllocator {
     }
   }
 
-  // TODO: extract into heyp/alg and test.
-  // Probably need to use templates to make generic over PerAggState types.
-  void MaybeReviseAdmission(absl::Time time, const proto::FlowInfo& parent,
-                            PerAggState& cur_state) {
-    if (cur_state.frac_lopri > 0) {
-      const double hipri_usage_bytes =
-          parent.cum_hipri_usage_bytes() - cur_state.last_cum_hipri_usage_bytes;
-      const double lopri_usage_bytes =
-          parent.cum_lopri_usage_bytes() - cur_state.last_cum_lopri_usage_bytes;
-
-      if (hipri_usage_bytes == 0) {
-        LOG(INFO) << absl::StrFormat("flow: %s: no HIPRI usage",
-                                     parent.flow().ShortDebugString());
-      } else {
-        ABSL_ASSERT(hipri_usage_bytes > 0);
-        const double measured_lopri_over_hipri =
-            lopri_usage_bytes / hipri_usage_bytes;
-        ABSL_ASSERT(cur_state.frac_lopri > 0);
-        const double want_hipri_over_lopri =
-            (1 - cur_state.frac_lopri) / cur_state.frac_lopri;
-
-        // Now, if we try to send X Gbps as LOPRI, but only succeed at sending
-        // 0.8 * X Gbps as LOPRI, this indicates that we have some congestion on
-        // LOPRI. Therefore, we should lower the LOPRI rate limit to mitigate
-        // the congestion.
-        //
-        // On the other hand, if we try to send X Gbps as LOPRI but end up
-        // sending more, this indicates that we have underestimated the demand
-        // and marked a smaller portion of traffic with LOPRI than we should
-        // have. It says nothing about LOPRI or HIPRI being congested, so leave
-        // the rate limits alone.
-        const double measured_ratio_over_intended_ratio =
-            measured_lopri_over_hipri * want_hipri_over_lopri;
-
-        if (measured_ratio_over_intended_ratio <
-            config_.heyp_acceptable_measured_ratio_over_intended_ratio()) {
-          double hipri_usage_bps =
-              8 * hipri_usage_bytes /
-              absl::ToDoubleSeconds(time - cur_state.last_time);
-          double lopri_usage_bps =
-              8 * lopri_usage_bytes /
-              absl::ToDoubleSeconds(time - cur_state.last_time);
-
-          int64_t new_lopri_limit = hipri_usage_bps + lopri_usage_bps -
-                                    cur_state.alloc.hipri_rate_limit_bps();
-          // Rate limiting is not perfect, avoid increasing the LOPRI limit.
-          new_lopri_limit =
-              std::min(new_lopri_limit, cur_state.alloc.lopri_rate_limit_bps());
-
-          LOG(INFO) << absl::StrFormat(
-              "flow: %s: inferred congestion: sent %f Mbps as HIPRI but "
-              "only %f "
-              "Mbps as LOPRI ",
-              parent.flow().ShortDebugString(), hipri_usage_bps / 1'000'000,
-              lopri_usage_bps / 1'000'000);
-          LOG(INFO) << absl::StrFormat(
-              "flow: %s: old LOPRI limit: %f Mbps new LOPRI limit: %f Mbps",
-              parent.flow().ShortDebugString(),
-              cur_state.alloc.lopri_rate_limit_bps() / 1'000'000,
-              new_lopri_limit / 1'000'000);
-          cur_state.alloc.set_lopri_rate_limit_bps(new_lopri_limit);
-        }
-      }
-    }
-
-    cur_state.last_time = time;
-    cur_state.last_cum_hipri_usage_bytes = parent.cum_hipri_usage_bytes();
-    cur_state.last_cum_lopri_usage_bytes = parent.cum_lopri_usage_bytes();
-  }
-
   std::vector<proto::FlowAlloc> AllocAgg(
       absl::Time time, const proto::AggInfo& agg_info) override {
     PerAggState& cur_state = agg_states_.at(agg_info.parent().flow());
-    MaybeReviseAdmission(time, agg_info.parent(), cur_state);
+    cur_state.alloc.set_lopri_rate_limit_bps(
+        HeypSigcomm20MaybeReviseLOPRIAdmission(
+            config_.heyp_acceptable_measured_ratio_over_intended_ratio(), time,
+            agg_info.parent(), cur_state));
+
+    cur_state.last_time = time;
+    cur_state.last_cum_hipri_usage_bytes =
+        agg_info.parent().cum_hipri_usage_bytes();
+    cur_state.last_cum_lopri_usage_bytes =
+        agg_info.parent().cum_lopri_usage_bytes();
+
     cur_state.frac_lopri =
         FracAdmittedAtLOPRI(agg_info.parent(), cur_state.alloc);
     std::vector<bool> lopri_children =
