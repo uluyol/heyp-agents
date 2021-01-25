@@ -148,14 +148,9 @@ TEST(FracAdmittedAtLOPRITest, Basic) {
                   lopri_rate_limit_bps: 200
                 )")),
             0);
+}
 
-  EXPECT_EQ(FracAdmittedAtLOPRI(
-                ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 1000"),
-                ParseTextProto<proto::FlowAlloc>(R"(
-                  hipri_rate_limit_bps: 600
-                  lopri_rate_limit_bps: 0
-                )")),
-            0);
+TEST(FracAdmittedAtLOPRITest, AllLOPRI) {
   EXPECT_EQ(FracAdmittedAtLOPRI(
                 ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 1000"),
                 ParseTextProto<proto::FlowAlloc>(R"(
@@ -163,6 +158,36 @@ TEST(FracAdmittedAtLOPRITest, Basic) {
                   lopri_rate_limit_bps: 900
                 )")),
             1);
+}
+
+TEST(FracAdmittedAtLOPRITest, AllHIPRI) {
+  EXPECT_EQ(FracAdmittedAtLOPRI(
+                ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 1000"),
+                ParseTextProto<proto::FlowAlloc>(R"(
+                  hipri_rate_limit_bps: 600
+                  lopri_rate_limit_bps: 0
+                )")),
+            0);
+}
+
+TEST(FracAdmittedAtLOPRITest, ZeroLimit) {
+  EXPECT_EQ(FracAdmittedAtLOPRI(
+                ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 1000"),
+                ParseTextProto<proto::FlowAlloc>(R"(
+                  hipri_rate_limit_bps: 0
+                  lopri_rate_limit_bps: 0
+                )")),
+            0);
+}
+
+TEST(FracAdmittedAtLOPRITest, ZeroDemand) {
+  EXPECT_EQ(FracAdmittedAtLOPRI(
+                ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 0"),
+                ParseTextProto<proto::FlowAlloc>(R"(
+                  hipri_rate_limit_bps: 600
+                  lopri_rate_limit_bps: 0
+                )")),
+            0);
 }
 
 class HeypSigcomm20MaybeReviseLOPRIAdmissionTest : public testing::Test {
@@ -210,7 +235,41 @@ TEST_F(HeypSigcomm20MaybeReviseLOPRIAdmissionTest, Basic) {
             2152);
 }
 
-// TODO: HeypSigcomm20MaybeReviseLOPRIAdmissionTest edge cases
+TEST_F(HeypSigcomm20MaybeReviseLOPRIAdmissionTest, AllLOPRI) {
+  EXPECT_EQ(HeypSigcomm20MaybeReviseLOPRIAdmission(1.0, T(1), NewInfo(10, 500),
+                                                   NewState(1.0, 0, 7200)),
+            7200);
+}
+
+TEST_F(HeypSigcomm20MaybeReviseLOPRIAdmissionTest, AllHIPRI) {
+  EXPECT_EQ(HeypSigcomm20MaybeReviseLOPRIAdmission(1.0, T(1), NewInfo(900, 10),
+                                                   NewState(0.0, 7200, 0)),
+            0);
+}
+
+TEST_F(HeypSigcomm20MaybeReviseLOPRIAdmissionTest, ZeroUsage) {
+  EXPECT_EQ(HeypSigcomm20MaybeReviseLOPRIAdmission(1.0, T(1), NewInfo(0, 0),
+                                                   NewState(1.0, 7200, 7200)),
+            7200);
+}
+
+TEST_F(HeypSigcomm20MaybeReviseLOPRIAdmissionTest, ZeroLimit) {
+  EXPECT_EQ(HeypSigcomm20MaybeReviseLOPRIAdmission(1.0, T(1), NewInfo(10, 500),
+                                                   NewState(0.0, 0, 0)),
+            0);
+}
+
+TEST_F(HeypSigcomm20MaybeReviseLOPRIAdmissionTest, AllHIPRIFailed) {
+  EXPECT_EQ(HeypSigcomm20MaybeReviseLOPRIAdmission(1.0, T(1), NewInfo(0, 300),
+                                                   NewState(0.0, 7200, 7200)),
+            7200);
+}
+
+TEST_F(HeypSigcomm20MaybeReviseLOPRIAdmissionTest, AllLOPRIFailed) {
+  EXPECT_EQ(HeypSigcomm20MaybeReviseLOPRIAdmission(0.5, T(1), NewInfo(900, 0),
+                                                   NewState(0.5, 7200, 7200)),
+            0);
+}
 
 }  // namespace
 }  // namespace heyp

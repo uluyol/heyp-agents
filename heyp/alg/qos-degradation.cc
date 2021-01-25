@@ -96,7 +96,11 @@ std::vector<bool> HeypSigcomm20PickLOPRIChildren(const proto::AggInfo& agg_info,
 
 double FracAdmittedAtLOPRI(const proto::FlowInfo& parent,
                            const proto::FlowAlloc& cur_alloc) {
-  if (parent.predicted_demand_bps() > cur_alloc.hipri_rate_limit_bps()) {
+  bool maybe_admit = cur_alloc.lopri_rate_limit_bps() > 0;
+  maybe_admit = maybe_admit && parent.predicted_demand_bps() > 0;
+  maybe_admit = maybe_admit && parent.predicted_demand_bps() >
+                                   cur_alloc.hipri_rate_limit_bps();
+  if (maybe_admit) {
     const double total_rate_limit_bps =
         cur_alloc.hipri_rate_limit_bps() + cur_alloc.lopri_rate_limit_bps();
     const double total_admitted_demand_bps =

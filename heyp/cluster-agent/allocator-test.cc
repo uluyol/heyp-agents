@@ -5,3 +5,4 @@
 // - Test for no LOPRI usage
 // - Test for zero demand
 // - Test for zero usage
+// - Test for zero limit

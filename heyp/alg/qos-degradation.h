@@ -53,7 +53,7 @@ template <typename SingleAggState>
 int64_t HeypSigcomm20MaybeReviseLOPRIAdmission(
     double acceptable_measured_ratio_over_intended_ratio, absl::Time time,
     const proto::FlowInfo& parent, const SingleAggState& cur_state) {
-  if (cur_state.frac_lopri > 0) {
+  if (cur_state.alloc.hipri_rate_limit_bps() > 0 && cur_state.frac_lopri > 0) {
     const double hipri_usage_bytes =
         parent.cum_hipri_usage_bytes() - cur_state.last_cum_hipri_usage_bytes;
     const double lopri_usage_bytes =
@@ -103,10 +103,10 @@ int64_t HeypSigcomm20MaybeReviseLOPRIAdmission(
         };
 
         LOG(INFO) << absl::StrFormat(
-            "flow: %s: inferred congestion (ratio = %f): sent %f Mbps as HIPRI but "
-            "only %f "
-            "Mbps as LOPRI ",
-            parent.flow().ShortDebugString(), measured_ratio_over_intended_ratio, to_mbps(hipri_usage_bps),
+            "flow: %s: inferred congestion (ratio = %f): sent %f Mbps as HIPRI "
+            "but only %f Mbps as LOPRI ",
+            parent.flow().ShortDebugString(),
+            measured_ratio_over_intended_ratio, to_mbps(hipri_usage_bps),
             to_mbps(lopri_usage_bps));
         LOG(INFO) << absl::StrFormat(
             "flow: %s: old LOPRI limit: %f Mbps new LOPRI limit: %f Mbps",
