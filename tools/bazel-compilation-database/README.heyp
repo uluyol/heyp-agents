@@ -1,0 +1,5 @@
+# Generating clangd config
+
+At this repository's root directory, run
+
+tools/bazel-compilation-database/generate.sh -s
