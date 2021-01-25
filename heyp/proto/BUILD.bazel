@@ -55,6 +55,13 @@ cc_library(
 )
 
 cc_library(
+    name = "fileio",
+    srcs = ["fileio.cc"],
+    hdrs = ["fileio.h"],
+    deps = ["@com_google_protobuf//:protobuf"],
+)
+
+cc_library(
     name = "parse-text",
     hdrs = ["parse-text.h"],
     deps = [
@@ -64,8 +71,11 @@ cc_library(
 )
 
 cc_library(
-    name = "fileio",
-    srcs = ["fileio.cc"],
-    hdrs = ["fileio.h"],
-    deps = ["@com_google_protobuf//:protobuf"],
+    name = "testing",
+    testonly = True,
+    hdrs = ["testing.h"],
+    deps = [
+        ":alg",
+        "@gtest",
+    ],
 )
