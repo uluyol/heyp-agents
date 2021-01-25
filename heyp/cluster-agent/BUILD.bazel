@@ -1,4 +1,4 @@
-load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
 
 cc_library(
     name = "allocator",
@@ -15,5 +15,16 @@ cc_library(
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/time",
         "@glog",
+    ],
+)
+
+cc_test(
+    name = "allocator-test",
+    srcs = ["allocator-test.cc"],
+    deps = [
+        ":allocator",
+        "//heyp/proto:parse-text",
+        "//heyp/proto:testing",
+        "@gtest//:gtest_main",
     ],
 )
