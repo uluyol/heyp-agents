@@ -20,6 +20,8 @@ constexpr int kNumAllocCores = 8;
 ClusterAllocator::ClusterAllocator(std::unique_ptr<PerAggAllocator> alloc)
     : alloc_(std::move(alloc)), exec_(kNumAllocCores) {}
 
+ClusterAllocator::~ClusterAllocator() {}
+
 void ClusterAllocator::Reset() {
   absl::MutexLock l(&mu_);
   group_ = exec_.NewTaskGroup();

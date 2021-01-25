@@ -23,6 +23,8 @@ class ClusterAllocator {
       const proto::ClusterAllocatorConfig& config,
       const proto::AllocBundle& cluster_wide_allocs);
 
+  ~ClusterAllocator();
+
   void Reset();
   void AddInfo(absl::Time time, const proto::AggInfo& info);
   AllocSet GetAllocs();
