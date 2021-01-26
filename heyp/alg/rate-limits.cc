@@ -28,6 +28,9 @@ double BweBurstinessFactor(const proto::AggInfo& info) {
 int64_t EvenlyDistributeExtra(int64_t admission,
                               const std::vector<int64_t>& demands,
                               int64_t waterlevel) {
+  if (demands.empty()) {
+    return admission;
+  }
   for (int64_t d : demands) {
     admission -= std::min(d, waterlevel);
   }
