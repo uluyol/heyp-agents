@@ -146,6 +146,10 @@ class HeypSigcomm20Allocator : public PerAggAllocator {
 
     cur_state.frac_lopri =
         FracAdmittedAtLOPRI(agg_info.parent(), cur_state.alloc);
+
+    ABSL_ASSERT(cur_state.frac_lopri >= 0);
+    ABSL_ASSERT(cur_state.frac_lopri <= 1);
+
     std::vector<bool> lopri_children =
         HeypSigcomm20PickLOPRIChildren(agg_info, cur_state.frac_lopri);
 
@@ -171,7 +175,7 @@ class HeypSigcomm20Allocator : public PerAggAllocator {
 
     routing_algos::SingleLinkMaxMinFairnessProblem problem;
     int64_t hipri_waterlevel =
-        problem.ComputeWaterlevel(hipri_admission, {lopri_demands});
+        problem.ComputeWaterlevel(hipri_admission, {hipri_demands});
     int64_t lopri_waterlevel =
         problem.ComputeWaterlevel(lopri_admission, {lopri_demands});
 
