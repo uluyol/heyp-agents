@@ -20,6 +20,7 @@ cc_library(
     srcs = ["test-main.cc"],
     deps = [
         ":init",
+        "@glog",
         "@gtest",
     ],
 )
