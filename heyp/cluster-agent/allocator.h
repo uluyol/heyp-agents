@@ -5,15 +5,12 @@
 #include <vector>
 
 #include "absl/time/time.h"
+#include "heyp/cluster-agent/allocs.h"
 #include "heyp/proto/config.pb.h"
 #include "heyp/proto/heyp.pb.h"
 #include "heyp/threads/executor.h"
 
 namespace heyp {
-
-struct AllocSet {
-  std::vector<std::vector<proto::FlowAlloc>> partial_sets;
-};
 
 class PerAggAllocator;
 
