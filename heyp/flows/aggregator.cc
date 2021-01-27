@@ -91,9 +91,6 @@ FlowAggregator::FlowAggregator(
     : config_(std::move(config)),
       agg_demand_predictor_(std::move(agg_demand_predictor)) {}
 
-// TODO: check that we retain host info as long as it is incorporated into the
-// cluster demand.
-
 void FlowAggregator::Update(const proto::InfoBundle& bundle) {
   const absl::Time timestamp = FromProtoTimestamp(bundle.timestamp());
   BundleState& bs = bundle_states_[bundle.bundler()];
