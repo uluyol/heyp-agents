@@ -1,5 +1,4 @@
 #include <csignal>
-#include <future>
 #include <iostream>
 #include <string>
 
@@ -14,11 +13,11 @@
 #include "heyp/init/init.h"
 #include "heyp/proto/fileio.h"
 
-static std::promise<void> exit_requested;
+static std::atomic<bool> should_exit_flag{false};
 
 static void InterruptHandler(int signal) {
   if (signal == SIGINT) {
-    exit_requested.set_value();
+    should_exit_flag.store(true);
   }
 }
 
@@ -66,7 +65,10 @@ absl::Status Run(const proto::ClusterAgentConfig& c,
           .BuildAndStart());
   LOG(INFO) << "Server listening on " << c.server().address();
 
-  exit_requested.get_future().wait();
+  while (!should_exit_flag.load()) {
+    absl::SleepFor(absl::Seconds(1));
+  }
+
   server->Shutdown();
   server->Wait();
   return absl::OkStatus();
