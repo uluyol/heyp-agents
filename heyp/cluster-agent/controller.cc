@@ -41,7 +41,7 @@ ClusterController::Listener& ClusterController::Listener::operator=(
 
 ClusterController::Listener ClusterController::RegisterListener(
     int64_t host_id,
-    const std::function<void(const proto::AllocBundle&)>& on_new_bundle_func) {
+    const std::function<void(proto::AllocBundle)>& on_new_bundle_func) {
   ClusterController::Listener lis(host_id, this);
   absl::MutexLock l(&broadcasting_mu_);
   on_new_bundle_funcs_[host_id] = on_new_bundle_func;
@@ -73,7 +73,7 @@ void ClusterController::ComputeAndBroadcast() {
   for (auto host_bundle_pair : alloc_bundles) {
     auto iter = on_new_bundle_funcs_.find(host_bundle_pair.first);
     if (iter != on_new_bundle_funcs_.end()) {
-      iter->second(host_bundle_pair.second);
+      iter->second(std::move(host_bundle_pair.second));
     }
   }
   broadcasting_mu_.Unlock();

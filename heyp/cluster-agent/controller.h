@@ -22,7 +22,7 @@ class ClusterController {
 
   Listener RegisterListener(
       int64_t host_id,
-      const std::function<void(const proto::AllocBundle&)>& on_new_bundle_func);
+      const std::function<void(proto::AllocBundle)>& on_new_bundle_func);
 
   class Listener {
    public:
@@ -48,7 +48,7 @@ class ClusterController {
   std::unique_ptr<ClusterAllocator> allocator_ ABSL_GUARDED_BY(state_mu_);
 
   absl::Mutex broadcasting_mu_;
-  absl::flat_hash_map<int64_t, std::function<void(const proto::AllocBundle&)>>
+  absl::flat_hash_map<int64_t, std::function<void(proto::AllocBundle)>>
       on_new_bundle_funcs_ ABSL_GUARDED_BY(broadcasting_mu_);
 };
 
