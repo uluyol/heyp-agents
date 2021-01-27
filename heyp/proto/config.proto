@@ -14,6 +14,10 @@ message HostFlowTrackerConfig {
   optional DemandPredictorConfig demand_predictor = 1;
 }
 
+message FlowAggregatorConfig {
+  optional DemandPredictorConfig demand_predictor = 1;
+}
+
 message HostFlowStateReporterConfig {
   repeated string this_host_addrs = 1;
   optional string ss_binary_name = 2 [default = "ss"];
@@ -48,4 +52,15 @@ message ClusterAllocatorConfig {
   optional double oversub_factor = 4 [default = 1.15];
   optional double heyp_acceptable_measured_ratio_over_intended_ratio = 5
       [default = 0.9];
+}
+
+message ClusterServerConfig {
+  optional string address = 1 [default = ":1415"];
+  optional string control_period = 2 [default = "5s"];
+}
+
+message ClusterAgentConfig {
+  optional FlowAggregatorConfig flow_aggregator = 1;
+  optional ClusterAllocatorConfig allocator = 2;
+  optional ClusterServerConfig server = 3;
 }
