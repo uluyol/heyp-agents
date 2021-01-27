@@ -11,8 +11,7 @@ ClusterController::ClusterController(
     std::unique_ptr<ClusterAllocator> allocator)
     : aggregator_(std::move(aggregator)), allocator_(std::move(allocator)) {}
 
-ClusterController::Listener::Listener(int64_t host_id, ClusterController* c)
-    : host_id_(host_id), controller_(c) {}
+ClusterController::Listener::Listener() : host_id_(0), controller_(nullptr) {}
 
 ClusterController::Listener::~Listener() {
   if (controller_ != nullptr && host_id_ != 0) {
@@ -42,7 +41,9 @@ ClusterController::Listener& ClusterController::Listener::operator=(
 ClusterController::Listener ClusterController::RegisterListener(
     int64_t host_id,
     const std::function<void(proto::AllocBundle)>& on_new_bundle_func) {
-  ClusterController::Listener lis(host_id, this);
+  ClusterController::Listener lis;
+  lis.host_id_ = host_id;
+  lis.controller_ = this;
   absl::MutexLock l(&broadcasting_mu_);
   on_new_bundle_funcs_[host_id] = on_new_bundle_func;
   return lis;

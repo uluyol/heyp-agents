@@ -26,6 +26,8 @@ class ClusterController {
 
   class Listener {
    public:
+    Listener();
+
     ~Listener();
     Listener(Listener&& other);
     Listener& operator=(Listener&& other);
@@ -34,8 +36,6 @@ class ClusterController {
     Listener& operator=(const Listener&) = delete;
 
    private:
-    Listener(int64_t host_id, ClusterController* c);
-
     int64_t host_id_ = 0;
     ClusterController* controller_ = nullptr;
 

@@ -43,6 +43,10 @@ ClusterController MakeClusterController() {
                                   )")));
 }
 
+TEST(ClusterControllerTest, EmptyListenerDestroysCorrectly) {
+  ClusterController::Listener lis;
+}
+
 TEST(ClusterControllerTest, MoveListener) {
   auto controller = MakeClusterController();
   ClusterController::Listener lis1 =
