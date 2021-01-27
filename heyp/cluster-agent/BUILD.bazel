@@ -64,3 +64,14 @@ cc_test(
         "//heyp/proto:testing",
     ],
 )
+
+cc_test(
+    name = "controller-test",
+    srcs = ["controller-test.cc"],
+    deps = [
+        ":controller",
+        "//heyp/init:test-main",
+        "//heyp/proto:parse-text",
+        "//heyp/proto:testing",
+    ],
+)

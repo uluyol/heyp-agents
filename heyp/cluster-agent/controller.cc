@@ -1,5 +1,6 @@
 #include "heyp/cluster-agent/controller.h"
 
+#include "absl/base/macros.h"
 #include "heyp/cluster-agent/allocator.h"
 #include "heyp/cluster-agent/allocs.h"
 
@@ -16,6 +17,7 @@ ClusterController::Listener::Listener(int64_t host_id, ClusterController* c)
 ClusterController::Listener::~Listener() {
   if (controller_ != nullptr && host_id_ != 0) {
     absl::MutexLock l(&controller_->broadcasting_mu_);
+    ABSL_ASSERT(controller_->on_new_bundle_funcs_.contains(host_id_));
     controller_->on_new_bundle_funcs_.erase(host_id_);
   }
   host_id_ = 0;
