@@ -54,7 +54,7 @@ void SendInfo(absl::Duration inform_period, uint64_t host_id,
     }
 
     // Step 2: collect a bundle of all socket-level flows while annotating them
-    // with src / dst DC.
+    //         with src / dst DC.
     proto::InfoBundle bundle;
     bundle.mutable_bundler()->set_host_id(host_id);
     *bundle.mutable_timestamp() = ToProtoTimestamp(absl::Now());
@@ -83,14 +83,28 @@ void SendInfo(absl::Duration inform_period, uint64_t host_id,
 }
 
 void EnforceAlloc(const FlowStateProvider* flow_state_provider,
+                  FlowStateReporter* flow_state_reporter,
                   HostEnforcerInterface* enforcer,
                   grpc::ClientReaderWriter<proto::InfoBundle,
                                            proto::AllocBundle>* io_stream) {
   while (true) {
+    // Step 1: wait for allocation from cluster agent.
     proto::AllocBundle bundle;
     if (!io_stream->Read(&bundle)) {
       break;
     }
+
+    // Step 2: refresh stats on all socket-level flows so that we can better
+    //         track usage across QoS switches.
+    LOG(INFO) << "TODO: implement HIPRI/LOPRI tracking";
+    absl::Status report_status = flow_state_reporter->ReportState(
+        [](const proto::FlowMarker&) { return false; });
+    if (!report_status.ok()) {
+      LOG(ERROR) << "failed to report flow state: " << report_status;
+      continue;
+    }
+
+    // Step 3: enforce the new allocation.
     enforcer->EnforceAllocs(*flow_state_provider, bundle);
   }
 }
@@ -107,8 +121,9 @@ void HostDaemon::Run(std::atomic<bool>* should_exit) {
                   flow_state_provider_, socket_to_host_aggregator_.get(),
                   flow_state_reporter_, should_exit, io_stream_.get());
 
-  enforcer_thread_ = std::thread(EnforceAlloc, flow_state_provider_, enforcer_,
-                                 io_stream_.get());
+  enforcer_thread_ =
+      std::thread(EnforceAlloc, flow_state_provider_, flow_state_reporter_,
+                  enforcer_, io_stream_.get());
 }
 
 HostDaemon::~HostDaemon() {
