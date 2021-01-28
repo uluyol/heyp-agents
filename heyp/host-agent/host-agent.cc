@@ -9,6 +9,8 @@
 #include "glog/logging.h"
 #include "google/protobuf/text_format.h"
 #include "grpcpp/grpcpp.h"
+#include "heyp/cli/parse.h"
+#include "heyp/flows/aggregator.h"
 #include "heyp/flows/dc-mapper.h"
 #include "heyp/host-agent/daemon.h"
 #include "heyp/host-agent/enforcer.h"
@@ -33,27 +35,35 @@ uint64_t GetUUID() {
   return absl::Uniform<uint64_t>(gen);
 }
 
-absl::StatusOr<absl::Duration> ParseAbslDuration(absl::string_view dur,
-                                                 absl::string_view field_name) {
-  absl::Duration d;
-  if (!absl::ParseDuration(dur, &d)) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("invalid ", field_name, ": ", dur));
-  }
-  return d;
-}
-
 absl::Status Run(const proto::HostAgentConfig& c) {
-  auto time_window_or = ParseAbslDuration(
-      c.flow_tracker().demand_predictor().time_window_dur(), "time window");
-  if (!time_window_or.ok()) {
-    return time_window_or.status();
+  std::unique_ptr<DemandPredictor> socket_demand_predictor;
+  absl::Duration socket_demand_window;
+  {
+    absl::Status st = ParseDemandPredictorConfig(
+        c.flow_tracker().demand_predictor(), &socket_demand_predictor,
+        &socket_demand_window);
+    if (!st.ok()) {
+      return st;
+    }
   }
+
+  std::unique_ptr<DemandPredictor> host_demand_predictor;
+  absl::Duration host_demand_window;
+  {
+    absl::Status st = ParseDemandPredictorConfig(
+        c.socket_to_host_aggregator().demand_predictor(),
+        &host_demand_predictor, &socket_demand_window);
+    if (!st.ok()) {
+      return st;
+    }
+  }
+
   auto inform_period_or =
       ParseAbslDuration(c.daemon().inform_period_dur(), "inform period");
   if (!inform_period_or.ok()) {
     return inform_period_or.status();
   }
+
   auto cluster_agent_connection_timeout_or = ParseAbslDuration(
       c.daemon().cluster_agent_connection_timeout_dur(), "connection_timeout");
   if (!cluster_agent_connection_timeout_or.ok()) {
@@ -64,12 +74,11 @@ absl::Status Run(const proto::HostAgentConfig& c) {
   LOG(INFO) << "host assigned id: " << host_id;
 
   LOG(INFO) << "creating flow tracker";
-  FlowTracker flow_tracker(
-      absl::make_unique<BweDemandPredictor>(
-          *time_window_or,
-          c.flow_tracker().demand_predictor().usage_multiplier(),
-          c.flow_tracker().demand_predictor().min_demand_bps()),
-      {.usage_history_window = 2 * *time_window_or});
+  FlowTracker flow_tracker(std::move(socket_demand_predictor),
+                           {.usage_history_window = 2 * socket_demand_window});
+  LOG(INFO) << "creating flow aggregator";
+  std::unique_ptr<FlowAggregator> flow_aggregator = NewConnToHostAggregator(
+      std::move(host_demand_predictor), 2 * host_demand_window);
   LOG(INFO) << "creating flow state reporter";
   auto flow_state_reporter_or = SSFlowStateReporter::Create(
       {
@@ -105,8 +114,8 @@ absl::Status Run(const proto::HostAgentConfig& c) {
                         .host_id = host_id,
                         .inform_period = *inform_period_or,
                     },
-                    &dc_mapper, &flow_tracker, flow_state_reporter.get(),
-                    &enforcer);
+                    &dc_mapper, &flow_tracker, std::move(flow_aggregator),
+                    flow_state_reporter.get(), &enforcer);
   LOG(INFO) << "running daemon main loop";
   daemon.Run(&should_exit_flag);
   return absl::OkStatus();

@@ -7,6 +7,7 @@
 
 #include "absl/time/time.h"
 #include "grpcpp/grpcpp.h"
+#include "heyp/flows/aggregator.h"
 #include "heyp/flows/dc-mapper.h"
 #include "heyp/host-agent/enforcer.h"
 #include "heyp/host-agent/flow-tracker.h"
@@ -24,6 +25,7 @@ class HostDaemon {
 
   HostDaemon(const std::shared_ptr<grpc::Channel>& channel, Config config,
              DCMapper* dc_mapper, FlowStateProvider* flow_state_provider,
+             std::unique_ptr<FlowAggregator> socket_to_host_aggregator,
              FlowStateReporter* flow_state_reporter,
              HostEnforcerInterface* enforcer);
 
@@ -35,6 +37,7 @@ class HostDaemon {
   const Config config_;
   DCMapper* dc_mapper_;
   FlowStateProvider* flow_state_provider_;
+  std::unique_ptr<FlowAggregator> socket_to_host_aggregator_;
   FlowStateReporter* flow_state_reporter_;
   HostEnforcerInterface* enforcer_;
   std::unique_ptr<proto::ClusterAgent::Stub> stub_;

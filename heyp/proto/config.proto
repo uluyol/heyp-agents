@@ -1,3 +1,7 @@
+// This file contains definitions of all configuration protos.
+// These messages should only be stored in textual or in-memory form (i.e. not
+// the binary format), so feed free to change any field numbers.
+
 syntax = "proto2";
 
 package heyp.proto;
@@ -35,9 +39,10 @@ message StaticDCMapperConfig {
 
 message HostAgentConfig {
   optional HostFlowTrackerConfig flow_tracker = 1;
-  optional HostFlowStateReporterConfig flow_state_reporter = 2;
-  optional HostDaemonConfig daemon = 3;
-  optional StaticDCMapperConfig dc_mapper = 4;
+  optional FlowAggregatorConfig socket_to_host_aggregator = 2;
+  optional HostFlowStateReporterConfig flow_state_reporter = 3;
+  optional HostDaemonConfig daemon = 4;
+  optional StaticDCMapperConfig dc_mapper = 5;
 }
 
 enum ClusterAllocatorType {

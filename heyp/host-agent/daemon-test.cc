@@ -4,6 +4,8 @@
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "heyp/alg/demand-predictor.h"
+#include "heyp/flows/aggregator.h"
 #include "heyp/proto/parse-text.h"
 #include "heyp/proto/testing.h"
 
@@ -96,6 +98,12 @@ class MockHostEnforcer : public HostEnforcerInterface {
               (override));
 };
 
+std::unique_ptr<FlowAggregator> MakeFlowAggregator() {
+  return NewConnToHostAggregator(
+      absl::make_unique<BweDemandPredictor>(absl::Seconds(60), 1.2, 0),
+      absl::Seconds(60));
+}
+
 TEST(HostDaemonTest, CreateAndTeardownNoRun) {
   InProcessTestServer server({});
   MockFlowStateProvider flow_state_provider;
@@ -108,7 +116,8 @@ TEST(HostDaemonTest, CreateAndTeardownNoRun) {
   {
     HostDaemon daemon(server.GetChannel(),
                       {.inform_period = absl::Milliseconds(100)}, &dc_mapper,
-                      &flow_state_provider, &flow_state_reporter, &enforcer);
+                      &flow_state_provider, MakeFlowAggregator(),
+                      &flow_state_reporter, &enforcer);
   }
   server.Teardown();
 }
@@ -128,7 +137,8 @@ TEST(HostDaemonTest, CreateAndTeardownNoActions) {
   {
     HostDaemon daemon(server.GetChannel(),
                       {.inform_period = absl::Milliseconds(100)}, &dc_mapper,
-                      &flow_state_provider, &flow_state_reporter, &enforcer);
+                      &flow_state_provider, MakeFlowAggregator(),
+                      &flow_state_reporter, &enforcer);
     std::atomic<bool> exit(true);
     daemon.Run(&exit);
   }
@@ -143,7 +153,6 @@ TEST(HostDaemonTest, CallsIntoHostEnforcer) {
           flow {
             src_dc: "us-east",
             dst_dc: "us-central",
-            protocol: TCP,
           }
           hipri_rate_limit_bps: 100,
           lopri_rate_limit_bps: 50,
@@ -152,7 +161,6 @@ TEST(HostDaemonTest, CallsIntoHostEnforcer) {
           flow {
             src_dc: "us-east",
             dst_dc: "us-west",
-            protocol: TCP,
           }
           hipri_rate_limit_bps: 1000,
           lopri_rate_limit_bps: 200,
@@ -163,7 +171,6 @@ TEST(HostDaemonTest, CallsIntoHostEnforcer) {
           flow {
             src_dc: "us-east",
             dst_dc: "us-central",
-            protocol: TCP,
           }
           hipri_rate_limit_bps: 110,
           lopri_rate_limit_bps: 50,
@@ -174,7 +181,6 @@ TEST(HostDaemonTest, CallsIntoHostEnforcer) {
           flow {
             src_dc: "us-east",
             dst_dc: "us-central",
-            protocol: TCP,
           }
           hipri_rate_limit_bps: 9000,
           lopri_rate_limit_bps: 0,
@@ -204,7 +210,8 @@ TEST(HostDaemonTest, CallsIntoHostEnforcer) {
   {
     HostDaemon daemon(server.GetChannel(),
                       {.inform_period = absl::Milliseconds(10)}, &dc_mapper,
-                      &flow_state_provider, &flow_state_reporter, &enforcer);
+                      &flow_state_provider, MakeFlowAggregator(),
+                      &flow_state_reporter, &enforcer);
     std::atomic<bool> exit(false);
     daemon.Run(&exit);
     absl::SleepFor(absl::Milliseconds(150));

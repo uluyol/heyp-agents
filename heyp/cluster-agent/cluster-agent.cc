@@ -7,6 +7,7 @@
 #include "absl/time/time.h"
 #include "glog/logging.h"
 #include "grpcpp/grpcpp.h"
+#include "heyp/cli/parse.h"
 #include "heyp/cluster-agent/allocator.h"
 #include "heyp/cluster-agent/server.h"
 #include "heyp/flows/aggregator.h"
@@ -24,16 +25,6 @@ static void InterruptHandler(int signal) {
 namespace heyp {
 namespace {
 
-absl::StatusOr<absl::Duration> ParseAbslDuration(absl::string_view dur,
-                                                 absl::string_view field_name) {
-  absl::Duration d;
-  if (!absl::ParseDuration(dur, &d)) {
-    return absl::InvalidArgumentError(
-        absl::StrCat("invalid ", field_name, ": ", dur));
-  }
-  return d;
-}
-
 absl::Status Run(const proto::ClusterAgentConfig& c,
                  const proto::AllocBundle& allocs) {
   auto control_period_or =
@@ -42,19 +33,19 @@ absl::Status Run(const proto::ClusterAgentConfig& c,
     return control_period_or.status();
   }
 
-  auto time_window_or = ParseAbslDuration(
-      c.flow_aggregator().demand_predictor().time_window_dur(), "time window");
-  if (!time_window_or.ok()) {
-    return time_window_or.status();
+  std::unique_ptr<DemandPredictor> agg_demand_predictor;
+  absl::Duration demand_time_window;
+  absl::Status predictor_status =
+      ParseDemandPredictorConfig(c.flow_aggregator().demand_predictor(),
+                                 &agg_demand_predictor, &demand_time_window);
+
+  if (!predictor_status.ok()) {
+    return predictor_status;
   }
 
   ClusterAgentService service(
-      NewHostToClusterAggregator(
-          absl::make_unique<BweDemandPredictor>(
-              *time_window_or,
-              c.flow_aggregator().demand_predictor().usage_multiplier(),
-              c.flow_aggregator().demand_predictor().min_demand_bps()),
-          *time_window_or),
+      NewHostToClusterAggregator(std::move(agg_demand_predictor),
+                                 demand_time_window),
       ClusterAllocator::Create(c.allocator(), allocs), *control_period_or);
 
   std::unique_ptr<grpc::Server> server(

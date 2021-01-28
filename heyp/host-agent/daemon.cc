@@ -6,14 +6,15 @@
 
 namespace heyp {
 
-HostDaemon::HostDaemon(const std::shared_ptr<grpc::Channel>& channel,
-                       Config config, DCMapper* dc_mapper,
-                       FlowStateProvider* flow_state_provider,
-                       FlowStateReporter* flow_state_reporter,
-                       HostEnforcerInterface* enforcer)
+HostDaemon::HostDaemon(
+    const std::shared_ptr<grpc::Channel>& channel, Config config,
+    DCMapper* dc_mapper, FlowStateProvider* flow_state_provider,
+    std::unique_ptr<FlowAggregator> socket_to_host_aggregator,
+    FlowStateReporter* flow_state_reporter, HostEnforcerInterface* enforcer)
     : config_(config),
       dc_mapper_(dc_mapper),
       flow_state_provider_(flow_state_provider),
+      socket_to_host_aggregator_(std::move(socket_to_host_aggregator)),
       flow_state_reporter_(flow_state_reporter),
       enforcer_(enforcer),
       stub_(proto::ClusterAgent::NewStub(channel)) {}
@@ -37,13 +38,13 @@ bool FlaggedOrWaitFor(absl::Duration dur, std::atomic<bool>* exit_flag) {
 
 void SendInfo(absl::Duration inform_period, uint64_t host_id,
               const DCMapper* dc_mapper, FlowStateProvider* flow_state_provider,
+              FlowAggregator* socket_to_host_aggregator,
               FlowStateReporter* flow_state_reporter,
               std::atomic<bool>* should_exit,
               grpc::ClientReaderWriter<proto::InfoBundle, proto::AllocBundle>*
                   io_stream) {
   do {
-    proto::InfoBundle bundle;
-    bundle.mutable_bundler()->set_host_id(host_id);
+    // Step 1: refresh stats on all socket-level flows.
     LOG(INFO) << "TODO: implement HIPRI/LOPRI tracking";
     absl::Status report_status = flow_state_reporter->ReportState(
         [](const proto::FlowMarker&) { return false; });
@@ -51,7 +52,11 @@ void SendInfo(absl::Duration inform_period, uint64_t host_id,
       LOG(ERROR) << "failed to report flow state: " << report_status;
       continue;
     }
-    // TODO: aggregate into src_dc, dst_dc, host_id
+
+    // Step 2: collect a bundle of all socket-level flows while annotating them
+    // with src / dst DC.
+    proto::InfoBundle bundle;
+    bundle.mutable_bundler()->set_host_id(host_id);
     *bundle.mutable_timestamp() = ToProtoTimestamp(absl::Now());
     flow_state_provider->ForEachActiveFlow(
         [&bundle, dc_mapper](absl::Time time, const proto::FlowInfo& info) {
@@ -59,6 +64,18 @@ void SendInfo(absl::Duration inform_period, uint64_t host_id,
           *send_info = info;
           *send_info->mutable_flow() = WithDCs(info.flow(), *dc_mapper);
         });
+
+    // Step 3: aggregate socket-level flows to host-level.
+    socket_to_host_aggregator->Update(bundle);
+
+    // Step 4: collect a bundle of all src/dst DC-level flows on the host.
+    bundle.clear_flow_infos();
+    socket_to_host_aggregator->ForEachAgg(
+        [&bundle](absl::Time time, const proto::AggInfo& info) {
+          *bundle.add_flow_infos() = info.parent();
+        });
+
+    // Step 5: send to cluster agent.
     io_stream->Write(bundle);
   } while (!FlaggedOrWaitFor(inform_period, should_exit));
 
@@ -87,8 +104,8 @@ void HostDaemon::Run(std::atomic<bool>* should_exit) {
 
   info_thread_ =
       std::thread(SendInfo, config_.inform_period, config_.host_id, dc_mapper_,
-                  flow_state_provider_, flow_state_reporter_, should_exit,
-                  io_stream_.get());
+                  flow_state_provider_, socket_to_host_aggregator_.get(),
+                  flow_state_reporter_, should_exit, io_stream_.get());
 
   enforcer_thread_ = std::thread(EnforceAlloc, flow_state_provider_, enforcer_,
                                  io_stream_.get());

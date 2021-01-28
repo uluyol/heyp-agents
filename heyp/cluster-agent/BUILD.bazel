@@ -6,6 +6,7 @@ cc_binary(
     deps = [
         ":allocator",
         ":server",
+        "//heyp/cli:parse",
         "//heyp/flows:aggregator",
         "//heyp/init",
         "//heyp/proto:fileio",
