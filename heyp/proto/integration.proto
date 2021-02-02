@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package heyp.proto;
+
+message TestCompareMetrics {
+  message Metric {
+    string name = 1;
+    double value = 2;
+  }
+
+  repeated Metric metrics = 1;
+}

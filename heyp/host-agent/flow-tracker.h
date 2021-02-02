@@ -27,11 +27,11 @@ class FlowStateProvider {
   virtual ~FlowStateProvider() = default;
 
   virtual void ForEachActiveFlow(
-      absl::FunctionRef<void(absl::Time, const proto ::FlowInfo&)> func)
+      absl::FunctionRef<void(absl::Time, const proto::FlowInfo&)> func)
       const = 0;
 
   virtual void ForEachFlow(
-      absl::FunctionRef<void(absl::Time, const proto ::FlowInfo&)> func)
+      absl::FunctionRef<void(absl::Time, const proto::FlowInfo&)> func)
       const = 0;
 };
 

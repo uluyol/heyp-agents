@@ -1,0 +1,31 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+cc_library(
+    name = "host-agent-os-tester",
+    srcs = ["host-agent-os-tester.cc"],
+    hdrs = ["host-agent-os-tester.h"],
+    deps = [
+        ":step-worker",
+        "//heyp/host-agent:enforcer",
+        "//heyp/host-agent:flow-tracker",
+        "//heyp/proto:integration_cc_proto",
+        "@com_google_absl//absl/random",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/time",
+    ],
+)
+
+cc_library(
+    name = "step-worker",
+    srcs = ["step-worker.cc"],
+    hdrs = ["step-worker.h"],
+    linkopts = ["-pthread"],
+    deps = [
+        "//heyp/proto:integration_cc_proto",
+        "@com_google_absl//absl/cleanup",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/synchronization",
+    ],
+)

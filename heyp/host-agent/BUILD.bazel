@@ -1,5 +1,9 @@
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
 
+package(
+    default_visibility = ["//heyp/integration:__subpackages__"],
+)
+
 cc_binary(
     name = "host-agent",
     srcs = ["host-agent.cc"],
