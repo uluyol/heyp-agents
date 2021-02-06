@@ -11,6 +11,8 @@
 
 #include "absl/cleanup/cleanup.h"
 #include "absl/strings/str_cat.h"
+#include "glog/logging.h"
+#include "heyp/posix/strerror.h"
 
 namespace heyp {
 namespace testing {
@@ -19,51 +21,52 @@ absl::StatusOr<std::unique_ptr<HostWorker>> HostWorker::Create() {
   int serve_fd = socket(AF_INET, SOCK_STREAM, 0);
   if (serve_fd == -1) {
     return absl::UnknownError(
-        absl::StrCat("failed to create socket: errno(", errno, ")"));
+        absl::StrCat("failed to create socket: ", StrError(errno)));
   }
 
   struct sockaddr_in addr;
   addr.sin_family = AF_INET;
-  addr.sin_addr.s_addr = INADDR_LOOPBACK;
+  addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
   addr.sin_port = htons(0);
   if (bind(serve_fd, reinterpret_cast<const struct sockaddr*>(&addr),
            sizeof addr)) {
     return absl::UnknownError(
-        absl::StrCat("failed to bind socket: errno(", errno, ")"));
+        absl::StrCat("failed to bind socket: ", StrError(errno)));
   }
 
   socklen_t addr_len = sizeof addr;
   if (getsockname(serve_fd, reinterpret_cast<struct sockaddr*>(&addr),
                   &addr_len)) {
     return absl::UnknownError(
-        absl::StrCat("failed to discover serving port: errno(", errno, ")"));
+        absl::StrCat("failed to discover serving port: ", StrError(errno)));
   }
 
   return absl::WrapUnique(new HostWorker(serve_fd, ntohs(addr.sin_port)));
 }
 
-void* HostWorkerServe(void* arg) {
-  HostWorker* worker = static_cast<HostWorker*>(arg);
+void HostWorker::Serve() {
+  // HostWorker* worker = static_cast<HostWorker*>(arg);
   constexpr int kListenBacklog = 10;
-  if (listen(worker->serve_fd_, kListenBacklog) == -1) {
-    return nullptr;
+  if (listen(serve_fd_, kListenBacklog) == -1) {
+    return;
   }
 
   while (true) {
-    int connfd = accept(worker->serve_fd_, nullptr, nullptr);
+    int connfd = accept(serve_fd_, nullptr, nullptr);
     if (connfd == -1) {
-      continue;
+      break;
     }
-    absl::MutexLock l(&worker->mu_);
-    worker->worker_threads_.push_back(
-        std::thread(&HostWorker::RecvFlow, worker, connfd));
+    LOG(INFO) << "new connection on fd " << connfd;
+    absl::MutexLock l(&mu_);
+    worker_fds_.push_back(connfd);
+    worker_threads_.push_back(std::thread(&HostWorker::RecvFlow, this,
+                                          connfd));  // does not own connfd
   }
 }
 
 HostWorker::HostWorker(int serve_fd, int serve_port)
     : serve_fd_(serve_fd), serve_port_(serve_port) {
-  pthread_create(&serve_thread_, nullptr, HostWorkerServe,
-                 static_cast<void*>(this));
+  serve_thread_ = std::thread(&HostWorker::Serve, this);
 }
 
 int HostWorker::serve_port() const { return serve_port_; }
@@ -90,47 +93,60 @@ bool ReadFull(int fd, char* buf, int n) {
 
 void HostWorker::RecvFlow(int fd) {
   char buf[kBufSize];
-  auto fd_closer = absl::MakeCleanup([fd] { close(fd); });
+  // auto fd_closer = absl::MakeCleanup([fd] { close(fd); });
 
+  VLOG(2) << "fd " << fd << ": read name length";
   if (!ReadFull(fd, buf, 2)) {
     return;
   }
   int name_size = buf[0] + (buf[1] << 8);
+  VLOG(2) << "fd " << fd << ": read name";
   if (!ReadFull(fd, buf, name_size)) {
     return;
   }
   std::string name(buf, name_size);
 
+  VLOG(2) << "fd " << fd << ": init counter";
   std::atomic<int64_t>* counter = nullptr;
   {
     absl::MutexLock l(&mu_);
     counter = GetCounter(name);
   }
 
-  int ret = -1;
-  do {
-    ret = read(fd, buf, sizeof buf);
+  VLOG(2) << "fd " << fd << ": start read loop";
+  while (!shutting_down_.load()) {
+    int ret = read(fd, buf, sizeof buf);
     if (ret > 0) {
       counter->fetch_add(ret);
     }
-  } while (ret > 0);
+  }
+  VLOG(2) << "fd " << fd << ": exited read loop";
 }
+
+#ifdef __APPLE__
+#define SEND_FLAGS 0
+#else
+#define SEND_FLAGS MSG_NOSIGNAL
+#endif
 
 void HostWorker::SendFlow(int fd, std::string name,
                           std::atomic<int64_t>* counter) {
-  auto fd_closer = absl::MakeCleanup([fd] { close(fd); });
+  // auto fd_closer = absl::MakeCleanup([fd] { close(fd); });
   char buf[kBufSize];
   buf[0] = name.size();
   buf[1] = name.size() >> 8;
   memmove(buf + 2, name.data(), name.size());
-  if (!write(fd, buf, name.size() + 2)) {
+  if (send(fd, buf, name.size() + 2, SEND_FLAGS) == name.size() + 2) {
+    VLOG(2) << "fd " << fd << ": waiting for go signal";
     go_.WaitForNotification();
+    VLOG(2) << "fd " << fd << ": start write loop";
     while (!shutting_down_.load()) {
-      int ret = write(fd, buf, kBufSize);
+      int ret = send(fd, buf, kBufSize, SEND_FLAGS);
       if (ret > 0) {
         counter->fetch_add(ret);
       }
     }
+    VLOG(2) << "fd " << fd << ": exited write loop";
   }
 }
 
@@ -148,17 +164,28 @@ absl::Status HostWorker::InitFlows(std::vector<Flow>& flows) {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd == -1) {
       return absl::UnknownError(
-          absl::StrCat("failed to create socket: errno(", errno, ")"));
+          absl::StrCat("failed to create socket: ", StrError(errno)));
     }
+
+#ifdef __APPLE__
+    {
+      int set = 1;
+      if (setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, static_cast<void*>(&set),
+                     sizeof set)) {
+        return absl::UnknownError(absl::StrCat(
+            "failed to set NOSIGPIPE on socket: ", StrError(errno)));
+      }
+    }
+#endif
 
     struct sockaddr_in addr;
     addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = INADDR_LOOPBACK;
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     addr.sin_port = htons(f.dst_port);
     if (connect(fd, reinterpret_cast<const struct sockaddr*>(&addr),
                 sizeof addr)) {
       return absl::UnknownError(
-          absl::StrCat("failed to connect: errno(", errno, ")"));
+          absl::StrCat("failed to connect: ", StrError(errno)));
     }
 
     struct sockaddr_in local_addr;
@@ -167,13 +194,14 @@ absl::Status HostWorker::InitFlows(std::vector<Flow>& flows) {
     if (getsockname(fd, reinterpret_cast<struct sockaddr*>(&local_addr),
                     &local_addr_len)) {
       return absl::UnknownError(
-          absl::StrCat("failed to get local port: errno(", errno, ")"));
+          absl::StrCat("failed to get local port: ", StrError(errno)));
     }
     f.src_port = ntohs(local_addr.sin_port);
 
     absl::MutexLock l(&mu_);
+    worker_fds_.push_back(fd);
     worker_threads_.push_back(std::thread(&HostWorker::SendFlow, this,
-                                          fd /* owns fd */, f.name,
+                                          fd /* does not own fd */, f.name,
                                           GetCounter(f.name)));
   }
 
@@ -192,10 +220,10 @@ void HostWorker::CollectStep(const std::string& label) {
 
   for (const auto& key_counter_pair : counters_) {
     CounterAndBps& measured = measurements_[key_counter_pair.first];
-    int64_t cum_bytes = key_counter_pair.second->load();
+    int64_t cur_cum_bytes = key_counter_pair.second->load();
     measured.step_bps.push_back(
-        {label, 8 * (measured.cum_bytes - cum_bytes) / elapsed_sec});
-    measured.cum_bytes = cum_bytes;
+        {label, 8 * (cur_cum_bytes - measured.cum_bytes) / elapsed_sec});
+    measured.cum_bytes = cur_cum_bytes;
   }
 
   last_step_time_ = now;
@@ -207,16 +235,27 @@ std::vector<proto::TestCompareMetrics::Metric> HostWorker::Finish() {
   shutting_down_.store(true);
 
   if (serve_fd_ != -1) {
+    LOG(INFO) << "tearing down serve loop";
+    // shutdown(serve_fd_, SHUT_RDWR);
     close(serve_fd_);
-    pthread_kill(serve_thread_, SIGINT);
-    pthread_join(serve_thread_, nullptr);
+    serve_thread_.join();
   }
 
   absl::MutexLock l(&mu_);
-  for (auto& t : worker_threads_) {
-    t.join();
+  LOG(INFO) << "tearing down " << worker_threads_.size() << " workers";
+  for (int fd : worker_fds_) {
+    VLOG(2) << "close fd " << fd;
+    close(fd);
+  }
+  for (size_t i = 0; i < worker_threads_.size(); ++i) {
+    VLOG(2) << "join worker " << i;
+    if (!worker_threads_[i].joinable()) {
+      LOG(ERROR) << "worker thread " << i << " is bad";
+    }
+    worker_threads_[i].join();
   }
 
+  LOG(INFO) << "accumulating results";
   std::vector<proto::TestCompareMetrics::Metric> results;
   for (const auto& key_val_pair : measurements_) {
     for (const auto& label_step_bps_pair : key_val_pair.second.step_bps) {

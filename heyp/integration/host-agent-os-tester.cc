@@ -6,6 +6,9 @@
 
 #include "absl/random/random.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_format.h"
+#include "absl/strings/str_join.h"
+#include "glog/logging.h"
 #include "heyp/host-agent/enforcer.h"
 #include "heyp/host-agent/flow-tracker.h"
 #include "heyp/integration/step-worker.h"
@@ -126,12 +129,20 @@ struct HostFlow {
   int dst_port;
 };
 
+struct FlowFormatter {
+  void operator()(std::string* out, const HostWorker::Flow& f) const {
+    out->append(absl::StrFormat("Flow %s: port %d -> port %d", f.name,
+                                f.src_port, f.dst_port));
+  }
+};
+
 }  // namespace
 
 // TODO: uh rate limit
 absl::StatusOr<proto::TestCompareMetrics> HostAgentOSTester::Run() {
   std::vector<std::unique_ptr<HostWorker>> workers;
 
+  LOG(INFO) << "creating " << config_.num_hosts << " hosts";
   // Populate workers
   for (int i = 0; i < config_.num_hosts; i++) {
     auto worker_or = HostWorker::Create();
@@ -141,6 +152,7 @@ absl::StatusOr<proto::TestCompareMetrics> HostAgentOSTester::Run() {
     workers.push_back(std::move(worker_or.value()));
   }
 
+  LOG(INFO) << "initializing flows";
   // Initialize all flows
   absl::Status status = absl::OkStatus();
   std::vector<HostWorker::Flow> all_flows;
@@ -164,6 +176,11 @@ absl::StatusOr<proto::TestCompareMetrics> HostAgentOSTester::Run() {
     }
   }
 
+  absl::SleepFor(absl::Milliseconds(100));
+
+  LOG(INFO) << "initalized flows:\n"
+            << absl::StrJoin(all_flows, "\n", FlowFormatter());
+
   proto::TestCompareMetrics metrics;
   if (status.ok()) {
     EasyEnforcer enforcer(all_flows);
@@ -184,6 +201,7 @@ absl::StatusOr<proto::TestCompareMetrics> HostAgentOSTester::Run() {
 
     int step = 0;
     while (absl::Now() - start < config_.run_dur) {
+      LOG(INFO) << "step " << step;
       absl::SleepFor(config_.step_dur);
       std::string label(absl::StrCat("step = ", step, "/have"));
       for (auto& w : workers) {
@@ -196,8 +214,10 @@ absl::StatusOr<proto::TestCompareMetrics> HostAgentOSTester::Run() {
     }
   }
 
-  for (auto& w : workers) {
-    for (auto m : w->Finish()) {
+  LOG(INFO) << "collecting metrics";
+  for (size_t i = 0; i < workers.size(); i++) {
+    LOG(INFO) << "collecting metrics from worker " << i;
+    for (auto m : workers[i]->Finish()) {
       *metrics.add_metrics() = m;
     }
   }

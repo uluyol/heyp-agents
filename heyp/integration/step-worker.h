@@ -40,11 +40,11 @@ class HostWorker {
  private:
   HostWorker(int serve_fd, int serve_port);
 
-  // RecvFlow and SendFlow take ownership over fd.
+  // RecvFlow and SendFlow do not take ownership over fd.
   void RecvFlow(int fd);
   void SendFlow(int fd, std::string name, std::atomic<int64_t> *counter);
 
-  friend void *HostWorkerServe(void *);
+  void Serve();
 
   const int serve_fd_;
   const int serve_port_;
@@ -53,7 +53,7 @@ class HostWorker {
   absl::Notification go_;
 
   std::atomic<bool> shutting_down_ = false;
-  pthread_t serve_thread_ = {};
+  std::thread serve_thread_;
 
   absl::Time last_step_time_;
 
@@ -61,9 +61,11 @@ class HostWorker {
     int64_t cum_bytes = 0;
     std::vector<std::pair<std::string, double>> step_bps;
   };
-  absl::flat_hash_map<std::string, CounterAndBps> measurements_;
 
   absl::Mutex mu_;
+  absl::flat_hash_map<std::string, CounterAndBps> measurements_
+      ABSL_GUARDED_BY(mu_);
+  std::vector<int> worker_fds_ ABSL_GUARDED_BY(mu_);
   std::vector<std::thread> worker_threads_ ABSL_GUARDED_BY(mu_);
   absl::flat_hash_map<std::string, std::unique_ptr<std::atomic<int64_t>>>
       counters_ ABSL_GUARDED_BY(mu_);

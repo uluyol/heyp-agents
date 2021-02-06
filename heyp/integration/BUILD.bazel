@@ -1,4 +1,14 @@
-load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
+
+cc_binary(
+    name = "host-agent-os-test",
+    srcs = ["host-agent-os-test.cc"],
+    deps = [
+        ":host-agent-os-tester",
+        "//heyp/init",
+        "@com_github_gflags_gflags//:gflags",
+    ],
+)
 
 cc_library(
     name = "host-agent-os-tester",
@@ -21,11 +31,13 @@ cc_library(
     hdrs = ["step-worker.h"],
     linkopts = ["-pthread"],
     deps = [
+        "//heyp/posix:strerror",
         "//heyp/proto:integration_cc_proto",
         "@com_google_absl//absl/cleanup",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/synchronization",
+        "@glog",
     ],
 )

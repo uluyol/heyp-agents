@@ -14,7 +14,7 @@ class HostAgentOSTester {
     absl::Duration run_dur = absl::Seconds(60);
     absl::Duration step_dur = absl::Seconds(2);
     int num_hosts = 4;
-    int64_t max_rate_limit_bps = 100'000'000;  // 100 Mbps
+    int64_t max_rate_limit_bps = 100 * 1024 * 1025;  // 100 Mbps
   };
 
   explicit HostAgentOSTester(Config config);
