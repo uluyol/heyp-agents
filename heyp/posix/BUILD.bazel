@@ -1,0 +1,14 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+package(
+    default_visibility = ["//heyp:__subpackages__"],
+)
+
+cc_library(
+    name = "strerror",
+    srcs = ["strerror.cc"],
+    hdrs = ["strerror.h"],
+    deps = [
+        "//third_party/chromium:safe_strerror",
+    ],
+)
