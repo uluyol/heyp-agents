@@ -165,7 +165,7 @@ class HeypSigcomm20Allocator : public PerAggAllocator {
     std::vector<int64_t> lopri_demands;
     hipri_demands.reserve(agg_info.children_size());
     lopri_demands.reserve(agg_info.children_size());
-    for (size_t i = 0; i < agg_info.children_size(); i++) {
+    for (size_t i = 0; i < agg_info.children_size(); ++i) {
       if (lopri_children[i]) {
         lopri_demands.push_back(agg_info.children(i).predicted_demand_bps());
       } else {
@@ -195,7 +195,7 @@ class HeypSigcomm20Allocator : public PerAggAllocator {
 
     std::vector<proto::FlowAlloc> allocs;
     allocs.reserve(agg_info.children_size());
-    for (size_t i = 0; i < agg_info.children_size(); i++) {
+    for (size_t i = 0; i < agg_info.children_size(); ++i) {
       proto::FlowAlloc alloc;
       *alloc.mutable_flow() = agg_info.children(i).flow();
       if (lopri_children[i]) {

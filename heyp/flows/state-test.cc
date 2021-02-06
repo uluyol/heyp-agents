@@ -21,7 +21,7 @@ MATCHER_P(HasSuffixElements, suffix, "") {
   if (arg.size() < suffix.size()) {
     return false;
   }
-  for (size_t i = 0; i < suffix.size(); i++) {
+  for (size_t i = 0; i < suffix.size(); ++i) {
     if (!(arg[arg.size() - 1 - i] == suffix[suffix.size() - 1 - i])) {
       return false;
     }
@@ -43,7 +43,7 @@ TEST(AggStateTest, NoSmoothing) {
   const absl::Time now = absl::Now();
 
   int64_t cum_usage_bytes = absl::Uniform(absl::BitGen(), 0, 10'000'000);
-  for (int i = 0; i < 20; i++) {
+  for (int i = 0; i < 20; ++i) {
     SCOPED_TRACE(testing::Message() << "i = " << i);
     cum_usage_bytes += 100 * i;
     state.UpdateUsage(
@@ -164,7 +164,7 @@ TEST(LeafStateTest, GarbageCollectsOldUsage) {
 
   absl::Time now = absl::Now();
   LeafState state({});
-  for (int i = 0; i < 20; i++) {
+  for (int i = 0; i < 20; ++i) {
     state.UpdateUsage(
         {
             .time = now + absl::Seconds(i),
@@ -191,7 +191,7 @@ TEST(LeafStateTest, HistoryAndDemandTracksIncreases) {
 
   int64_t cum_usage_bytes = absl::Uniform(absl::BitGen(), 0, 10'000'000);
   int64_t last_usage_bps = 0;
-  for (int i = 0; i < 20; i++) {
+  for (int i = 0; i < 20; ++i) {
     cum_usage_bytes += 100 * i;
     state.UpdateUsage(
         {

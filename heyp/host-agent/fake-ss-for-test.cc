@@ -11,7 +11,7 @@ static void PrintRec(std::vector<std::string> recs) {
 }
 
 int main(int argc, char **argv) {
-  for (int i = 0; i < argc; i++) {
+  for (int i = 0; i < argc; ++i) {
     if (strcmp(argv[i], "-E") == 0) {
       absl::SleepFor(absl::Milliseconds(40));
       PrintRec({

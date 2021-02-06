@@ -103,7 +103,7 @@ class RateLimitPicker {
   }
 
   void Pick(std::vector<std::pair<HostWorker::Flow, int64_t>>& limits) {
-    for (int i = 0; i < limits.size(); i++) {
+    for (int i = 0; i < limits.size(); ++i) {
       limits[i].second =
           RoundVal(absl::Uniform(gen_, max_bps_ / 100, max_bps_));
     }
@@ -144,7 +144,7 @@ absl::StatusOr<proto::TestCompareMetrics> HostAgentOSTester::Run() {
 
   LOG(INFO) << "creating " << config_.num_hosts << " hosts";
   // Populate workers
-  for (int i = 0; i < config_.num_hosts; i++) {
+  for (int i = 0; i < config_.num_hosts; ++i) {
     auto worker_or = HostWorker::Create();
     if (!worker_or.ok()) {
       return worker_or.status();
@@ -156,9 +156,9 @@ absl::StatusOr<proto::TestCompareMetrics> HostAgentOSTester::Run() {
   // Initialize all flows
   absl::Status status = absl::OkStatus();
   std::vector<HostWorker::Flow> all_flows;
-  for (int i = 0; i < config_.num_hosts; i++) {
+  for (int i = 0; i < config_.num_hosts; ++i) {
     std::vector<HostWorker::Flow> out_flows;
-    for (int j = 0; j < config_.num_hosts; j++) {
+    for (int j = 0; j < config_.num_hosts; ++j) {
       if (i == j) {
         continue;
       }
@@ -215,7 +215,7 @@ absl::StatusOr<proto::TestCompareMetrics> HostAgentOSTester::Run() {
   }
 
   LOG(INFO) << "collecting metrics";
-  for (size_t i = 0; i < workers.size(); i++) {
+  for (size_t i = 0; i < workers.size(); ++i) {
     LOG(INFO) << "collecting metrics from worker " << i;
     for (auto m : workers[i]->Finish()) {
       *metrics.add_metrics() = m;

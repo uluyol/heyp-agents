@@ -37,7 +37,7 @@ std::vector<bool> HeypSigcomm20PickLOPRIChildren(const proto::AggInfo& agg_info,
   int64_t lopri_demand = 0;
   std::vector<size_t> children_sorted_by_dec_demand(agg_info.children_size(),
                                                     0);
-  for (size_t i = 0; i < agg_info.children_size(); i++) {
+  for (size_t i = 0; i < agg_info.children_size(); ++i) {
     children_sorted_by_dec_demand[i] = i;
     const auto& c = agg_info.children(i);
     total_demand += c.predicted_demand_bps();

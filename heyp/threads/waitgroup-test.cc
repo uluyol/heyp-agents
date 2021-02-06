@@ -15,7 +15,7 @@ TEST(WaitGroupTest, CountIsExpected) {
   std::atomic<int> n = 0;
   wg.Add(kNumTasks);
   std::vector<std::thread> threads;
-  for (int i = 0; i < kNumTasks; i++) {
+  for (int i = 0; i < kNumTasks; ++i) {
     threads.push_back(std::thread([&wg, &n, i] {
       n += i;
       wg.Done();
@@ -25,7 +25,7 @@ TEST(WaitGroupTest, CountIsExpected) {
   wg.Wait();
   EXPECT_EQ(n, ((kNumTasks - 1) * kNumTasks) / 2);
 
-  for (int i = 0; i < kNumTasks; i++) {
+  for (int i = 0; i < kNumTasks; ++i) {
     threads[i].join();
   }
 }

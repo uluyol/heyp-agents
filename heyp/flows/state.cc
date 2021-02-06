@@ -81,14 +81,14 @@ void AggState::UpdateUsage(const Update u, absl::Duration usage_history_window,
   if (u.time - usage_history_.front().time > 2 * usage_history_window) {
     absl::Time min_time = u.time - usage_history_window;
     size_t keep_from = usage_history_.size();
-    for (size_t i = 0; i < usage_history_.size(); i++) {
+    for (size_t i = 0; i < usage_history_.size(); ++i) {
       if (usage_history_[i].time >= min_time) {
         keep_from = i;
         break;
       }
     }
     ssize_t num_keep = usage_history_.size() - keep_from;
-    for (ssize_t i = 0; i < num_keep; i++) {
+    for (ssize_t i = 0; i < num_keep; ++i) {
       usage_history_[i] = usage_history_[keep_from + i];
     }
     usage_history_.resize(num_keep);
