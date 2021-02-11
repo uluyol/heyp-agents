@@ -1,0 +1,28 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
+
+cc_library(
+    name = "tc-caller",
+    srcs = ["tc-caller.cc"],
+    hdrs = ["tc-caller.h"],
+    deps = [
+        "//third_party/simdjson",
+        "@boost//:process",
+        "@com_google_absl//absl/status",
+    ],
+)
+
+cc_binary(
+    name = "fake-tc-for-test",
+    testonly = 1,
+    srcs = ["fake-tc-for-test.c"],
+)
+
+cc_test(
+    name = "tc-caller-test",
+    srcs = ["tc-caller-test.cc"],
+    data = [":fake-tc-for-test"],
+    deps = [
+        ":tc-caller",
+        "//heyp/init:test-main",
+    ],
+)
