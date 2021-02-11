@@ -1,0 +1,8 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+cc_library(
+    name = "simdjson",
+    srcs = ["simdjson.cpp"],
+    hdrs = ["simdjson.h"],
+    visibility = ["//visibility:public"],
+)
