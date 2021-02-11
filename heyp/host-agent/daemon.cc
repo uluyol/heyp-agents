@@ -22,8 +22,14 @@ HostDaemon::HostDaemon(
 namespace {
 
 proto::FlowMarker WithDCs(proto::FlowMarker marker, const DCMapper& dc_mapper) {
-  marker.set_src_dc(dc_mapper.HostDC(marker.src_addr()));
-  marker.set_dst_dc(dc_mapper.HostDC(marker.dst_addr()));
+  auto src_dc = dc_mapper.HostDC(marker.src_addr());
+  auto dst_dc = dc_mapper.HostDC(marker.dst_addr());
+  if (src_dc != nullptr) {
+    marker.set_src_dc(*src_dc);
+  }
+  if (dst_dc != nullptr) {
+    marker.set_dst_dc(*dst_dc);
+  }
   return marker;
 }
 
