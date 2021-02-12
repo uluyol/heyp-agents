@@ -1,6 +1,35 @@
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
 
 cc_library(
+    name = "tc",
+    srcs = ["tc.cc"],
+    hdrs = ["tc.h"],
+    visibility = ["//heyp/host-agent:__subpackages__"],
+    deps = [
+        ":iptables",
+        ":tc-caller",
+        "//heyp/flows:dc-mapper",
+        "//heyp/host-agent:enforcer",
+        "@com_google_absl//absl/strings",
+        "@glog",
+    ],
+)
+
+cc_library(
+    name = "iptables",
+    srcs = ["iptables.cc"],
+    hdrs = ["iptables.h"],
+    deps = [
+        "@boost//:process",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/synchronization",
+        "@glog",
+    ],
+)
+
+cc_library(
     name = "tc-caller",
     srcs = ["tc-caller.cc"],
     hdrs = ["tc-caller.h"],

@@ -4,6 +4,7 @@
 #include <istream>
 #include <iterator>
 
+#include "absl/strings/str_cat.h"
 #include "boost/process/args.hpp"
 #include "boost/process/child.hpp"
 #include "boost/process/io.hpp"
@@ -26,6 +27,12 @@ absl::Status TcCaller::Call(const std::vector<std::string>& tc_args) {
     buf_.clear();
     std::copy(std::istreambuf_iterator<char>(out), {},
               std::back_inserter(buf_));
+
+    c.wait();
+    if (c.exit_code() != 0) {
+      return absl::InternalError(
+          absl::StrCat("tc exit status ", c.exit_code(), ":\n", buf_));
+    }
 
     auto result = parser_.parse(buf_);
     if (result.error() != simdjson::SUCCESS) {
