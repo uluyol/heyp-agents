@@ -80,42 +80,6 @@ absl::string_view ToString(IpFamily f) {
   return "UNKNOWN_IP_FAMILY";
 }
 
-namespace {
-
-constexpr static char kIptablesSave[] = "iptables-save";
-constexpr static char kIptablesRestore[] = "iptables-restore";
-constexpr static char kIptables[] = "iptables";
-constexpr static char kIp6tablesRestore[] = "ip6tables-restore";
-constexpr static char kIp6tablesSave[] = "ip6tables-save";
-constexpr static char kIp6tables[] = "ip6tables";
-
-// WaitString a constant for specifying the wait flag
-const char kWaitString[] = "-w";
-
-// WaitSecondsValue a constant for specifying the default wait seconds
-const char kWaitSecondsValue[] = "5";
-
-// WaitIntervalString a constant for specifying the wait interval flag
-const char kWaitIntervalString[] = "-W";
-
-// WaitIntervalUsecondsValue a constant for specifying the default wait
-// interval useconds
-const char kWaitIntervalUsecondsValue[] = "100000";
-
-enum class Operation {
-  kCreateChain,
-  kFlushChain,
-  kDeleteChain,
-  kListChain,
-  kAppendRule,
-  kCheckRule,
-  kDeleteRule,
-
-  // RulePosition
-  kRulePositionPrepend,
-  kRulePositionAppend,
-};
-
 absl::string_view ToString(Operation op) {
   switch (op) {
     case Operation::kCreateChain:
@@ -151,6 +115,28 @@ Operation ToOp(RulePosition p) {
   LOG(FATAL) << "unknown rule position";
 }
 
+namespace {
+
+constexpr static char kIptablesSave[] = "iptables-save";
+constexpr static char kIptablesRestore[] = "iptables-restore";
+constexpr static char kIptables[] = "iptables";
+constexpr static char kIp6tablesRestore[] = "ip6tables-restore";
+constexpr static char kIp6tablesSave[] = "ip6tables-save";
+constexpr static char kIp6tables[] = "ip6tables";
+
+// WaitString a constant for specifying the wait flag
+const char kWaitString[] = "-w";
+
+// WaitSecondsValue a constant for specifying the default wait seconds
+const char kWaitSecondsValue[] = "5";
+
+// WaitIntervalString a constant for specifying the wait interval flag
+const char kWaitIntervalString[] = "-W";
+
+// WaitIntervalUsecondsValue a constant for specifying the default wait
+// interval useconds
+const char kWaitIntervalUsecondsValue[] = "100000";
+
 }  // namespace
 
 // runner implements Interface in terms of exec("iptables").
@@ -177,8 +163,7 @@ class RunnerImpl : public Runner {
 
   // EnsureRule checks if the specified rule is present and, if not, creates
   // it.  If the rule existed, return true.
-  absl::StatusOr<bool> EnsureRule(RulePosition position, Table table,
-                                  Chain chain,
+  absl::StatusOr<bool> EnsureRule(RulePosition position, Table table, Chain chain,
                                   std::vector<std::string> args) override;
 
   // DeleteRule checks if the specified rule is present and, if so, deletes
@@ -191,22 +176,21 @@ class RunnerImpl : public Runner {
 
   // SaveInto calls `iptables-save` for table and stores result in a given
   // buffer.
-  absl::Status SaveInto(Table table, std::string &buffer) override;
+  absl::Status SaveInto(Table table, absl::Cord &buffer) override;
 
   // Restore runs `iptables-restore` passing data through []byte.
   // table is the Table to restore
   // data should be formatted like the output of SaveInto()
   // flush sets the presence of the "--noflush" flag. see: FlushFlag
   // counters sets the "--counters" flag. see: RestoreCountersFlag
-  absl::Status Restore(Table table, const std::string &data,
-                       RestoreFlags flags) override;
+  absl::Status Restore(Table table, const absl::Cord &data, RestoreFlags flags) override;
 
   // RestoreAll is the same as Restore except that no table is specified.
-  absl::Status RestoreAll(const std::string &data, RestoreFlags flags) override;
+  absl::Status RestoreAll(const absl::Cord &data, RestoreFlags flags) override;
 
  private:
-  absl::Status RestoreInternal(std::vector<std::string> args,
-                               const std::string &data, RestoreFlags flags);
+  absl::Status RestoreInternal(std::vector<std::string> args, const absl::Cord &data,
+                               RestoreFlags flags);
 
   const IpFamily family_;
   const bool has_check_;
@@ -215,8 +199,7 @@ class RunnerImpl : public Runner {
 
   absl::Mutex mu_;
 
-  absl::StatusOr<std::string> Run(Operation op,
-                                  const std::vector<std::string> &args,
+  absl::StatusOr<std::string> Run(Operation op, const std::vector<std::string> &args,
                                   int *exit_status = nullptr)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(mu_);
 
@@ -241,8 +224,8 @@ std::unique_ptr<Runner> Runner::Create(IpFamily family) {
 
 namespace {
 
-std::vector<std::string> MakeFullArgs(
-    Table table, Chain chain, const std::vector<std::string> &args = {}) {
+std::vector<std::string> MakeFullArgs(Table table, Chain chain,
+                                      const std::vector<std::string> &args = {}) {
   std::vector<std::string> result{
       std::string(ToString(chain)),
       "-t",
@@ -256,8 +239,9 @@ std::vector<std::string> MakeFullArgs(
 
 }  // namespace
 
-absl::StatusOr<std::string> RunnerImpl::Run(
-    Operation op, const std::vector<std::string> &args, int *exit_status) {
+absl::StatusOr<std::string> RunnerImpl::Run(Operation op,
+                                            const std::vector<std::string> &args,
+                                            int *exit_status) {
   const char *iptables_cmd = kIptables;
   if (family_ == IpFamily::kIpV6) {
     iptables_cmd = kIp6tables;
@@ -267,8 +251,7 @@ absl::StatusOr<std::string> RunnerImpl::Run(
   for (const std::string &arg : args) {
     full_args.push_back(arg);
   }
-  VLOG(2) << "running iptables: " << iptables_cmd
-          << absl::StrJoin(full_args, " ");
+  VLOG(2) << "running iptables: " << iptables_cmd << absl::StrJoin(full_args, " ");
 
   try {
     bp::ipstream out_stream;
@@ -276,15 +259,13 @@ absl::StatusOr<std::string> RunnerImpl::Run(
                 bp::std_out > out_stream, bp::std_err > out_stream);
 
     std::string out;
-    std::copy(std::istreambuf_iterator<char>(out_stream), {},
-              std::back_inserter(out));
+    std::copy(std::istreambuf_iterator<char>(out_stream), {}, std::back_inserter(out));
 
     c.wait();
     if (exit_status != nullptr) {
       *exit_status = c.exit_code();
     } else if (c.exit_code() != 0) {
-      return absl::InternalError(
-          absl::StrCat("iptables exit status ", c.exit_code()));
+      return absl::InternalError(absl::StrCat("iptables exit status ", c.exit_code()));
     }
 
     return out;
@@ -304,8 +285,8 @@ absl::StatusOr<bool> RunnerImpl::EnsureChain(Table table, Chain chain) {
     return true;
   }
   if (!st.ok()) {
-    return absl::InternalError(absl::StrCat(
-        "failed creating chain \"", ToString(chain), "\": ", st.message()));
+    return absl::InternalError(
+        absl::StrCat("failed creating chain \"", ToString(chain), "\": ", st.message()));
   }
   return false;
 }
@@ -316,8 +297,8 @@ absl::Status RunnerImpl::FlushChain(Table table, Chain chain) {
 
   absl::Status st = Run(Operation::kFlushChain, full_args).status();
   if (!st.ok()) {
-    st = absl::InternalError(absl::StrCat(
-        "error flushing chain \"", ToString(chain), "\": ", st.message()));
+    st = absl::InternalError(
+        absl::StrCat("error flushing chain \"", ToString(chain), "\": ", st.message()));
   }
   return st;
 }
@@ -330,16 +311,16 @@ absl::Status RunnerImpl::DeleteChain(Table table, Chain chain) {
   // non-zero return (more like DeleteRule)
   absl::Status st = Run(Operation::kDeleteChain, full_args).status();
   if (!st.ok()) {
-    st = absl::InternalError(absl::StrCat(
-        "error deleting chain \"", ToString(chain), "\": ", st.message()));
+    st = absl::InternalError(
+        absl::StrCat("error deleting chain \"", ToString(chain), "\": ", st.message()));
   }
   return st;
 }
 
 // Returns (bool, nil) if it was able to check the existence of the rule, or
 // (<undefined>, error) if the process of checking failed.
-absl::StatusOr<bool> RunnerImpl::CheckRule(
-    Table table, Chain chain, const std::vector<std::string> &args) {
+absl::StatusOr<bool> RunnerImpl::CheckRule(Table table, Chain chain,
+                                           const std::vector<std::string> &args) {
   if (has_check_) {
     return CheckRuleUsingCheck(MakeFullArgs(table, chain, args));
   }
@@ -347,8 +328,7 @@ absl::StatusOr<bool> RunnerImpl::CheckRule(
 }
 
 // Executes the rule check using the "-C" flag
-absl::StatusOr<bool> RunnerImpl::CheckRuleUsingCheck(
-    std::vector<std::string> args) {
+absl::StatusOr<bool> RunnerImpl::CheckRuleUsingCheck(std::vector<std::string> args) {
   int exit_status = 0;
   absl::Status st = Run(Operation::kCheckRule, args).status();
   if (st.ok()) {
@@ -358,13 +338,11 @@ absl::StatusOr<bool> RunnerImpl::CheckRuleUsingCheck(
       return false;
     }
   }
-  return absl::InternalError(
-      absl::StrCat("error checking rule: ", st.message()));
+  return absl::InternalError(absl::StrCat("error checking rule: ", st.message()));
 }
 
 absl::StatusOr<bool> RunnerImpl::EnsureRule(RulePosition position, Table table,
-                                            Chain chain,
-                                            std::vector<std::string> args) {
+                                            Chain chain, std::vector<std::string> args) {
   std::vector<std::string> full_args = MakeFullArgs(table, chain, args);
   absl::MutexLock lock(&mu_);
 
@@ -378,8 +356,7 @@ absl::StatusOr<bool> RunnerImpl::EnsureRule(RulePosition position, Table table,
   }
   absl::Status st = Run(ToOp(position), full_args).status();
   if (!st.ok()) {
-    return absl::InternalError(
-        absl::StrCat("error appending rule: ", st.message()));
+    return absl::InternalError(absl::StrCat("error appending rule: ", st.message()));
   }
   return false;
 }
@@ -397,8 +374,7 @@ absl::Status RunnerImpl::DeleteRule(Table table, Chain chain,
   if (exists_or.value()) {
     st = Run(Operation::kDeleteRule, full_args).status();
     if (!st.ok()) {
-      st = absl::InternalError(
-          absl::StrCat("error deleting rule: ", st.message()));
+      st = absl::InternalError(absl::StrCat("error deleting rule: ", st.message()));
     }
   } else {
     // nothing to do, rule doesn't exist
@@ -406,7 +382,7 @@ absl::Status RunnerImpl::DeleteRule(Table table, Chain chain,
   return st;
 }
 
-absl::Status RunnerImpl::SaveInto(Table table, std::string &buffer) {
+absl::Status RunnerImpl::SaveInto(Table table, absl::Cord &buffer) {
   const char *save_cmd = kIptablesSave;
   if (family_ == IpFamily::kIpV6) {
     save_cmd = kIp6tablesSave;
@@ -418,12 +394,24 @@ absl::Status RunnerImpl::SaveInto(Table table, std::string &buffer) {
 
   try {
     bp::ipstream out_stream;
-    bp::child c(bp::search_path(save_cmd), bp::args(args),
-                bp::std_out > out_stream, bp::std_err > stderr);
+    bp::child c(bp::search_path(save_cmd), bp::args(args), bp::std_out > out_stream,
+                bp::std_err > stderr);
 
-    buffer.clear();
-    std::copy(std::istreambuf_iterator<char>(out_stream), {},
-              std::back_inserter(buffer));
+    {
+      constexpr size_t kChunkSize = 4096;
+      char *chunk = new char[kChunkSize];
+      while (out_stream.read(chunk, kChunkSize)) {
+        buffer.Append(
+            absl::MakeCordFromExternal(absl::string_view(chunk, kChunkSize),
+                                       [](absl::string_view v) { delete &v[0]; }));
+      }
+      buffer.Append(
+          absl::MakeCordFromExternal(absl::string_view(chunk, out_stream.gcount()),
+                                     [](absl::string_view v) { delete &v[0]; }));
+      if (out_stream.bad()) {
+        return absl::UnknownError("i/o error reading process output");
+      }
+    }
 
     c.wait();
     if (c.exit_code() != 0) {
@@ -437,20 +425,18 @@ absl::Status RunnerImpl::SaveInto(Table table, std::string &buffer) {
   }
 }
 
-absl::Status RunnerImpl::Restore(Table table, const std::string &data,
+absl::Status RunnerImpl::Restore(Table table, const absl::Cord &data,
                                  RestoreFlags flags) {
   return RestoreInternal({"-T", std::string(ToString(table))}, data, flags);
 }
 
-absl::Status RunnerImpl::RestoreAll(const std::string &data,
-                                    RestoreFlags flags) {
+absl::Status RunnerImpl::RestoreAll(const absl::Cord &data, RestoreFlags flags) {
   return RestoreInternal({}, data, flags);
 }
 
 // restoreInternal is the shared part of Restore/RestoreAll
 absl::Status RunnerImpl::RestoreInternal(std::vector<std::string> args,
-                                         const std::string &data,
-                                         RestoreFlags flags) {
+                                         const absl::Cord &data, RestoreFlags flags) {
   if (!flags.flush_tables) {
     args.push_back("--noflush");
   }
@@ -474,9 +460,8 @@ absl::Status RunnerImpl::RestoreInternal(std::vector<std::string> args,
 
   try {
     bp::opstream input_stream;
-    bp::child c(bp::search_path(restore_cmd), bp::args(full_args),
-                bp::std_out > stdout, bp::std_err > stderr,
-                bp::std_in < input_stream);
+    bp::child c(bp::search_path(restore_cmd), bp::args(full_args), bp::std_out > stdout,
+                bp::std_err > stderr, bp::std_in < input_stream);
 
     input_stream << data;
     input_stream.close();

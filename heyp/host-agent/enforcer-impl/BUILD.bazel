@@ -6,10 +6,11 @@ cc_library(
     hdrs = ["tc.h"],
     visibility = ["//heyp/host-agent:__subpackages__"],
     deps = [
-        ":iptables",
+        ":iptables-controller",
         ":tc-caller",
         "//heyp/flows:dc-mapper",
         "//heyp/host-agent:enforcer",
+        "@com_google_absl//absl/functional:function_ref",
         "@com_google_absl//absl/strings",
         "@glog",
     ],
@@ -30,6 +31,18 @@ cc_library(
 )
 
 cc_library(
+    name = "iptables-controller",
+    srcs = ["iptables-controller.cc"],
+    hdrs = ["iptables-controller.h"],
+    deps = [
+        ":iptables",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings:str_format",
+        "@glog",
+    ],
+)
+
+cc_library(
     name = "tc-caller",
     srcs = ["tc-caller.cc"],
     hdrs = ["tc-caller.h"],
@@ -37,6 +50,7 @@ cc_library(
         "//third_party/simdjson",
         "@boost//:process",
         "@com_google_absl//absl/status",
+        "@glog",
     ],
 )
 
@@ -44,6 +58,15 @@ cc_binary(
     name = "fake-tc-for-test",
     testonly = 1,
     srcs = ["fake-tc-for-test.c"],
+)
+
+cc_test(
+    name = "iptables-controller-test",
+    srcs = ["iptables-controller-test.cc"],
+    deps = [
+        ":iptables-controller",
+        "//heyp/init:test-main",
+    ],
 )
 
 cc_test(

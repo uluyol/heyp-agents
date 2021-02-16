@@ -27,6 +27,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/cord.h"
 #include "absl/strings/string_view.h"
 
 namespace heyp {
@@ -69,6 +70,23 @@ enum class IpFamily {
 
 absl::string_view ToString(IpFamily f);
 
+enum class Operation {
+  kCreateChain,
+  kFlushChain,
+  kDeleteChain,
+  kListChain,
+  kAppendRule,
+  kCheckRule,
+  kDeleteRule,
+
+  // RulePosition
+  kRulePositionPrepend,
+  kRulePositionAppend,
+};
+
+absl::string_view ToString(Operation op);
+Operation ToOp(RulePosition p);
+
 class Runner {
  public:
   static std::unique_ptr<Runner> Create(IpFamily family);
@@ -103,7 +121,7 @@ class Runner {
 
   // SaveInto calls `iptables-save` for table and stores result in a given
   // buffer.
-  virtual absl::Status SaveInto(Table table, std::string& buffer) = 0;
+  virtual absl::Status SaveInto(Table table, absl::Cord& buffer) = 0;
 
   struct RestoreFlags {
     bool flush_tables = true;
@@ -115,11 +133,11 @@ class Runner {
   // data should be formatted like the output of SaveInto()
   // flush sets the presence of the "--noflush" flag. see: FlushFlag
   // counters sets the "--counters" flag. see: RestoreCountersFlag
-  virtual absl::Status Restore(Table table, const std::string& data,
+  virtual absl::Status Restore(Table table, const absl::Cord& data,
                                RestoreFlags flags) = 0;
 
   // RestoreAll is the same as Restore except that no table is specified.
-  virtual absl::Status RestoreAll(const std::string& data,
+  virtual absl::Status RestoreAll(const absl::Cord& data,
                                   RestoreFlags flags) = 0;
 };
 

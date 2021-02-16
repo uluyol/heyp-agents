@@ -5,11 +5,13 @@
 #include <iterator>
 
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_join.h"
 #include "boost/process/args.hpp"
 #include "boost/process/child.hpp"
 #include "boost/process/io.hpp"
 #include "boost/process/pipe.hpp"
 #include "boost/process/search_path.hpp"
+#include "glog/logging.h"
 #include "third_party/simdjson/simdjson.h"
 
 namespace bp = boost::process;
@@ -20,6 +22,8 @@ TcCaller::TcCaller(const std::string& tc_name) : tc_name_(tc_name) {}
 
 absl::Status TcCaller::Call(const std::vector<std::string>& tc_args) {
   try {
+    VLOG(2) << "running tc: " << tc_name_ << absl::StrJoin(tc_args, " ");
+
     bp::ipstream out;
     bp::child c(bp::search_path(tc_name_), bp::args(tc_args),
                 bp::std_out > out);
