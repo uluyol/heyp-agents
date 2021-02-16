@@ -117,13 +117,6 @@ Operation ToOp(RulePosition p) {
 
 namespace {
 
-constexpr static char kIptablesSave[] = "iptables-save";
-constexpr static char kIptablesRestore[] = "iptables-restore";
-constexpr static char kIptables[] = "iptables";
-constexpr static char kIp6tablesRestore[] = "ip6tables-restore";
-constexpr static char kIp6tablesSave[] = "ip6tables-save";
-constexpr static char kIp6tables[] = "ip6tables";
-
 // WaitString a constant for specifying the wait flag
 const char kWaitString[] = "-w";
 
@@ -142,9 +135,14 @@ const char kWaitIntervalUsecondsValue[] = "100000";
 // runner implements Interface in terms of exec("iptables").
 class RunnerImpl : public Runner {
  public:
-  RunnerImpl(IpFamily family, std::vector<std::string> wait_flag,
+  RunnerImpl(IpFamily family, absl::string_view iptables_cmd,
+             absl::string_view iptables_save_cmd, absl::string_view iptables_restore_cmd,
+             std::vector<std::string> wait_flag,
              std::vector<std::string> restore_wait_flag)
       : family_(family),
+        iptables_cmd_(iptables_cmd),
+        iptables_save_cmd_(iptables_save_cmd),
+        iptables_restore_cmd_(iptables_restore_cmd),
         has_check_(true),  // assume recent-enough iptables
         wait_flag_(std::move(wait_flag)),
         restore_wait_flag_(std::move(restore_wait_flag)) {}
@@ -193,6 +191,9 @@ class RunnerImpl : public Runner {
                                RestoreFlags flags);
 
   const IpFamily family_;
+  const std::string iptables_cmd_;
+  const std::string iptables_save_cmd_;
+  const std::string iptables_restore_cmd_;
   const bool has_check_;
   std::vector<std::string> wait_flag_;
   std::vector<std::string> restore_wait_flag_;
@@ -212,8 +213,25 @@ class RunnerImpl : public Runner {
 };
 
 std::unique_ptr<Runner> Runner::Create(IpFamily family) {
+  absl::string_view iptables_cmd = "iptables";
+  absl::string_view iptables_save_cmd = "iptables-save";
+  absl::string_view iptables_restore_cmd = "iptables-restore";
+
+  if (family == IpFamily::kIpV6) {
+    iptables_cmd = "ip6tables";
+    iptables_save_cmd = "ip6tables-save";
+    iptables_restore_cmd = "ip6tables-restore";
+  }
+
+  return CreateWithIptablesCommands(family, iptables_cmd, iptables_save_cmd,
+                                    iptables_restore_cmd);
+}
+
+std::unique_ptr<Runner> Runner::CreateWithIptablesCommands(
+    IpFamily family, absl::string_view iptables_cmd, absl::string_view iptables_save_cmd,
+    absl::string_view iptables_restore_cmd) {
   return absl::make_unique<RunnerImpl>(
-      family,
+      family, iptables_cmd, iptables_save_cmd, iptables_restore_cmd,
       std::vector<std::string>{
           kWaitString, kWaitSecondsValue, kWaitIntervalString,
           kWaitIntervalUsecondsValue} /* assume recent-enough iptables */,
@@ -242,20 +260,17 @@ std::vector<std::string> MakeFullArgs(Table table, Chain chain,
 absl::StatusOr<std::string> RunnerImpl::Run(Operation op,
                                             const std::vector<std::string> &args,
                                             int *exit_status) {
-  const char *iptables_cmd = kIptables;
-  if (family_ == IpFamily::kIpV6) {
-    iptables_cmd = kIp6tables;
-  }
   std::vector<std::string> full_args = wait_flag_;
   full_args.push_back(std::string(ToString(op)));
   for (const std::string &arg : args) {
     full_args.push_back(arg);
   }
-  VLOG(2) << "running iptables: " << iptables_cmd << absl::StrJoin(full_args, " ");
+  VLOG(2) << "running iptables: " << iptables_cmd_ << " "
+          << absl::StrJoin(full_args, " ");
 
   try {
     bp::ipstream out_stream;
-    bp::child c(bp::search_path(iptables_cmd), bp::args(full_args),
+    bp::child c(bp::search_path(iptables_cmd_), bp::args(full_args),
                 bp::std_out > out_stream, bp::std_err > out_stream);
 
     std::string out;
@@ -383,24 +398,25 @@ absl::Status RunnerImpl::DeleteRule(Table table, Chain chain,
 }
 
 absl::Status RunnerImpl::SaveInto(Table table, absl::Cord &buffer) {
-  const char *save_cmd = kIptablesSave;
-  if (family_ == IpFamily::kIpV6) {
-    save_cmd = kIp6tablesSave;
-  }
   std::vector<std::string> args{"-t", std::string(ToString(table))};
 
   absl::MutexLock lock(&mu_);
-  VLOG(2) << "running iptables save: " << save_cmd << absl::StrJoin(args, " ");
+  VLOG(2) << "running iptables save: " << iptables_save_cmd_ << " "
+          << absl::StrJoin(args, " ");
 
   try {
     bp::ipstream out_stream;
-    bp::child c(bp::search_path(save_cmd), bp::args(args), bp::std_out > out_stream,
-                bp::std_err > stderr);
+    bp::child c(bp::search_path(iptables_save_cmd_), bp::args(args),
+                bp::std_out > out_stream, bp::std_err > stderr);
 
     {
       constexpr size_t kChunkSize = 4096;
-      char *chunk = new char[kChunkSize];
-      while (out_stream.read(chunk, kChunkSize)) {
+      char *chunk = nullptr;
+      while (true) {
+        chunk = new char[kChunkSize];
+        if (!out_stream.read(chunk, kChunkSize)) {
+          break;
+        }
         buffer.Append(
             absl::MakeCordFromExternal(absl::string_view(chunk, kChunkSize),
                                        [](absl::string_view v) { delete &v[0]; }));
@@ -448,20 +464,17 @@ absl::Status RunnerImpl::RestoreInternal(std::vector<std::string> args,
     full_args.push_back(arg);
   }
 
-  const char *restore_cmd = kIptablesRestore;
-  if (family_ == IpFamily::kIpV6) {
-    restore_cmd = kIp6tablesRestore;
-  }
-
   absl::MutexLock lock(&mu_);
+  VLOG(2) << "running iptables restore: " << iptables_restore_cmd_ << " "
+          << absl::StrJoin(full_args, " ");
 
   CHECK(!restore_wait_flag_.empty())
       << "support for older iptables-restore not implemented";
 
   try {
     bp::opstream input_stream;
-    bp::child c(bp::search_path(restore_cmd), bp::args(full_args), bp::std_out > stdout,
-                bp::std_err > stderr, bp::std_in < input_stream);
+    bp::child c(bp::search_path(iptables_restore_cmd_), bp::args(full_args),
+                bp::std_out > stdout, bp::std_err > stderr, bp::std_in < input_stream);
 
     input_stream << data;
     input_stream.close();

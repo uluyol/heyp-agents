@@ -90,6 +90,9 @@ Operation ToOp(RulePosition p);
 class Runner {
  public:
   static std::unique_ptr<Runner> Create(IpFamily family);
+  static std::unique_ptr<Runner> CreateWithIptablesCommands(
+      IpFamily family, absl::string_view iptables_cmd,
+      absl::string_view iptables_save_cmd, absl::string_view iptables_restore_cmd);
 
   virtual ~Runner() = default;
 
@@ -107,8 +110,7 @@ class Runner {
 
   // EnsureRule checks if the specified rule is present and, if not, creates
   // it.  If the rule existed, return true.
-  virtual absl::StatusOr<bool> EnsureRule(RulePosition position, Table table,
-                                          Chain chain,
+  virtual absl::StatusOr<bool> EnsureRule(RulePosition position, Table table, Chain chain,
                                           std::vector<std::string> args) = 0;
 
   // DeleteRule checks if the specified rule is present and, if so, deletes
@@ -137,8 +139,7 @@ class Runner {
                                RestoreFlags flags) = 0;
 
   // RestoreAll is the same as Restore except that no table is specified.
-  virtual absl::Status RestoreAll(const absl::Cord& data,
-                                  RestoreFlags flags) = 0;
+  virtual absl::Status RestoreAll(const absl::Cord& data, RestoreFlags flags) = 0;
 };
 
 }  // namespace iptables

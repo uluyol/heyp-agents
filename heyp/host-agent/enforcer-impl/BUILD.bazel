@@ -54,12 +54,6 @@ cc_library(
     ],
 )
 
-cc_binary(
-    name = "fake-tc-for-test",
-    testonly = 1,
-    srcs = ["fake-tc-for-test.c"],
-)
-
 cc_test(
     name = "iptables-controller-test",
     srcs = ["iptables-controller-test.cc"],
@@ -67,6 +61,37 @@ cc_test(
         ":iptables-controller",
         "//heyp/init:test-main",
     ],
+)
+
+cc_binary(
+    name = "fake-iptables-save-for-test",
+    testonly = 1,
+    srcs = ["fake-iptables-save-for-test.c"],
+)
+
+cc_binary(
+    name = "fake-iptables-restore-for-test",
+    testonly = 1,
+    srcs = ["fake-iptables-restore-for-test.c"],
+)
+
+cc_test(
+    name = "iptables-test",
+    srcs = ["iptables-test.cc"],
+    data = [
+        ":fake-iptables-restore-for-test",
+        ":fake-iptables-save-for-test",
+    ],
+    deps = [
+        ":iptables",
+        "//heyp/init:test-main",
+    ],
+)
+
+cc_binary(
+    name = "fake-tc-for-test",
+    testonly = 1,
+    srcs = ["fake-tc-for-test.c"],
 )
 
 cc_test(
