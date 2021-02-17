@@ -33,7 +33,7 @@ TEST(RunnerTest, Restore) {
   char buf[1024];
   for (int i = 0; i < 20; ++i) {
     memset(buf, 'Z' - i, 1024);
-    data.Append(buf);
+    data.Append(absl::string_view(buf, 1024));
   }
 
   absl::Status status = runner->Restore(Table::kMangle, data,
