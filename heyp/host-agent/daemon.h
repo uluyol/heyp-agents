@@ -26,7 +26,7 @@ class HostDaemon {
   HostDaemon(const std::shared_ptr<grpc::Channel>& channel, Config config,
              DCMapper* dc_mapper, FlowStateProvider* flow_state_provider,
              std::unique_ptr<FlowAggregator> socket_to_host_aggregator,
-             FlowStateReporter* flow_state_reporter, HostEnforcerInterface* enforcer);
+             FlowStateReporter* flow_state_reporter, HostEnforcer* enforcer);
 
   ~HostDaemon();
 
@@ -38,7 +38,7 @@ class HostDaemon {
   FlowStateProvider* flow_state_provider_;
   std::unique_ptr<FlowAggregator> socket_to_host_aggregator_;
   FlowStateReporter* flow_state_reporter_;
-  HostEnforcerInterface* enforcer_;
+  HostEnforcer* enforcer_;
   std::unique_ptr<proto::ClusterAgent::Stub> stub_;
 
   grpc::ClientContext context_;

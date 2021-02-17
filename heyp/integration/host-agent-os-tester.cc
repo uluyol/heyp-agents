@@ -4,6 +4,7 @@
 #include <cmath>
 #include <iterator>
 
+#include "absl/functional/bind_front.h"
 #include "absl/random/random.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
@@ -11,7 +12,9 @@
 #include "glog/logging.h"
 #include "heyp/host-agent/enforcer.h"
 #include "heyp/host-agent/flow-tracker.h"
+#include "heyp/host-agent/linux-enforcer/enforcer.h"
 #include "heyp/integration/step-worker.h"
+#include "heyp/posix/os.h"
 
 namespace heyp {
 namespace testing {
@@ -66,10 +69,33 @@ class InfiniteDemandProvider : public FlowStateProvider {
   std::vector<proto::FlowInfo> infos_;
 };
 
+MatchedHostFlows WithFlowPriority(const bool use_hipri,
+                                  const FlowStateProvider& flow_state_provider,
+                                  const proto::FlowAlloc& flow_alloc) {
+  if (use_hipri) {
+    return MatchedHostFlows{.hipri = {flow_alloc.flow()}};
+  } else {
+    return MatchedHostFlows{.lopri = {flow_alloc.flow()}};
+  }
+}
+
 class EasyEnforcer {
  public:
-  explicit EasyEnforcer(const std::vector<HostWorker::Flow>& all_flows)
-      : demand_provider_(all_flows) {}
+  explicit EasyEnforcer(absl::string_view device, bool use_hipri,
+                        const std::vector<HostWorker::Flow>& all_flows)
+      : demand_provider_(all_flows) {
+    if (kHostIsLinux) {
+      auto e = LinuxHostEnforcer::Create(device,
+                                         absl::bind_front(WithFlowPriority, use_hipri));
+      auto st = e->ResetDeviceConfig();
+      if (!st.ok()) {
+        LOG(ERROR) << "failed to reset config of device '" << device << "': " << st;
+      }
+      enforcer_ = std::move(e);
+    } else {
+      enforcer_ = absl::make_unique<NopHostEnforcer>();
+    }
+  }
 
   void UpdateLimits(const std::vector<std::pair<HostWorker::Flow, int64_t>>& limits,
                     const std::string& label, proto::TestCompareMetrics* metrics) {
@@ -83,12 +109,12 @@ class EasyEnforcer {
       m->set_name(absl::StrCat(flow_limit_pair.first.name, "/", label, "/want"));
       m->set_value(flow_limit_pair.second);
     }
-    enforcer_.EnforceAllocs(demand_provider_, b);
+    enforcer_->EnforceAllocs(demand_provider_, b);
   }
 
  private:
   InfiniteDemandProvider demand_provider_;
-  HostEnforcer enforcer_;
+  std::unique_ptr<HostEnforcer> enforcer_;
 };
 
 class RateLimitPicker {
@@ -176,7 +202,7 @@ absl::StatusOr<proto::TestCompareMetrics> HostAgentOSTester::Run() {
 
   proto::TestCompareMetrics metrics;
   if (status.ok()) {
-    EasyEnforcer enforcer(all_flows);
+    EasyEnforcer enforcer(config_.device, config_.use_hipri, all_flows);
     RateLimitPicker limit_picker(config_.max_rate_limit_bps);
     std::vector<std::pair<HostWorker::Flow, int64_t>> all_flows_limits;
     for (const auto& f : all_flows) {

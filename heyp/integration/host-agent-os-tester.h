@@ -11,6 +11,8 @@ namespace testing {
 class HostAgentOSTester {
  public:
   struct Config {
+    std::string device;
+    bool use_hipri = true;
     absl::Duration run_dur = absl::Seconds(60);
     absl::Duration step_dur = absl::Seconds(2);
     int num_hosts = 4;

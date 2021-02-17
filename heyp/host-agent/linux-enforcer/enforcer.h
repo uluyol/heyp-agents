@@ -5,14 +5,11 @@
 #include <string>
 #include <vector>
 
-#include "absl/container/flat_hash_map.h"
 #include "absl/container/inlined_vector.h"
+#include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "heyp/flows/dc-mapper.h"
 #include "heyp/host-agent/enforcer.h"
-#include "heyp/host-agent/linux-enforcer/iptables-controller.h"
-#include "heyp/host-agent/linux-enforcer/tc-caller.h"
-#include "heyp/proto/alg.h"
 #include "heyp/proto/heyp.pb.h"
 
 namespace heyp {
@@ -34,47 +31,16 @@ MatchedHostFlows ExpandDestIntoHostsSinglePri(
 // TODO: track hipri/lopri
 class LinuxHostEnforcer : public HostEnforcer {
  public:
-  LinuxHostEnforcer(absl::string_view device,
-                    const MatchHostFlowsFunc& match_host_flows_fn);
+  static std::unique_ptr<LinuxHostEnforcer> Create(
+      absl::string_view device, const MatchHostFlowsFunc& match_host_flows_fn);
 
-  LinuxHostEnforcer(const LinuxHostEnforcer&) = delete;
-  LinuxHostEnforcer& operator=(const LinuxHostEnforcer&) = delete;
+  virtual ~LinuxHostEnforcer() = default;
 
-  absl::Status ResetDeviceConfig();
+  virtual absl::Status ResetDeviceConfig() = 0;
 
-  void EnforceAllocs(const FlowStateProvider& flow_state_provider,
-                     const proto::AllocBundle& bundle) override;
-
- private:
-  struct FlowSys {
-    struct Priority {
-      std::string class_id;
-      int64_t cur_rate_limit_bps = 0;
-      bool did_create_class = false;
-      bool did_create_filter = false;
-      bool update_after_ipt_change = false;
-    };
-
-    Priority hipri;
-    Priority lopri;
-  };
-
-  absl::Status ResetIptables();
-  absl::Status ResetTrafficControl();
-
-  void StageIptablesForFlow(const MatchedHostFlows::Vec& matched_flows,
-                            const std::string& dscp, const std::string& class_id);
-  absl::Status UpdateTrafficControlForFlow(int64_t rate_limit_bps,
-                                           FlowSys::Priority& sys);
-
-  const std::string device_;
-  const MatchHostFlowsFunc match_host_flows_fn_;
-  TcCaller tc_caller_;
-  iptables::Controller ipt_controller_;
-  int32_t next_class_id_;
-
-  absl::flat_hash_map<proto::FlowMarker, FlowSys, HashFlow, EqFlow>
-      sys_info_;  // entries are never deleted
+  // Inherited from HostEnforcer
+  // void EnforceAllocs(const FlowStateProvider& flow_state_provider,
+  //                   const proto::AllocBundle& bundle) = 0;
 };
 
 }  // namespace heyp

@@ -2,24 +2,15 @@
 
 #include <limits>
 
+#include "absl/container/flat_hash_map.h"
 #include "glog/logging.h"
+#include "heyp/host-agent/linux-enforcer/iptables-controller.h"
 #include "heyp/host-agent/linux-enforcer/iptables.h"
+#include "heyp/host-agent/linux-enforcer/tc-caller.h"
+#include "heyp/proto/alg.h"
 #include "heyp/proto/heyp.pb.h"
 
 namespace heyp {
-
-namespace {
-
-uint16_t AssertValidPort(int32_t port32) {
-  const int32_t kMaxPortNum = std::numeric_limits<uint16_t>::max();
-
-  CHECK(port32 >= 0);
-  CHECK(port32 <= kMaxPortNum);
-
-  return static_cast<uint16_t>(port32);
-}
-
-}  // namespace
 
 MatchedHostFlows ExpandDestIntoHostsSinglePri(
     const StaticDCMapper *dc_mapper, const FlowStateProvider &flow_state_provider,
@@ -51,14 +42,69 @@ MatchedHostFlows ExpandDestIntoHostsSinglePri(
   return matched;
 }
 
-LinuxHostEnforcer::LinuxHostEnforcer(absl::string_view device,
-                                     const MatchHostFlowsFunc &match_host_flows_fn)
+namespace {
+
+uint16_t AssertValidPort(int32_t port32) {
+  const int32_t kMaxPortNum = std::numeric_limits<uint16_t>::max();
+
+  CHECK(port32 >= 0);
+  CHECK(port32 <= kMaxPortNum);
+
+  return static_cast<uint16_t>(port32);
+}
+
+// Implementation is separated from interface to reduce #includes in the header file and
+// speed up compilation.
+class LinuxHostEnforcerImpl : public LinuxHostEnforcer {
+ public:
+  LinuxHostEnforcerImpl(absl::string_view device,
+                        const MatchHostFlowsFunc &match_host_flows_fn);
+
+  absl::Status ResetDeviceConfig() override;
+
+  void EnforceAllocs(const FlowStateProvider &flow_state_provider,
+                     const proto::AllocBundle &bundle) override;
+
+ private:
+  struct FlowSys {
+    struct Priority {
+      std::string class_id;
+      int64_t cur_rate_limit_bps = 0;
+      bool did_create_class = false;
+      bool did_create_filter = false;
+      bool update_after_ipt_change = false;
+    };
+
+    Priority hipri;
+    Priority lopri;
+  };
+
+  absl::Status ResetIptables();
+  absl::Status ResetTrafficControl();
+
+  void StageIptablesForFlow(const MatchedHostFlows::Vec &matched_flows,
+                            const std::string &dscp, const std::string &class_id);
+  absl::Status UpdateTrafficControlForFlow(int64_t rate_limit_bps,
+                                           FlowSys::Priority &sys);
+
+  const std::string device_;
+  const MatchHostFlowsFunc match_host_flows_fn_;
+  TcCaller tc_caller_;
+  iptables::Controller ipt_controller_;
+  int32_t next_class_id_;
+
+  absl::flat_hash_map<proto::FlowMarker, FlowSys, HashFlow, EqFlow>
+      sys_info_;  // entries are never deleted
+};
+
+LinuxHostEnforcerImpl::LinuxHostEnforcerImpl(
+    absl::string_view device, const MatchHostFlowsFunc &match_host_flows_fn)
     : device_(device),
       match_host_flows_fn_(match_host_flows_fn),
       ipt_controller_(device),
       next_class_id_(2) {}
 
-absl::Status LinuxHostEnforcer::ResetDeviceConfig() {
+absl::Status LinuxHostEnforcerImpl::ResetDeviceConfig() {
   auto st = ResetTrafficControl();
   if (!st.ok()) {
     return absl::Status(st.code(),
@@ -72,21 +118,21 @@ absl::Status LinuxHostEnforcer::ResetDeviceConfig() {
   return absl::OkStatus();
 }
 
-absl::Status LinuxHostEnforcer::ResetIptables() { return ipt_controller_.Clear(); }
+absl::Status LinuxHostEnforcerImpl::ResetIptables() { return ipt_controller_.Clear(); }
 
-absl::Status LinuxHostEnforcer::ResetTrafficControl() {
+absl::Status LinuxHostEnforcerImpl::ResetTrafficControl() {
   absl::Status st = tc_caller_.Call({"-j", "qdisc", "delete", "dev", device_, "root"});
   st.Update(tc_caller_.Call({"-j", "qdisc", "add", "dev", device_, "root", "handle",
                              "1:", "htb", "default", "0"}));
   return st;
 }
 
-static constexpr char kDscpHipri[] = "AF41";
-static constexpr char kDscpLopri[] = "AF31";
+constexpr char kDscpHipri[] = "AF41";
+constexpr char kDscpLopri[] = "AF31";
 
-void LinuxHostEnforcer::StageIptablesForFlow(const MatchedHostFlows::Vec &matched_flows,
-                                             const std::string &dscp,
-                                             const std::string &class_id) {
+void LinuxHostEnforcerImpl::StageIptablesForFlow(
+    const MatchedHostFlows::Vec &matched_flows, const std::string &dscp,
+    const std::string &class_id) {
   if (matched_flows.empty()) {
     return;
   }
@@ -105,8 +151,8 @@ void LinuxHostEnforcer::StageIptablesForFlow(const MatchedHostFlows::Vec &matche
   }
 }
 
-absl::Status LinuxHostEnforcer::UpdateTrafficControlForFlow(int64_t rate_limit_bps,
-                                                            FlowSys::Priority &sys) {
+absl::Status LinuxHostEnforcerImpl::UpdateTrafficControlForFlow(int64_t rate_limit_bps,
+                                                                FlowSys::Priority &sys) {
   double rate_limit_mbps = rate_limit_bps;
   rate_limit_mbps /= 1024.0 * 1024.0;
 
@@ -161,8 +207,8 @@ absl::Status LinuxHostEnforcer::UpdateTrafficControlForFlow(int64_t rate_limit_b
 //
 // 3. Reduce rate limits for appropriate (FG, QoS) pairs.
 //
-void LinuxHostEnforcer::EnforceAllocs(const FlowStateProvider &flow_state_provider,
-                                      const proto::AllocBundle &bundle) {
+void LinuxHostEnforcerImpl::EnforceAllocs(const FlowStateProvider &flow_state_provider,
+                                          const proto::AllocBundle &bundle) {
   for (const proto::FlowAlloc &flow_alloc : bundle.flow_allocs()) {
     MatchedHostFlows matched = match_host_flows_fn_(flow_state_provider, flow_alloc);
     FlowSys &sys = sys_info_[flow_alloc.flow()];
@@ -223,6 +269,13 @@ void LinuxHostEnforcer::EnforceAllocs(const FlowStateProvider &flow_state_provid
       continue;
     }
   }
+}
+
+}  // namespace
+
+std::unique_ptr<LinuxHostEnforcer> LinuxHostEnforcer::Create(
+    absl::string_view device, const MatchHostFlowsFunc &match_host_flows_fn) {
+  return absl::make_unique<LinuxHostEnforcerImpl>(device, match_host_flows_fn);
 }
 
 }  // namespace heyp

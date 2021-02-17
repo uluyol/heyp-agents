@@ -7,19 +7,21 @@
 
 namespace heyp {
 
-class HostEnforcerInterface {
+class HostEnforcer {
  public:
-  virtual ~HostEnforcerInterface() = default;
+  virtual ~HostEnforcer() = default;
 
   virtual void EnforceAllocs(const FlowStateProvider& flow_state_provider,
                              const proto::AllocBundle& bundle) = 0;
 };
 
-class HostEnforcer : public HostEnforcerInterface {
+class NopHostEnforcer : public HostEnforcer {
  public:
   void EnforceAllocs(const FlowStateProvider& flow_state_provider,
                      const proto::AllocBundle& bundle) override;
 };
+
+// See linux-enforcer/enforcer.h for an implementation of a real enforcer.
 
 }  // namespace heyp
 

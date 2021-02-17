@@ -96,7 +96,8 @@ absl::Status Run(const proto::HostAgentConfig& c) {
   LOG(INFO) << "creating dc mapper";
   StaticDCMapper dc_mapper(c.dc_mapper());
   LOG(INFO) << "creating host enforcer";
-  HostEnforcer enforcer;
+  // TODO: initialize a LinuxHostEnforcer
+  NopHostEnforcer enforcer;
   LOG(INFO) << "connecting to cluster agent";
   std::shared_ptr<grpc::Channel> channel = grpc::CreateChannel(
       c.daemon().cluster_agent_addr(), grpc::InsecureChannelCredentials());

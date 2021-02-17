@@ -84,7 +84,7 @@ class MockFlowStateReporter : public FlowStateReporter {
               (absl::FunctionRef<bool(const proto::FlowMarker&)> is_lopri), (override));
 };
 
-class MockHostEnforcer : public HostEnforcerInterface {
+class MockHostEnforcer : public HostEnforcer {
  public:
   MOCK_METHOD(void, EnforceAllocs,
               (const FlowStateProvider& flow_state_provider,

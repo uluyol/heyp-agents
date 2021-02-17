@@ -4,7 +4,10 @@ cc_library(
     name = "enforcer",
     srcs = ["enforcer.cc"],
     hdrs = ["enforcer.h"],
-    visibility = ["//heyp/host-agent:__subpackages__"],
+    visibility = [
+        "//heyp/host-agent:__subpackages__",
+        "//heyp/integration:__subpackages__",
+    ],
     deps = [
         ":iptables-controller",
         ":tc-caller",

@@ -29,6 +29,8 @@ int main(int argc, char** argv) {
   }
 
   heyp::testing::HostAgentOSTester tester({
+      .device = "lo",
+      .use_hipri = true,
       .run_dur = run_dur,
       .step_dur = step_dur,
       .num_hosts = FLAGS_num_hosts,

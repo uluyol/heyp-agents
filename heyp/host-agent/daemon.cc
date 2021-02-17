@@ -9,8 +9,7 @@ namespace heyp {
 HostDaemon::HostDaemon(const std::shared_ptr<grpc::Channel>& channel, Config config,
                        DCMapper* dc_mapper, FlowStateProvider* flow_state_provider,
                        std::unique_ptr<FlowAggregator> socket_to_host_aggregator,
-                       FlowStateReporter* flow_state_reporter,
-                       HostEnforcerInterface* enforcer)
+                       FlowStateReporter* flow_state_reporter, HostEnforcer* enforcer)
     : config_(config),
       dc_mapper_(dc_mapper),
       flow_state_provider_(flow_state_provider),
@@ -88,7 +87,7 @@ void SendInfo(
 
 void EnforceAlloc(
     const FlowStateProvider* flow_state_provider, FlowStateReporter* flow_state_reporter,
-    HostEnforcerInterface* enforcer,
+    HostEnforcer* enforcer,
     grpc::ClientReaderWriter<proto::InfoBundle, proto::AllocBundle>* io_stream) {
   while (true) {
     // Step 1: wait for allocation from cluster agent.
