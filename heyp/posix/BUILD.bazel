@@ -5,6 +5,11 @@ package(
 )
 
 cc_library(
+    name = "os",
+    hdrs = ["os.h"],
+)
+
+cc_library(
     name = "strerror",
     srcs = ["strerror.cc"],
     hdrs = ["strerror.h"],
