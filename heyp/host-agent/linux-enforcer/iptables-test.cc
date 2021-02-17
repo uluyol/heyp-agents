@@ -1,4 +1,4 @@
-#include "heyp/host-agent/enforcer-impl/iptables.h"
+#include "heyp/host-agent/linux-enforcer/iptables.h"
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -8,7 +8,7 @@ namespace iptables {
 
 TEST(RunnerTest, SaveInto) {
   std::unique_ptr<Runner> runner = Runner::CreateWithIptablesCommands(
-      IpFamily::kIpV4, "", "heyp/host-agent/enforcer-impl/fake-iptables-save-for-test",
+      IpFamily::kIpV4, "", "heyp/host-agent/linux-enforcer/fake-iptables-save-for-test",
       "");
 
   absl::Cord buffer;
@@ -27,7 +27,7 @@ TEST(RunnerTest, SaveInto) {
 TEST(RunnerTest, Restore) {
   std::unique_ptr<Runner> runner = Runner::CreateWithIptablesCommands(
       IpFamily::kIpV4, "", "",
-      "heyp/host-agent/enforcer-impl/fake-iptables-restore-for-test");
+      "heyp/host-agent/linux-enforcer/fake-iptables-restore-for-test");
 
   absl::Cord data;
   char buf[1024];

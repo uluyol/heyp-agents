@@ -1,5 +1,5 @@
-#ifndef HEYP_HOST_AGENT_ENFORCER_IMPL_TC_H_
-#define HEYP_HOST_AGENT_ENFORCER_IMPL_TC_H_
+#ifndef HEYP_HOST_AGENT_LINUX_ENFORCER_ENFORCER_H_
+#define HEYP_HOST_AGENT_LINUX_ENFORCER_ENFORCER_H_
 
 #include <functional>
 #include <string>
@@ -9,9 +9,9 @@
 #include "absl/container/inlined_vector.h"
 #include "absl/strings/string_view.h"
 #include "heyp/flows/dc-mapper.h"
-#include "heyp/host-agent/enforcer-impl/iptables-controller.h"
-#include "heyp/host-agent/enforcer-impl/tc-caller.h"
 #include "heyp/host-agent/enforcer.h"
+#include "heyp/host-agent/linux-enforcer/iptables-controller.h"
+#include "heyp/host-agent/linux-enforcer/tc-caller.h"
 #include "heyp/proto/alg.h"
 #include "heyp/proto/heyp.pb.h"
 
@@ -78,4 +78,4 @@ class TcHostEnforcer : public HostEnforcer {
 
 }  // namespace heyp
 
-#endif  // HEYP_HOST_AGENT_ENFORCER_IMPL_TC_H_
+#endif  // HEYP_HOST_AGENT_LINUX_ENFORCER_ENFORCER_H_

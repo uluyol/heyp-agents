@@ -15,7 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "heyp/host-agent/enforcer-impl/iptables.h"
+#include "heyp/host-agent/linux-enforcer/iptables.h"
 
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"

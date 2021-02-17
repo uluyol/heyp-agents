@@ -1,5 +1,5 @@
-#ifndef HEYP_HOST_AGENT_ENFORCER_IMPL_TC_CALLER_H_
-#define HEYP_HOST_AGENT_ENFORCER_IMPL_TC_CALLER_H_
+#ifndef HEYP_HOST_AGENT_LINUX_ENFORCER_TC_CALLER_H_
+#define HEYP_HOST_AGENT_LINUX_ENFORCER_TC_CALLER_H_
 
 #include <string>
 #include <vector>
@@ -25,4 +25,4 @@ class TcCaller {
 
 }  // namespace heyp
 
-#endif  // HEYP_HOST_AGENT_ENFORCER_IMPL_TC_CALLER_H_
+#endif  // HEYP_HOST_AGENT_LINUX_ENFORCER_TC_CALLER_H_

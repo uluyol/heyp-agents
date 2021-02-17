@@ -1,9 +1,9 @@
-#include "heyp/host-agent/enforcer-impl/tc.h"
+#include "heyp/host-agent/linux-enforcer/enforcer.h"
 
 #include <limits>
 
 #include "glog/logging.h"
-#include "heyp/host-agent/enforcer-impl/iptables.h"
+#include "heyp/host-agent/linux-enforcer/iptables.h"
 #include "heyp/proto/heyp.pb.h"
 
 namespace heyp {

@@ -1,5 +1,5 @@
-#ifndef HEYP_HOST_AGENT_ENFORCER_IMPL_IPTABLES_CONTROLLER_H_
-#define HEYP_HOST_AGENT_ENFORCER_IMPL_IPTABLES_CONTROLLER_H_
+#ifndef HEYP_HOST_AGENT_LINUX_ENFORCER_IPTABLES_CONTROLLER_H_
+#define HEYP_HOST_AGENT_LINUX_ENFORCER_IPTABLES_CONTROLLER_H_
 
 #include <cstdint>
 #include <ostream>
@@ -7,7 +7,7 @@
 
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
-#include "heyp/host-agent/enforcer-impl/iptables.h"
+#include "heyp/host-agent/linux-enforcer/iptables.h"
 
 namespace heyp {
 namespace iptables {
@@ -66,4 +66,4 @@ void AddRuleLinesToAdd(absl::string_view dev, const SettingBatch& batch,
 }  // namespace iptables
 }  // namespace heyp
 
-#endif  // HEYP_HOST_AGENT_ENFORCER_IMPL_IPTABLES_CONTROLLER_H_
+#endif  // HEYP_HOST_AGENT_LINUX_ENFORCER_IPTABLES_CONTROLLER_H_

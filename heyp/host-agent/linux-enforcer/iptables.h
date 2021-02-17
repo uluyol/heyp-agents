@@ -18,8 +18,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef HEYP_HOST_AGENT_ENFORCER_IMPL_IPTABLES_H_
-#define HEYP_HOST_AGENT_ENFORCER_IMPL_IPTABLES_H_
+#ifndef HEYP_HOST_AGENT_LINUX_ENFORCER_IPTABLES_H_
+#define HEYP_HOST_AGENT_LINUX_ENFORCER_IPTABLES_H_
 
 #include <memory>
 #include <string>
@@ -145,4 +145,4 @@ class Runner {
 }  // namespace iptables
 }  // namespace heyp
 
-#endif  // HEYP_HOST_AGENT_ENFORCER_IMPL_IPTABLES_H_
+#endif  // HEYP_HOST_AGENT_LINUX_ENFORCER_IPTABLES_H_

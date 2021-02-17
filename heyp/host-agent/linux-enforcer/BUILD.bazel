@@ -1,9 +1,9 @@
 load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
 
 cc_library(
-    name = "tc",
-    srcs = ["tc.cc"],
-    hdrs = ["tc.h"],
+    name = "enforcer",
+    srcs = ["enforcer.cc"],
+    hdrs = ["enforcer.h"],
     visibility = ["//heyp/host-agent:__subpackages__"],
     deps = [
         ":iptables-controller",
