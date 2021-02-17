@@ -90,6 +90,8 @@ class MockHostEnforcer : public HostEnforcer {
               (const FlowStateProvider& flow_state_provider,
                const proto::AllocBundle& bundle),
               (override));
+
+  MOCK_METHOD(bool, IsLopri, (const proto::FlowMarker& flow), (override));
 };
 
 std::unique_ptr<FlowAggregator> MakeFlowAggregator() {

@@ -9,4 +9,6 @@ void NopHostEnforcer::EnforceAllocs(const FlowStateProvider& flow_state_provider
   LOG(INFO) << "NopHostEnforcer: got alloc to enforce (ignored)";
 }
 
+bool NopHostEnforcer::IsLopri(const proto::FlowMarker& flow) { return false; }
+
 }  // namespace heyp

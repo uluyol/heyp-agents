@@ -159,7 +159,6 @@ struct FlowFormatter {
 
 }  // namespace
 
-// TODO: uh rate limit
 absl::StatusOr<proto::TestCompareMetrics> HostAgentOSTester::Run() {
   std::vector<std::unique_ptr<HostWorker>> workers;
 

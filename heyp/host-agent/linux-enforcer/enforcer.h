@@ -28,7 +28,6 @@ MatchedHostFlows ExpandDestIntoHostsSinglePri(
     const StaticDCMapper* dc_mapper, const FlowStateProvider& flow_state_provider,
     const proto::FlowAlloc& flow_alloc);
 
-// TODO: track hipri/lopri
 class LinuxHostEnforcer : public HostEnforcer {
  public:
   static std::unique_ptr<LinuxHostEnforcer> Create(
@@ -39,6 +38,9 @@ class LinuxHostEnforcer : public HostEnforcer {
   virtual absl::Status ResetDeviceConfig() = 0;
 
   // Inherited from HostEnforcer
+  //
+  // virtual bool IsLopri(const proto::FlowMarker& flow) = 0;
+  //
   // void EnforceAllocs(const FlowStateProvider& flow_state_provider,
   //                   const proto::AllocBundle& bundle) = 0;
 };

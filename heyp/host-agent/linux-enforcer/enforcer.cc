@@ -65,6 +65,8 @@ class LinuxHostEnforcerImpl : public LinuxHostEnforcer {
   void EnforceAllocs(const FlowStateProvider &flow_state_provider,
                      const proto::AllocBundle &bundle) override;
 
+  bool IsLopri(const proto::FlowMarker &flow) override;
+
  private:
   struct FlowSys {
     struct Priority {
@@ -269,6 +271,11 @@ void LinuxHostEnforcerImpl::EnforceAllocs(const FlowStateProvider &flow_state_pr
       continue;
     }
   }
+}
+
+bool LinuxHostEnforcerImpl::IsLopri(const proto::FlowMarker &flow) {
+  return ipt_controller_.DscpFor(flow.src_port(), flow.dst_port(), flow.dst_addr(),
+                                 kDscpHipri) == kDscpLopri;
 }
 
 }  // namespace
