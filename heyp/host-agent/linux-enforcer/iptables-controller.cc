@@ -141,6 +141,12 @@ absl::Status Controller::CommitChanges() {
   return absl::OkStatus();
 }
 
+absl::string_view Controller::DscpFor(uint16_t src_port, uint16_t dst_port,
+                                      absl::string_view dst_addr,
+                                      absl::string_view default_dscp) {
+  return SettingsFindDscp(applied_, src_port, dst_port, dst_addr, default_dscp);
+}
+
 void AddRuleLinesToDelete(absl::string_view dev, const SettingBatch& batch,
                           absl::Cord& lines) {
   std::string src_port_match;
@@ -187,6 +193,46 @@ void AddRuleLinesToAdd(absl::string_view dev, const SettingBatch& batch,
         "-A OUTPUT -o %s -p tcp -m tcp -d %s%s%s -j DSCP --set-dscp-class %s\n", dev,
         s.dst_addr, src_port_match, dst_port_match, s.dscp));
   }
+}
+
+absl::string_view SettingsFindDscp(const SettingBatch& batch, uint16_t src_port,
+                                   uint16_t dst_port, absl::string_view dst_addr,
+                                   absl::string_view default_dscp) {
+  // First search for an exact entry
+  Setting to_find{
+      .src_port = src_port,
+      .dst_port = dst_port,
+      .dst_addr = std::string(dst_addr),
+  };
+  auto it = std::lower_bound(batch.settings.begin(), batch.settings.end(), to_find);
+  if (it != batch.settings.end() && it->src_port == src_port &&
+      it->dst_port == dst_port && it->dst_addr == dst_addr) {
+    return it->dscp;
+  }
+  // Look for an entry with no src_port
+  to_find.src_port = 0;
+  it = std::lower_bound(batch.settings.begin(), batch.settings.end(), to_find);
+  if (it != batch.settings.end() && it->src_port == 0 && it->dst_port == dst_port &&
+      it->dst_addr == dst_addr) {
+    return it->dscp;
+  }
+  // Look for an entry with no dst_port
+  to_find.src_port = src_port;
+  to_find.dst_port = 0;
+  it = std::lower_bound(batch.settings.begin(), batch.settings.end(), to_find);
+  if (it != batch.settings.end() && it->src_port == src_port && it->dst_port == 0 &&
+      it->dst_addr == dst_addr) {
+    return it->dscp;
+  }
+  // Look for an entry with no src_port or dst_port
+  to_find.src_port = 0;
+  it = std::lower_bound(batch.settings.begin(), batch.settings.end(), to_find);
+  if (it != batch.settings.end() && it->src_port == 0 && it->dst_port == 0 &&
+      it->dst_addr == dst_addr) {
+    return it->dscp;
+  }
+
+  return default_dscp;
 }
 
 }  // namespace iptables

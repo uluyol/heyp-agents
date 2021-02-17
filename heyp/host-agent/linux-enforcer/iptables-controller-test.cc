@@ -124,7 +124,7 @@ std::string CleanExpectedLines(absl::string_view lines) {
   return absl::StrJoin(lines_vec, "\n");
 }
 
-TEST(AddRuleLinesToDelete, Basic) {
+TEST(AddRuleLinesToDeleteTest, Basic) {
   absl::Cord lines;
   AddRuleLinesToDelete(
       "eth5",
@@ -161,7 +161,7 @@ TEST(AddRuleLinesToDelete, Basic) {
   EXPECT_EQ(lines, CleanExpectedLines(expected_lines));
 }
 
-TEST(AddRuleLinesToAdd, Basic) {
+TEST(AddRuleLinesToAddTest, Basic) {
   absl::Cord lines;
   AddRuleLinesToAdd(
       "eth5",
@@ -196,6 +196,37 @@ TEST(AddRuleLinesToAdd, Basic) {
   )";
 
   EXPECT_EQ(lines, CleanExpectedLines(expected_lines));
+}
+
+TEST(SettingsFindDscpTest, Basic) {
+  SettingBatch applied{{
+      {.dst_addr = "10.0.0.2", .class_id = "2:99", .dscp = "AF41"},
+      {.dst_port = 555, .dst_addr = "10.0.0.1", .class_id = "2:100", .dscp = "AF31"},
+      {.src_port = 20, .dst_addr = "10.0.0.1", .class_id = "2:101", .dscp = "AF41"},
+      {.src_port = 12,
+       .dst_port = 20,
+       .dst_addr = "127.0.0.1",
+       .class_id = "2:102",
+       .dscp = "AF41"},
+      {.src_port = 13,
+       .dst_port = 20,
+       .dst_addr = "127.0.0.1",
+       .class_id = "2:103",
+       .dscp = "AF31"},
+  }};
+
+  std::sort(applied.settings.begin(), applied.settings.end());
+
+  EXPECT_EQ(SettingsFindDscp(applied, 999, 888, "10.0.0.2", "BAD"), "AF41");
+  EXPECT_EQ(SettingsFindDscp(applied, 999, 555, "10.0.0.1", "BAD"), "AF31");
+  EXPECT_EQ(SettingsFindDscp(applied, 999, 556, "10.0.0.1", "BAD"), "BAD");
+  EXPECT_EQ(SettingsFindDscp(applied, 20, 1, "10.0.0.1", "BAD"), "AF41");
+  EXPECT_EQ(SettingsFindDscp(applied, 21, 20, "10.0.0.1", "BAD"), "BAD");
+  EXPECT_EQ(SettingsFindDscp(applied, 12, 20, "127.0.0.1", "BAD"), "AF41");
+  EXPECT_EQ(SettingsFindDscp(applied, 12, 21, "127.0.0.1", "BAD"), "BAD");
+  EXPECT_EQ(SettingsFindDscp(applied, 13, 20, "127.0.0.1", "BAD"), "AF31");
+  EXPECT_EQ(SettingsFindDscp(applied, 13, 21, "127.0.0.1", "BAD"), "BAD");
+  EXPECT_EQ(SettingsFindDscp(applied, 13, 20, "127.0.0.2", "BAD"), "BAD");
 }
 
 }  // namespace

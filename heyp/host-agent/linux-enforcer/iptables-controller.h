@@ -45,6 +45,9 @@ class Controller {
   void Stage(SettingBatch::Setting setting);
   absl::Status CommitChanges();
 
+  absl::string_view DscpFor(uint16_t src_port, uint16_t dst_port,
+                            absl::string_view dst_addr, absl::string_view default_dscp);
+
  private:
   const std::string dev_;
   std::unique_ptr<Runner> runner_;
@@ -62,6 +65,10 @@ void AddRuleLinesToDelete(absl::string_view dev, const SettingBatch& batch,
                           absl::Cord& lines);
 void AddRuleLinesToAdd(absl::string_view dev, const SettingBatch& batch,
                        absl::Cord& lines);
+
+absl::string_view SettingsFindDscp(const SettingBatch& batch, uint16_t src_port,
+                                   uint16_t dst_port, absl::string_view dst_addr,
+                                   absl::string_view default_dscp);
 
 }  // namespace iptables
 }  // namespace heyp
