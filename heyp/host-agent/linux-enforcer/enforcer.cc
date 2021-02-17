@@ -51,14 +51,14 @@ MatchedHostFlows ExpandDestIntoHostsSinglePri(
   return matched;
 }
 
-TcHostEnforcer::TcHostEnforcer(absl::string_view device,
-                               const MatchHostFlowsFunc &match_host_flows_fn)
+LinuxHostEnforcer::LinuxHostEnforcer(absl::string_view device,
+                                     const MatchHostFlowsFunc &match_host_flows_fn)
     : device_(device),
       match_host_flows_fn_(match_host_flows_fn),
       ipt_controller_(device),
       next_class_id_(2) {}
 
-absl::Status TcHostEnforcer::ResetDeviceConfig() {
+absl::Status LinuxHostEnforcer::ResetDeviceConfig() {
   auto st = ResetTrafficControl();
   if (!st.ok()) {
     return absl::Status(st.code(),
@@ -72,9 +72,9 @@ absl::Status TcHostEnforcer::ResetDeviceConfig() {
   return absl::OkStatus();
 }
 
-absl::Status TcHostEnforcer::ResetIptables() { return ipt_controller_.Clear(); }
+absl::Status LinuxHostEnforcer::ResetIptables() { return ipt_controller_.Clear(); }
 
-absl::Status TcHostEnforcer::ResetTrafficControl() {
+absl::Status LinuxHostEnforcer::ResetTrafficControl() {
   absl::Status st = tc_caller_.Call({"-j", "qdisc", "delete", "dev", device_, "root"});
   st.Update(tc_caller_.Call({"-j", "qdisc", "add", "dev", device_, "root", "handle",
                              "1:", "htb", "default", "0"}));
@@ -84,9 +84,9 @@ absl::Status TcHostEnforcer::ResetTrafficControl() {
 static constexpr char kDscpHipri[] = "AF41";
 static constexpr char kDscpLopri[] = "AF31";
 
-void TcHostEnforcer::StageIptablesForFlow(const MatchedHostFlows::Vec &matched_flows,
-                                          const std::string &dscp,
-                                          const std::string &class_id) {
+void LinuxHostEnforcer::StageIptablesForFlow(const MatchedHostFlows::Vec &matched_flows,
+                                             const std::string &dscp,
+                                             const std::string &class_id) {
   if (matched_flows.empty()) {
     return;
   }
@@ -105,8 +105,8 @@ void TcHostEnforcer::StageIptablesForFlow(const MatchedHostFlows::Vec &matched_f
   }
 }
 
-absl::Status TcHostEnforcer::UpdateTrafficControlForFlow(int64_t rate_limit_bps,
-                                                         FlowSys::Priority &sys) {
+absl::Status LinuxHostEnforcer::UpdateTrafficControlForFlow(int64_t rate_limit_bps,
+                                                            FlowSys::Priority &sys) {
   double rate_limit_mbps = rate_limit_bps;
   rate_limit_mbps /= 1024.0 * 1024.0;
 
@@ -161,8 +161,8 @@ absl::Status TcHostEnforcer::UpdateTrafficControlForFlow(int64_t rate_limit_bps,
 //
 // 3. Reduce rate limits for appropriate (FG, QoS) pairs.
 //
-void TcHostEnforcer::EnforceAllocs(const FlowStateProvider &flow_state_provider,
-                                   const proto::AllocBundle &bundle) {
+void LinuxHostEnforcer::EnforceAllocs(const FlowStateProvider &flow_state_provider,
+                                      const proto::AllocBundle &bundle) {
   for (const proto::FlowAlloc &flow_alloc : bundle.flow_allocs()) {
     MatchedHostFlows matched = match_host_flows_fn_(flow_state_provider, flow_alloc);
     FlowSys &sys = sys_info_[flow_alloc.flow()];

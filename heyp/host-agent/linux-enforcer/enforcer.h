@@ -32,12 +32,13 @@ MatchedHostFlows ExpandDestIntoHostsSinglePri(
     const proto::FlowAlloc& flow_alloc);
 
 // TODO: track hipri/lopri
-class TcHostEnforcer : public HostEnforcer {
+class LinuxHostEnforcer : public HostEnforcer {
  public:
-  TcHostEnforcer(absl::string_view device, const MatchHostFlowsFunc& match_host_flows_fn);
+  LinuxHostEnforcer(absl::string_view device,
+                    const MatchHostFlowsFunc& match_host_flows_fn);
 
-  TcHostEnforcer(const TcHostEnforcer&) = delete;
-  TcHostEnforcer& operator=(const TcHostEnforcer&) = delete;
+  LinuxHostEnforcer(const LinuxHostEnforcer&) = delete;
+  LinuxHostEnforcer& operator=(const LinuxHostEnforcer&) = delete;
 
   absl::Status ResetDeviceConfig();
 
