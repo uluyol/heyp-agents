@@ -15,11 +15,8 @@ namespace bp = boost::process;
 
 namespace heyp {
 
-FlowTracker::FlowTracker(std::unique_ptr<DemandPredictor> demand_predictor,
-                         Config config)
-    : config_(config),
-      demand_predictor_(std::move(demand_predictor)),
-      next_seqnum_(0) {}
+FlowTracker::FlowTracker(std::unique_ptr<DemandPredictor> demand_predictor, Config config)
+    : config_(config), demand_predictor_(std::move(demand_predictor)), next_seqnum_(0) {}
 
 void FlowTracker::ForEachActiveFlow(
     absl::FunctionRef<void(absl::Time, const proto::FlowInfo &)> func) const {
@@ -208,8 +205,7 @@ void SSFlowStateReporter::MonitorDone() {
     proto::FlowMarker f;
     int64_t usage_bps = 0;
     int64_t cum_usage_bytes = 0;
-    auto status =
-        ParseLine(impl_->config.host_id, line, f, usage_bps, cum_usage_bytes);
+    auto status = ParseLine(impl_->config.host_id, line, f, usage_bps, cum_usage_bytes);
     if (!status.ok()) {
       LOG(ERROR) << "failed to parse done line: " << status;
       continue;
@@ -229,8 +225,8 @@ absl::Status SSFlowStateReporter::ReportState(
     absl::FunctionRef<bool(const proto::FlowMarker &)> is_lopri) {
   try {
     bp::ipstream out;
-    bp::child c(bp::search_path(impl_->config.ss_binary_name), "-i", "-t", "-n",
-                "-H", "-O", bp::std_out > out);
+    bp::child c(bp::search_path(impl_->config.ss_binary_name), "-i", "-t", "-n", "-H",
+                "-O", bp::std_out > out);
 
     absl::Time now = absl::Now();
     std::string line;
@@ -239,8 +235,7 @@ absl::Status SSFlowStateReporter::ReportState(
       proto::FlowMarker f;
       int64_t usage_bps = 0;
       int64_t cum_usage_bytes = 0;
-      auto status =
-          ParseLine(impl_->config.host_id, line, f, usage_bps, cum_usage_bytes);
+      auto status = ParseLine(impl_->config.host_id, line, f, usage_bps, cum_usage_bytes);
       if (!status.ok()) {
         return status;
       }
@@ -256,35 +251,31 @@ absl::Status SSFlowStateReporter::ReportState(
     impl_->flow_tracker->UpdateFlows(now, flow_updates);
     c.wait();
   } catch (const std::system_error &e) {
-    return absl::InternalError(
-        absl::StrCat("failed to start ss subprocess: ", e.what()));
+    return absl::InternalError(absl::StrCat("failed to start ss subprocess: ", e.what()));
   }
   return absl::OkStatus();
 }
 
-SSFlowStateReporter::SSFlowStateReporter(Config config,
-                                         FlowTracker *flow_tracker)
+SSFlowStateReporter::SSFlowStateReporter(Config config, FlowTracker *flow_tracker)
     : impl_(absl::WrapUnique(new Impl{
           .config = config,
           .flow_tracker = flow_tracker,
           .is_dying = false,
       })) {}
 
-absl::StatusOr<std::unique_ptr<SSFlowStateReporter>>
-SSFlowStateReporter::Create(Config config, FlowTracker *flow_tracker) {
+absl::StatusOr<std::unique_ptr<SSFlowStateReporter>> SSFlowStateReporter::Create(
+    Config config, FlowTracker *flow_tracker) {
   // Sort addresses
   std::sort(config.my_addrs.begin(), config.my_addrs.end());
 
-  auto tracker =
-      absl::WrapUnique(new SSFlowStateReporter(config, flow_tracker));
+  auto tracker = absl::WrapUnique(new SSFlowStateReporter(config, flow_tracker));
 
   try {
-    bp::child c(bp::search_path(config.ss_binary_name), "-E", "-i", "-t", "-n",
-                "-H", "-O", bp::std_out > tracker->impl_->monitor_done_out);
+    bp::child c(bp::search_path(config.ss_binary_name), "-E", "-i", "-t", "-n", "-H",
+                "-O", bp::std_out > tracker->impl_->monitor_done_out);
     tracker->impl_->monitor_done_proc = std::move(c);
   } catch (const std::system_error &e) {
-    return absl::UnknownError(
-        absl::StrCat("failed to start ss subprocess: ", e.what()));
+    return absl::UnknownError(absl::StrCat("failed to start ss subprocess: ", e.what()));
   }
 
   tracker->impl_->monitor_done_thread =

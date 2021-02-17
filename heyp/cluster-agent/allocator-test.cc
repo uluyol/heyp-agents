@@ -26,14 +26,13 @@ proto::AllocBundle Bundle(const AllocSet& alloc_set) {
 }
 
 TEST(BweClusterAllocatorTest, Basic) {
-  auto alloc =
-      ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+  auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
                                  type: BWE
                                  enable_burstiness: false
                                  enable_bonus: true
                                  oversub_factor: 1.0
                                )"),
-                               ParseTextProto<proto::AllocBundle>(R"(
+                                        ParseTextProto<proto::AllocBundle>(R"(
                                  flow_allocs {
                                    flow {
                                      src_dc: "east-us"
@@ -137,14 +136,13 @@ TEST(BweClusterAllocatorTest, Basic) {
 }
 
 TEST(BweClusterAllocatorTest, WithOversub) {
-  auto alloc =
-      ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+  auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
                                  type: BWE
                                  enable_burstiness: false
                                  enable_bonus: true
                                  oversub_factor: 1.5
                                )"),
-                               ParseTextProto<proto::AllocBundle>(R"(
+                                        ParseTextProto<proto::AllocBundle>(R"(
                                  flow_allocs {
                                    flow {
                                      src_dc: "east-us"
@@ -216,14 +214,13 @@ TEST(BweClusterAllocatorTest, WithOversub) {
 }
 
 TEST(BweClusterAllocatorTest, WithBonus) {
-  auto alloc =
-      ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+  auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
                                  type: BWE
                                  enable_burstiness: false
                                  enable_bonus: true
                                  oversub_factor: 1.0
                                )"),
-                               ParseTextProto<proto::AllocBundle>(R"(
+                                        ParseTextProto<proto::AllocBundle>(R"(
                                  flow_allocs {
                                    flow {
                                      src_dc: "east-us"
@@ -295,14 +292,13 @@ TEST(BweClusterAllocatorTest, WithBonus) {
 }
 
 TEST(BweClusterAllocatorTest, WithBurstiness) {
-  auto alloc =
-      ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+  auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
                                  type: BWE
                                  enable_burstiness: true
                                  enable_bonus: true
                                  oversub_factor: 1.0
                                )"),
-                               ParseTextProto<proto::AllocBundle>(R"(
+                                        ParseTextProto<proto::AllocBundle>(R"(
                                  flow_allocs {
                                    flow {
                                      src_dc: "east-us"
@@ -375,14 +371,13 @@ TEST(BweClusterAllocatorTest, WithBurstiness) {
 }
 
 TEST(BweClusterAllocatorTest, WithBurstinessAndCongestion) {
-  auto alloc =
-      ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+  auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
                                  type: BWE
                                  enable_burstiness: true
                                  enable_bonus: true
                                  oversub_factor: 1.0
                                )"),
-                               ParseTextProto<proto::AllocBundle>(R"(
+                                        ParseTextProto<proto::AllocBundle>(R"(
                                  flow_allocs {
                                    flow {
                                      src_dc: "east-us"
@@ -455,14 +450,13 @@ TEST(BweClusterAllocatorTest, WithBurstinessAndCongestion) {
 }
 
 TEST(BweClusterAllocatorTest, ZeroDemand) {
-  auto alloc =
-      ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+  auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
                                  type: BWE
                                  enable_burstiness: true
                                  enable_bonus: true
                                  oversub_factor: 1.1
                                )"),
-                               ParseTextProto<proto::AllocBundle>(R"(
+                                        ParseTextProto<proto::AllocBundle>(R"(
                                  flow_allocs {
                                    flow {
                                      src_dc: "east-us"
@@ -519,14 +513,13 @@ TEST(BweClusterAllocatorTest, ZeroDemand) {
 }
 
 TEST(BweClusterAllocatorTest, ZeroLimit) {
-  auto alloc =
-      ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+  auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
                                  type: BWE
                                  enable_burstiness: true
                                  enable_bonus: true
                                  oversub_factor: 1.1
                                )"),
-                               ParseTextProto<proto::AllocBundle>(R"(
+                                        ParseTextProto<proto::AllocBundle>(R"(
                                  flow_allocs {
                                    flow {
                                      src_dc: "east-us"
@@ -583,15 +576,14 @@ TEST(BweClusterAllocatorTest, ZeroLimit) {
 }
 
 TEST(HeypSigcomm20ClusterAllocatorTest, Basic) {
-  auto alloc =
-      ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+  auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
                                  type: HEYP_SIGCOMM20
                                  enable_burstiness: false
                                  enable_bonus: true
                                  oversub_factor: 1.0
                                  heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
                                )"),
-                               ParseTextProto<proto::AllocBundle>(R"(
+                                        ParseTextProto<proto::AllocBundle>(R"(
                                  flow_allocs {
                                    flow {
                                      src_dc: "east-us"
@@ -697,15 +689,14 @@ TEST(HeypSigcomm20ClusterAllocatorTest, Basic) {
 }
 
 TEST(HeypSigcomm20ClusterAllocatorTest, WithOversub) {
-  auto alloc =
-      ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+  auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
                                  type: HEYP_SIGCOMM20
                                  enable_burstiness: false
                                  enable_bonus: true
                                  oversub_factor: 1.5
                                  heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
                                )"),
-                               ParseTextProto<proto::AllocBundle>(R"(
+                                        ParseTextProto<proto::AllocBundle>(R"(
                                  flow_allocs {
                                    flow {
                                      src_dc: "east-us"
@@ -778,15 +769,14 @@ TEST(HeypSigcomm20ClusterAllocatorTest, WithOversub) {
 }
 
 TEST(HeypSigcomm20ClusterAllocatorTest, WithBonus) {
-  auto alloc =
-      ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+  auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
                                  type: HEYP_SIGCOMM20
                                  enable_burstiness: false
                                  enable_bonus: true
                                  oversub_factor: 1.0
                                  heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
                                )"),
-                               ParseTextProto<proto::AllocBundle>(R"(
+                                        ParseTextProto<proto::AllocBundle>(R"(
                                  flow_allocs {
                                    flow {
                                      src_dc: "east-us"
@@ -859,15 +849,14 @@ TEST(HeypSigcomm20ClusterAllocatorTest, WithBonus) {
 }
 
 TEST(HeypSigcomm20ClusterAllocatorTest, WithBurstiness) {
-  auto alloc =
-      ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+  auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
                                  type: HEYP_SIGCOMM20
                                  enable_burstiness: true
                                  enable_bonus: true
                                  oversub_factor: 1.0
                                  heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
                                )"),
-                               ParseTextProto<proto::AllocBundle>(R"(
+                                        ParseTextProto<proto::AllocBundle>(R"(
                                  flow_allocs {
                                    flow {
                                      src_dc: "east-us"
@@ -940,15 +929,14 @@ TEST(HeypSigcomm20ClusterAllocatorTest, WithBurstiness) {
 }
 
 TEST(HeypSigcomm20ClusterAllocatorTest, WithBurstinessAndCongestion) {
-  auto alloc =
-      ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+  auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
                                  type: HEYP_SIGCOMM20
                                  enable_burstiness: true
                                  enable_bonus: true
                                  oversub_factor: 1.0
                                  heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
                                )"),
-                               ParseTextProto<proto::AllocBundle>(R"(
+                                        ParseTextProto<proto::AllocBundle>(R"(
                                  flow_allocs {
                                    flow {
                                      src_dc: "east-us"
@@ -1021,15 +1009,14 @@ TEST(HeypSigcomm20ClusterAllocatorTest, WithBurstinessAndCongestion) {
 }
 
 TEST(HeypSigcomm20ClusterAllocatorTest, ZeroDemand) {
-  auto alloc =
-      ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+  auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
                                  type: HEYP_SIGCOMM20
                                  enable_burstiness: true
                                  enable_bonus: true
                                  oversub_factor: 1.1
                                  heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
                                )"),
-                               ParseTextProto<proto::AllocBundle>(R"(
+                                        ParseTextProto<proto::AllocBundle>(R"(
                                  flow_allocs {
                                    flow {
                                      src_dc: "east-us"
@@ -1086,15 +1073,14 @@ TEST(HeypSigcomm20ClusterAllocatorTest, ZeroDemand) {
 }
 
 TEST(HeypSigcomm20ClusterAllocatorTest, ZeroLimit) {
-  auto alloc =
-      ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+  auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
                                  type: HEYP_SIGCOMM20
                                  enable_burstiness: true
                                  enable_bonus: true
                                  oversub_factor: 1.1
                                  heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
                                )"),
-                               ParseTextProto<proto::AllocBundle>(R"(
+                                        ParseTextProto<proto::AllocBundle>(R"(
                                  flow_allocs {
                                    flow {
                                      src_dc: "east-us"
@@ -1151,15 +1137,14 @@ TEST(HeypSigcomm20ClusterAllocatorTest, ZeroLimit) {
 }
 
 TEST(HeypSigcomm20ClusterAllocatorTest, AllLOPRI) {
-  auto alloc =
-      ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+  auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
                                  type: HEYP_SIGCOMM20
                                  enable_burstiness: true
                                  enable_bonus: true
                                  oversub_factor: 1.1
                                  heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
                                )"),
-                               ParseTextProto<proto::AllocBundle>(R"(
+                                        ParseTextProto<proto::AllocBundle>(R"(
                                  flow_allocs {
                                    flow {
                                      src_dc: "east-us"
@@ -1327,15 +1312,14 @@ class LOPRICongestionInfoGenerator {
 };
 
 TEST(HeypSigcomm20ClusterAllocatorTest, BoundedLOPRICongestion) {
-  auto alloc =
-      ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+  auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
                                  type: HEYP_SIGCOMM20
                                  enable_burstiness: true
                                  enable_bonus: true
                                  oversub_factor: 1.1
                                  heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
                                )"),
-                               ParseTextProto<proto::AllocBundle>(R"(
+                                        ParseTextProto<proto::AllocBundle>(R"(
                                  flow_allocs {
                                    flow {
                                      src_dc: "east-us"
@@ -1353,9 +1337,9 @@ TEST(HeypSigcomm20ClusterAllocatorTest, BoundedLOPRICongestion) {
     expected_max_lopri_usage = 0;
     result = Bundle(alloc_set);
     for (const proto::FlowAlloc& alloc : result.flow_allocs()) {
-      expected_max_lopri_usage += std::min(
-          LOPRICongestionInfoGenerator::DemandOf(alloc.flow().host_id()),
-          alloc.lopri_rate_limit_bps());
+      expected_max_lopri_usage +=
+          std::min(LOPRICongestionInfoGenerator::DemandOf(alloc.flow().host_id()),
+                   alloc.lopri_rate_limit_bps());
     }
   };
 
@@ -1372,9 +1356,8 @@ TEST(HeypSigcomm20ClusterAllocatorTest, BoundedLOPRICongestion) {
   alloc->Reset();
   alloc->AddInfo(T(2), info_gen.AddUsage(16000, 5000));
   update_bundle_and_collect(alloc->GetAllocs());
-  EXPECT_THAT(
-      expected_max_lopri_usage,
-      testing::AllOf(testing::Ge(45000), testing::Le(kTotalOversub * 40000)));
+  EXPECT_THAT(expected_max_lopri_usage,
+              testing::AllOf(testing::Ge(45000), testing::Le(kTotalOversub * 40000)));
 
   alloc->Reset();
   alloc->AddInfo(T(3), info_gen.AddUsage(16000, 4000));
@@ -1399,15 +1382,14 @@ TEST(HeypSigcomm20ClusterAllocatorTest, BoundedLOPRICongestion) {
 }
 
 TEST(HeypSigcomm20ClusterAllocatorTest, UnboundedLOPRICongestion) {
-  auto alloc =
-      ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+  auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
                                  type: HEYP_SIGCOMM20
                                  enable_burstiness: true
                                  enable_bonus: true
                                  oversub_factor: 1.1
                                  heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
                                )"),
-                               ParseTextProto<proto::AllocBundle>(R"(
+                                        ParseTextProto<proto::AllocBundle>(R"(
                                  flow_allocs {
                                    flow {
                                      src_dc: "east-us"
@@ -1425,9 +1407,9 @@ TEST(HeypSigcomm20ClusterAllocatorTest, UnboundedLOPRICongestion) {
     expected_max_lopri_usage = 0;
     result = Bundle(alloc_set);
     for (const proto::FlowAlloc& alloc : result.flow_allocs()) {
-      expected_max_lopri_usage += std::min(
-          LOPRICongestionInfoGenerator::DemandOf(alloc.flow().host_id()),
-          alloc.lopri_rate_limit_bps());
+      expected_max_lopri_usage +=
+          std::min(LOPRICongestionInfoGenerator::DemandOf(alloc.flow().host_id()),
+                   alloc.lopri_rate_limit_bps());
     }
   };
 
@@ -1444,37 +1426,32 @@ TEST(HeypSigcomm20ClusterAllocatorTest, UnboundedLOPRICongestion) {
   alloc->Reset();
   alloc->AddInfo(T(2), info_gen.AddUsage(16000, 5000));
   update_bundle_and_collect(alloc->GetAllocs());
-  EXPECT_THAT(
-      expected_max_lopri_usage,
-      testing::AllOf(testing::Ge(45000), testing::Le(kTotalOversub * 40000)));
+  EXPECT_THAT(expected_max_lopri_usage,
+              testing::AllOf(testing::Ge(45000), testing::Le(kTotalOversub * 40000)));
 
   alloc->Reset();
   alloc->AddInfo(T(3), info_gen.AddUsage(16000, 4000));
   update_bundle_and_collect(alloc->GetAllocs());
-  EXPECT_THAT(
-      expected_max_lopri_usage,
-      testing::AllOf(testing::Ge(30000), testing::Le(kTotalOversub * 32000)));
+  EXPECT_THAT(expected_max_lopri_usage,
+              testing::AllOf(testing::Ge(30000), testing::Le(kTotalOversub * 32000)));
 
   alloc->Reset();
   alloc->AddInfo(T(4), info_gen.AddUsage(16000, 3000));
   update_bundle_and_collect(alloc->GetAllocs());
-  EXPECT_THAT(
-      expected_max_lopri_usage,
-      testing::AllOf(testing::Ge(24000), testing::Le(kTotalOversub * 24000)));
+  EXPECT_THAT(expected_max_lopri_usage,
+              testing::AllOf(testing::Ge(24000), testing::Le(kTotalOversub * 24000)));
 
   alloc->Reset();
   alloc->AddInfo(T(5), info_gen.AddUsage(16000, 2000));
   update_bundle_and_collect(alloc->GetAllocs());
-  EXPECT_THAT(
-      expected_max_lopri_usage,
-      testing::AllOf(testing::Ge(15000), testing::Le(kTotalOversub * 16000)));
+  EXPECT_THAT(expected_max_lopri_usage,
+              testing::AllOf(testing::Ge(15000), testing::Le(kTotalOversub * 16000)));
 
   alloc->Reset();
   alloc->AddInfo(T(6), info_gen.AddUsage(16000, 1000));
   update_bundle_and_collect(alloc->GetAllocs());
-  EXPECT_THAT(
-      expected_max_lopri_usage,
-      testing::AllOf(testing::Ge(5000), testing::Le(kTotalOversub * 8000)));
+  EXPECT_THAT(expected_max_lopri_usage,
+              testing::AllOf(testing::Ge(5000), testing::Le(kTotalOversub * 8000)));
 
   alloc->Reset();
   alloc->AddInfo(T(7), info_gen.AddUsage(16000, 500));

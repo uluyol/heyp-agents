@@ -9,9 +9,7 @@
 namespace heyp {
 namespace {
 
-MATCHER_P(EqFlowNoId, other, "") {
-  return IsSameFlow(arg, other, {.cmp_seqnum = false});
-}
+MATCHER_P(EqFlowNoId, other, "") { return IsSameFlow(arg, other, {.cmp_seqnum = false}); }
 
 TEST(FlowTrackerTest, RaceNewFlowBeforeOldFlowFinalized) {
   FlowTracker tracker(
@@ -25,9 +23,7 @@ TEST(FlowTrackerTest, RaceNewFlowBeforeOldFlowFinalized) {
   });
 
   const absl::Time epoch = absl::Now();
-  auto time = [epoch](int64_t sec) -> absl::Time {
-    return epoch + absl::Seconds(sec);
-  };
+  auto time = [epoch](int64_t sec) -> absl::Time { return epoch + absl::Seconds(sec); };
 
   tracker.UpdateFlows(time(0), {{flow, 0, 100'000, FlowPri::kHi}});
   tracker.UpdateFlows(time(1), {{flow, 0, 200'000, FlowPri::kHi}});
@@ -61,16 +57,14 @@ TEST(FlowTrackerTest, RaceNewFlowBeforeOldFlowFinalized) {
   tracker.FinalizeFlows(time(6), {{flow, 0, 500'000}});
 
   times_called = 0;
-  tracker.ForEachActiveFlow(
-      [&](absl::Time, const proto::FlowInfo&) { ++times_called; });
+  tracker.ForEachActiveFlow([&](absl::Time, const proto::FlowInfo&) { ++times_called; });
 
   EXPECT_THAT(times_called, testing::Eq(0));
 }
 
 TEST(SSFlowStateReporterTest, BadSSBinary) {
   FlowTracker tracker(
-      absl::make_unique<BweDemandPredictor>(absl::Seconds(240), 1.4, 8'000),
-      {});
+      absl::make_unique<BweDemandPredictor>(absl::Seconds(240), 1.4, 8'000), {});
 
   EXPECT_FALSE(SSFlowStateReporter::Create(
                    {.ss_binary_name = "__DOES_NOT_EXIST_ANYWHERE__"}, &tracker)
@@ -79,8 +73,7 @@ TEST(SSFlowStateReporterTest, BadSSBinary) {
 
 TEST(SSFlowStateReporterTest, CollectsExpectedOutput) {
   FlowTracker tracker(
-      absl::make_unique<BweDemandPredictor>(absl::Seconds(240), 1.4, 8'000),
-      {});
+      absl::make_unique<BweDemandPredictor>(absl::Seconds(240), 1.4, 8'000), {});
 
   auto reporter_or = SSFlowStateReporter::Create(
       {
@@ -94,36 +87,34 @@ TEST(SSFlowStateReporterTest, CollectsExpectedOutput) {
 
   std::unique_ptr<SSFlowStateReporter> reporter = std::move(*reporter_or);
   int i = 0;
-  ASSERT_THAT(reporter->ReportState(
-                  [&i](const proto::FlowMarker&) { return (++i % 2) == 0; }),
-              testing::Property(&absl::Status::ok, testing::IsTrue()));
+  ASSERT_THAT(
+      reporter->ReportState([&i](const proto::FlowMarker&) { return (++i % 2) == 0; }),
+      testing::Property(&absl::Status::ok, testing::IsTrue()));
 
   constexpr absl::Duration kMaxWaitDur = absl::Seconds(2);
   absl::Time start = absl::Now();
   bool saw_closing = false;
   while (!saw_closing && absl::Now() - start < kMaxWaitDur) {
-    absl::flat_hash_map<proto::FlowMarker, std::pair<int64_t, int64_t>,
-                        HashHostFlowNoId, EqHostFlowNoId>
+    absl::flat_hash_map<proto::FlowMarker, std::pair<int64_t, int64_t>, HashHostFlowNoId,
+                        EqHostFlowNoId>
         active_usage_bps_cum_bytes;
     tracker.ForEachActiveFlow(
-        [&active_usage_bps_cum_bytes](absl::Time time,
-                                      const proto::FlowInfo& info) {
+        [&active_usage_bps_cum_bytes](absl::Time time, const proto::FlowInfo& info) {
           active_usage_bps_cum_bytes[info.flow()] = {info.ewma_usage_bps(),
                                                      info.cum_usage_bytes()};
         });
 
-    absl::flat_hash_map<proto::FlowMarker, std::pair<int64_t, int64_t>,
-                        HashHostFlowNoId, EqHostFlowNoId>
+    absl::flat_hash_map<proto::FlowMarker, std::pair<int64_t, int64_t>, HashHostFlowNoId,
+                        EqHostFlowNoId>
         dead_usage_bps_cum_bytes;
-    tracker.ForEachFlow(
-        [&dead_usage_bps_cum_bytes, &active_usage_bps_cum_bytes, &saw_closing](
-            absl::Time time, const proto::FlowInfo& info) {
-          if (!active_usage_bps_cum_bytes.contains(info.flow())) {
-            dead_usage_bps_cum_bytes[info.flow()] = {info.ewma_usage_bps(),
-                                                     info.cum_usage_bytes()};
-            saw_closing = true;
-          }
-        });
+    tracker.ForEachFlow([&dead_usage_bps_cum_bytes, &active_usage_bps_cum_bytes,
+                         &saw_closing](absl::Time time, const proto::FlowInfo& info) {
+      if (!active_usage_bps_cum_bytes.contains(info.flow())) {
+        dead_usage_bps_cum_bytes[info.flow()] = {info.ewma_usage_bps(),
+                                                 info.cum_usage_bytes()};
+        saw_closing = true;
+      }
+    });
 
     const proto::FlowMarker marker1 = ProtoFlowMarker({
         .src_addr = "140.197.113.99",
@@ -142,24 +133,22 @@ TEST(SSFlowStateReporterTest, CollectsExpectedOutput) {
     });
 
     if (active_usage_bps_cum_bytes.size() == 1) {
-      ASSERT_THAT(
-          active_usage_bps_cum_bytes,
-          testing::UnorderedElementsAre(testing::Pair(
-              EqFlowNoId(marker2),
-              testing::Pair(testing::Eq(999'999'999), testing::Eq(9999)))));
+      ASSERT_THAT(active_usage_bps_cum_bytes,
+                  testing::UnorderedElementsAre(testing::Pair(
+                      EqFlowNoId(marker2),
+                      testing::Pair(testing::Eq(999'999'999), testing::Eq(9999)))));
       ASSERT_THAT(dead_usage_bps_cum_bytes,
                   testing::UnorderedElementsAre(testing::Pair(
-                      EqFlowNoId(marker1), testing::Pair(testing::Ge(1'358'943),
-                                                         testing::Eq(4140)))));
+                      EqFlowNoId(marker1),
+                      testing::Pair(testing::Ge(1'358'943), testing::Eq(4140)))));
     } else {
-      ASSERT_THAT(active_usage_bps_cum_bytes,
-                  testing::UnorderedElementsAre(
-                      testing::Pair(EqFlowNoId(marker1),
-                                    testing::Pair(testing::Eq(458'943),
-                                                  testing::Eq(240))),
-                      testing::Pair(EqFlowNoId(marker2),
-                                    testing::Pair(testing::Eq(999'999'999),
-                                                  testing::Eq(9999)))));
+      ASSERT_THAT(
+          active_usage_bps_cum_bytes,
+          testing::UnorderedElementsAre(
+              testing::Pair(EqFlowNoId(marker1),
+                            testing::Pair(testing::Eq(458'943), testing::Eq(240))),
+              testing::Pair(EqFlowNoId(marker2),
+                            testing::Pair(testing::Eq(999'999'999), testing::Eq(9999)))));
       ASSERT_THAT(dead_usage_bps_cum_bytes, testing::IsEmpty());
     }
   }

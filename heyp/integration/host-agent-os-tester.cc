@@ -34,8 +34,7 @@ proto::FlowMarker MarkerOf(const HostWorker::Flow& f) {
 
 class InfiniteDemandProvider : public FlowStateProvider {
  public:
-  explicit InfiniteDemandProvider(
-      const std::vector<HostWorker::Flow>& all_flows) {
+  explicit InfiniteDemandProvider(const std::vector<HostWorker::Flow>& all_flows) {
     constexpr int64_t kMaxBps = 10'000'000'000;
 
     for (const HostWorker::Flow& f : all_flows) {
@@ -48,16 +47,15 @@ class InfiniteDemandProvider : public FlowStateProvider {
   }
 
   void ForEachActiveFlow(
-      absl::FunctionRef<void(absl::Time, const proto::FlowInfo&)> func)
-      const override {
+      absl::FunctionRef<void(absl::Time, const proto::FlowInfo&)> func) const override {
     absl::Time now = absl::Now();
     for (const proto::FlowInfo& info : infos_) {
       func(now, info);
     }
   }
 
-  void ForEachFlow(absl::FunctionRef<void(absl::Time, const proto::FlowInfo&)>
-                       func) const override {
+  void ForEachFlow(
+      absl::FunctionRef<void(absl::Time, const proto::FlowInfo&)> func) const override {
     absl::Time now = absl::Now();
     for (const proto::FlowInfo& info : infos_) {
       func(now, info);
@@ -73,9 +71,8 @@ class EasyEnforcer {
   explicit EasyEnforcer(const std::vector<HostWorker::Flow>& all_flows)
       : demand_provider_(all_flows) {}
 
-  void UpdateLimits(
-      const std::vector<std::pair<HostWorker::Flow, int64_t>>& limits,
-      const std::string& label, proto::TestCompareMetrics* metrics) {
+  void UpdateLimits(const std::vector<std::pair<HostWorker::Flow, int64_t>>& limits,
+                    const std::string& label, proto::TestCompareMetrics* metrics) {
     proto::AllocBundle b;
     for (const auto& flow_limit_pair : limits) {
       proto::FlowAlloc* a = b.add_flow_allocs();
@@ -83,8 +80,7 @@ class EasyEnforcer {
       a->set_hipri_rate_limit_bps(flow_limit_pair.second);
 
       auto m = metrics->add_metrics();
-      m->set_name(
-          absl::StrCat(flow_limit_pair.first.name, "/", label, "/want"));
+      m->set_name(absl::StrCat(flow_limit_pair.first.name, "/", label, "/want"));
       m->set_value(flow_limit_pair.second);
     }
     enforcer_.EnforceAllocs(demand_provider_, b);
@@ -104,8 +100,7 @@ class RateLimitPicker {
 
   void Pick(std::vector<std::pair<HostWorker::Flow, int64_t>>& limits) {
     for (int i = 0; i < limits.size(); ++i) {
-      limits[i].second =
-          RoundVal(absl::Uniform(gen_, max_bps_ / 100, max_bps_));
+      limits[i].second = RoundVal(absl::Uniform(gen_, max_bps_ / 100, max_bps_));
     }
   }
 
@@ -131,8 +126,8 @@ struct HostFlow {
 
 struct FlowFormatter {
   void operator()(std::string* out, const HostWorker::Flow& f) const {
-    out->append(absl::StrFormat("Flow %s: port %d -> port %d", f.name,
-                                f.src_port, f.dst_port));
+    out->append(
+        absl::StrFormat("Flow %s: port %d -> port %d", f.name, f.src_port, f.dst_port));
   }
 };
 
@@ -171,15 +166,13 @@ absl::StatusOr<proto::TestCompareMetrics> HostAgentOSTester::Run() {
     if (!init_status.ok()) {
       status.Update(init_status);
     } else {
-      std::copy(out_flows.begin(), out_flows.end(),
-                std::back_inserter(all_flows));
+      std::copy(out_flows.begin(), out_flows.end(), std::back_inserter(all_flows));
     }
   }
 
   absl::SleepFor(absl::Milliseconds(100));
 
-  LOG(INFO) << "initalized flows:\n"
-            << absl::StrJoin(all_flows, "\n", FlowFormatter());
+  LOG(INFO) << "initalized flows:\n" << absl::StrJoin(all_flows, "\n", FlowFormatter());
 
   proto::TestCompareMetrics metrics;
   if (status.ok()) {
@@ -190,8 +183,7 @@ absl::StatusOr<proto::TestCompareMetrics> HostAgentOSTester::Run() {
       all_flows_limits.push_back({f, 0});
     }
     limit_picker.Pick(all_flows_limits);
-    enforcer.UpdateLimits(all_flows_limits, absl::StrCat("step = ", 0),
-                          &metrics);
+    enforcer.UpdateLimits(all_flows_limits, absl::StrCat("step = ", 0), &metrics);
 
     for (auto& w : workers) {
       w->Go();
@@ -209,8 +201,7 @@ absl::StatusOr<proto::TestCompareMetrics> HostAgentOSTester::Run() {
       }
       ++step;
       limit_picker.Pick(all_flows_limits);
-      enforcer.UpdateLimits(all_flows_limits, absl::StrCat("step = ", step),
-                            &metrics);
+      enforcer.UpdateLimits(all_flows_limits, absl::StrCat("step = ", step), &metrics);
     }
   }
 

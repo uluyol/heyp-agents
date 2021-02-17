@@ -63,12 +63,11 @@ class HostWorker {
   };
 
   absl::Mutex mu_;
-  absl::flat_hash_map<std::string, CounterAndBps> measurements_
-      ABSL_GUARDED_BY(mu_);
+  absl::flat_hash_map<std::string, CounterAndBps> measurements_ ABSL_GUARDED_BY(mu_);
   std::vector<int> worker_fds_ ABSL_GUARDED_BY(mu_);
   std::vector<std::thread> worker_threads_ ABSL_GUARDED_BY(mu_);
-  absl::flat_hash_map<std::string, std::unique_ptr<std::atomic<int64_t>>>
-      counters_ ABSL_GUARDED_BY(mu_);
+  absl::flat_hash_map<std::string, std::unique_ptr<std::atomic<int64_t>>> counters_
+      ABSL_GUARDED_BY(mu_);
 
   std::atomic<int64_t> *GetCounter(const std::string &name)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(mu_);

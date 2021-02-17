@@ -28,10 +28,11 @@ proto::AggInfo ChildrenWithDemandsAndPri(
 }
 
 template <bool StateToIncrease>
-std::vector<bool> GreedyAssignToMinimizeGapWrapper(
-    proto::AggInfo demands, const std::vector<bool> initial_lopri,
-    std::vector<size_t> sorted_by_demand, int64_t cur_demand,
-    int64_t want_demand) {
+std::vector<bool> GreedyAssignToMinimizeGapWrapper(proto::AggInfo demands,
+                                                   const std::vector<bool> initial_lopri,
+                                                   std::vector<size_t> sorted_by_demand,
+                                                   int64_t cur_demand,
+                                                   int64_t want_demand) {
   std::vector<bool> lopri_children = initial_lopri;
   GreedyAssignToMinimizeGap<StateToIncrease>(
       {
@@ -49,13 +50,11 @@ TEST(GreedyAssignToMinimizeGapTest, Directionality) {
   const std::vector<bool> initial_lopri = {true, false, false, true};
   const std::vector<size_t> sorted_by_demand{2, 0, 3, 1};
 
-  auto assign_lopri =
-      absl::bind_front(GreedyAssignToMinimizeGapWrapper<true>, demands,
-                       initial_lopri, sorted_by_demand, 300);
+  auto assign_lopri = absl::bind_front(GreedyAssignToMinimizeGapWrapper<true>, demands,
+                                       initial_lopri, sorted_by_demand, 300);
 
-  auto assign_hipri =
-      absl::bind_front(GreedyAssignToMinimizeGapWrapper<false>, demands,
-                       initial_lopri, sorted_by_demand, 400);
+  auto assign_hipri = absl::bind_front(GreedyAssignToMinimizeGapWrapper<false>, demands,
+                                       initial_lopri, sorted_by_demand, 400);
 
   constexpr bool t = true;
   constexpr bool f = false;
@@ -71,13 +70,11 @@ TEST(GreedyAssignToMinimizeGapTest, FlipCompletely) {
   const std::vector<bool> initial_lopri = {true, false, false, true};
   const std::vector<size_t> sorted_by_demand{2, 0, 3, 1};
 
-  auto assign_lopri =
-      absl::bind_front(GreedyAssignToMinimizeGapWrapper<true>, demands,
-                       initial_lopri, sorted_by_demand, 300);
+  auto assign_lopri = absl::bind_front(GreedyAssignToMinimizeGapWrapper<true>, demands,
+                                       initial_lopri, sorted_by_demand, 300);
 
-  auto assign_hipri =
-      absl::bind_front(GreedyAssignToMinimizeGapWrapper<false>, demands,
-                       initial_lopri, sorted_by_demand, 400);
+  auto assign_hipri = absl::bind_front(GreedyAssignToMinimizeGapWrapper<false>, demands,
+                                       initial_lopri, sorted_by_demand, 400);
 
   constexpr bool t = true;
   constexpr bool f = false;
@@ -118,76 +115,74 @@ TEST(HeypSigcomm20PickLOPRIChildrenTest, FlipCompletely) {
   constexpr bool t = true;
   constexpr bool f = false;
 
-  EXPECT_THAT(HeypSigcomm20PickLOPRIChildren(info, 1),
-              testing::ElementsAre(t, t, t, t));
-  EXPECT_THAT(HeypSigcomm20PickLOPRIChildren(info, 0),
-              testing::ElementsAre(f, f, f, f));
+  EXPECT_THAT(HeypSigcomm20PickLOPRIChildren(info, 1), testing::ElementsAre(t, t, t, t));
+  EXPECT_THAT(HeypSigcomm20PickLOPRIChildren(info, 0), testing::ElementsAre(f, f, f, f));
 }
 
 TEST(FracAdmittedAtLOPRITest, Basic) {
-  EXPECT_EQ(FracAdmittedAtLOPRI(
-                ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 1000"),
-                ParseTextProto<proto::FlowAlloc>(R"(
+  EXPECT_EQ(
+      FracAdmittedAtLOPRI(ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 1000"),
+                          ParseTextProto<proto::FlowAlloc>(R"(
                   hipri_rate_limit_bps: 600
                   lopri_rate_limit_bps: 200
                 )")),
-            0.25);
+      0.25);
 
-  EXPECT_EQ(FracAdmittedAtLOPRI(
-                ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 640"),
-                ParseTextProto<proto::FlowAlloc>(R"(
+  EXPECT_EQ(
+      FracAdmittedAtLOPRI(ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 640"),
+                          ParseTextProto<proto::FlowAlloc>(R"(
                   hipri_rate_limit_bps: 600
                   lopri_rate_limit_bps: 200
                 )")),
-            0.0625);
+      0.0625);
 
-  EXPECT_EQ(FracAdmittedAtLOPRI(
-                ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 500"),
-                ParseTextProto<proto::FlowAlloc>(R"(
+  EXPECT_EQ(
+      FracAdmittedAtLOPRI(ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 500"),
+                          ParseTextProto<proto::FlowAlloc>(R"(
                   hipri_rate_limit_bps: 600
                   lopri_rate_limit_bps: 200
                 )")),
-            0);
+      0);
 }
 
 TEST(FracAdmittedAtLOPRITest, AllLOPRI) {
-  EXPECT_EQ(FracAdmittedAtLOPRI(
-                ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 1000"),
-                ParseTextProto<proto::FlowAlloc>(R"(
+  EXPECT_EQ(
+      FracAdmittedAtLOPRI(ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 1000"),
+                          ParseTextProto<proto::FlowAlloc>(R"(
                   hipri_rate_limit_bps: 0
                   lopri_rate_limit_bps: 900
                 )")),
-            1);
+      1);
 }
 
 TEST(FracAdmittedAtLOPRITest, AllHIPRI) {
-  EXPECT_EQ(FracAdmittedAtLOPRI(
-                ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 1000"),
-                ParseTextProto<proto::FlowAlloc>(R"(
+  EXPECT_EQ(
+      FracAdmittedAtLOPRI(ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 1000"),
+                          ParseTextProto<proto::FlowAlloc>(R"(
                   hipri_rate_limit_bps: 600
                   lopri_rate_limit_bps: 0
                 )")),
-            0);
+      0);
 }
 
 TEST(FracAdmittedAtLOPRITest, ZeroLimit) {
-  EXPECT_EQ(FracAdmittedAtLOPRI(
-                ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 1000"),
-                ParseTextProto<proto::FlowAlloc>(R"(
+  EXPECT_EQ(
+      FracAdmittedAtLOPRI(ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 1000"),
+                          ParseTextProto<proto::FlowAlloc>(R"(
                   hipri_rate_limit_bps: 0
                   lopri_rate_limit_bps: 0
                 )")),
-            0);
+      0);
 }
 
 TEST(FracAdmittedAtLOPRITest, ZeroDemand) {
-  EXPECT_EQ(FracAdmittedAtLOPRI(
-                ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 0"),
-                ParseTextProto<proto::FlowAlloc>(R"(
+  EXPECT_EQ(
+      FracAdmittedAtLOPRI(ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 0"),
+                          ParseTextProto<proto::FlowAlloc>(R"(
                   hipri_rate_limit_bps: 600
                   lopri_rate_limit_bps: 0
                 )")),
-            0);
+      0);
 }
 
 class HeypSigcomm20MaybeReviseLOPRIAdmissionTest : public testing::Test {
@@ -209,9 +204,7 @@ class HeypSigcomm20MaybeReviseLOPRIAdmissionTest : public testing::Test {
     return st;
   }
 
-  static absl::Time T(int64_t sec) {
-    return absl::UnixEpoch() + absl::Seconds(sec);
-  }
+  static absl::Time T(int64_t sec) { return absl::UnixEpoch() + absl::Seconds(sec); }
 
   static proto::FlowInfo NewInfo(int64_t cum_hipri_usage_bytes,
                                  int64_t cum_lopri_usage_bytes) {

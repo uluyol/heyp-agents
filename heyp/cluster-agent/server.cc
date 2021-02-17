@@ -18,8 +18,7 @@ class WaitableAlloc {
     mu_.Unlock();
   }
 
-  void BlockingRead(
-      absl::FunctionRef<void(const proto::AllocBundle& alloc)> func) {
+  void BlockingRead(absl::FunctionRef<void(const proto::AllocBundle& alloc)> func) {
     mu_.LockWhen(absl::Condition(&have_alloc_));
     func(alloc_);
     have_alloc_ = false;
@@ -34,9 +33,9 @@ class WaitableAlloc {
 
 }  // namespace
 
-ClusterAgentService::ClusterAgentService(
-    std::unique_ptr<FlowAggregator> aggregator,
-    std::unique_ptr<ClusterAllocator> allocator, absl::Duration control_period)
+ClusterAgentService::ClusterAgentService(std::unique_ptr<FlowAggregator> aggregator,
+                                         std::unique_ptr<ClusterAllocator> allocator,
+                                         absl::Duration control_period)
     : control_period_(control_period),
       controller_(std::move(aggregator), std::move(allocator)) {}
 

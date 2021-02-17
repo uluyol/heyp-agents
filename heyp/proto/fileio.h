@@ -7,8 +7,7 @@
 
 namespace heyp {
 
-bool ReadTextProtoFromFile(const std::string& path,
-                           google::protobuf::Message* out);
+bool ReadTextProtoFromFile(const std::string& path, google::protobuf::Message* out);
 
 }  // namespace heyp
 

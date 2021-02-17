@@ -21,8 +21,7 @@ class ClusterController {
   class Listener;
 
   Listener RegisterListener(
-      int64_t host_id,
-      const std::function<void(proto::AllocBundle)>& on_new_bundle_func);
+      int64_t host_id, const std::function<void(proto::AllocBundle)>& on_new_bundle_func);
 
   class Listener {
    public:

@@ -25,8 +25,7 @@ struct CompareFlowOptions {
 
 // ExpectedFieldsAreSet checks that all field groups marked true in options are
 // set to a non-zero value.
-bool ExpectedFieldsAreSet(const proto::FlowMarker& marker,
-                          CompareFlowOptions options);
+bool ExpectedFieldsAreSet(const proto::FlowMarker& marker, CompareFlowOptions options);
 
 // UnexpectedFieldsAreUnset checks that all fields groups marked false in
 // options are set to a zero value.
@@ -41,8 +40,7 @@ struct HashFlow {
 };
 
 struct EqFlow {
-  bool operator()(const proto::FlowMarker& lhs,
-                  const proto::FlowMarker& rhs) const;
+  bool operator()(const proto::FlowMarker& lhs, const proto::FlowMarker& rhs) const;
 };
 
 struct HashHostFlowNoId {
@@ -50,8 +48,7 @@ struct HashHostFlowNoId {
 };
 
 struct EqHostFlowNoId {
-  bool operator()(const proto::FlowMarker& lhs,
-                  const proto::FlowMarker& rhs) const;
+  bool operator()(const proto::FlowMarker& lhs, const proto::FlowMarker& rhs) const;
 };
 
 struct HashClusterFlow {
@@ -59,8 +56,7 @@ struct HashClusterFlow {
 };
 
 struct EqClusterFlow {
-  bool operator()(const proto::FlowMarker& lhs,
-                  const proto::FlowMarker& rhs) const;
+  bool operator()(const proto::FlowMarker& lhs, const proto::FlowMarker& rhs) const;
 };
 
 }  // namespace heyp

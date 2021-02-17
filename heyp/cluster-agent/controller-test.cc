@@ -69,9 +69,8 @@ TEST(ClusterControllerTest, PlumbsDataCompletely) {
   auto controller = MakeClusterController();
 
   int call_count = 0;
-  auto lis1 = controller.RegisterListener(
-      1, [&call_count](const proto::AllocBundle& b1) {
-        EXPECT_THAT(b1, AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
+  auto lis1 = controller.RegisterListener(1, [&call_count](const proto::AllocBundle& b1) {
+    EXPECT_THAT(b1, AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
                                           flow_allocs {
                                             flow {
                                               src_dc: "chicago"
@@ -89,11 +88,10 @@ TEST(ClusterControllerTest, PlumbsDataCompletely) {
                                             lopri_rate_limit_bps: 1000
                                           }
                                           )")));
-        ++call_count;
-      });
-  auto lis2 = controller.RegisterListener(
-      2, [&call_count](const proto::AllocBundle& b2) {
-        EXPECT_THAT(b2, AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
+    ++call_count;
+  });
+  auto lis2 = controller.RegisterListener(2, [&call_count](const proto::AllocBundle& b2) {
+    EXPECT_THAT(b2, AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
                                           flow_allocs {
                                             flow {
                                               src_dc: "chicago"
@@ -103,8 +101,8 @@ TEST(ClusterControllerTest, PlumbsDataCompletely) {
                                             hipri_rate_limit_bps: 1000
                                           }
                                           )")));
-        ++call_count;
-      });
+    ++call_count;
+  });
 
   controller.UpdateInfo(ParseTextProto<proto::InfoBundle>(R"(
                             bundler {

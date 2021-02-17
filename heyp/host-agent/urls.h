@@ -8,8 +8,7 @@
 
 namespace heyp {
 
-absl::Status ParseHostPort(absl::string_view s, absl::string_view *host,
-                           int32_t *port);
+absl::Status ParseHostPort(absl::string_view s, absl::string_view *host, int32_t *port);
 
 }  // namespace heyp
 

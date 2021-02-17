@@ -15,8 +15,8 @@ struct Result {
 };
 
 std::ostream& operator<<(std::ostream& os, const Result& r) {
-  return os << "{status: " << r.status << " host: " << r.host
-            << " port: " << r.port << "}";
+  return os << "{status: " << r.status << " host: " << r.host << " port: " << r.port
+            << "}";
 }
 
 Result EasyParse(absl::string_view s) {
@@ -46,8 +46,7 @@ TEST(ParseHostPortTest, Basic) {
                                                    .port = 9913,
                                                }));
   EXPECT_THAT(EasyParse("").status.code(), testing::Ne(absl::StatusCode::kOk));
-  EXPECT_THAT(EasyParse(":42").status.code(),
-              testing::Ne(absl::StatusCode::kOk));
+  EXPECT_THAT(EasyParse(":42").status.code(), testing::Ne(absl::StatusCode::kOk));
   EXPECT_THAT(EasyParse("mozilla.com:").status.code(),
               testing::Ne(absl::StatusCode::kOk));
   EXPECT_THAT(EasyParse(":").status.code(), testing::Ne(absl::StatusCode::kOk));

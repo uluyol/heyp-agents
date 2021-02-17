@@ -38,8 +38,7 @@ double BweBurstinessFactor(const proto::AggInfo& info);
 
 // EvenlyDistributeExtra computes how must extra bandwidth can be given to each
 // child if evenly distributed.
-int64_t EvenlyDistributeExtra(int64_t admission,
-                              const std::vector<int64_t>& demands,
+int64_t EvenlyDistributeExtra(int64_t admission, const std::vector<int64_t>& demands,
                               int64_t waterlevel);
 
 }  // namespace heyp

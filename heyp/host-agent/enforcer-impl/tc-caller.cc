@@ -25,12 +25,10 @@ absl::Status TcCaller::Call(const std::vector<std::string>& tc_args) {
     VLOG(2) << "running tc: " << tc_name_ << absl::StrJoin(tc_args, " ");
 
     bp::ipstream out;
-    bp::child c(bp::search_path(tc_name_), bp::args(tc_args),
-                bp::std_out > out);
+    bp::child c(bp::search_path(tc_name_), bp::args(tc_args), bp::std_out > out);
 
     buf_.clear();
-    std::copy(std::istreambuf_iterator<char>(out), {},
-              std::back_inserter(buf_));
+    std::copy(std::istreambuf_iterator<char>(out), {}, std::back_inserter(buf_));
 
     c.wait();
     if (c.exit_code() != 0) {
@@ -40,15 +38,13 @@ absl::Status TcCaller::Call(const std::vector<std::string>& tc_args) {
 
     auto result = parser_.parse(buf_);
     if (result.error() != simdjson::SUCCESS) {
-      return absl::InternalError(
-          absl::StrCat("failed to parse tc output to json: ",
-                       simdjson::error_message(result.error())));
+      return absl::InternalError(absl::StrCat("failed to parse tc output to json: ",
+                                              simdjson::error_message(result.error())));
     }
 
     result_ = result.value();
   } catch (const std::system_error& e) {
-    return absl::InternalError(
-        absl::StrCat("failed to run tc subprocess: ", e.what()));
+    return absl::InternalError(absl::StrCat("failed to run tc subprocess: ", e.what()));
   }
   return absl::OkStatus();
 }

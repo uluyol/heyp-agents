@@ -6,11 +6,11 @@
 
 namespace heyp {
 
-HostDaemon::HostDaemon(
-    const std::shared_ptr<grpc::Channel>& channel, Config config,
-    DCMapper* dc_mapper, FlowStateProvider* flow_state_provider,
-    std::unique_ptr<FlowAggregator> socket_to_host_aggregator,
-    FlowStateReporter* flow_state_reporter, HostEnforcerInterface* enforcer)
+HostDaemon::HostDaemon(const std::shared_ptr<grpc::Channel>& channel, Config config,
+                       DCMapper* dc_mapper, FlowStateProvider* flow_state_provider,
+                       std::unique_ptr<FlowAggregator> socket_to_host_aggregator,
+                       FlowStateReporter* flow_state_reporter,
+                       HostEnforcerInterface* enforcer)
     : config_(config),
       dc_mapper_(dc_mapper),
       flow_state_provider_(flow_state_provider),
@@ -42,18 +42,16 @@ bool FlaggedOrWaitFor(absl::Duration dur, std::atomic<bool>* exit_flag) {
   return exit_flag->load();
 }
 
-void SendInfo(absl::Duration inform_period, uint64_t host_id,
-              const DCMapper* dc_mapper, FlowStateProvider* flow_state_provider,
-              FlowAggregator* socket_to_host_aggregator,
-              FlowStateReporter* flow_state_reporter,
-              std::atomic<bool>* should_exit,
-              grpc::ClientReaderWriter<proto::InfoBundle, proto::AllocBundle>*
-                  io_stream) {
+void SendInfo(
+    absl::Duration inform_period, uint64_t host_id, const DCMapper* dc_mapper,
+    FlowStateProvider* flow_state_provider, FlowAggregator* socket_to_host_aggregator,
+    FlowStateReporter* flow_state_reporter, std::atomic<bool>* should_exit,
+    grpc::ClientReaderWriter<proto::InfoBundle, proto::AllocBundle>* io_stream) {
   do {
     // Step 1: refresh stats on all socket-level flows.
     LOG(INFO) << "TODO: implement HIPRI/LOPRI tracking";
-    absl::Status report_status = flow_state_reporter->ReportState(
-        [](const proto::FlowMarker&) { return false; });
+    absl::Status report_status =
+        flow_state_reporter->ReportState([](const proto::FlowMarker&) { return false; });
     if (!report_status.ok()) {
       LOG(ERROR) << "failed to report flow state: " << report_status;
       continue;
@@ -88,11 +86,10 @@ void SendInfo(absl::Duration inform_period, uint64_t host_id,
   io_stream->WritesDone();
 }
 
-void EnforceAlloc(const FlowStateProvider* flow_state_provider,
-                  FlowStateReporter* flow_state_reporter,
-                  HostEnforcerInterface* enforcer,
-                  grpc::ClientReaderWriter<proto::InfoBundle,
-                                           proto::AllocBundle>* io_stream) {
+void EnforceAlloc(
+    const FlowStateProvider* flow_state_provider, FlowStateReporter* flow_state_reporter,
+    HostEnforcerInterface* enforcer,
+    grpc::ClientReaderWriter<proto::InfoBundle, proto::AllocBundle>* io_stream) {
   while (true) {
     // Step 1: wait for allocation from cluster agent.
     proto::AllocBundle bundle;
@@ -103,8 +100,8 @@ void EnforceAlloc(const FlowStateProvider* flow_state_provider,
     // Step 2: refresh stats on all socket-level flows so that we can better
     //         track usage across QoS switches.
     LOG(INFO) << "TODO: implement HIPRI/LOPRI tracking";
-    absl::Status report_status = flow_state_reporter->ReportState(
-        [](const proto::FlowMarker&) { return false; });
+    absl::Status report_status =
+        flow_state_reporter->ReportState([](const proto::FlowMarker&) { return false; });
     if (!report_status.ok()) {
       LOG(ERROR) << "failed to report flow state: " << report_status;
       continue;
@@ -122,14 +119,12 @@ void HostDaemon::Run(std::atomic<bool>* should_exit) {
 
   io_stream_ = stub_->RegisterHost(&context_);
 
-  info_thread_ =
-      std::thread(SendInfo, config_.inform_period, config_.host_id, dc_mapper_,
-                  flow_state_provider_, socket_to_host_aggregator_.get(),
-                  flow_state_reporter_, should_exit, io_stream_.get());
+  info_thread_ = std::thread(SendInfo, config_.inform_period, config_.host_id, dc_mapper_,
+                             flow_state_provider_, socket_to_host_aggregator_.get(),
+                             flow_state_reporter_, should_exit, io_stream_.get());
 
-  enforcer_thread_ =
-      std::thread(EnforceAlloc, flow_state_provider_, flow_state_reporter_,
-                  enforcer_, io_stream_.get());
+  enforcer_thread_ = std::thread(EnforceAlloc, flow_state_provider_, flow_state_reporter_,
+                                 enforcer_, io_stream_.get());
 }
 
 HostDaemon::~HostDaemon() {

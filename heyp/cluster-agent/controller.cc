@@ -6,9 +6,8 @@
 
 namespace heyp {
 
-ClusterController::ClusterController(
-    std::unique_ptr<FlowAggregator> aggregator,
-    std::unique_ptr<ClusterAllocator> allocator)
+ClusterController::ClusterController(std::unique_ptr<FlowAggregator> aggregator,
+                                     std::unique_ptr<ClusterAllocator> allocator)
     : aggregator_(std::move(aggregator)), allocator_(std::move(allocator)) {}
 
 ClusterController::Listener::Listener() : host_id_(0), controller_(nullptr) {}
@@ -29,8 +28,7 @@ ClusterController::Listener::Listener(Listener&& other)
   other.controller_ = nullptr;
 }
 
-ClusterController::Listener& ClusterController::Listener::operator=(
-    Listener&& other) {
+ClusterController::Listener& ClusterController::Listener::operator=(Listener&& other) {
   host_id_ = other.host_id_;
   controller_ = other.controller_;
   other.host_id_ = 0;
@@ -39,8 +37,7 @@ ClusterController::Listener& ClusterController::Listener::operator=(
 }
 
 ClusterController::Listener ClusterController::RegisterListener(
-    int64_t host_id,
-    const std::function<void(proto::AllocBundle)>& on_new_bundle_func) {
+    int64_t host_id, const std::function<void(proto::AllocBundle)>& on_new_bundle_func) {
   ClusterController::Listener lis;
   lis.host_id_ = host_id;
   lis.controller_ = this;
@@ -59,10 +56,9 @@ void ClusterController::ComputeAndBroadcast() {
   allocator_->Reset();
   {
     ClusterAllocator* alloc = allocator_.get();
-    aggregator_->ForEachAgg(
-        [alloc](absl::Time time, const proto::AggInfo& info) {
-          alloc->AddInfo(time, info);
-        });
+    aggregator_->ForEachAgg([alloc](absl::Time time, const proto::AggInfo& info) {
+      alloc->AddInfo(time, info);
+    });
   }
   AllocSet allocs = allocator_->GetAllocs();
   state_mu_.Unlock();

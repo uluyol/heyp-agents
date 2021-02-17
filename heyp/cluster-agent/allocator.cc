@@ -11,8 +11,8 @@ namespace heyp {
 class PerAggAllocator {
  public:
   virtual ~PerAggAllocator() = default;
-  virtual std::vector<proto::FlowAlloc> AllocAgg(
-      absl::Time time, const proto::AggInfo& agg_info) = 0;
+  virtual std::vector<proto::FlowAlloc> AllocAgg(absl::Time time,
+                                                 const proto::AggInfo& agg_info) = 0;
 };
 
 constexpr int kNumAllocCores = 8;
@@ -45,11 +45,9 @@ AllocSet ClusterAllocator::GetAllocs() {
 namespace {
 
 template <typename ValueType>
-using FlowMap =
-    absl::flat_hash_map<proto::FlowMarker, ValueType, HashFlow, EqFlow>;
+using FlowMap = absl::flat_hash_map<proto::FlowMarker, ValueType, HashFlow, EqFlow>;
 
-FlowMap<proto::FlowAlloc> ToAdmissionsMap(
-    const proto::AllocBundle& cluster_wide_allocs) {
+FlowMap<proto::FlowAlloc> ToAdmissionsMap(const proto::AllocBundle& cluster_wide_allocs) {
   FlowMap<proto::FlowAlloc> map;
   for (const proto::FlowAlloc& a : cluster_wide_allocs.flow_allocs()) {
     map[a.flow()] = a;
@@ -62,10 +60,9 @@ class BweAggAllocator : public PerAggAllocator {
                   FlowMap<proto::FlowAlloc> agg_admissions)
       : config_(config), agg_admissions_(std::move(agg_admissions)) {}
 
-  std::vector<proto::FlowAlloc> AllocAgg(
-      absl::Time time, const proto::AggInfo& agg_info) override {
-    const proto::FlowAlloc& admission =
-        agg_admissions_.at(agg_info.parent().flow());
+  std::vector<proto::FlowAlloc> AllocAgg(absl::Time time,
+                                         const proto::AggInfo& agg_info) override {
+    const proto::FlowAlloc& admission = agg_admissions_.at(agg_info.parent().flow());
 
     CHECK_EQ(admission.lopri_rate_limit_bps(), 0)
         << "Bwe allocation incompatible with QoS degradation";
@@ -82,8 +79,7 @@ class BweAggAllocator : public PerAggAllocator {
     }
 
     routing_algos::SingleLinkMaxMinFairnessProblem problem;
-    int64_t waterlevel =
-        problem.ComputeWaterlevel(cluster_admission, {demands});
+    int64_t waterlevel = problem.ComputeWaterlevel(cluster_admission, {demands});
 
     int64_t bonus = 0;
     if (config_.enable_bonus()) {
@@ -130,22 +126,18 @@ class HeypSigcomm20Allocator : public PerAggAllocator {
     }
   }
 
-  std::vector<proto::FlowAlloc> AllocAgg(
-      absl::Time time, const proto::AggInfo& agg_info) override {
+  std::vector<proto::FlowAlloc> AllocAgg(absl::Time time,
+                                         const proto::AggInfo& agg_info) override {
     PerAggState& cur_state = agg_states_.at(agg_info.parent().flow());
-    cur_state.alloc.set_lopri_rate_limit_bps(
-        HeypSigcomm20MaybeReviseLOPRIAdmission(
-            config_.heyp_acceptable_measured_ratio_over_intended_ratio(), time,
-            agg_info.parent(), cur_state));
+    cur_state.alloc.set_lopri_rate_limit_bps(HeypSigcomm20MaybeReviseLOPRIAdmission(
+        config_.heyp_acceptable_measured_ratio_over_intended_ratio(), time,
+        agg_info.parent(), cur_state));
 
     cur_state.last_time = time;
-    cur_state.last_cum_hipri_usage_bytes =
-        agg_info.parent().cum_hipri_usage_bytes();
-    cur_state.last_cum_lopri_usage_bytes =
-        agg_info.parent().cum_lopri_usage_bytes();
+    cur_state.last_cum_hipri_usage_bytes = agg_info.parent().cum_hipri_usage_bytes();
+    cur_state.last_cum_lopri_usage_bytes = agg_info.parent().cum_lopri_usage_bytes();
 
-    cur_state.frac_lopri =
-        FracAdmittedAtLOPRI(agg_info.parent(), cur_state.alloc);
+    cur_state.frac_lopri = FracAdmittedAtLOPRI(agg_info.parent(), cur_state.alloc);
 
     ABSL_ASSERT(cur_state.frac_lopri >= 0);
     ABSL_ASSERT(cur_state.frac_lopri <= 1);
@@ -182,10 +174,10 @@ class HeypSigcomm20Allocator : public PerAggAllocator {
     int64_t hipri_bonus = 0;
     int64_t lopri_bonus = 0;
     if (config_.enable_bonus()) {
-      hipri_bonus = EvenlyDistributeExtra(hipri_admission, hipri_demands,
-                                          hipri_waterlevel);
-      lopri_bonus = EvenlyDistributeExtra(lopri_admission, lopri_demands,
-                                          lopri_waterlevel);
+      hipri_bonus =
+          EvenlyDistributeExtra(hipri_admission, hipri_demands, hipri_waterlevel);
+      lopri_bonus =
+          EvenlyDistributeExtra(lopri_admission, lopri_demands, lopri_waterlevel);
     }
 
     const int64_t hipri_limit =
@@ -214,13 +206,11 @@ class HeypSigcomm20Allocator : public PerAggAllocator {
 std::unique_ptr<ClusterAllocator> ClusterAllocator::Create(
     const proto::ClusterAllocatorConfig& config,
     const proto::AllocBundle& cluster_wide_allocs) {
-  FlowMap<proto::FlowAlloc> cluster_admissions =
-      ToAdmissionsMap(cluster_wide_allocs);
+  FlowMap<proto::FlowAlloc> cluster_admissions = ToAdmissionsMap(cluster_wide_allocs);
   switch (config.type()) {
     case proto::ClusterAllocatorType::BWE:
-      return absl::WrapUnique(
-          new ClusterAllocator(absl::make_unique<BweAggAllocator>(
-              config, std::move(cluster_admissions))));
+      return absl::WrapUnique(new ClusterAllocator(
+          absl::make_unique<BweAggAllocator>(config, std::move(cluster_admissions))));
     case proto::ClusterAllocatorType::HEYP_SIGCOMM20:
       return absl::WrapUnique(
           new ClusterAllocator(absl::make_unique<HeypSigcomm20Allocator>(

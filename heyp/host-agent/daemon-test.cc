@@ -19,8 +19,7 @@ class TestClusterAgentService final : public proto::ClusterAgent::Service {
 
   grpc::Status RegisterHost(
       grpc::ServerContext* context,
-      grpc::ServerReaderWriter<proto::AllocBundle, proto::InfoBundle>* stream)
-      override {
+      grpc::ServerReaderWriter<proto::AllocBundle, proto::InfoBundle>* stream) override {
     while (true) {
       proto::InfoBundle infos;
       if (!stream->Read(&infos)) {
@@ -52,9 +51,7 @@ class InProcessTestServer {
     server_ = grpc::ServerBuilder().RegisterService(&service_).BuildAndStart();
   }
 
-  std::shared_ptr<grpc::Channel> GetChannel() {
-    return server_->InProcessChannel({});
-  }
+  std::shared_ptr<grpc::Channel> GetChannel() { return server_->InProcessChannel({}); }
 
   int64_t num_iters() { return service_.num_iters(); }
 
@@ -73,21 +70,18 @@ class InProcessTestServer {
 
 class MockFlowStateProvider : public FlowStateProvider {
  public:
-  MOCK_METHOD(
-      void, ForEachActiveFlow,
-      (absl::FunctionRef<void(absl::Time, const proto::FlowInfo&)> func),
-      (const override));
-  MOCK_METHOD(
-      void, ForEachFlow,
-      (absl::FunctionRef<void(absl::Time, const proto::FlowInfo&)> func),
-      (const override));
+  MOCK_METHOD(void, ForEachActiveFlow,
+              (absl::FunctionRef<void(absl::Time, const proto::FlowInfo&)> func),
+              (const override));
+  MOCK_METHOD(void, ForEachFlow,
+              (absl::FunctionRef<void(absl::Time, const proto::FlowInfo&)> func),
+              (const override));
 };
 
 class MockFlowStateReporter : public FlowStateReporter {
  public:
   MOCK_METHOD(absl::Status, ReportState,
-              (absl::FunctionRef<bool(const proto::FlowMarker&)> is_lopri),
-              (override));
+              (absl::FunctionRef<bool(const proto::FlowMarker&)> is_lopri), (override));
 };
 
 class MockHostEnforcer : public HostEnforcerInterface {
@@ -114,9 +108,8 @@ TEST(HostDaemonTest, CreateAndTeardownNoRun) {
   EXPECT_CALL(flow_state_reporter, ReportState(testing::_)).Times(0);
   EXPECT_CALL(enforcer, EnforceAllocs(testing::_, testing::_)).Times(0);
   {
-    HostDaemon daemon(server.GetChannel(),
-                      {.inform_period = absl::Milliseconds(100)}, &dc_mapper,
-                      &flow_state_provider, MakeFlowAggregator(),
+    HostDaemon daemon(server.GetChannel(), {.inform_period = absl::Milliseconds(100)},
+                      &dc_mapper, &flow_state_provider, MakeFlowAggregator(),
                       &flow_state_reporter, &enforcer);
   }
   server.Teardown();
@@ -130,14 +123,11 @@ TEST(HostDaemonTest, CreateAndTeardownNoActions) {
   MockHostEnforcer enforcer;
   EXPECT_CALL(flow_state_provider, ForEachActiveFlow(testing::_))
       .Times(testing::AtLeast(0));
-  EXPECT_CALL(flow_state_reporter, ReportState(testing::_))
-      .Times(testing::AtLeast(0));
-  EXPECT_CALL(enforcer, EnforceAllocs(testing::_, testing::_))
-      .Times(testing::AtLeast(0));
+  EXPECT_CALL(flow_state_reporter, ReportState(testing::_)).Times(testing::AtLeast(0));
+  EXPECT_CALL(enforcer, EnforceAllocs(testing::_, testing::_)).Times(testing::AtLeast(0));
   {
-    HostDaemon daemon(server.GetChannel(),
-                      {.inform_period = absl::Milliseconds(100)}, &dc_mapper,
-                      &flow_state_provider, MakeFlowAggregator(),
+    HostDaemon daemon(server.GetChannel(), {.inform_period = absl::Milliseconds(100)},
+                      &dc_mapper, &flow_state_provider, MakeFlowAggregator(),
                       &flow_state_reporter, &enforcer);
     std::atomic<bool> exit(true);
     daemon.Run(&exit);
@@ -196,21 +186,18 @@ TEST(HostDaemonTest, CallsIntoHostEnforcer) {
 
   EXPECT_CALL(flow_state_provider, ForEachActiveFlow(testing::_))
       .Times(testing::AtLeast(0));
-  EXPECT_CALL(flow_state_reporter, ReportState(testing::_))
-      .Times(testing::AtLeast(0));
+  EXPECT_CALL(flow_state_reporter, ReportState(testing::_)).Times(testing::AtLeast(0));
   {
     testing::InSequence seq;
     for (const auto& entry : allocs) {
-      EXPECT_CALL(enforcer, EnforceAllocs(testing::_, AllocBundleEq(entry)))
-          .Times(1);
+      EXPECT_CALL(enforcer, EnforceAllocs(testing::_, AllocBundleEq(entry))).Times(1);
     }
     EXPECT_CALL(enforcer, EnforceAllocs(testing::_, testing::_))
         .Times(testing::AtLeast(0));
   }
   {
-    HostDaemon daemon(server.GetChannel(),
-                      {.inform_period = absl::Milliseconds(10)}, &dc_mapper,
-                      &flow_state_provider, MakeFlowAggregator(),
+    HostDaemon daemon(server.GetChannel(), {.inform_period = absl::Milliseconds(10)},
+                      &dc_mapper, &flow_state_provider, MakeFlowAggregator(),
                       &flow_state_reporter, &enforcer);
     std::atomic<bool> exit(false);
     daemon.Run(&exit);

@@ -13,8 +13,7 @@ void GreedyAssignToMinimizeGap(GreedyAssignToMinimizeGapArgs args,
     }
     // Try to flip child_i to our bin.
     int64_t next_demand =
-        args.cur_demand +
-        args.agg_info.children(child_i).predicted_demand_bps();
+        args.cur_demand + args.agg_info.children(child_i).predicted_demand_bps();
     if (next_demand > args.want_demand) {
       continue;  // flipping child_i overshoots the goal
     }
@@ -25,18 +24,17 @@ void GreedyAssignToMinimizeGap(GreedyAssignToMinimizeGapArgs args,
 }
 
 // Instantiate both (true/false) variants
-template void GreedyAssignToMinimizeGap<false>(
-    GreedyAssignToMinimizeGapArgs args, std::vector<bool>& lopri_children);
-template void GreedyAssignToMinimizeGap<true>(
-    GreedyAssignToMinimizeGapArgs args, std::vector<bool>& lopri_children);
+template void GreedyAssignToMinimizeGap<false>(GreedyAssignToMinimizeGapArgs args,
+                                               std::vector<bool>& lopri_children);
+template void GreedyAssignToMinimizeGap<true>(GreedyAssignToMinimizeGapArgs args,
+                                              std::vector<bool>& lopri_children);
 
 std::vector<bool> HeypSigcomm20PickLOPRIChildren(const proto::AggInfo& agg_info,
                                                  const double want_frac_lopri) {
   std::vector<bool> lopri_children(agg_info.children_size(), false);
   int64_t total_demand = 0;
   int64_t lopri_demand = 0;
-  std::vector<size_t> children_sorted_by_dec_demand(agg_info.children_size(),
-                                                    0);
+  std::vector<size_t> children_sorted_by_dec_demand(agg_info.children_size(), 0);
   for (size_t i = 0; i < agg_info.children_size(); ++i) {
     children_sorted_by_dec_demand[i] = i;
     const auto& c = agg_info.children(i);
@@ -53,17 +51,15 @@ std::vector<bool> HeypSigcomm20PickLOPRIChildren(const proto::AggInfo& agg_info,
     return std::vector<bool>(agg_info.children_size(), false);
   }
 
-  std::sort(
-      children_sorted_by_dec_demand.begin(),
-      children_sorted_by_dec_demand.end(),
-      [&agg_info](size_t lhs, size_t rhs) -> bool {
-        int64_t lhs_demand = agg_info.children(lhs).predicted_demand_bps();
-        int64_t rhs_demand = agg_info.children(rhs).predicted_demand_bps();
-        if (lhs_demand == rhs_demand) {
-          return lhs > rhs;
-        }
-        return lhs_demand > rhs_demand;
-      });
+  std::sort(children_sorted_by_dec_demand.begin(), children_sorted_by_dec_demand.end(),
+            [&agg_info](size_t lhs, size_t rhs) -> bool {
+              int64_t lhs_demand = agg_info.children(lhs).predicted_demand_bps();
+              int64_t rhs_demand = agg_info.children(rhs).predicted_demand_bps();
+              if (lhs_demand == rhs_demand) {
+                return lhs > rhs;
+              }
+              return lhs_demand > rhs_demand;
+            });
 
   if (static_cast<double>(lopri_demand) / static_cast<double>(total_demand) >
       want_frac_lopri) {
@@ -98,8 +94,8 @@ double FracAdmittedAtLOPRI(const proto::FlowInfo& parent,
                            const proto::FlowAlloc& cur_alloc) {
   bool maybe_admit = cur_alloc.lopri_rate_limit_bps() > 0;
   maybe_admit = maybe_admit && parent.predicted_demand_bps() > 0;
-  maybe_admit = maybe_admit && parent.predicted_demand_bps() >
-                                   cur_alloc.hipri_rate_limit_bps();
+  maybe_admit =
+      maybe_admit && parent.predicted_demand_bps() > cur_alloc.hipri_rate_limit_bps();
   if (maybe_admit) {
     const double total_rate_limit_bps =
         cur_alloc.hipri_rate_limit_bps() + cur_alloc.lopri_rate_limit_bps();

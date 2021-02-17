@@ -23,8 +23,7 @@ struct FlowMarkerStruct {
 
 inline proto::FlowMarker ProtoFlowMarker(FlowMarkerStruct st);
 
-inline absl::Time FromProtoTimestamp(
-    const google::protobuf::Timestamp& timestamp);
+inline absl::Time FromProtoTimestamp(const google::protobuf::Timestamp& timestamp);
 
 inline google::protobuf::Timestamp ToProtoTimestamp(absl::Time time);
 
@@ -44,8 +43,7 @@ inline proto::FlowMarker ProtoFlowMarker(FlowMarkerStruct st) {
   return p;
 }
 
-inline absl::Time FromProtoTimestamp(
-    const google::protobuf::Timestamp& timestamp) {
+inline absl::Time FromProtoTimestamp(const google::protobuf::Timestamp& timestamp) {
   return absl::FromUnixSeconds(timestamp.seconds()) +
          absl::Nanoseconds(timestamp.nanos());
 }
@@ -53,8 +51,8 @@ inline absl::Time FromProtoTimestamp(
 inline google::protobuf::Timestamp ToProtoTimestamp(absl::Time time) {
   google::protobuf::Timestamp timestamp;
   timestamp.set_seconds(absl::ToUnixSeconds(time));
-  int64_t nanos = absl::ToInt64Nanoseconds(
-      time - absl::FromUnixSeconds(absl::ToUnixSeconds(time)));
+  int64_t nanos =
+      absl::ToInt64Nanoseconds(time - absl::FromUnixSeconds(absl::ToUnixSeconds(time)));
   ABSL_ASSERT(nanos < 1'000'000'000);
   timestamp.set_nanos(nanos);
   return timestamp;

@@ -13,9 +13,7 @@ Executor::Executor(int num_workers) {
     while (!is_dead) {
       // Wait for data
       mu_.LockWhen(absl::Condition(
-          +[](Status* st) -> bool {
-            return (!st->tasks.empty()) || st->is_dead;
-          },
+          +[](Status* st) -> bool { return (!st->tasks.empty()) || st->is_dead; },
           &this->st_));
       // Read data
       is_dead = this->st_.is_dead;

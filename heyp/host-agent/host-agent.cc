@@ -39,9 +39,9 @@ absl::Status Run(const proto::HostAgentConfig& c) {
   std::unique_ptr<DemandPredictor> socket_demand_predictor;
   absl::Duration socket_demand_window;
   {
-    absl::Status st = ParseDemandPredictorConfig(
-        c.flow_tracker().demand_predictor(), &socket_demand_predictor,
-        &socket_demand_window);
+    absl::Status st =
+        ParseDemandPredictorConfig(c.flow_tracker().demand_predictor(),
+                                   &socket_demand_predictor, &socket_demand_window);
     if (!st.ok()) {
       return st;
     }
@@ -50,9 +50,9 @@ absl::Status Run(const proto::HostAgentConfig& c) {
   std::unique_ptr<DemandPredictor> host_demand_predictor;
   absl::Duration host_demand_window;
   {
-    absl::Status st = ParseDemandPredictorConfig(
-        c.socket_to_host_aggregator().demand_predictor(),
-        &host_demand_predictor, &socket_demand_window);
+    absl::Status st =
+        ParseDemandPredictorConfig(c.socket_to_host_aggregator().demand_predictor(),
+                                   &host_demand_predictor, &socket_demand_window);
     if (!st.ok()) {
       return st;
     }
@@ -77,8 +77,8 @@ absl::Status Run(const proto::HostAgentConfig& c) {
   FlowTracker flow_tracker(std::move(socket_demand_predictor),
                            {.usage_history_window = 2 * socket_demand_window});
   LOG(INFO) << "creating flow aggregator";
-  std::unique_ptr<FlowAggregator> flow_aggregator = NewConnToHostAggregator(
-      std::move(host_demand_predictor), 2 * host_demand_window);
+  std::unique_ptr<FlowAggregator> flow_aggregator =
+      NewConnToHostAggregator(std::move(host_demand_predictor), 2 * host_demand_window);
   LOG(INFO) << "creating flow state reporter";
   auto flow_state_reporter_or = SSFlowStateReporter::Create(
       {
@@ -100,11 +100,11 @@ absl::Status Run(const proto::HostAgentConfig& c) {
   LOG(INFO) << "connecting to cluster agent";
   std::shared_ptr<grpc::Channel> channel = grpc::CreateChannel(
       c.daemon().cluster_agent_addr(), grpc::InsecureChannelCredentials());
-  bool is_connected = channel->WaitForConnected(gpr_time_add(
-      gpr_now(GPR_CLOCK_MONOTONIC),
-      gpr_time_from_micros(
-          absl::ToInt64Microseconds(*cluster_agent_connection_timeout_or),
-          GPR_TIMESPAN)));
+  bool is_connected = channel->WaitForConnected(
+      gpr_time_add(gpr_now(GPR_CLOCK_MONOTONIC),
+                   gpr_time_from_micros(
+                       absl::ToInt64Microseconds(*cluster_agent_connection_timeout_or),
+                       GPR_TIMESPAN)));
   if (!is_connected) {
     return absl::DeadlineExceededError("failed to connect to cluster agent");
   }

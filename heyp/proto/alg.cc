@@ -23,8 +23,7 @@ bool IsZero(T val) {
     return false;                      \
   }
 
-bool ExpectedFieldsAreSet(const proto::FlowMarker& marker,
-                          CompareFlowOptions options) {
+bool ExpectedFieldsAreSet(const proto::FlowMarker& marker, CompareFlowOptions options) {
   if (options.cmp_fg) {
     NONEMPTY_OR_RETURN(src_dc);
     NONEMPTY_OR_RETURN(dst_dc);
@@ -113,12 +112,12 @@ bool IsSameFlow(const proto::FlowMarker& lhs, const proto::FlowMarker& rhs,
 #undef SAME_OR_RETURN
 
 size_t HashFlow::operator()(const proto::FlowMarker& marker) const {
-  return absl::Hash<std::tuple<absl::string_view, absl::string_view, uint64_t,
-                               absl::string_view, absl::string_view, int32_t,
-                               int32_t, int32_t, uint64_t>>()(
+  return absl::Hash<
+      std::tuple<absl::string_view, absl::string_view, uint64_t, absl::string_view,
+                 absl::string_view, int32_t, int32_t, int32_t, uint64_t>>()(
       {marker.src_dc(), marker.dst_dc(), marker.host_id(), marker.src_addr(),
-       marker.dst_addr(), marker.protocol(), marker.src_port(),
-       marker.dst_port(), marker.seqnum()});
+       marker.dst_addr(), marker.protocol(), marker.src_port(), marker.dst_port(),
+       marker.seqnum()});
 }
 
 bool EqFlow::operator()(const proto::FlowMarker& lhs,
@@ -127,10 +126,10 @@ bool EqFlow::operator()(const proto::FlowMarker& lhs,
 }
 
 size_t HashHostFlowNoId::operator()(const proto::FlowMarker& marker) const {
-  return absl::Hash<std::tuple<absl::string_view, absl::string_view, int32_t,
-                               int32_t, int32_t>>()(
-      {marker.src_addr(), marker.dst_addr(), marker.protocol(),
-       marker.src_port(), marker.dst_port()});
+  return absl::Hash<
+      std::tuple<absl::string_view, absl::string_view, int32_t, int32_t, int32_t>>()(
+      {marker.src_addr(), marker.dst_addr(), marker.protocol(), marker.src_port(),
+       marker.dst_port()});
 }
 
 bool EqHostFlowNoId::operator()(const proto::FlowMarker& lhs,

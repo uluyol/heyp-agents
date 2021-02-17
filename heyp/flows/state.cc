@@ -18,18 +18,15 @@ const proto::FlowInfo& AggState::cur() const { return cur_; }
 
 void AggState::UpdateUsage(const Update u, absl::Duration usage_history_window,
                            const DemandPredictor& demand_predictor) {
-  const int64_t cum_usage_bytes =
-      u.cum_hipri_usage_bytes + u.cum_lopri_usage_bytes;
-  const bool is_lopri =
-      (u.cum_hipri_usage_bytes == cur_.cum_hipri_usage_bytes()) &&
-      (u.cum_lopri_usage_bytes > cur_.cum_lopri_usage_bytes());
+  const int64_t cum_usage_bytes = u.cum_hipri_usage_bytes + u.cum_lopri_usage_bytes;
+  const bool is_lopri = (u.cum_hipri_usage_bytes == cur_.cum_hipri_usage_bytes()) &&
+                        (u.cum_lopri_usage_bytes > cur_.cum_lopri_usage_bytes());
 
   if (u.time < updated_time_) {
     LOG(WARNING) << absl::Substitute(
         "got update ($0, $1) older than last update ($2, $3)",
         absl::FormatTime(u.time, absl::UTCTimeZone()), cum_usage_bytes,
-        absl::FormatTime(updated_time_, absl::UTCTimeZone()),
-        cur_.cum_usage_bytes());
+        absl::FormatTime(updated_time_, absl::UTCTimeZone()), cur_.cum_usage_bytes());
     return;
   }
 
@@ -42,10 +39,8 @@ void AggState::UpdateUsage(const Update u, absl::Duration usage_history_window,
     const int64_t usage_bits = 8 * (cum_usage_bytes - cur_.cum_usage_bytes());
     const absl::Duration dur = u.time - updated_time_;
     if (dur > absl::ZeroDuration()) {
-      const double measured_mean_usage_bps =
-          usage_bits / absl::ToDoubleSeconds(dur);
-      measured_usage_bps =
-          std::max<double>(measured_mean_usage_bps, measured_usage_bps);
+      const double measured_mean_usage_bps = usage_bits / absl::ToDoubleSeconds(dur);
+      measured_usage_bps = std::max<double>(measured_mean_usage_bps, measured_usage_bps);
     }
   } else {
     was_updated_ = true;
@@ -94,8 +89,7 @@ void AggState::UpdateUsage(const Update u, absl::Duration usage_history_window,
     usage_history_.resize(num_keep);
   }
 
-  cur_.set_predicted_demand_bps(
-      demand_predictor.FromUsage(u.time, usage_history_));
+  cur_.set_predicted_demand_bps(demand_predictor.FromUsage(u.time, usage_history_));
 }
 
 LeafState::LeafState(const proto::FlowMarker& flow) : impl_(flow, true) {}

@@ -27,12 +27,10 @@ class FlowStateProvider {
   virtual ~FlowStateProvider() = default;
 
   virtual void ForEachActiveFlow(
-      absl::FunctionRef<void(absl::Time, const proto::FlowInfo&)> func)
-      const = 0;
+      absl::FunctionRef<void(absl::Time, const proto::FlowInfo&)> func) const = 0;
 
   virtual void ForEachFlow(
-      absl::FunctionRef<void(absl::Time, const proto::FlowInfo&)> func)
-      const = 0;
+      absl::FunctionRef<void(absl::Time, const proto::FlowInfo&)> func) const = 0;
 };
 
 class FlowStateReporter {
@@ -52,11 +50,10 @@ class FlowTracker : public FlowStateProvider {
   FlowTracker(std::unique_ptr<DemandPredictor> demand_predictor, Config config);
 
   void ForEachActiveFlow(
-      absl::FunctionRef<void(absl::Time, const proto::FlowInfo&)> func)
-      const override;
+      absl::FunctionRef<void(absl::Time, const proto::FlowInfo&)> func) const override;
 
-  void ForEachFlow(absl::FunctionRef<void(absl::Time, const proto::FlowInfo&)>
-                       func) const override;
+  void ForEachFlow(
+      absl::FunctionRef<void(absl::Time, const proto::FlowInfo&)> func) const override;
 
   struct Update {
     proto::FlowMarker flow;
@@ -68,14 +65,12 @@ class FlowTracker : public FlowStateProvider {
   // Updates the usage of the specified Flows.
   // Each Flow should have a zero (i.e. unassigned unique_flow_id) because the
   // FlowTracker will assign one.
-  void UpdateFlows(absl::Time timestamp,
-                   absl::Span<const Update> flow_update_batch);
+  void UpdateFlows(absl::Time timestamp, absl::Span<const Update> flow_update_batch);
 
   // Updates the usage of the specified Flows and marks them as complete.
   // Each Flow should have a zero (i.e. unassigned unique_flow_id) because the
   // FlowTracker will assign one.
-  void FinalizeFlows(absl::Time timestamp,
-                     absl::Span<const Update> flow_update_batch);
+  void FinalizeFlows(absl::Time timestamp, absl::Span<const Update> flow_update_batch);
 
  private:
   const Config config_;
@@ -85,8 +80,8 @@ class FlowTracker : public FlowStateProvider {
   uint64_t next_seqnum_ ABSL_GUARDED_BY(mu_);
   absl::flat_hash_map<proto::FlowMarker, LeafState, HashHostFlowNoId,
                       EqHostFlowNoId>
-      active_flows_ ABSL_GUARDED_BY(
-          mu_);  // key has zero flow id, value has correct flow id
+      active_flows_
+          ABSL_GUARDED_BY(mu_);  // key has zero flow id, value has correct flow id
   std::vector<LeafState> done_flows_ ABSL_GUARDED_BY(mu_);
 };
 

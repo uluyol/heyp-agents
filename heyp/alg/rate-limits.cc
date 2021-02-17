@@ -5,8 +5,7 @@
 namespace heyp {
 
 std::ostream& operator<<(std::ostream& os, const RateLimits& limits) {
-  return os << "(" << limits.hipri_limit_bps << ", " << limits.lopri_limit_bps
-            << ")";
+  return os << "(" << limits.hipri_limit_bps << ", " << limits.lopri_limit_bps << ")";
 }
 
 double BweBurstinessFactor(const proto::AggInfo& info) {
@@ -25,8 +24,7 @@ double BweBurstinessFactor(const proto::AggInfo& info) {
   return burstiness;
 }
 
-int64_t EvenlyDistributeExtra(int64_t admission,
-                              const std::vector<int64_t>& demands,
+int64_t EvenlyDistributeExtra(int64_t admission, const std::vector<int64_t>& demands,
                               int64_t waterlevel) {
   if (demands.empty()) {
     return admission;

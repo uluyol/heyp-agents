@@ -10,11 +10,10 @@ namespace heyp {
 namespace {
 
 bool HistoryIsSorted(absl::Span<const UsageHistoryEntry> hist) {
-  return std::is_sorted(
-      hist.begin(), hist.end(),
-      [](const UsageHistoryEntry& lhs, const UsageHistoryEntry& rhs) {
-        return lhs.time < rhs.time;
-      });
+  return std::is_sorted(hist.begin(), hist.end(),
+                        [](const UsageHistoryEntry& lhs, const UsageHistoryEntry& rhs) {
+                          return lhs.time < rhs.time;
+                        });
 }
 
 MATCHER_P(HasSuffixElements, suffix, "") {
@@ -32,8 +31,7 @@ MATCHER_P(HasSuffixElements, suffix, "") {
 class MockDemandPredictor : public DemandPredictor {
  public:
   MOCK_METHOD(int64_t, FromUsage,
-              (absl::Time now,
-               absl::Span<const UsageHistoryEntry> usage_history),
+              (absl::Time now, absl::Span<const UsageHistoryEntry> usage_history),
               (const override));
 };
 
@@ -156,10 +154,9 @@ TEST(LeafStateTest, GarbageCollectsOldUsage) {
   constexpr absl::Duration window = absl::Seconds(5);
   MockDemandPredictor predictor;
 
-  EXPECT_CALL(
-      predictor,
-      FromUsage(testing::_, testing::AllOf(testing::SizeIs(testing::Le(11)),
-                                           testing::Truly(HistoryIsSorted))))
+  EXPECT_CALL(predictor,
+              FromUsage(testing::_, testing::AllOf(testing::SizeIs(testing::Le(11)),
+                                                   testing::Truly(HistoryIsSorted))))
       .Times(19);
 
   absl::Time now = absl::Now();
@@ -203,8 +200,7 @@ TEST(LeafStateTest, HistoryAndDemandTracksIncreases) {
     EXPECT_THAT(state.cur().cum_usage_bytes(), testing::Eq(cum_usage_bytes));
     if (i >= 2) {
       EXPECT_THAT(state.cur().ewma_usage_bps(), testing::Gt(last_usage_bps));
-      EXPECT_THAT(state.cur().predicted_demand_bps(),
-                  testing::Gt(1.1 * last_usage_bps));
+      EXPECT_THAT(state.cur().predicted_demand_bps(), testing::Gt(1.1 * last_usage_bps));
     }
     if (i >= 1) {
       last_usage_bps = state.cur().ewma_usage_bps();
@@ -215,40 +211,34 @@ TEST(LeafStateTest, HistoryAndDemandTracksIncreases) {
 TEST(LeafStateTest, CheckHistoryIsExpected) {
   const absl::Time now = absl::UnixEpoch();
 
-  auto time = [now](int64_t sec) -> absl::Time {
-    return now + absl::Seconds(sec);
-  };
+  auto time = [now](int64_t sec) -> absl::Time { return now + absl::Seconds(sec); };
 
   LeafState state({});
   MockDemandPredictor predictor;
 
   {
     testing::InSequence seq;
-    EXPECT_CALL(predictor,
-                FromUsage(testing::Eq(time(1)),
-                          HasSuffixElements(std::vector<UsageHistoryEntry>{
-                              UsageHistoryEntry{time(1), 8000},
-                          })));
-    EXPECT_CALL(predictor,
-                FromUsage(testing::Eq(time(2)),
-                          HasSuffixElements(std::vector<UsageHistoryEntry>{
-                              UsageHistoryEntry{time(1), 8000},
-                              UsageHistoryEntry{time(2), 10400},
-                          })));
-    EXPECT_CALL(predictor,
-                FromUsage(testing::Eq(time(3)),
-                          HasSuffixElements(std::vector<UsageHistoryEntry>{
-                              UsageHistoryEntry{time(1), 8000},
-                              UsageHistoryEntry{time(2), 10400},
-                              UsageHistoryEntry{time(3), 12800},
-                          })));
-    EXPECT_CALL(predictor,
-                FromUsage(testing::Eq(time(4)),
-                          HasSuffixElements(std::vector<UsageHistoryEntry>{
-                              UsageHistoryEntry{time(2), 10400},
-                              UsageHistoryEntry{time(3), 12800},
-                              UsageHistoryEntry{time(4), 15200},
-                          })));
+    EXPECT_CALL(predictor, FromUsage(testing::Eq(time(1)),
+                                     HasSuffixElements(std::vector<UsageHistoryEntry>{
+                                         UsageHistoryEntry{time(1), 8000},
+                                     })));
+    EXPECT_CALL(predictor, FromUsage(testing::Eq(time(2)),
+                                     HasSuffixElements(std::vector<UsageHistoryEntry>{
+                                         UsageHistoryEntry{time(1), 8000},
+                                         UsageHistoryEntry{time(2), 10400},
+                                     })));
+    EXPECT_CALL(predictor, FromUsage(testing::Eq(time(3)),
+                                     HasSuffixElements(std::vector<UsageHistoryEntry>{
+                                         UsageHistoryEntry{time(1), 8000},
+                                         UsageHistoryEntry{time(2), 10400},
+                                         UsageHistoryEntry{time(3), 12800},
+                                     })));
+    EXPECT_CALL(predictor, FromUsage(testing::Eq(time(4)),
+                                     HasSuffixElements(std::vector<UsageHistoryEntry>{
+                                         UsageHistoryEntry{time(2), 10400},
+                                         UsageHistoryEntry{time(3), 12800},
+                                         UsageHistoryEntry{time(4), 15200},
+                                     })));
   }
 
   // const int64_t cum_usage_bytes = absl::Uniform(absl::BitGen(), 0,
@@ -295,9 +285,7 @@ TEST(LeafStateTest, Priorities) {
   NopDemandPredictor demand_predictor;
 
   const absl::Time now = absl::Now();
-  auto time = [now](int64_t sec) -> absl::Time {
-    return now + absl::Seconds(sec);
-  };
+  auto time = [now](int64_t sec) -> absl::Time { return now + absl::Seconds(sec); };
 
   LeafState state({});
   constexpr absl::Duration kHistoryWindow = absl::Seconds(10);

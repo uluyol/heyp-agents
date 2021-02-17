@@ -6,8 +6,8 @@
 
 namespace heyp {
 
-absl::StatusOr<absl::Duration> ParseAbslDuration(
-    absl::string_view dur, absl::string_view field_name_on_error) {
+absl::StatusOr<absl::Duration> ParseAbslDuration(absl::string_view dur,
+                                                 absl::string_view field_name_on_error) {
   absl::Duration d;
   if (!absl::ParseDuration(dur, &d)) {
     return absl::InvalidArgumentError(
@@ -16,17 +16,17 @@ absl::StatusOr<absl::Duration> ParseAbslDuration(
   return d;
 }
 
-absl::Status ParseDemandPredictorConfig(
-    const proto::DemandPredictorConfig &c,
-    std::unique_ptr<DemandPredictor> *predictor, absl::Duration *time_window) {
+absl::Status ParseDemandPredictorConfig(const proto::DemandPredictorConfig &c,
+                                        std::unique_ptr<DemandPredictor> *predictor,
+                                        absl::Duration *time_window) {
   auto window_or = ParseAbslDuration(c.time_window_dur(), "time_window");
   if (!window_or.ok()) {
     return window_or.status();
   }
 
   *time_window = *window_or;
-  *predictor = absl::make_unique<BweDemandPredictor>(
-      *time_window, c.usage_multiplier(), c.min_demand_bps());
+  *predictor = absl::make_unique<BweDemandPredictor>(*time_window, c.usage_multiplier(),
+                                                     c.min_demand_bps());
 
   return absl::OkStatus();
 }

@@ -56,8 +56,7 @@ int64_t HeypSigcomm20MaybeReviseLOPRIAdmission(
   if (time <= cur_state.last_time) {
     LOG(WARNING) << "cur time (" << time << ") needs to be after last time ("
                  << cur_state.last_time << ")";
-  } else if (cur_state.alloc.hipri_rate_limit_bps() > 0 &&
-             cur_state.frac_lopri > 0) {
+  } else if (cur_state.alloc.hipri_rate_limit_bps() > 0 && cur_state.frac_lopri > 0) {
     const double hipri_usage_bytes =
         parent.cum_hipri_usage_bytes() - cur_state.last_cum_hipri_usage_bytes;
     const double lopri_usage_bytes =
@@ -68,8 +67,7 @@ int64_t HeypSigcomm20MaybeReviseLOPRIAdmission(
                                    parent.flow().ShortDebugString());
     } else {
       ABSL_ASSERT(hipri_usage_bytes > 0);
-      const double measured_lopri_over_hipri =
-          lopri_usage_bytes / hipri_usage_bytes;
+      const double measured_lopri_over_hipri = lopri_usage_bytes / hipri_usage_bytes;
       ABSL_ASSERT(cur_state.frac_lopri > 0);
       const double want_hipri_over_lopri =
           (1 - cur_state.frac_lopri) / cur_state.frac_lopri;
@@ -90,31 +88,25 @@ int64_t HeypSigcomm20MaybeReviseLOPRIAdmission(
       if (measured_ratio_over_intended_ratio <
           acceptable_measured_ratio_over_intended_ratio) {
         double hipri_usage_bps =
-            8 * hipri_usage_bytes /
-            absl::ToDoubleSeconds(time - cur_state.last_time);
+            8 * hipri_usage_bytes / absl::ToDoubleSeconds(time - cur_state.last_time);
         double lopri_usage_bps =
-            8 * lopri_usage_bytes /
-            absl::ToDoubleSeconds(time - cur_state.last_time);
+            8 * lopri_usage_bytes / absl::ToDoubleSeconds(time - cur_state.last_time);
 
         // Rate limiting is not perfect, avoid increasing the LOPRI limit.
-        const int64_t new_lopri_limit = std::min<int64_t>(
-            lopri_usage_bps, cur_state.alloc.lopri_rate_limit_bps());
+        const int64_t new_lopri_limit =
+            std::min<int64_t>(lopri_usage_bps, cur_state.alloc.lopri_rate_limit_bps());
 
-        auto to_mbps = [](auto bps) {
-          return static_cast<double>(bps) / 1'000'000;
-        };
+        auto to_mbps = [](auto bps) { return static_cast<double>(bps) / 1'000'000; };
 
         LOG(INFO) << absl::StrFormat(
             "flow: %s: inferred congestion (ratio = %f): sent %f Mbps as HIPRI "
             "but only %f Mbps as LOPRI ",
-            parent.flow().ShortDebugString(),
-            measured_ratio_over_intended_ratio, to_mbps(hipri_usage_bps),
-            to_mbps(lopri_usage_bps));
+            parent.flow().ShortDebugString(), measured_ratio_over_intended_ratio,
+            to_mbps(hipri_usage_bps), to_mbps(lopri_usage_bps));
         LOG(INFO) << absl::StrFormat(
             "flow: %s: old LOPRI limit: %f Mbps new LOPRI limit: %f Mbps",
             parent.flow().ShortDebugString(),
-            to_mbps(cur_state.alloc.lopri_rate_limit_bps()),
-            to_mbps(new_lopri_limit));
+            to_mbps(cur_state.alloc.lopri_rate_limit_bps()), to_mbps(new_lopri_limit));
 
         return new_lopri_limit;
       }

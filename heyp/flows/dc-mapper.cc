@@ -18,8 +18,7 @@ const std::string* StaticDCMapper::HostDC(absl::string_view host) const {
   return &iter->second;
 }
 
-const std::vector<std::string>* StaticDCMapper::HostsForDC(
-    absl::string_view dc) const {
+const std::vector<std::string>* StaticDCMapper::HostsForDC(absl::string_view dc) const {
   auto iter = dc_to_all_hosts_.find(dc);
   if (iter == dc_to_all_hosts_.end()) {
     return nullptr;

@@ -19,8 +19,8 @@ struct AggResult {
 
 std::ostream& operator<<(std::ostream& os, const AggResult& r) {
   for (const auto& vp : r.values) {
-    os << "time: " << absl::FormatDuration(vp.first - absl::UnixEpoch())
-       << " info {" << vp.second.DebugString() << "}\n";
+    os << "time: " << absl::FormatDuration(vp.first - absl::UnixEpoch()) << " info {"
+       << vp.second.DebugString() << "}\n";
   }
   return os;
 }
@@ -35,16 +35,14 @@ AggResult GetResult(FlowAggregator& agg) {
 
 class MatchesTimeInfo {
  public:
-  explicit MatchesTimeInfo(const std::pair<absl::Time, proto::AggInfo>& p)
-      : p_(p) {}
+  explicit MatchesTimeInfo(const std::pair<absl::Time, proto::AggInfo>& p) : p_(p) {}
 
   bool operator()(const std::pair<absl::Time, proto::AggInfo>& p2) const {
     if (p_.first != p2.first) {
       return false;
     }
     google::protobuf::util::MessageDifferencer differencer;
-    differencer.TreatAsSet(
-        proto::AggInfo::GetDescriptor()->FindFieldByName("children"));
+    differencer.TreatAsSet(proto::AggInfo::GetDescriptor()->FindFieldByName("children"));
     return differencer.Compare(p_.second, p2.second);
   }
 
@@ -58,8 +56,8 @@ bool operator==(const AggResult& lhs, const AggResult& rhs) {
     return false;
   }
   for (const auto& p : lhs.values) {
-    bool found = std::find_if(rhs.values.begin(), rhs.values.end(),
-                              MatchesTimeInfo(p)) != rhs.values.end();
+    bool found = std::find_if(rhs.values.begin(), rhs.values.end(), MatchesTimeInfo(p)) !=
+                 rhs.values.end();
     if (!found) {
       return false;
     }
@@ -140,9 +138,8 @@ TEST(ConnToHostAggregatorTest, OneBundleOneTime) {
     }
   )"));
 
-  EXPECT_EQ(GetResult(*flow_agg),
-            AggResult({
-                {TUnix(10), ParseTextProto<proto::AggInfo>(R"(
+  EXPECT_EQ(GetResult(*flow_agg), AggResult({
+                                      {TUnix(10), ParseTextProto<proto::AggInfo>(R"(
                             parent {
                               flow {
                                 src_dc: "east-us"
@@ -195,7 +192,7 @@ TEST(ConnToHostAggregatorTest, OneBundleOneTime) {
                               currently_lopri: false
                             }
                           )")},
-                {TUnix(10), ParseTextProto<proto::AggInfo>(R"(
+                                      {TUnix(10), ParseTextProto<proto::AggInfo>(R"(
                             parent {
                               flow {
                                 src_dc: "east-us"
@@ -229,7 +226,7 @@ TEST(ConnToHostAggregatorTest, OneBundleOneTime) {
                               currently_lopri: true
                             }
                           )")},
-            }));
+                                  }));
 }
 
 TEST(ConnToHostAggregatorTest, AliveThenDead) {
@@ -265,9 +262,8 @@ TEST(ConnToHostAggregatorTest, AliveThenDead) {
     }
   )"));
 
-  EXPECT_EQ(GetResult(*flow_agg),
-            AggResult({
-                {TUnix(10), ParseTextProto<proto::AggInfo>(R"(
+  EXPECT_EQ(GetResult(*flow_agg), AggResult({
+                                      {TUnix(10), ParseTextProto<proto::AggInfo>(R"(
                             parent {
                               flow {
                                 src_dc: "east-us"
@@ -300,7 +296,7 @@ TEST(ConnToHostAggregatorTest, AliveThenDead) {
                               currently_lopri: true
                             }
                           )")},
-            }));
+                                  }));
 
   flow_agg->Update(ParseTextProto<proto::InfoBundle>(R"(
     bundler {
@@ -311,9 +307,8 @@ TEST(ConnToHostAggregatorTest, AliveThenDead) {
     }
   )"));
 
-  EXPECT_EQ(GetResult(*flow_agg),
-            AggResult({
-                {TUnix(41), ParseTextProto<proto::AggInfo>(R"(
+  EXPECT_EQ(GetResult(*flow_agg), AggResult({
+                                      {TUnix(41), ParseTextProto<proto::AggInfo>(R"(
                             parent {
                               flow {
                                 src_dc: "east-us"
@@ -327,7 +322,7 @@ TEST(ConnToHostAggregatorTest, AliveThenDead) {
                               cum_lopri_usage_bytes: 2000
                             }
                           )")},
-            }));
+                                  }));
 }
 
 TEST(HostToClusterAggregatorTest, Unaligned) {
@@ -392,9 +387,8 @@ TEST(HostToClusterAggregatorTest, Unaligned) {
     }
   )"));
 
-  EXPECT_EQ(GetResult(*flow_agg),
-            AggResult({
-                {TUnix(10), ParseTextProto<proto::AggInfo>(R"(
+  EXPECT_EQ(GetResult(*flow_agg), AggResult({
+                                      {TUnix(10), ParseTextProto<proto::AggInfo>(R"(
                             parent {
                               flow {
                                 src_dc: "east-us"
@@ -434,7 +428,7 @@ TEST(HostToClusterAggregatorTest, Unaligned) {
                               currently_lopri: false
                             }
                           )")},
-                {TUnix(10), ParseTextProto<proto::AggInfo>(R"(
+                                      {TUnix(10), ParseTextProto<proto::AggInfo>(R"(
                             parent {
                               flow {
                                 src_dc: "east-us"
@@ -461,7 +455,7 @@ TEST(HostToClusterAggregatorTest, Unaligned) {
                               currently_lopri: true
                             }
                           )")},
-            }));
+                                  }));
 }
 
 }  // namespace

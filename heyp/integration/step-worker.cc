@@ -20,23 +20,19 @@ namespace testing {
 absl::StatusOr<std::unique_ptr<HostWorker>> HostWorker::Create() {
   int serve_fd = socket(AF_INET, SOCK_STREAM, 0);
   if (serve_fd == -1) {
-    return absl::UnknownError(
-        absl::StrCat("failed to create socket: ", StrError(errno)));
+    return absl::UnknownError(absl::StrCat("failed to create socket: ", StrError(errno)));
   }
 
   struct sockaddr_in addr;
   addr.sin_family = AF_INET;
   addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
   addr.sin_port = htons(0);
-  if (bind(serve_fd, reinterpret_cast<const struct sockaddr*>(&addr),
-           sizeof addr)) {
-    return absl::UnknownError(
-        absl::StrCat("failed to bind socket: ", StrError(errno)));
+  if (bind(serve_fd, reinterpret_cast<const struct sockaddr*>(&addr), sizeof addr)) {
+    return absl::UnknownError(absl::StrCat("failed to bind socket: ", StrError(errno)));
   }
 
   socklen_t addr_len = sizeof addr;
-  if (getsockname(serve_fd, reinterpret_cast<struct sockaddr*>(&addr),
-                  &addr_len)) {
+  if (getsockname(serve_fd, reinterpret_cast<struct sockaddr*>(&addr), &addr_len)) {
     return absl::UnknownError(
         absl::StrCat("failed to discover serving port: ", StrError(errno)));
   }
@@ -129,8 +125,7 @@ void HostWorker::RecvFlow(int fd) {
 #define SEND_FLAGS MSG_NOSIGNAL
 #endif
 
-void HostWorker::SendFlow(int fd, std::string name,
-                          std::atomic<int64_t>* counter) {
+void HostWorker::SendFlow(int fd, std::string name, std::atomic<int64_t>* counter) {
   // auto fd_closer = absl::MakeCleanup([fd] { close(fd); });
   char buf[kBufSize];
   buf[0] = name.size();
@@ -172,8 +167,8 @@ absl::Status HostWorker::InitFlows(std::vector<Flow>& flows) {
       int set = 1;
       if (setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, static_cast<void*>(&set),
                      sizeof set)) {
-        return absl::UnknownError(absl::StrCat(
-            "failed to set NOSIGPIPE on socket: ", StrError(errno)));
+        return absl::UnknownError(
+            absl::StrCat("failed to set NOSIGPIPE on socket: ", StrError(errno)));
       }
     }
 #endif
@@ -182,10 +177,8 @@ absl::Status HostWorker::InitFlows(std::vector<Flow>& flows) {
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     addr.sin_port = htons(f.dst_port);
-    if (connect(fd, reinterpret_cast<const struct sockaddr*>(&addr),
-                sizeof addr)) {
-      return absl::UnknownError(
-          absl::StrCat("failed to connect: ", StrError(errno)));
+    if (connect(fd, reinterpret_cast<const struct sockaddr*>(&addr), sizeof addr)) {
+      return absl::UnknownError(absl::StrCat("failed to connect: ", StrError(errno)));
     }
 
     struct sockaddr_in local_addr;
@@ -260,8 +253,7 @@ std::vector<proto::TestCompareMetrics::Metric> HostWorker::Finish() {
   for (const auto& key_val_pair : measurements_) {
     for (const auto& label_step_bps_pair : key_val_pair.second.step_bps) {
       proto::TestCompareMetrics::Metric m;
-      m.set_name(
-          absl::StrCat(key_val_pair.first, "/", label_step_bps_pair.first));
+      m.set_name(absl::StrCat(key_val_pair.first, "/", label_step_bps_pair.first));
       m.set_value(label_step_bps_pair.second);
       results.push_back(std::move(m));
     }

@@ -12,12 +12,12 @@
 
 namespace heyp {
 
-absl::StatusOr<absl::Duration> ParseAbslDuration(
-    absl::string_view dur, absl::string_view field_name_on_error);
+absl::StatusOr<absl::Duration> ParseAbslDuration(absl::string_view dur,
+                                                 absl::string_view field_name_on_error);
 
-absl::Status ParseDemandPredictorConfig(
-    const proto::DemandPredictorConfig &c,
-    std::unique_ptr<DemandPredictor> *predictor, absl::Duration *time_window);
+absl::Status ParseDemandPredictorConfig(const proto::DemandPredictorConfig &c,
+                                        std::unique_ptr<DemandPredictor> *predictor,
+                                        absl::Duration *time_window);
 
 }  // namespace heyp
 

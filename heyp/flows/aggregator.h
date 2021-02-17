@@ -34,8 +34,7 @@ class FlowAggregator {
     std::function<bool(proto::FlowMarker)> is_valid_child;   // optional
   };
 
-  FlowAggregator(std::unique_ptr<DemandPredictor> agg_demand_predictor,
-                 Config config);
+  FlowAggregator(std::unique_ptr<DemandPredictor> agg_demand_predictor, Config config);
 
   // Update the stats for a 'bundle' of flows at once.
   //
@@ -43,13 +42,11 @@ class FlowAggregator {
   // flows (i.e. the same flow should only ever be reported by one bundler).
   void Update(const proto::InfoBundle& bundle);
 
-  void ForEachAgg(
-      absl::FunctionRef<void(absl::Time, const proto::AggInfo&)> func);
+  void ForEachAgg(absl::FunctionRef<void(absl::Time, const proto::AggInfo&)> func);
 
  private:
   template <typename ValueType>
-  using FlowMap =
-      absl::flat_hash_map<proto::FlowMarker, ValueType, HashFlow, EqFlow>;
+  using FlowMap = absl::flat_hash_map<proto::FlowMarker, ValueType, HashFlow, EqFlow>;
 
   struct AggWIP {
     // Updated in ForEachAgg but needs to persist to track historical usage.

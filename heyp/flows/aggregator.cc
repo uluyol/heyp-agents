@@ -36,8 +36,7 @@ std::unique_ptr<FlowAggregator> NewConnToHostAggregator(
       std::move(host_demand_predictor),
       FlowAggregator::Config{
           .usage_history_window = usage_history_window,
-          .get_agg_flow_fn =
-              [](const proto::FlowMarker& c) -> proto::FlowMarker {
+          .get_agg_flow_fn = [](const proto::FlowMarker& c) -> proto::FlowMarker {
             proto::FlowMarker h = c;
             h.clear_src_addr();
             h.clear_dst_addr();
@@ -64,8 +63,7 @@ std::unique_ptr<FlowAggregator> NewHostToClusterAggregator(
       std::move(cluster_demand_predictor),
       FlowAggregator::Config{
           .usage_history_window = usage_history_window,
-          .get_agg_flow_fn =
-              [](const proto::FlowMarker& c) -> proto::FlowMarker {
+          .get_agg_flow_fn = [](const proto::FlowMarker& c) -> proto::FlowMarker {
             proto::FlowMarker h = c;
             h.clear_host_id();
             h.clear_src_addr();
@@ -86,8 +84,8 @@ std::unique_ptr<FlowAggregator> NewHostToClusterAggregator(
       });
 }
 
-FlowAggregator::FlowAggregator(
-    std::unique_ptr<DemandPredictor> agg_demand_predictor, Config config)
+FlowAggregator::FlowAggregator(std::unique_ptr<DemandPredictor> agg_demand_predictor,
+                               Config config)
     : config_(std::move(config)),
       agg_demand_predictor_(std::move(agg_demand_predictor)) {}
 
@@ -138,22 +136,17 @@ void FlowAggregator::ForEachAgg(
       AggWIP& wip = GetAggWIP(flow_time_info.first);
       wip.oldest_active_time =
           std::min(wip.oldest_active_time, flow_time_info.second.first);
-      wip.cum_hipri_usage_bytes +=
-          flow_time_info.second.second.cum_hipri_usage_bytes();
-      wip.cum_lopri_usage_bytes +=
-          flow_time_info.second.second.cum_lopri_usage_bytes();
+      wip.cum_hipri_usage_bytes += flow_time_info.second.second.cum_hipri_usage_bytes();
+      wip.cum_lopri_usage_bytes += flow_time_info.second.second.cum_lopri_usage_bytes();
       wip.sum_ewma_usage_bps += flow_time_info.second.second.ewma_usage_bps();
       wip.children.push_back(flow_time_info.second.second);
     }
 
     for (const auto& flow_time_info : bs.dead) {
       AggWIP& wip = GetAggWIP(flow_time_info.first);
-      wip.newest_dead_time =
-          std::max(wip.newest_dead_time, flow_time_info.second.first);
-      wip.cum_hipri_usage_bytes +=
-          flow_time_info.second.second.cum_hipri_usage_bytes();
-      wip.cum_lopri_usage_bytes +=
-          flow_time_info.second.second.cum_lopri_usage_bytes();
+      wip.newest_dead_time = std::max(wip.newest_dead_time, flow_time_info.second.first);
+      wip.cum_hipri_usage_bytes += flow_time_info.second.second.cum_hipri_usage_bytes();
+      wip.cum_lopri_usage_bytes += flow_time_info.second.second.cum_lopri_usage_bytes();
     }
   }
 
@@ -185,8 +178,7 @@ void FlowAggregator::ForEachAgg(
   }
 }
 
-FlowAggregator::AggWIP& FlowAggregator::GetAggWIP(
-    const proto::FlowMarker& child) {
+FlowAggregator::AggWIP& FlowAggregator::GetAggWIP(const proto::FlowMarker& child) {
   proto::FlowMarker m = config_.get_agg_flow_fn(child);
   auto iter = agg_wips_.find(m);
   if (iter == agg_wips_.end()) {

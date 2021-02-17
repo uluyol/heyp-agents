@@ -25,8 +25,7 @@ static void InterruptHandler(int signal) {
 namespace heyp {
 namespace {
 
-absl::Status Run(const proto::ClusterAgentConfig& c,
-                 const proto::AllocBundle& allocs) {
+absl::Status Run(const proto::ClusterAgentConfig& c, const proto::AllocBundle& allocs) {
   auto control_period_or =
       ParseAbslDuration(c.server().control_period(), "control period");
   if (!control_period_or.ok()) {
@@ -35,23 +34,20 @@ absl::Status Run(const proto::ClusterAgentConfig& c,
 
   std::unique_ptr<DemandPredictor> agg_demand_predictor;
   absl::Duration demand_time_window;
-  absl::Status predictor_status =
-      ParseDemandPredictorConfig(c.flow_aggregator().demand_predictor(),
-                                 &agg_demand_predictor, &demand_time_window);
+  absl::Status predictor_status = ParseDemandPredictorConfig(
+      c.flow_aggregator().demand_predictor(), &agg_demand_predictor, &demand_time_window);
 
   if (!predictor_status.ok()) {
     return predictor_status;
   }
 
   ClusterAgentService service(
-      NewHostToClusterAggregator(std::move(agg_demand_predictor),
-                                 demand_time_window),
+      NewHostToClusterAggregator(std::move(agg_demand_predictor), demand_time_window),
       ClusterAllocator::Create(c.allocator(), allocs), *control_period_or);
 
   std::unique_ptr<grpc::Server> server(
       grpc::ServerBuilder()
-          .AddListeningPort(c.server().address(),
-                            grpc::InsecureServerCredentials())
+          .AddListeningPort(c.server().address(), grpc::InsecureServerCredentials())
           .RegisterService(&service)
           .BuildAndStart());
   LOG(INFO) << "Server listening on " << c.server().address();
@@ -73,8 +69,7 @@ int main(int argc, char** argv) {
   std::signal(SIGINT, InterruptHandler);
 
   if (argc != 3) {
-    std::cerr << "usage: " << argv[0]
-              << " config_path.textproto limits_path.textproto\n";
+    std::cerr << "usage: " << argv[0] << " config_path.textproto limits_path.textproto\n";
     return 1;
   }
 

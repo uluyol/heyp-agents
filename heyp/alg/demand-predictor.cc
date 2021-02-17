@@ -13,8 +13,7 @@ std::ostream& operator<<(std::ostream& os, const UsageHistoryEntry& e) {
 }
 
 BweDemandPredictor::BweDemandPredictor(absl::Duration time_window,
-                                       double usage_multiplier,
-                                       int64_t min_demand_bps)
+                                       double usage_multiplier, int64_t min_demand_bps)
     : time_window_(time_window),
       usage_multiplier_(usage_multiplier),
       min_demand_bps_(min_demand_bps) {

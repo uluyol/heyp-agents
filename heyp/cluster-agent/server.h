@@ -14,8 +14,7 @@ class ClusterAgentService final : public proto::ClusterAgent::Service {
 
   grpc::Status RegisterHost(
       grpc::ServerContext* context,
-      grpc::ServerReaderWriter<proto::AllocBundle, proto::InfoBundle>* stream)
-      override;
+      grpc::ServerReaderWriter<proto::AllocBundle, proto::InfoBundle>* stream) override;
 
  private:
   const absl::Duration control_period_;

@@ -22,9 +22,8 @@ class DemandPredictor {
  public:
   virtual ~DemandPredictor(){};
 
-  virtual int64_t FromUsage(
-      absl::Time now,
-      absl::Span<const UsageHistoryEntry> usage_history) const = 0;
+  virtual int64_t FromUsage(absl::Time now,
+                            absl::Span<const UsageHistoryEntry> usage_history) const = 0;
 };
 
 class BweDemandPredictor : public DemandPredictor {
@@ -32,9 +31,8 @@ class BweDemandPredictor : public DemandPredictor {
   BweDemandPredictor(absl::Duration time_window, double usage_multiplier,
                      int64_t min_demand_bps);
 
-  int64_t FromUsage(
-      absl::Time now,
-      absl::Span<const UsageHistoryEntry> usage_history) const override;
+  int64_t FromUsage(absl::Time now,
+                    absl::Span<const UsageHistoryEntry> usage_history) const override;
 
  private:
   const absl::Duration time_window_;
@@ -44,9 +42,8 @@ class BweDemandPredictor : public DemandPredictor {
 
 class NopDemandPredictor : public DemandPredictor {
  public:
-  int64_t FromUsage(
-      absl::Time now,
-      absl::Span<const UsageHistoryEntry> usage_history) const override {
+  int64_t FromUsage(absl::Time now,
+                    absl::Span<const UsageHistoryEntry> usage_history) const override {
     return 0;
   }
 };
