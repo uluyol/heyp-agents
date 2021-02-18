@@ -4,12 +4,14 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 http_archive(
     name = "com_google_absl",
+    sha256 = "46e8249a18be8968777890803b57f9d7a5e5f3b6e432951f121114161cb51427",
     strip_prefix = "abseil-cpp-184d2f8364bcb05e413ec4c72cad0cf86e712d1c",
     urls = ["https://github.com/abseil/abseil-cpp/archive/184d2f8364bcb05e413ec4c72cad0cf86e712d1c.zip"],
 )
 
 http_archive(
     name = "gtest",
+    sha256 = "355097d91fc3b412f122958f57cdc6ec42eb60d445b6c48be580ee639aed5b26",
     strip_prefix = "googletest-18f8200e3079b0e54fa00cb7ac55d4c39dcf6da6",
     urls = ["https://github.com/google/googletest/archive/18f8200e3079b0e54fa00cb7ac55d4c39dcf6da6.zip"],
 )
@@ -23,6 +25,7 @@ http_archive(
 
 http_archive(
     name = "glog",
+    sha256 = "cbba86b5a63063999e0fc86de620a3ad22d6fd2aa5948bff4995dcd851074a0b",
     strip_prefix = "glog-c8f8135a5720aee7de8328b42e4c43f8aa2e60aa",
     urls = ["https://github.com/google/glog/archive/c8f8135a5720aee7de8328b42e4c43f8aa2e60aa.zip"],
 )
@@ -35,6 +38,7 @@ http_archive(
 
 http_archive(
     name = "com_github_nelhage_rules_boost",
+    sha256 = "23365db335d049a97620ab6aa639eeee7bf0d0d262c778e8dbe70164b249c918",
     strip_prefix = "rules_boost-fbac9be7640ecc0fab075233d394f08f1a37e449",
     urls = ["https://github.com/nelhage/rules_boost/archive/fbac9be7640ecc0fab075233d394f08f1a37e449.zip"],
 )
@@ -45,6 +49,7 @@ boost_deps()
 
 http_archive(
     name = "com_github_grpc_grpc",
+    sha256 = "0af0b937d5a766006f3dba6507ebbe698128a868bc0c7e5dd63f6cbb764a4e9c",
     strip_prefix = "grpc-893466127810d97d8f9ce8f2b312423a11912b48",
     urls = [
         "https://github.com/grpc/grpc/archive/893466127810d97d8f9ce8f2b312423a11912b48.tar.gz",
@@ -61,6 +66,7 @@ grpc_extra_deps()
 
 http_archive(
     name = "com_github_uluyol_routing_algos",
+    sha256 = "873dd78369f5a13f56df603bc35b2f7fdf2057ce54b8114c88af60282c16a3f3",
     strip_prefix = "routing-algos-a43ab38b70d0301e38f0114df651edbffa730d4c",
     urls = [
         "https://github.com/uluyol/routing-algos/archive/a43ab38b70d0301e38f0114df651edbffa730d4c.tar.gz",
