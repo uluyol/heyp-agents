@@ -4,6 +4,7 @@
 #include <istream>
 #include <iterator>
 
+#include "absl/strings/ascii.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
 #include "boost/process/args.hpp"
@@ -36,13 +37,16 @@ absl::Status TcCaller::Call(const std::vector<std::string>& tc_args) {
           absl::StrCat("tc exit status ", c.exit_code(), ":\n", buf_));
     }
 
-    auto result = parser_.parse(buf_);
-    if (result.error() != simdjson::SUCCESS) {
-      return absl::InternalError(absl::StrCat("failed to parse tc output to json: ",
-                                              simdjson::error_message(result.error())));
+    if (absl::StripAsciiWhitespace(buf_).empty()) {
+      result_.reset();
+    } else {
+      auto result = parser_.parse(buf_);
+      if (result.error() != simdjson::SUCCESS) {
+        return absl::InternalError(absl::StrCat("failed to parse tc output to json: ",
+                                                simdjson::error_message(result.error())));
+      }
+      result_ = result.value();
     }
-
-    result_ = result.value();
   } catch (const std::system_error& e) {
     return absl::InternalError(absl::StrCat("failed to run tc subprocess: ", e.what()));
   }

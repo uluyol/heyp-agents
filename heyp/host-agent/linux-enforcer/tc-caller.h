@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "absl/status/status.h"
+#include "absl/types/optional.h"
 #include "third_party/simdjson/simdjson.h"
 
 namespace heyp {
@@ -14,13 +15,13 @@ class TcCaller {
   explicit TcCaller(const std::string& tc_name = "tc");
 
   absl::Status Call(const std::vector<std::string>& tc_args);
-  simdjson::dom::element GetResult() const { return result_; }
+  absl::optional<simdjson::dom::element> GetResult() const { return result_; }
 
  private:
   const std::string tc_name_;
   simdjson::dom::parser parser_;
   std::string buf_;
-  simdjson::dom::element result_;
+  absl::optional<simdjson::dom::element> result_;
 };
 
 }  // namespace heyp
