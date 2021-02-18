@@ -176,7 +176,15 @@ absl::Status HostWorker::InitFlows(std::vector<Flow>& flows) {
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     addr.sin_port = htons(f.dst_port);
-    if (connect(fd, reinterpret_cast<const struct sockaddr*>(&addr), sizeof addr)) {
+    bool connected = false;
+    for (int attempt = 0; !connected && attempt < 5; ++attempt) {
+      if (!connect(fd, reinterpret_cast<const struct sockaddr*>(&addr), sizeof addr)) {
+        connected = true;
+      } else {
+        absl::SleepFor(absl::Milliseconds(100));
+      }
+    }
+    if (!connected) {
       return absl::UnknownError(absl::StrCat("failed to connect: ", StrError(errno)));
     }
 
@@ -228,9 +236,8 @@ std::vector<proto::TestCompareMetrics::Metric> HostWorker::Finish() {
 
   if (serve_fd_ != -1) {
     LOG(INFO) << "tearing down serve loop";
-    // shutdown(serve_fd_, SHUT_RDWR);
+    shutdown(serve_fd_, SHUT_RDWR);
     close(serve_fd_);
-    serve_thread_.join();
   }
 
   absl::MutexLock l(&mu_);
@@ -239,6 +246,7 @@ std::vector<proto::TestCompareMetrics::Metric> HostWorker::Finish() {
     VLOG(2) << "close fd " << fd;
     close(fd);
   }
+  serve_thread_.join();
   for (size_t i = 0; i < worker_threads_.size(); ++i) {
     VLOG(2) << "join worker " << i;
     if (!worker_threads_[i].joinable()) {
