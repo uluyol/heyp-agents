@@ -73,7 +73,6 @@ class LinuxHostEnforcerImpl : public LinuxHostEnforcer {
       std::string class_id;
       int64_t cur_rate_limit_bps = 0;
       bool did_create_class = false;
-      bool did_create_filter = false;
       bool update_after_ipt_change = false;
     };
 
@@ -181,18 +180,6 @@ absl::Status LinuxHostEnforcerImpl::UpdateTrafficControlForFlow(int64_t rate_lim
     if (!st.ok()) {
       return absl::InternalError(
           absl::StrCat("failed to change rate limit for tc class: ", st.message()));
-    }
-  }
-
-  if (!sys.did_create_filter) {
-    absl::Status st = tc_caller_.Call({"-j", "class", "add", "dev", device_, "parent",
-                                       "1:", "classid", sys.class_id, "htb", "rate",
-                                       absl::StrCat(rate_limit_mbps, "mbit")});
-    if (st.ok()) {
-      sys.did_create_class = true;
-    } else {
-      return absl::InternalError(
-          absl::StrCat("failed to create tc class: ", st.message()));
     }
   }
 
