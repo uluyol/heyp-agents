@@ -23,7 +23,7 @@ TcCaller::TcCaller(const std::string& tc_name) : tc_name_(tc_name) {}
 
 absl::Status TcCaller::Call(const std::vector<std::string>& tc_args) {
   try {
-    VLOG(2) << "running tc: " << tc_name_ << absl::StrJoin(tc_args, " ");
+    VLOG(2) << "running tc: " << tc_name_ << " " << absl::StrJoin(tc_args, " ");
 
     bp::ipstream out;
     bp::child c(bp::search_path(tc_name_), bp::args(tc_args), bp::std_out > out);
