@@ -144,8 +144,8 @@ void LinuxHostEnforcerImpl::StageIptablesForFlow(
 
   for (auto f : matched_flows) {
     ipt_controller_.Stage({
-        .dst_port = AssertValidPort(f.dst_port()),
         .src_port = AssertValidPort(f.src_port()),
+        .dst_port = AssertValidPort(f.dst_port()),
         .dst_addr = f.dst_addr(),
         .class_id = class_id,
         .dscp = dscp,
