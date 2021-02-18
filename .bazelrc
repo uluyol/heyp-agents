@@ -1,6 +1,18 @@
 build --cxxopt=-std=c++17
 build --define absl=1
 
+build:libc++ --action_env=BAZEL_COMPILER=clang
+build:libc++ --linkopt=-fuse-ld=lld
+build:libc++ --action_env=CXXFLAGS=-stdlib=libc++
+build:libc++ --action_env=LDFLAGS=-stdlib=libc++
+build:libc++ --action_env=BAZEL_CXXOPTS=-stdlib=libc++
+build:libc++ --action_env=BAZEL_LINKLIBS=-l%:libc++.a:-l%:libc++abi.a
+build:libc++ --action_env=BAZEL_LINKOPTS=-lm:-pthread
+build:libc++ --define force_libcpp=enabled
+
+build:clang-opt -c opt
+build:clang-opt --config=libc++
+
 build:asan --strip=never
 build:asan --copt -fsanitize=address
 build:asan --copt -DADDRESS_SANITIZER
