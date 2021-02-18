@@ -477,7 +477,8 @@ absl::Status RunnerImpl::RestoreInternal(std::vector<std::string> args,
                 bp::std_out > stdout, bp::std_err > stderr, bp::std_in < input_stream);
 
     input_stream << data;
-    input_stream.close();
+    input_stream.flush();
+    input_stream.pipe().close();
 
     c.wait();
     if (c.exit_code() != 0) {

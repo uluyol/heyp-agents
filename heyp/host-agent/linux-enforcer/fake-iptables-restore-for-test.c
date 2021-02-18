@@ -33,6 +33,12 @@ int main(int argc, char **argv) {
       }
     }
   }
+  if (fread(buf, 1, 1024, stdin) > 0) {
+    return 4;
+  }
+  if (!feof(stdin)) {
+    return 5;
+  }
 
   return 0;
 }
