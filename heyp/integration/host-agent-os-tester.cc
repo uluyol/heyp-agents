@@ -93,6 +93,7 @@ class EasyEnforcer {
       }
       enforcer_ = std::move(e);
     } else {
+      LOG(WARNING) << "using nop enforcer";
       enforcer_ = absl::make_unique<NopHostEnforcer>();
     }
   }
@@ -197,10 +198,9 @@ absl::StatusOr<proto::TestCompareMetrics> HostAgentOSTester::Run() {
 
   absl::SleepFor(absl::Milliseconds(100));
 
-  LOG(INFO) << "initalized flows:\n" << absl::StrJoin(all_flows, "\n", FlowFormatter());
-
   proto::TestCompareMetrics metrics;
   if (status.ok()) {
+    LOG(INFO) << "initalized flows:\n" << absl::StrJoin(all_flows, "\n", FlowFormatter());
     EasyEnforcer enforcer(config_.device, config_.use_hipri, all_flows);
     RateLimitPicker limit_picker(config_.max_rate_limit_bps);
     std::vector<std::pair<HostWorker::Flow, int64_t>> all_flows_limits;
@@ -218,7 +218,8 @@ absl::StatusOr<proto::TestCompareMetrics> HostAgentOSTester::Run() {
 
     int step = 0;
     while (absl::Now() - start < config_.run_dur) {
-      LOG(INFO) << "step " << step;
+      LOG(INFO) << "step " << step
+                << ": dur = " << absl::FormatDuration(config_.step_dur);
       absl::SleepFor(config_.step_dur);
       std::string label(absl::StrCat("step = ", step, "/have"));
       for (auto& w : workers) {
@@ -228,6 +229,8 @@ absl::StatusOr<proto::TestCompareMetrics> HostAgentOSTester::Run() {
       limit_picker.Pick(all_flows_limits);
       enforcer.UpdateLimits(all_flows_limits, absl::StrCat("step = ", step), &metrics);
     }
+  } else {
+    LOG(FATAL) << "failed to initialize flows: " << status;
   }
 
   LOG(INFO) << "collecting metrics";
@@ -241,6 +244,16 @@ absl::StatusOr<proto::TestCompareMetrics> HostAgentOSTester::Run() {
   if (!status.ok()) {
     return status;
   }
+
+  std::sort(metrics.mutable_metrics()->begin(), metrics.mutable_metrics()->end(),
+            [](const proto::TestCompareMetrics::Metric& lhs,
+               const proto::TestCompareMetrics::Metric& rhs) -> bool {
+              if (lhs.name() == rhs.name()) {
+                return lhs.value() < rhs.value();
+              }
+              return lhs.name() < rhs.name();
+            });
+
   return metrics;
 }
 
