@@ -12,6 +12,7 @@ class HostAgentOSTester {
  public:
   struct Config {
     std::string device;
+    std::string log_dir;  // optional
     bool use_hipri = true;
     absl::Duration run_dur = absl::Seconds(60);
     absl::Duration step_dur = absl::Seconds(2);

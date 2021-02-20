@@ -7,6 +7,7 @@
 #include "heyp/init/init.h"
 #include "heyp/integration/host-agent-os-tester.h"
 
+DEFINE_string(logdir, "", "directory to write debug log files to, if present");
 DEFINE_string(run_dur, "60s", "how much time the test should measure for");
 DEFINE_string(step_dur, "2s", "how long a single step in the test should last");
 DEFINE_int32(num_hosts, 4, "number of hosts to emulate");
@@ -30,6 +31,7 @@ int main(int argc, char** argv) {
 
   heyp::testing::HostAgentOSTester tester({
       .device = "lo",
+      .log_dir = FLAGS_logdir,
       .use_hipri = true,
       .run_dur = run_dur,
       .step_dur = step_dur,

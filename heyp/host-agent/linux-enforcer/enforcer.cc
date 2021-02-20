@@ -2,11 +2,13 @@
 
 #include <limits>
 
+#include "absl/cleanup/cleanup.h"
 #include "absl/container/flat_hash_map.h"
 #include "glog/logging.h"
 #include "heyp/host-agent/linux-enforcer/iptables-controller.h"
 #include "heyp/host-agent/linux-enforcer/iptables.h"
 #include "heyp/host-agent/linux-enforcer/tc-caller.h"
+#include "heyp/io/debug-output-logger.h"
 #include "heyp/proto/alg.h"
 #include "heyp/proto/heyp.pb.h"
 
@@ -58,7 +60,8 @@ uint16_t AssertValidPort(int32_t port32) {
 class LinuxHostEnforcerImpl : public LinuxHostEnforcer {
  public:
   LinuxHostEnforcerImpl(absl::string_view device,
-                        const MatchHostFlowsFunc &match_host_flows_fn);
+                        const MatchHostFlowsFunc &match_host_flows_fn,
+                        absl::string_view debug_log_outdir);
 
   absl::Status ResetDeviceConfig() override;
 
@@ -92,6 +95,7 @@ class LinuxHostEnforcerImpl : public LinuxHostEnforcer {
   const MatchHostFlowsFunc match_host_flows_fn_;
   TcCaller tc_caller_;
   iptables::Controller ipt_controller_;
+  DebugOutputLogger debug_logger_;
   int32_t next_class_id_;
 
   absl::flat_hash_map<proto::FlowMarker, FlowSys, HashFlow, EqFlow>
@@ -99,10 +103,12 @@ class LinuxHostEnforcerImpl : public LinuxHostEnforcer {
 };
 
 LinuxHostEnforcerImpl::LinuxHostEnforcerImpl(
-    absl::string_view device, const MatchHostFlowsFunc &match_host_flows_fn)
+    absl::string_view device, const MatchHostFlowsFunc &match_host_flows_fn,
+    absl::string_view debug_log_outdir)
     : device_(device),
       match_host_flows_fn_(match_host_flows_fn),
       ipt_controller_(device),
+      debug_logger_(debug_log_outdir),
       next_class_id_(2) {}
 
 absl::Status LinuxHostEnforcerImpl::ResetDeviceConfig() {
@@ -198,6 +204,36 @@ absl::Status LinuxHostEnforcerImpl::UpdateTrafficControlForFlow(int64_t rate_lim
 //
 void LinuxHostEnforcerImpl::EnforceAllocs(const FlowStateProvider &flow_state_provider,
                                           const proto::AllocBundle &bundle) {
+  auto cleanup = absl::MakeCleanup([this] {
+    if (debug_logger_.should_log()) {
+      absl::Cord mangle_table;
+      ipt_controller_.GetRunner()
+          .SaveInto(iptables::Table::kMangle, mangle_table)
+          .IgnoreError();
+      bool have_qdisc_output = false;
+      absl::Cord qdisc_output;
+      if (tc_caller_.Call({"-j", "qdisc"}).ok()) {
+        qdisc_output.Append(simdjson::minify(tc_caller_.GetResult()));
+        have_qdisc_output = true;
+      }
+      bool have_class_output = false;
+      absl::Cord class_output;
+      if (tc_caller_.Call({"-j", "class", "show", "dev", device_}).ok()) {
+        class_output.Append(simdjson::minify(tc_caller_.GetResult()));
+        have_class_output = true;
+      }
+
+      absl::Time timestamp = absl::Now();
+      debug_logger_.Write("iptables:mangle", mangle_table, timestamp);
+      if (have_qdisc_output) {
+        debug_logger_.Write("tc:qdisc", qdisc_output, timestamp);
+      }
+      if (have_class_output) {
+        debug_logger_.Write("tc:class", class_output, timestamp);
+      }
+    }
+  });
+
   for (const proto::FlowAlloc &flow_alloc : bundle.flow_allocs()) {
     MatchedHostFlows matched = match_host_flows_fn_(flow_state_provider, flow_alloc);
     FlowSys &sys = sys_info_[flow_alloc.flow()];
@@ -268,8 +304,10 @@ bool LinuxHostEnforcerImpl::IsLopri(const proto::FlowMarker &flow) {
 }  // namespace
 
 std::unique_ptr<LinuxHostEnforcer> LinuxHostEnforcer::Create(
-    absl::string_view device, const MatchHostFlowsFunc &match_host_flows_fn) {
-  return absl::make_unique<LinuxHostEnforcerImpl>(device, match_host_flows_fn);
+    absl::string_view device, const MatchHostFlowsFunc &match_host_flows_fn,
+    absl::string_view debug_log_outdir) {
+  return absl::make_unique<LinuxHostEnforcerImpl>(device, match_host_flows_fn,
+                                                  debug_log_outdir);
 }
 
 }  // namespace heyp

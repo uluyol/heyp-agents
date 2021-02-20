@@ -31,7 +31,8 @@ MatchedHostFlows ExpandDestIntoHostsSinglePri(
 class LinuxHostEnforcer : public HostEnforcer {
  public:
   static std::unique_ptr<LinuxHostEnforcer> Create(
-      absl::string_view device, const MatchHostFlowsFunc& match_host_flows_fn);
+      absl::string_view device, const MatchHostFlowsFunc& match_host_flows_fn,
+      absl::string_view debug_log_outdir = "");
 
   virtual ~LinuxHostEnforcer() = default;
 

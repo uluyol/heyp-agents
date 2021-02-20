@@ -13,6 +13,8 @@ cc_library(
         ":tc-caller",
         "//heyp/flows:dc-mapper",
         "//heyp/host-agent:enforcer",
+        "//heyp/io:debug-output-logger",
+        "@com_google_absl//absl/cleanup",
         "@com_google_absl//absl/functional:function_ref",
         "@com_google_absl//absl/strings",
         "@glog",

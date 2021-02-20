@@ -77,6 +77,8 @@ void ComputeDiff(SettingBatch& old_batch, SettingBatch& new_batch, SettingBatch*
 Controller::Controller(absl::string_view dev)
     : dev_(dev), runner_(Runner::Create(IpFamily::kIpV4)) {}
 
+Runner& Controller::GetRunner() { return *runner_; }
+
 absl::Status Controller::Clear() {
   applied_.settings.clear();
   LOG(INFO) << "flushing iptables 'mangle' table";

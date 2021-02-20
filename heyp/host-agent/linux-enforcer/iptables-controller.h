@@ -41,6 +41,8 @@ class Controller {
  public:
   explicit Controller(absl::string_view dev);
 
+  Runner& GetRunner();
+
   absl::Status Clear();
   void Stage(SettingBatch::Setting setting);
   absl::Status CommitChanges();

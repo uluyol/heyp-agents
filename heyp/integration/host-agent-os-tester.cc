@@ -82,11 +82,12 @@ MatchedHostFlows WithFlowPriority(const bool use_hipri,
 class EasyEnforcer {
  public:
   explicit EasyEnforcer(absl::string_view device, bool use_hipri,
-                        const std::vector<HostWorker::Flow>& all_flows)
+                        const std::vector<HostWorker::Flow>& all_flows,
+                        absl::string_view log_dir)
       : demand_provider_(all_flows) {
     if (kHostIsLinux) {
-      auto e = LinuxHostEnforcer::Create(device,
-                                         absl::bind_front(WithFlowPriority, use_hipri));
+      auto e = LinuxHostEnforcer::Create(
+          device, absl::bind_front(WithFlowPriority, use_hipri), log_dir);
       auto st = e->ResetDeviceConfig();
       if (!st.ok()) {
         LOG(ERROR) << "failed to reset config of device '" << device << "': " << st;
@@ -201,7 +202,7 @@ absl::StatusOr<proto::TestCompareMetrics> HostAgentOSTester::Run() {
   proto::TestCompareMetrics metrics;
   if (status.ok()) {
     LOG(INFO) << "initalized flows:\n" << absl::StrJoin(all_flows, "\n", FlowFormatter());
-    EasyEnforcer enforcer(config_.device, config_.use_hipri, all_flows);
+    EasyEnforcer enforcer(config_.device, config_.use_hipri, all_flows, config_.log_dir);
     RateLimitPicker limit_picker(config_.max_rate_limit_bps);
     std::vector<std::pair<HostWorker::Flow, int64_t>> all_flows_limits;
     for (const auto& f : all_flows) {
