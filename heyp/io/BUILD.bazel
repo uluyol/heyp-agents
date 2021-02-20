@@ -1,0 +1,18 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+package(
+    default_visibility = ["//heyp:__subpackages__"],
+)
+
+cc_library(
+    name = "debug-output-logger",
+    srcs = ["debug-output-logger.cc"],
+    hdrs = ["debug-output-logger.h"],
+    deps = [
+        "//heyp/posix:strerror",
+        "@com_google_absl//absl/cleanup",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/time",
+    ],
+)
