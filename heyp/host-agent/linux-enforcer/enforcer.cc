@@ -213,13 +213,19 @@ void LinuxHostEnforcerImpl::EnforceAllocs(const FlowStateProvider &flow_state_pr
       bool have_qdisc_output = false;
       absl::Cord qdisc_output;
       if (tc_caller_.Call({"-j", "qdisc"}).ok()) {
-        qdisc_output.Append(simdjson::minify(tc_caller_.GetResult()));
+        auto opt_elem = tc_caller_.GetResult();
+        if (opt_elem.has_value()) {
+          qdisc_output.Append(simdjson::minify(*opt_elem));
+        }
         have_qdisc_output = true;
       }
       bool have_class_output = false;
       absl::Cord class_output;
       if (tc_caller_.Call({"-j", "class", "show", "dev", device_}).ok()) {
-        class_output.Append(simdjson::minify(tc_caller_.GetResult()));
+        auto opt_elem = tc_caller_.GetResult();
+        if (opt_elem.has_value()) {
+          class_output.Append(simdjson::minify(*opt_elem));
+        }
         have_class_output = true;
       }
 
