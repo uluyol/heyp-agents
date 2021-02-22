@@ -10,6 +10,20 @@ cc_binary(
     ],
 )
 
+cc_binary(
+    name = "mk-want-vs-have-csv",
+    srcs = ["mk-want-vs-have-csv.cc"],
+    deps = [
+        "//heyp/init",
+        "//heyp/proto:fileio",
+        "//heyp/proto:integration_cc_proto",
+        "@com_github_gflags_gflags//:gflags",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+    ],
+)
+
 cc_library(
     name = "host-agent-os-tester",
     srcs = ["host-agent-os-tester.cc"],
