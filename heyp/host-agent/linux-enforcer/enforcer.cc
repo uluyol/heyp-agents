@@ -128,9 +128,10 @@ absl::Status LinuxHostEnforcerImpl::ResetDeviceConfig() {
 absl::Status LinuxHostEnforcerImpl::ResetIptables() { return ipt_controller_.Clear(); }
 
 absl::Status LinuxHostEnforcerImpl::ResetTrafficControl() {
-  absl::Status st = tc_caller_.Call({"-j", "qdisc", "delete", "dev", device_, "root"});
-  st.Update(tc_caller_.Call({"-j", "qdisc", "add", "dev", device_, "root", "handle",
-                             "1:", "htb", "default", "0"}));
+  absl::Status st = tc_caller_.Call({"qdisc", "delete", "dev", device_, "root"}, false);
+  st.Update(tc_caller_.Call(
+      {"qdisc", "add", "dev", device_, "root", "handle", "1:", "htb", "default", "0"},
+      false));
   return st;
 }
 
@@ -169,9 +170,10 @@ absl::Status LinuxHostEnforcerImpl::UpdateTrafficControlForFlow(int64_t rate_lim
 
   if (!sys.did_create_class) {
     // Add class
-    absl::Status st = tc_caller_.Call({"-j", "class", "add", "dev", device_, "parent",
-                                       "1:", "classid", sys.class_id, "htb", "rate",
-                                       absl::StrCat(rate_limit_mbps, "mbit")});
+    absl::Status st = tc_caller_.Call(
+        {"class", "add", "dev", device_, "parent", "1:", "classid", sys.class_id, "htb",
+         "rate", absl::StrCat(rate_limit_mbps, "mbit")},
+        false);
     if (st.ok()) {
       sys.did_create_class = true;
     } else {
@@ -180,9 +182,10 @@ absl::Status LinuxHostEnforcerImpl::UpdateTrafficControlForFlow(int64_t rate_lim
     }
   } else {
     // Change class rate limit
-    absl::Status st = tc_caller_.Call({"-j", "class", "change", "dev", device_, "parent",
-                                       "1:", "classid", sys.class_id, "htb", "rate",
-                                       absl::StrCat(rate_limit_mbps, "mbit")});
+    absl::Status st = tc_caller_.Call(
+        {"class", "change", "dev", device_, "parent", "1:", "classid", sys.class_id,
+         "htb", "rate", absl::StrCat(rate_limit_mbps, "mbit")},
+        false);
     if (!st.ok()) {
       return absl::InternalError(
           absl::StrCat("failed to change rate limit for tc class: ", st.message()));
@@ -212,20 +215,14 @@ void LinuxHostEnforcerImpl::EnforceAllocs(const FlowStateProvider &flow_state_pr
           .IgnoreError();
       bool have_qdisc_output = false;
       absl::Cord qdisc_output;
-      if (tc_caller_.Call({"-j", "qdisc"}).ok()) {
-        auto opt_elem = tc_caller_.GetResult();
-        if (opt_elem.has_value()) {
-          qdisc_output.Append(simdjson::minify(*opt_elem));
-        }
+      if (tc_caller_.Call({"qdisc"}, false).ok()) {
+        qdisc_output.Append(tc_caller_.RawOut());
         have_qdisc_output = true;
       }
       bool have_class_output = false;
       absl::Cord class_output;
-      if (tc_caller_.Call({"-j", "class", "show", "dev", device_}).ok()) {
-        auto opt_elem = tc_caller_.GetResult();
-        if (opt_elem.has_value()) {
-          class_output.Append(simdjson::minify(*opt_elem));
-        }
+      if (tc_caller_.Call({"class", "show", "dev", device_}, false).ok()) {
+        class_output.Append(tc_caller_.RawOut());
         have_class_output = true;
       }
 

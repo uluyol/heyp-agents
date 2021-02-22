@@ -21,7 +21,8 @@ namespace heyp {
 
 TcCaller::TcCaller(const std::string& tc_name) : tc_name_(tc_name) {}
 
-absl::Status TcCaller::Call(const std::vector<std::string>& tc_args) {
+absl::Status TcCaller::Call(const std::vector<std::string>& tc_args,
+                            bool parse_into_json) {
   try {
     VLOG(2) << "running tc: " << tc_name_ << " " << absl::StrJoin(tc_args, " ");
 
@@ -37,7 +38,7 @@ absl::Status TcCaller::Call(const std::vector<std::string>& tc_args) {
           absl::StrCat("tc exit status ", c.exit_code(), ":\n", buf_));
     }
 
-    if (absl::StripAsciiWhitespace(buf_).empty()) {
+    if (absl::StripAsciiWhitespace(buf_).empty() || !parse_into_json) {
       result_.reset();
     } else {
       auto result = parser_.parse(buf_);
