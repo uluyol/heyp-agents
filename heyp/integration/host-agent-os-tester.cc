@@ -222,7 +222,7 @@ absl::StatusOr<proto::TestCompareMetrics> HostAgentOSTester::Run() {
       LOG(INFO) << "step " << step
                 << ": dur = " << absl::FormatDuration(config_.step_dur);
       absl::SleepFor(config_.step_dur);
-      std::string label(absl::StrCat("step = ", step, "/have"));
+      std::string label(absl::StrCat("step = ", step));
       for (auto& w : workers) {
         w->CollectStep(label);
       }

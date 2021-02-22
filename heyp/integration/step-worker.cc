@@ -6,6 +6,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 
+#include <algorithm>
 #include <cstring>
 
 #include "absl/cleanup/cleanup.h"
@@ -105,7 +106,7 @@ void HostWorker::RecvFlow(int fd) {
   std::atomic<int64_t>* counter = nullptr;
   {
     absl::MutexLock l(&mu_);
-    counter = GetCounter(name);
+    counter = GetCounter(name, /*recv=*/true);
   }
 
   VLOG(2) << "fd " << fd << ": start read loop";
@@ -144,10 +145,12 @@ void HostWorker::SendFlow(int fd, std::string name, std::atomic<int64_t>* counte
   }
 }
 
-std::atomic<int64_t>* HostWorker::GetCounter(const std::string& name) {
-  auto iter = counters_.find(name);
+std::atomic<int64_t>* HostWorker::GetCounter(const std::string& name, bool recv) {
+  auto iter = counters_.find({name, recv});
   if (iter == counters_.end()) {
-    return counters_.insert({name, absl::make_unique<std::atomic<int64_t>>()})
+    return counters_
+        .insert({std::pair<std::string, bool>{name, recv},
+                 absl::make_unique<std::atomic<int64_t>>()})
         .first->second.get();
   }
   return iter->second.get();
@@ -202,7 +205,7 @@ absl::Status HostWorker::InitFlows(std::vector<Flow>& flows) {
     worker_fds_.push_back(fd);
     worker_threads_.push_back(std::thread(&HostWorker::SendFlow, this,
                                           fd /* does not own fd */, f.name,
-                                          GetCounter(f.name)));
+                                          GetCounter(f.name, /*recv=*/false)));
   }
 
   return absl::OkStatus();
@@ -259,8 +262,13 @@ std::vector<proto::TestCompareMetrics::Metric> HostWorker::Finish() {
   std::vector<proto::TestCompareMetrics::Metric> results;
   for (const auto& key_val_pair : measurements_) {
     for (const auto& label_step_bps_pair : key_val_pair.second.step_bps) {
+      absl::string_view measurement_loc = "/send";
+      if (key_val_pair.first.second) {
+        measurement_loc = "/recv";
+      }
       proto::TestCompareMetrics::Metric m;
-      m.set_name(absl::StrCat(key_val_pair.first, "/", label_step_bps_pair.first));
+      m.set_name(absl::StrCat(key_val_pair.first.first, "/", label_step_bps_pair.first,
+                              measurement_loc));
       m.set_value(label_step_bps_pair.second);
       results.push_back(std::move(m));
     }

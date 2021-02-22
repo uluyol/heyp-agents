@@ -6,6 +6,7 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/strip.h"
+#include "absl/types/optional.h"
 #include "gflags/gflags.h"
 #include "heyp/init/init.h"
 #include "heyp/proto/fileio.h"
@@ -13,6 +14,13 @@
 
 namespace heyp {
 namespace {
+
+std::string ToString(absl::optional<double> val) {
+  if (!val.has_value()) {
+    return "<missing>";
+  }
+  return std::to_string(*val);
+}
 
 absl::Status ToCsv(absl::string_view input_path, bool print_header, bool ignore_bad) {
   proto::TestCompareMetrics metrics;
@@ -31,56 +39,70 @@ absl::Status ToCsv(absl::string_view input_path, bool print_header, bool ignore_
             });
 
   if (print_header) {
-    std::cout << "Metric,Want,Have\n";
+    std::cout << "Metric,Want,Send,Recv\n";
   }
 
-  absl::string_view prev_name;
-  bool new_record = true;
-  double have_value = 0;
+  struct {
+    absl::string_view name;
+    absl::optional<double> want;
+    absl::optional<double> send;
+    absl::optional<double> recv;
+  } record;
 
   for (const proto::TestCompareMetrics::Metric& m : metrics.metrics()) {
-    bool is_have = absl::EndsWith(m.name(), "/have");
-    bool is_want = absl::EndsWith(m.name(), "/want");
+    absl::string_view name = m.name();
+    name = absl::StripSuffix(name, "/want");
+    name = absl::StripSuffix(name, "/send");
+    name = absl::StripSuffix(name, "/recv");
 
-    if (!new_record) {
-      if (is_have) {
-        std::cerr << "missing want value for " << absl::StripSuffix(prev_name, "/have");
-        if (ignore_bad) {
-          new_record = true;
-          prev_name = "";
-        } else {
-          return absl::DataLossError("missing want value");
-        }
-      } else if (is_want) {
-        std::cout << absl::StrFormat("%s,%g,%g\n", absl::StripSuffix(m.name(), "/want"),
-                                     m.value(), have_value);
-        new_record = true;
-      } else {
-        // unknown data, ignore
-        continue;
-      }
-    } else {
-      if (is_have) {
-        have_value = m.value();
-        new_record = false;
-        prev_name = m.name();
-      } else if (is_want) {
-        std::cerr << "missing have value for " << absl::StripSuffix(m.name(), "/want");
+    if (!record.name.empty() && name != record.name) {
+      if (!(record.want.has_value() && record.send.has_value() &&
+            record.recv.has_value())) {
+        std::cerr << absl::StrFormat(
+            "missing data: {name = %s, want = %s, send = %s, recv = %s}\n", record.name,
+            ToString(record.want), ToString(record.send), ToString(record.recv));
         if (!ignore_bad) {
-          return absl::DataLossError("missing want value");
+          return absl::DataLossError("missing data for record");
         }
-      } else {
-        // unknown data, ignore
-        continue;
+        record.name = name;
+        record.want.reset();
+        record.send.reset();
+        record.recv.reset();
       }
+      std::cout << absl::StrFormat("%s,%g,%g,%g\n", record.name, *record.want,
+                                   *record.send, *record.recv);
+
+      record.name = name;
+      record.want.reset();
+      record.send.reset();
+      record.recv.reset();
+    }
+
+    record.name = name;
+
+    if (absl::EndsWith(m.name(), "/want")) {
+      record.want = m.value();
+    } else if (absl::EndsWith(m.name(), "/send")) {
+      record.send = m.value();
+    } else if (absl::EndsWith(m.name(), "/recv")) {
+      record.recv = m.value();
+    } else {
+      // ignore unknown data
     }
   }
 
-  if (!new_record) {
-    std::cerr << "missing want value for " << absl::StripSuffix(prev_name, "/have");
-    if (!ignore_bad) {
-      return absl::DataLossError("missing want value");
+  if (!record.name.empty()) {
+    if (!(record.want.has_value() && record.send.has_value() &&
+          record.recv.has_value())) {
+      std::cerr << absl::StrFormat(
+          "missing data: {name = %s, want = %s, send = %s, recv = %s}\n", record.name,
+          ToString(record.want), ToString(record.send), ToString(record.recv));
+      if (!ignore_bad) {
+        return absl::DataLossError("missing data for record");
+      }
     }
+    std::cout << absl::StrFormat("%s,%g,%g,%g\n", record.name, *record.want, *record.send,
+                                 *record.recv);
   }
 
   return absl::OkStatus();
@@ -90,7 +112,7 @@ absl::Status ToCsv(absl::string_view input_path, bool print_header, bool ignore_
 }  // namespace heyp
 
 DEFINE_bool(header, false, "add header to csv output");
-DEFINE_bool(ignore_bad, false, "ignore records with missing have/want values");
+DEFINE_bool(ignore_bad, false, "ignore records with missing data");
 
 int main(int argc, char** argv) {
   heyp::MainInit(&argc, &argv);
@@ -98,10 +120,10 @@ int main(int argc, char** argv) {
   if (argc != 2) {
     std::cerr << absl::StrFormat("usage: %s input_file.textproto [> out.csv]\n\n",
                                  argv[0]);
-    std::cerr << "Output format: METRIC_NAME,WANT,HAVE\n";
+    std::cerr << "Output format: METRIC_NAME,WANT,SEND,RECV\n";
     std::cerr << "Notable options:\n";
     std::cerr << "\t-header to add a header to the output\n";
-    std::cerr << "\t-ignore_bad to ignore missing have/want values";
+    std::cerr << "\t-ignore_bad to ignore records with missing data";
     return 2;
   }
 
