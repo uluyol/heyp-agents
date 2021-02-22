@@ -114,11 +114,14 @@ absl::Status Controller::CommitChanges() {
   //       absl::StrCat("failed to save 'mangle' table rules: ", st.message()));
   // }
 
+  mangle_table.Append("*mangle\n");
   AddRuleLinesToDelete(dev_, to_del_, mangle_table);
   AddRuleLinesToAdd(dev_, to_add_, mangle_table);
   mangle_table.Append("COMMIT\n");
 
   LOG(INFO) << "updating rules for iptables 'mangle' table";
+
+  VLOG(3) << "restore input:\n" << mangle_table;
 
   absl::Status st = runner_->Restore(Table::kMangle, mangle_table,
                                      {.flush_tables = false, .restore_counters = false});
