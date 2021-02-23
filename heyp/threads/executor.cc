@@ -56,19 +56,53 @@ TaskGroup::~TaskGroup() {
       << "must call WaitAll on TaskGroup before destroying";
 }
 
-void TaskGroup::WaitAll() {
-  wg_.Wait();
+absl::Status TaskGroup::WaitAll() {
+  mu_.LockWhen(absl::Condition(
+      +[](int* c) { return (*c) == 0; }, &count_));
+  // done
+  absl::Status st = status_;
+  mu_.Unlock();
   exec_->children_.Done();
   exec_ = nullptr;
+  return st;
 }
 
-void TaskGroup::AddTask(const std::function<void()>& fn) {
-  wg_.Add();
+void TaskGroup::WaitAllNoStatus() {
+  auto st = WaitAll();
+  CHECK(st.ok())
+      << "got non-OK status in WaitAllNoStatus; consider using WaitAll instead";
+}
+
+void TaskGroup::AddTask(const std::function<absl::Status()>& fn) {
+  {
+    absl::MutexLock l(&mu_);
+    count_++;
+  }
+  absl::MutexLock l(&exec_->mu_);
+  ABSL_ASSERT(!exec_->st_.is_dead);
+  exec_->st_.tasks.push_back([fn, this] {
+    auto st = fn();
+
+    absl::MutexLock l(&this->mu_);
+    this->status_.Update(st);
+    ABSL_ASSERT(this->count_ > 0);
+    this->count_--;
+  });
+}
+
+void TaskGroup::AddTaskNoStatus(const std::function<void()>& fn) {
+  {
+    absl::MutexLock l(&mu_);
+    count_++;
+  }
   absl::MutexLock l(&exec_->mu_);
   ABSL_ASSERT(!exec_->st_.is_dead);
   exec_->st_.tasks.push_back([fn, this] {
     fn();
-    this->wg_.Done();
+
+    absl::MutexLock l(&this->mu_);
+    ABSL_ASSERT(this->count_ > 0);
+    this->count_--;
   });
 }
 

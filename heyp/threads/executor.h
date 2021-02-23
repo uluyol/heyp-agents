@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "absl/base/thread_annotations.h"
+#include "absl/status/status.h"
 #include "absl/synchronization/mutex.h"
 #include "heyp/threads/waitgroup.h"
 
@@ -43,14 +44,20 @@ class TaskGroup {
 
   ~TaskGroup();
 
-  void AddTask(const std::function<void()>& fn);
-  void WaitAll();
+  void AddTask(const std::function<absl::Status()>& fn);
+  void AddTaskNoStatus(const std::function<void()>& fn);
+
+  absl::Status WaitAll();
+  void WaitAllNoStatus();  // fatal error if any non-OK statuses
 
  private:
   TaskGroup(Executor* e) : exec_(e) {}
 
   Executor* exec_ = nullptr;
-  WaitGroup wg_;
+
+  absl::Mutex mu_;
+  int count_ ABSL_GUARDED_BY(mu_) = 0;
+  absl::Status status_ ABSL_GUARDED_BY(mu_);
 
   friend class Executor;
 };

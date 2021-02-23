@@ -12,11 +12,11 @@ class BusyWork {
   BusyWork(std::unique_ptr<TaskGroup> tg) : tg_(std::move(tg)) {
     auto tasksp = &tasks_;
     for (int i = 0; i < N; ++i) {
-      tg_->AddTask([i, tasksp] { (*tasksp)[i].store(1); });
+      tg_->AddTaskNoStatus([i, tasksp] { (*tasksp)[i].store(1); });
     }
   }
 
-  void Wait() { tg_->WaitAll(); }
+  void Wait() { tg_->WaitAllNoStatus(); }
 
   void CheckDone() {
     int sum = 0;
@@ -38,6 +38,21 @@ TEST(ExecutorTest, OneTaskGroup) {
   BusyWork<kNumTasks> work(executor.NewTaskGroup());
   work.Wait();
   work.CheckDone();
+}
+
+TEST(ExecutorTest, ReturnsError) {
+  Executor executor(3);
+  auto tg = executor.NewTaskGroup();
+  tg->AddTask([] { return absl::OkStatus(); });
+  tg->AddTask([] {
+    absl::SleepFor(absl::Milliseconds(50));
+    return absl::FailedPreconditionError("");
+  });
+  tg->AddTask([] {
+    absl::SleepFor(absl::Milliseconds(100));
+    return absl::OkStatus();
+  });
+  EXPECT_THAT(tg->WaitAll().code(), absl::StatusCode::kFailedPrecondition);
 }
 
 TEST(ExecutorTest, MultipleTaskGroups) {

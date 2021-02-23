@@ -12,6 +12,7 @@ cc_library(
     deps = [
         ":waitgroup",
         "@com_google_absl//absl/base",
+        "@com_google_absl//absl/status",
         "@com_google_absl//absl/synchronization",
         "@glog",
     ],

@@ -29,7 +29,7 @@ void ClusterAllocator::Reset() {
 }
 
 void ClusterAllocator::AddInfo(absl::Time time, const proto::AggInfo& info) {
-  group_->AddTask([time, info, this] {
+  group_->AddTaskNoStatus([time, info, this] {
     auto a = this->alloc_->AllocAgg(time, info);
     absl::MutexLock l(&this->mu_);
     allocs_.partial_sets.push_back(std::move(a));
@@ -37,7 +37,7 @@ void ClusterAllocator::AddInfo(absl::Time time, const proto::AggInfo& info) {
 }
 
 AllocSet ClusterAllocator::GetAllocs() {
-  group_->WaitAll();
+  group_->WaitAllNoStatus();
   absl::MutexLock l(&mu_);
   return allocs_;
 }
