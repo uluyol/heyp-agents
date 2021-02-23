@@ -14,6 +14,8 @@ class TcCaller {
  public:
   explicit TcCaller(const std::string& tc_name = "tc");
 
+  absl::Status Batch(const absl::Cord& input, bool force);
+
   absl::Status Call(const std::vector<std::string>& tc_args, bool parse_into_json);
   std::string RawOut() const { return buf_; };
   absl::optional<simdjson::dom::element> GetResult() const { return result_; }

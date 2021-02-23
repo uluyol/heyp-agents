@@ -1,9 +1,12 @@
 #include "heyp/host-agent/linux-enforcer/enforcer.h"
 
+#include <algorithm>
 #include <limits>
 
 #include "absl/cleanup/cleanup.h"
 #include "absl/container/flat_hash_map.h"
+#include "absl/strings/str_format.h"
+#include "absl/strings/str_split.h"
 #include "glog/logging.h"
 #include "heyp/host-agent/linux-enforcer/iptables-controller.h"
 #include "heyp/host-agent/linux-enforcer/iptables.h"
@@ -81,25 +84,29 @@ class LinuxHostEnforcerImpl : public LinuxHostEnforcer {
 
     Priority hipri;
     Priority lopri;
+
+    MatchedHostFlows matched;
   };
 
   absl::Status ResetIptables();
   absl::Status ResetTrafficControl();
 
+  void StageTrafficControlForFlow(int64_t rate_limit_bps, FlowSys::Priority *sys,
+                                  std::vector<FlowSys::Priority *> *classes_to_create,
+                                  int *create_count, int *update_count);
   void StageIptablesForFlow(const MatchedHostFlows::Vec &matched_flows,
                             const std::string &dscp, const std::string &class_id);
-  absl::Status UpdateTrafficControlForFlow(int64_t rate_limit_bps,
-                                           FlowSys::Priority &sys);
 
   const std::string device_;
   const MatchHostFlowsFunc match_host_flows_fn_;
+  absl::Cord tc_batch_input_;
   TcCaller tc_caller_;
   iptables::Controller ipt_controller_;
   DebugOutputLogger debug_logger_;
   int32_t next_class_id_;
 
-  absl::flat_hash_map<proto::FlowMarker, FlowSys, HashFlow, EqFlow>
-      sys_info_;  // entries are never deleted
+  absl::flat_hash_map<proto::FlowMarker, std::unique_ptr<FlowSys>, HashFlow, EqFlow>
+      sys_info_;  // entries are never deleted, values are pointer for stability
 };
 
 LinuxHostEnforcerImpl::LinuxHostEnforcerImpl(
@@ -128,11 +135,11 @@ absl::Status LinuxHostEnforcerImpl::ResetDeviceConfig() {
 absl::Status LinuxHostEnforcerImpl::ResetIptables() { return ipt_controller_.Clear(); }
 
 absl::Status LinuxHostEnforcerImpl::ResetTrafficControl() {
-  absl::Status st = tc_caller_.Call({"qdisc", "delete", "dev", device_, "root"}, false);
-  st.Update(tc_caller_.Call(
-      {"qdisc", "add", "dev", device_, "root", "handle", "1:", "htb", "default", "0"},
-      false));
-  return st;
+  return tc_caller_.Batch(
+      absl::Cord(absl::StrFormat("qdisc delete dev %s root\n"
+                                 "qdisc add dev %s root handle 1: htb default 0",
+                                 device_, device_)),
+      /*force=*/true);
 }
 
 constexpr char kDscpHipri[] = "AF41";
@@ -159,40 +166,31 @@ void LinuxHostEnforcerImpl::StageIptablesForFlow(
   }
 }
 
-absl::Status LinuxHostEnforcerImpl::UpdateTrafficControlForFlow(int64_t rate_limit_bps,
-                                                                FlowSys::Priority &sys) {
+void LinuxHostEnforcerImpl::StageTrafficControlForFlow(
+    int64_t rate_limit_bps, FlowSys::Priority *sys,
+    std::vector<FlowSys::Priority *> *classes_to_create, int *create_count,
+    int *update_count) {
   double rate_limit_mbps = rate_limit_bps;
   rate_limit_mbps /= 1024.0 * 1024.0;
 
-  if (sys.class_id.empty()) {
-    sys.class_id = absl::StrCat("1:", next_class_id_++);
+  if (sys->class_id.empty()) {
+    sys->class_id = absl::StrCat("1:", next_class_id_++);
   }
 
-  if (!sys.did_create_class) {
-    // Add class
-    absl::Status st = tc_caller_.Call(
-        {"class", "add", "dev", device_, "parent", "1:", "classid", sys.class_id, "htb",
-         "rate", absl::StrCat(rate_limit_mbps, "mbit")},
-        false);
-    if (st.ok()) {
-      sys.did_create_class = true;
-    } else {
-      return absl::InternalError(
-          absl::StrCat("failed to create tc class: ", st.message()));
+  if (!sys->did_create_class) {
+    tc_batch_input_.Append(
+        absl::StrFormat("class add dev %s parent 1: classid %s htb rate %fmbit\n",
+                        device_, sys->class_id, rate_limit_mbps));
+    if (classes_to_create != nullptr) {
+      classes_to_create->push_back(sys);
     }
+    (*create_count)++;
   } else {
-    // Change class rate limit
-    absl::Status st = tc_caller_.Call(
-        {"class", "change", "dev", device_, "parent", "1:", "classid", sys.class_id,
-         "htb", "rate", absl::StrCat(rate_limit_mbps, "mbit")},
-        false);
-    if (!st.ok()) {
-      return absl::InternalError(
-          absl::StrCat("failed to change rate limit for tc class: ", st.message()));
-    }
+    tc_batch_input_.Append(
+        absl::StrFormat("class change dev %s parent 1: classid %s htb rate %fmbit\n",
+                        device_, sys->class_id, rate_limit_mbps));
+    (*update_count)++;
   }
-
-  return absl::OkStatus();
 }
 
 // EnforceAllocs adjusts the rate limits and QoS for host traffic in 3 stages:
@@ -237,65 +235,130 @@ void LinuxHostEnforcerImpl::EnforceAllocs(const FlowStateProvider &flow_state_pr
     }
   });
 
+  // ==== Stage 1: Initialize qdiscs and increase any rate limits ====
+
+  std::vector<FlowSys::Priority *> classes_to_create;
+  tc_batch_input_.Clear();
+  int create_count = 0;
+  int update_count = 0;
   for (const proto::FlowAlloc &flow_alloc : bundle.flow_allocs()) {
-    MatchedHostFlows matched = match_host_flows_fn_(flow_state_provider, flow_alloc);
-    FlowSys &sys = sys_info_[flow_alloc.flow()];
-    absl::Status st = absl::OkStatus();
+    if (sys_info_[flow_alloc.flow()] == nullptr) {
+      sys_info_[flow_alloc.flow()] = absl::make_unique<FlowSys>();
+    }
+    FlowSys *sys = sys_info_[flow_alloc.flow()].get();
+    sys->matched = match_host_flows_fn_(flow_state_provider, flow_alloc);
 
     // Early update for traffic control (HIPRI)
-    bool must_create = sys.hipri.class_id.empty() && !matched.hipri.empty();
-    if (must_create || flow_alloc.hipri_rate_limit_bps() > sys.hipri.cur_rate_limit_bps) {
-      st = UpdateTrafficControlForFlow(flow_alloc.hipri_rate_limit_bps(), sys.hipri);
-      sys.hipri.update_after_ipt_change = false;
-    } else if (flow_alloc.hipri_rate_limit_bps() < sys.hipri.cur_rate_limit_bps) {
-      sys.hipri.update_after_ipt_change = true;
+    bool must_create = sys->hipri.class_id.empty() && !sys->matched.hipri.empty();
+    if (must_create ||
+        flow_alloc.hipri_rate_limit_bps() > sys->hipri.cur_rate_limit_bps) {
+      StageTrafficControlForFlow(flow_alloc.hipri_rate_limit_bps(), &sys->hipri,
+                                 &classes_to_create, &create_count, &update_count);
+      sys->hipri.update_after_ipt_change = false;
+    } else if (flow_alloc.hipri_rate_limit_bps() < sys->hipri.cur_rate_limit_bps) {
+      sys->hipri.update_after_ipt_change = true;
     }
-    sys.hipri.cur_rate_limit_bps = flow_alloc.hipri_rate_limit_bps();
+    sys->hipri.cur_rate_limit_bps = flow_alloc.hipri_rate_limit_bps();
 
     // Early update for traffic control (LOPRI)
-    must_create = sys.lopri.class_id.empty() && !matched.lopri.empty();
-    if (must_create || flow_alloc.lopri_rate_limit_bps() > sys.lopri.cur_rate_limit_bps) {
-      st.Update(
-          UpdateTrafficControlForFlow(flow_alloc.lopri_rate_limit_bps(), sys.lopri));
-      sys.lopri.update_after_ipt_change = false;
-    } else if (flow_alloc.lopri_rate_limit_bps() < sys.lopri.cur_rate_limit_bps) {
-      sys.lopri.update_after_ipt_change = true;
+    must_create = sys->lopri.class_id.empty() && !sys->matched.lopri.empty();
+    if (must_create ||
+        flow_alloc.lopri_rate_limit_bps() > sys->lopri.cur_rate_limit_bps) {
+      StageTrafficControlForFlow(flow_alloc.lopri_rate_limit_bps(), &sys->lopri,
+                                 &classes_to_create, &create_count, &update_count);
+      sys->lopri.update_after_ipt_change = false;
+    } else if (flow_alloc.lopri_rate_limit_bps() < sys->lopri.cur_rate_limit_bps) {
+      sys->lopri.update_after_ipt_change = true;
     }
-    sys.lopri.cur_rate_limit_bps = flow_alloc.lopri_rate_limit_bps();
-
-    if (!st.ok()) {
-      LOG(ERROR) << "failed to increase rate limits for flow: alloc = "
-                 << flow_alloc.ShortDebugString() << ": " << st;
-      LOG(WARNING) << "will not change iptables config for flow";
-      continue;
-    }
-
-    StageIptablesForFlow(matched.hipri, kDscpHipri, sys.hipri.class_id);
-    StageIptablesForFlow(matched.lopri, kDscpLopri, sys.lopri.class_id);
+    sys->lopri.cur_rate_limit_bps = flow_alloc.lopri_rate_limit_bps();
   }
 
-  absl::Status st = ipt_controller_.CommitChanges();
+  LOG(INFO) << absl::StrFormat("creating %d rate limiters and increasing %d rate limits",
+                               create_count, update_count);
+  absl::Status st = tc_caller_.Batch(tc_batch_input_, /*force=*/true);
+  if (!st.ok()) {
+    LOG(ERROR) << "failed to init or increase rate limits for some flows: " << st;
+    // Find out which classes have not been created
+    st = tc_caller_.Call({"class", "show", "dev", device_}, false);
+
+    if (st.ok()) {
+      std::vector<std::string> found_classes;
+      for (auto line : absl::StrSplit(tc_caller_.RawOut(), '\n')) {
+        std::vector<absl::string_view> fields =
+            absl::StrSplit(line, absl::ByAnyChar(" \t"));
+        if (fields.size() >= 3) {
+          found_classes.push_back(std::string(fields[2]));
+        }
+      }
+
+      std::sort(found_classes.begin(), found_classes.end());
+      for (FlowSys::Priority *sys : classes_to_create) {
+        if (std::binary_search(found_classes.begin(), found_classes.end(),
+                               sys->class_id)) {
+          sys->did_create_class = true;
+        } else {
+          // failed to create class, will report error when staging iptables changes
+        }
+      }
+    }
+  } else {
+    for (FlowSys::Priority *sys : classes_to_create) {
+      sys->did_create_class = true;
+    }
+  }
+
+  // ==== Stage 2: Update iptables ====
+
+  for (const proto::FlowAlloc &flow_alloc : bundle.flow_allocs()) {
+    FlowSys *sys = sys_info_[flow_alloc.flow()].get();
+
+    if (!sys->matched.hipri.empty() && !sys->hipri.did_create_class) {
+      LOG(ERROR) << "failed to create rate limiter for flow (HIPRI): alloc = "
+                 << flow_alloc.ShortDebugString();
+      LOG(WARNING) << "will not change iptables config for flow";
+      continue;
+    } else {
+      StageIptablesForFlow(sys->matched.hipri, kDscpHipri, sys->hipri.class_id);
+    }
+
+    if (!sys->matched.lopri.empty() && !sys->lopri.did_create_class) {
+      LOG(ERROR) << "failed to create rate limiter for flow (LOPRI): alloc = "
+                 << flow_alloc.ShortDebugString();
+      LOG(WARNING) << "will not change iptables config for flow";
+      continue;
+    } else {
+      StageIptablesForFlow(sys->matched.lopri, kDscpLopri, sys->lopri.class_id);
+    }
+  }
+
+  st = ipt_controller_.CommitChanges();
   if (!st.ok()) {
     LOG(ERROR) << "failed to commit iptables config: " << st;
     LOG(WARNING) << "will not decrease rate limits";
     return;
   }
 
+  // ==== Stage 3: Decrease any rate limits ====
+
+  tc_batch_input_.Clear();
+  create_count = 0;
+  update_count = 0;
   for (const proto::FlowAlloc &flow_alloc : bundle.flow_allocs()) {
-    FlowSys &sys = sys_info_[flow_alloc.flow()];
+    FlowSys *sys = sys_info_[flow_alloc.flow()].get();
 
-    if (sys.hipri.update_after_ipt_change) {
-      st = UpdateTrafficControlForFlow(sys.hipri.cur_rate_limit_bps, sys.hipri);
+    if (sys->hipri.update_after_ipt_change) {
+      StageTrafficControlForFlow(sys->hipri.cur_rate_limit_bps, &sys->hipri, nullptr,
+                                 &create_count, &update_count);
     }
-    if (sys.lopri.update_after_ipt_change) {
-      st = UpdateTrafficControlForFlow(sys.lopri.cur_rate_limit_bps, sys.lopri);
+    if (sys->lopri.update_after_ipt_change) {
+      StageTrafficControlForFlow(sys->lopri.cur_rate_limit_bps, &sys->lopri, nullptr,
+                                 &create_count, &update_count);
     }
-
-    if (!st.ok()) {
-      LOG(ERROR) << "failed to reduce rate limits for flow: alloc = "
-                 << flow_alloc.ShortDebugString() << ": " << st;
-      continue;
-    }
+  }
+  LOG(INFO) << absl::StrFormat("decreasing %d rate limits", update_count);
+  st = tc_caller_.Batch(tc_batch_input_, /*force=*/true);
+  if (!st.ok()) {
+    LOG(ERROR) << "failed to decrease rate limits for some flows: " << st;
   }
 }
 

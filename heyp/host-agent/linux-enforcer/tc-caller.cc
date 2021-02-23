@@ -21,6 +21,34 @@ namespace heyp {
 
 TcCaller::TcCaller(const std::string& tc_name) : tc_name_(tc_name) {}
 
+absl::Status TcCaller::Batch(const absl::Cord& input, bool force) {
+  std::vector<std::string> args{"-batch", "-", "-force"};
+  if (!force) {
+    args.resize(1);
+  }
+
+  try {
+    VLOG(2) << "running tc: " << tc_name_ << " " << absl::StrJoin(args, " ");
+
+    bp::opstream input_stream;
+    bp::child c(bp::search_path(tc_name_), bp::args(args), bp::std_out > stdout,
+                bp::std_err > stderr, bp::std_in < input_stream);
+
+    input_stream << input;
+    input_stream.flush();
+    input_stream.pipe().close();
+
+    c.wait();
+    if (c.exit_code() != 0) {
+      return absl::InternalError(absl::StrCat("tc -batch exit status ", c.exit_code()));
+    }
+    return absl::OkStatus();
+  } catch (const std::system_error& e) {
+    return absl::InternalError(
+        absl::StrCat("failed to run tc -batch subprocess: ", e.what()));
+  }
+}
+
 absl::Status TcCaller::Call(const std::vector<std::string>& tc_args,
                             bool parse_into_json) {
   try {
