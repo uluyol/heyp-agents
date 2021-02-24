@@ -247,6 +247,7 @@ std::vector<proto::TestCompareMetrics::Metric> HostWorker::Finish() {
   LOG(INFO) << "tearing down " << worker_threads_.size() << " workers";
   for (int fd : worker_fds_) {
     VLOG(2) << "close fd " << fd;
+    shutdown(fd, SHUT_RDWR);
     close(fd);
   }
   serve_thread_.join();
