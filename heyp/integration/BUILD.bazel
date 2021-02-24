@@ -25,10 +25,28 @@ cc_binary(
 )
 
 cc_library(
+    name = "flow-state-collector",
+    srcs = ["flow-state-collector.cc"],
+    hdrs = ["flow-state-collector.h"],
+    deps = [
+        ":step-worker",
+        "//heyp/alg:demand-predictor",
+        "//heyp/host-agent:flow-tracker",
+        "//heyp/proto:heyp_cc_proto",
+        "//heyp/proto:integration_cc_proto",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/synchronization",
+        "@glog",
+    ],
+)
+
+cc_library(
     name = "host-agent-os-tester",
     srcs = ["host-agent-os-tester.cc"],
     hdrs = ["host-agent-os-tester.h"],
     deps = [
+        ":flow-state-collector",
         ":step-worker",
         "//heyp/host-agent:enforcer",
         "//heyp/host-agent:flow-tracker",

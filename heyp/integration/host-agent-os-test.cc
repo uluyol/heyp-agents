@@ -12,6 +12,8 @@ DEFINE_string(run_dur, "60s", "how much time the test should measure for");
 DEFINE_string(step_dur, "2s", "how long a single step in the test should last");
 DEFINE_int32(num_hosts, 4, "number of hosts to emulate");
 DEFINE_int64(max_rate_limit_mbps, 100, "maximum rate limit (in Mbps)");
+DEFINE_bool(ignore_instantaneous_usage, false,
+            "ignore instantaneous usage reports when estimating usage bps");
 
 int main(int argc, char** argv) {
   heyp::MainInit(&argc, &argv);
@@ -37,6 +39,7 @@ int main(int argc, char** argv) {
       .step_dur = step_dur,
       .num_hosts = FLAGS_num_hosts,
       .max_rate_limit_bps = FLAGS_max_rate_limit_mbps * 1024 * 1024,
+      .ignore_instantaneous_usage = FLAGS_ignore_instantaneous_usage,
   });
 
   auto metrics_or = tester.Run();

@@ -13,6 +13,7 @@
 #include "heyp/host-agent/enforcer.h"
 #include "heyp/host-agent/flow-tracker.h"
 #include "heyp/host-agent/linux-enforcer/enforcer.h"
+#include "heyp/integration/flow-state-collector.h"
 #include "heyp/integration/step-worker.h"
 #include "heyp/posix/os.h"
 
@@ -146,12 +147,6 @@ class RateLimitPicker {
   int64_t factor_;
 };
 
-struct HostFlow {
-  std::string name;
-  int src_port;
-  int dst_port;
-};
-
 struct FlowFormatter {
   void operator()(std::string* out, const HostWorker::Flow& f) const {
     out->append(
@@ -200,6 +195,7 @@ absl::StatusOr<proto::TestCompareMetrics> HostAgentOSTester::Run() {
   absl::SleepFor(absl::Milliseconds(100));
 
   proto::TestCompareMetrics metrics;
+  std::unique_ptr<FlowStateCollector> collector;
   if (status.ok()) {
     LOG(INFO) << "initalized flows:\n" << absl::StrJoin(all_flows, "\n", FlowFormatter());
     EasyEnforcer enforcer(config_.device, config_.use_hipri, all_flows, config_.log_dir);
@@ -215,6 +211,16 @@ absl::StatusOr<proto::TestCompareMetrics> HostAgentOSTester::Run() {
       w->Go();
     }
 
+    {
+      auto collector_or = FlowStateCollector::Create(all_flows, absl::Milliseconds(500),
+                                                     config_.ignore_instantaneous_usage);
+      if (!collector_or.ok()) {
+        status.Update(collector_or.status());
+      } else {
+        collector = std::move(*collector_or);
+      }
+    }
+
     absl::Time start = absl::Now();
 
     int step = 0;
@@ -225,6 +231,9 @@ absl::StatusOr<proto::TestCompareMetrics> HostAgentOSTester::Run() {
       std::string label(absl::StrCat("step = ", step));
       for (auto& w : workers) {
         w->CollectStep(label);
+      }
+      if (collector != nullptr) {
+        collector->CollectStep(label);
       }
       ++step;
       limit_picker.Pick(all_flows_limits);
@@ -238,6 +247,13 @@ absl::StatusOr<proto::TestCompareMetrics> HostAgentOSTester::Run() {
   for (size_t i = 0; i < workers.size(); ++i) {
     LOG(INFO) << "collecting metrics from worker " << i;
     for (auto m : workers[i]->Finish()) {
+      *metrics.add_metrics() = m;
+    }
+  }
+
+  if (collector != nullptr) {
+    LOG(INFO) << "collecting metrics from FlowStateCollector";
+    for (auto m : collector->Finish()) {
       *metrics.add_metrics() = m;
     }
   }
