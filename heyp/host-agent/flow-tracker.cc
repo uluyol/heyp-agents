@@ -65,14 +65,17 @@ void FlowTracker::UpdateFlows(absl::Time timestamp,
       CHECK(u.used_priority != FlowPri::kUnset);
       CHECK(u.used_priority == FlowPri::kHi || u.used_priority == FlowPri::kLo);
       bool is_lopri = u.used_priority == FlowPri::kLo;
-      active_flows_.at(u.flow).UpdateUsage(
-          {
-              .time = timestamp,
-              .cum_usage_bytes = u.cum_usage_bytes,
-              .instantaneous_usage_bps = u.instantaneous_usage_bps,
-              .is_lopri = is_lopri,
-          },
-          config_.usage_history_window, *demand_predictor_);
+      LeafState::Update flow_update{
+          .time = timestamp,
+          .cum_usage_bytes = u.cum_usage_bytes,
+          .instantaneous_usage_bps = u.instantaneous_usage_bps,
+          .is_lopri = is_lopri,
+      };
+      if (config_.ignore_instantaneous_usage) {
+        flow_update.instantaneous_usage_bps = 0;
+      }
+      active_flows_.at(u.flow).UpdateUsage(flow_update, config_.usage_history_window,
+                                           *demand_predictor_);
       ++i;
     }
   }
@@ -90,14 +93,16 @@ void FlowTracker::FinalizeFlows(absl::Time timestamp,
     if (u.used_priority == FlowPri::kUnset && state.cur().currently_lopri()) {
       is_lopri = true;
     }
-    state.UpdateUsage(
-        {
-            .time = timestamp,
-            .cum_usage_bytes = u.cum_usage_bytes,
-            .instantaneous_usage_bps = u.instantaneous_usage_bps,
-            .is_lopri = is_lopri,
-        },
-        config_.usage_history_window, *demand_predictor_);
+    LeafState::Update flow_update{
+        .time = timestamp,
+        .cum_usage_bytes = u.cum_usage_bytes,
+        .instantaneous_usage_bps = u.instantaneous_usage_bps,
+        .is_lopri = is_lopri,
+    };
+    if (config_.ignore_instantaneous_usage) {
+      flow_update.instantaneous_usage_bps = 0;
+    }
+    state.UpdateUsage(flow_update, config_.usage_history_window, *demand_predictor_);
     done_flows_.push_back(state);
     active_flows_.erase(u.flow);
   }
@@ -117,6 +122,7 @@ struct SSFlowStateReporter::Impl {
 SSFlowStateReporter::~SSFlowStateReporter() {
   impl_->is_dying = true;
   impl_->monitor_done_proc.terminate();
+  impl_->monitor_done_out.pipe().close();
 
   if (impl_->monitor_done_thread.joinable()) {
     impl_->monitor_done_thread.join();
@@ -207,7 +213,7 @@ void SSFlowStateReporter::MonitorDone() {
     int64_t cum_usage_bytes = 0;
     auto status = ParseLine(impl_->config.host_id, line, f, usage_bps, cum_usage_bytes);
     if (!status.ok()) {
-      LOG(ERROR) << "failed to parse done line: " << status;
+      VLOG(2) << "failed to parse done line: " << status << " on " << line;
       continue;
     }
     if (IgnoreFlow(f)) {
@@ -237,7 +243,8 @@ absl::Status SSFlowStateReporter::ReportState(
       int64_t cum_usage_bytes = 0;
       auto status = ParseLine(impl_->config.host_id, line, f, usage_bps, cum_usage_bytes);
       if (!status.ok()) {
-        return status;
+        VLOG(2) << "failed to parse line: " << status << " on " << line;
+        continue;
       }
       if (IgnoreFlow(f)) {
         continue;

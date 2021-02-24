@@ -45,6 +45,7 @@ class FlowTracker : public FlowStateProvider {
  public:
   struct Config {
     absl::Duration usage_history_window = absl::Seconds(120);
+    bool ignore_instantaneous_usage = false;
   };
 
   FlowTracker(std::unique_ptr<DemandPredictor> demand_predictor, Config config);
