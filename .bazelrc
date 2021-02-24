@@ -13,6 +13,9 @@ build:libc++ --define force_libcpp=enabled
 build:clang-opt -c opt
 build:clang-opt --config=libc++
 
+build:clang-dbg -c dbg
+build:clang-dbg --config=libc++
+
 build:asan --strip=never
 build:asan --copt -fsanitize=address
 build:asan --copt -DADDRESS_SANITIZER
