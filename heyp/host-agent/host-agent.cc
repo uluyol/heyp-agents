@@ -1,5 +1,6 @@
 #include <csignal>
 
+#include "absl/functional/bind_front.h"
 #include "absl/random/distributions.h"
 #include "absl/random/random.h"
 #include "absl/status/statusor.h"
@@ -15,7 +16,9 @@
 #include "heyp/host-agent/daemon.h"
 #include "heyp/host-agent/enforcer.h"
 #include "heyp/host-agent/flow-tracker.h"
+#include "heyp/host-agent/linux-enforcer/enforcer.h"
 #include "heyp/init/init.h"
+#include "heyp/posix/os.h"
 #include "heyp/proto/config.pb.h"
 #include "heyp/proto/fileio.h"
 
@@ -106,8 +109,22 @@ absl::Status Run(const proto::HostAgentConfig& c) {
   LOG(INFO) << "creating dc mapper";
   StaticDCMapper dc_mapper(c.dc_mapper());
   LOG(INFO) << "creating host enforcer";
-  // TODO: initialize a LinuxHostEnforcer
-  NopHostEnforcer enforcer;
+  std::unique_ptr<HostEnforcer> enforcer;
+  if (kHostIsLinux) {
+    auto e = LinuxHostEnforcer::Create(
+        c.enforcer().device(),
+        absl::bind_front(&ExpandDestIntoHostsSinglePri, &dc_mapper),
+        c.enforcer().debug_log_dir());
+    absl::Status st = e->ResetDeviceConfig();
+    if (!st.ok()) {
+      LOG(ERROR) << "failed to reset config of device '" << c.enforcer().device()
+                 << "': " << st;
+    }
+    enforcer = std::move(e);
+  } else {
+    LOG(WARNING) << "not on Linux: using nop enforcer";
+    enforcer = absl::make_unique<NopHostEnforcer>();
+  }
   LOG(INFO) << "connecting to cluster agent";
   std::shared_ptr<grpc::Channel> channel = grpc::CreateChannel(
       c.daemon().cluster_agent_addr(), grpc::InsecureChannelCredentials());
@@ -127,7 +144,7 @@ absl::Status Run(const proto::HostAgentConfig& c) {
                         .collect_stats_period = *collect_stats_period_or,
                     },
                     &dc_mapper, &flow_tracker, std::move(flow_aggregator),
-                    flow_state_reporter.get(), &enforcer);
+                    flow_state_reporter.get(), enforcer.get());
   LOG(INFO) << "running daemon main loop";
   daemon.Run(&should_exit_flag);
   return absl::OkStatus();

@@ -24,6 +24,11 @@ struct MatchedHostFlows {
 using MatchHostFlowsFunc =
     std::function<MatchedHostFlows(const FlowStateProvider&, const proto::FlowAlloc&)>;
 
+// ExpandDestIntoHostsSinglePri matches all traffic in an FG to *either* HIPRI or LOPRI.
+// It cannot be used with allocations that provide both HIPRI and LOPRI limits for a
+// single FG.
+//
+// It uses the StaticDCMatcher to match any flow that could possibly belong to the FG.
 MatchedHostFlows ExpandDestIntoHostsSinglePri(
     const StaticDCMapper* dc_mapper, const FlowStateProvider& flow_state_provider,
     const proto::FlowAlloc& flow_alloc);
