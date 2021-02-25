@@ -21,6 +21,7 @@ class HostDaemon {
   struct Config {
     uint64_t host_id;
     absl::Duration inform_period = absl::Seconds(2);
+    absl::Duration collect_stats_period = absl::Milliseconds(500);
   };
 
   HostDaemon(const std::shared_ptr<grpc::Channel>& channel, Config config,
@@ -44,6 +45,7 @@ class HostDaemon {
   grpc::ClientContext context_;
   std::unique_ptr<grpc::ClientReaderWriter<proto::InfoBundle, proto::AllocBundle>>
       io_stream_;
+  std::thread collect_stats_thread_;
   std::thread info_thread_;
   std::thread enforcer_thread_;
 };

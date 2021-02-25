@@ -16,6 +16,7 @@ message DemandPredictorConfig {
 
 message HostFlowTrackerConfig {
   optional DemandPredictorConfig demand_predictor = 1;
+  optional bool ignore_instantaneous_usage = 2 [default = true];
 }
 
 message FlowAggregatorConfig {
@@ -28,9 +29,10 @@ message HostFlowStateReporterConfig {
 }
 
 message HostDaemonConfig {
-  optional string inform_period_dur = 1 [default = "2s"];
-  optional string cluster_agent_addr = 2;
-  optional string cluster_agent_connection_timeout_dur = 3 [default = "10s"];
+  optional string collect_stats_period = 1 [default = "500ms"];
+  optional string inform_period_dur = 2 [default = "2s"];
+  optional string cluster_agent_addr = 3;
+  optional string cluster_agent_connection_timeout_dur = 4 [default = "10s"];
 }
 
 message StaticDCMapperConfig {

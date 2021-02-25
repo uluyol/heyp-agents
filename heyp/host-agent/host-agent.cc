@@ -58,6 +58,12 @@ absl::Status Run(const proto::HostAgentConfig& c) {
     }
   }
 
+  auto collect_stats_period_or =
+      ParseAbslDuration(c.daemon().collect_stats_period(), "collect stats period");
+  if (!collect_stats_period_or.ok()) {
+    return collect_stats_period_or.status();
+  }
+
   auto inform_period_or =
       ParseAbslDuration(c.daemon().inform_period_dur(), "inform period");
   if (!inform_period_or.ok()) {
@@ -74,8 +80,12 @@ absl::Status Run(const proto::HostAgentConfig& c) {
   LOG(INFO) << "host assigned id: " << host_id;
 
   LOG(INFO) << "creating flow tracker";
-  FlowTracker flow_tracker(std::move(socket_demand_predictor),
-                           {.usage_history_window = 2 * socket_demand_window});
+  FlowTracker flow_tracker(
+      std::move(socket_demand_predictor),
+      {
+          .usage_history_window = 2 * socket_demand_window,
+          .ignore_instantaneous_usage = c.flow_tracker().ignore_instantaneous_usage(),
+      });
   LOG(INFO) << "creating flow aggregator";
   std::unique_ptr<FlowAggregator> flow_aggregator =
       NewConnToHostAggregator(std::move(host_demand_predictor), 2 * host_demand_window);
@@ -114,6 +124,7 @@ absl::Status Run(const proto::HostAgentConfig& c) {
                     {
                         .host_id = host_id,
                         .inform_period = *inform_period_or,
+                        .collect_stats_period = *collect_stats_period_or,
                     },
                     &dc_mapper, &flow_tracker, std::move(flow_aggregator),
                     flow_state_reporter.get(), &enforcer);

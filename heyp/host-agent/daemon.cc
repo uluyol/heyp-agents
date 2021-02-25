@@ -43,13 +43,12 @@ bool FlaggedOrWaitFor(absl::Duration dur, std::atomic<bool>* exit_flag) {
   return exit_flag->load();
 }
 
-void SendInfo(
-    absl::Duration inform_period, uint64_t host_id, const DCMapper* dc_mapper,
-    FlowStateProvider* flow_state_provider, FlowAggregator* socket_to_host_aggregator,
-    FlowStateReporter* flow_state_reporter, HostEnforcer* enforcer,
-    std::atomic<bool>* should_exit,
-    grpc::ClientReaderWriter<proto::InfoBundle, proto::AllocBundle>* io_stream) {
-  do {
+void CollectStats(absl::Duration period, bool force_run,
+                  FlowStateReporter* flow_state_reporter, HostEnforcer* enforcer,
+                  std::atomic<bool>* should_exit) {
+  // Wait the first time since Run() refreshes once
+  while (force_run || !FlaggedOrWaitFor(period, should_exit)) {
+    force_run = false;
     // Step 1: refresh stats on all socket-level flows.
     absl::Status report_status = flow_state_reporter->ReportState(
         absl::bind_front(&HostEnforcer::IsLopri, enforcer));
@@ -57,7 +56,15 @@ void SendInfo(
       LOG(ERROR) << "failed to report flow state: " << report_status;
       continue;
     }
+  }
+}
 
+void SendInfo(
+    absl::Duration inform_period, uint64_t host_id, const DCMapper* dc_mapper,
+    FlowStateProvider* flow_state_provider, FlowAggregator* socket_to_host_aggregator,
+    std::atomic<bool>* should_exit,
+    grpc::ClientReaderWriter<proto::InfoBundle, proto::AllocBundle>* io_stream) {
+  do {
     // Step 2: collect a bundle of all socket-level flows while annotating them
     //         with src / dst DC.
     proto::InfoBundle bundle;
@@ -88,8 +95,7 @@ void SendInfo(
 }
 
 void EnforceAlloc(
-    const FlowStateProvider* flow_state_provider, FlowStateReporter* flow_state_reporter,
-    HostEnforcer* enforcer,
+    const FlowStateProvider* flow_state_provider, HostEnforcer* enforcer,
     grpc::ClientReaderWriter<proto::InfoBundle, proto::AllocBundle>* io_stream) {
   while (true) {
     // Step 1: wait for allocation from cluster agent.
@@ -98,16 +104,7 @@ void EnforceAlloc(
       break;
     }
 
-    // Step 2: refresh stats on all socket-level flows so that we can better
-    //         track usage across QoS switches.
-    absl::Status report_status = flow_state_reporter->ReportState(
-        absl::bind_front(&HostEnforcer::IsLopri, enforcer));
-    if (!report_status.ok()) {
-      LOG(ERROR) << "failed to report flow state: " << report_status;
-      continue;
-    }
-
-    // Step 3: enforce the new allocation.
+    // Step 2: enforce the new allocation.
     enforcer->EnforceAllocs(*flow_state_provider, bundle);
   }
 }
@@ -117,18 +114,31 @@ void EnforceAlloc(
 void HostDaemon::Run(std::atomic<bool>* should_exit) {
   CHECK(io_stream_ == nullptr);
 
+  // Make sure CollectStats has run at least once before we start reporting anything to
+  // the cluster agent or start enforcement.
+  {
+    std::atomic<bool> once_should_exit = true;
+    CollectStats(absl::ZeroDuration(), true, flow_state_reporter_, enforcer_,
+                 &once_should_exit);
+  }
+
   io_stream_ = stub_->RegisterHost(&context_);
 
-  info_thread_ =
-      std::thread(SendInfo, config_.inform_period, config_.host_id, dc_mapper_,
-                  flow_state_provider_, socket_to_host_aggregator_.get(),
-                  flow_state_reporter_, enforcer_, should_exit, io_stream_.get());
+  collect_stats_thread_ = std::thread(CollectStats, config_.collect_stats_period, false,
+                                      flow_state_reporter_, enforcer_, should_exit);
 
-  enforcer_thread_ = std::thread(EnforceAlloc, flow_state_provider_, flow_state_reporter_,
-                                 enforcer_, io_stream_.get());
+  info_thread_ = std::thread(SendInfo, config_.inform_period, config_.host_id, dc_mapper_,
+                             flow_state_provider_, socket_to_host_aggregator_.get(),
+                             should_exit, io_stream_.get());
+
+  enforcer_thread_ =
+      std::thread(EnforceAlloc, flow_state_provider_, enforcer_, io_stream_.get());
 }
 
 HostDaemon::~HostDaemon() {
+  if (collect_stats_thread_.joinable()) {
+    collect_stats_thread_.join();
+  }
   if (info_thread_.joinable()) {
     info_thread_.join();
   }
