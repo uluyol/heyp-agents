@@ -72,3 +72,25 @@ http_archive(
         "https://github.com/uluyol/routing-algos/archive/a43ab38b70d0301e38f0114df651edbffa730d4c.tar.gz",
     ],
 )
+
+http_archive(
+    name = "net_zlib",
+    build_file = "zlib.BUILD",
+    sha256 = "c3e5e9fdd5004dcb542feda5ee4f0ff0744628baf8ed2dd5d66f8ca1197cb1a1",
+    strip_prefix = "zlib-1.2.11",
+    # Use the same URL twice to trick bazel into re-trying if connection fails
+    urls = [
+        "https://zlib.net/zlib-1.2.11.tar.gz",
+        "https://zlib.net/zlib-1.2.11.tar.gz",
+    ],
+)
+
+http_archive(
+    name = "hdrhistogram_c",
+    build_file = "hdrhistogram_c.BUILD",
+    sha256 = "be2e7163ee6247b370ccc52ac6276d0542f0cf1368646ba32c1290ab957503f4",
+    strip_prefix = "HdrHistogram_c-706a9e06477472e4a34531640c15a641ba2c83cb",
+    urls = [
+        "https://github.com/HdrHistogram/HdrHistogram_c/archive/706a9e06477472e4a34531640c15a641ba2c83cb.zip",
+    ],
+)
