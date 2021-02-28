@@ -1,0 +1,23 @@
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+
+cc_library(
+    name = "hdrhistogram",
+    srcs = ["hdrhistogram.cc"],
+    hdrs = ["hdrhistogram.h"],
+    visibility = ["//heyp:__subpackages__"],
+    deps = [
+        "//heyp/posix:strerror",
+        "@com_google_absl//absl/status",
+        "@glog",
+        "@hdrhistogram_c",
+    ],
+)
+
+cc_test(
+    name = "hdrhistogram-test",
+    srcs = ["hdrhistogram-test.cc"],
+    deps = [
+        ":hdrhistogram",
+        "//heyp/init:test-main",
+    ],
+)
