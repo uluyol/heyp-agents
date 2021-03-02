@@ -1,0 +1,10 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary")
+
+cc_binary(
+    name = "server",
+    srcs = ["server.c"],
+    malloc = "@com_google_tcmalloc//tcmalloc",
+    deps = [
+        "//third_party/libuv",
+    ],
+)
