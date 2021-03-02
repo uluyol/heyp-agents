@@ -2,6 +2,17 @@ workspace(name = "heyp-agents")
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
+_ALL_CONTENT = """filegroup(name = "all", srcs = glob(["**"]), visibility = ["//visibility:public"])"""
+
+http_archive(
+    name = "libuv",
+    build_file_content = _ALL_CONTENT,
+    strip_prefix = "libuv-1.41.0",
+    urls = [
+        "https://github.com/libuv/libuv/archive/v1.41.0.zip",
+    ],
+)
+
 http_archive(
     name = "com_google_absl",
     sha256 = "46e8249a18be8968777890803b57f9d7a5e5f3b6e432951f121114161cb51427",
@@ -93,4 +104,23 @@ http_archive(
     urls = [
         "https://github.com/HdrHistogram/HdrHistogram_c/archive/706a9e06477472e4a34531640c15a641ba2c83cb.zip",
     ],
+)
+
+http_archive(
+    name = "rules_foreign_cc",
+    sha256 = "c2cdcf55ffaf49366725639e45dedd449b8c3fe22b54e31625eb80ce3a240f1e",
+    strip_prefix = "rules_foreign_cc-0.1.0",
+    url = "https://github.com/bazelbuild/rules_foreign_cc/archive/0.1.0.zip",
+)
+
+load("@rules_foreign_cc//:workspace_definitions.bzl", "rules_foreign_cc_dependencies")
+
+# This sets up some common toolchains for building targets. For more details, please see
+# https://github.com/bazelbuild/rules_foreign_cc/tree/main/docs#rules_foreign_cc_dependencies
+rules_foreign_cc_dependencies()
+
+http_archive(
+    name = "com_google_tcmalloc",
+    strip_prefix = "tcmalloc-ca93361644ebe822c479a31018f9221549e07a87",
+    url = "https://github.com/google/tcmalloc/archive/ca93361644ebe822c479a31018f9221549e07a87.zip",
 )
