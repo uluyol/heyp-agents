@@ -3,6 +3,7 @@ load("@rules_cc//cc:defs.bzl", "cc_binary")
 cc_binary(
     name = "server",
     srcs = ["server.c"],
+    copts = ["-fno-strict-aliasing"],
     malloc = "@com_google_tcmalloc//tcmalloc",
     deps = [
         "//third_party/libuv",
