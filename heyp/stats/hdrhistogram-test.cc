@@ -6,9 +6,9 @@
 namespace heyp {
 namespace {
 
-MATCHER_P2(RecordApproximatelyEq, pct_margin_frac, value_margin_frac, "") {
-  const HdrHistogram::Record& lhs = std::get<0>(arg);
-  const HdrHistogram::Record& rhs = std::get<1>(arg);
+MATCHER_P2(BucketApproximatelyEq, pct_margin_frac, value_margin_frac, "") {
+  const HdrHistogram::Bucket& lhs = std::get<0>(arg);
+  const HdrHistogram::Bucket& rhs = std::get<1>(arg);
   return ApproximatelyEqual(lhs, rhs, pct_margin_frac, value_margin_frac);
 }
 
@@ -43,13 +43,13 @@ TEST(HdrHistogramTest, Basic) {
                   Int64Near(10000, 10000 / 1e3), Int64Near(100000, 100000 / 1e3),
                   Int64Near(200000, 200000 / 1e3), Int64Near(210000, 210000 / 1e3)));
 
-  std::vector<HdrHistogram::Record> expected_records{
+  std::vector<HdrHistogram::Bucket> expected_buckets{
       {16.7, 1, 1},      {50, 10000, 2},   {66.7, 100000, 1},
       {83.3, 200000, 1}, {100, 210000, 1},
   };
 
-  EXPECT_THAT(h.RecordedValues(),
-              testing::Pointwise(RecordApproximatelyEq(0.01, 0.001), expected_records));
+  EXPECT_THAT(h.Buckets(),
+              testing::Pointwise(BucketApproximatelyEq(0.01, 0.001), expected_buckets));
 }
 
 }  // namespace

@@ -147,21 +147,21 @@ int64_t HdrHistogram::ValueAtIndex(int32_t index) const {
   return hdr_value_at_index(h_, index);
 }
 
-std::vector<HdrHistogram::Record> HdrHistogram::RecordedValues() const {
+std::vector<HdrHistogram::Bucket> HdrHistogram::Buckets() const {
   struct hdr_iter iter;
   hdr_iter_recorded_init(&iter, h_);
 
-  std::vector<Record> records;
+  std::vector<Bucket> buckets;
   while (hdr_iter_next(&iter)) {
-    double percentile = 100 * iter.cumulative_count;
-    percentile /= h_->total_count;
-    records.push_back({
-        .percentile = percentile,
+    double perc = 100 * iter.cumulative_count;
+    perc /= h_->total_count;
+    buckets.push_back({
+        .percentile = perc,
         .value = iter.value,
         .count = iter.count,
     });
   }
-  return records;
+  return buckets;
 }
 
 static absl::Status ErrorCodeToStatus(int ret) {
@@ -200,12 +200,12 @@ static bool Within(T lhs_v, T rhs_v, double margin_frac) {
 //    int64_t count;
 //  };
 
-std::ostream& operator<<(std::ostream& os, const HdrHistogram::Record& r) {
+std::ostream& operator<<(std::ostream& os, const HdrHistogram::Bucket& r) {
   return os << "{p = " << r.percentile << ", v = " << r.value << ", c = " << r.count
             << "}";
 }
 
-bool ApproximatelyEqual(const HdrHistogram::Record& lhs, const HdrHistogram::Record& rhs,
+bool ApproximatelyEqual(const HdrHistogram::Bucket& lhs, const HdrHistogram::Bucket& rhs,
                         double pct_margin_frac, double value_margin_frac) {
   if (!Within(lhs.percentile, rhs.percentile, pct_margin_frac)) {
     return false;

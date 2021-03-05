@@ -109,13 +109,13 @@ class HdrHistogram {
   int64_t CountAtIndex(int32_t index) const;
   int64_t ValueAtIndex(int32_t index) const;
 
-  struct Record {
+  struct Bucket {
     double percentile;
     int64_t value;
     int64_t count;
   };
 
-  std::vector<Record> RecordedValues() const;
+  std::vector<Bucket> Buckets() const;
 
   absl::Status PercentilesPrintClassic(FILE* stream, int32_t ticks_per_half_distance,
                                        double value_scale);
@@ -134,9 +134,9 @@ class HdrHistogram {
   struct hdr_histogram* h_;
 };
 
-std::ostream& operator<<(std::ostream& os, const HdrHistogram::Record& r);
+std::ostream& operator<<(std::ostream& os, const HdrHistogram::Bucket& r);
 
-bool ApproximatelyEqual(const HdrHistogram::Record& lhs, const HdrHistogram::Record& rhs,
+bool ApproximatelyEqual(const HdrHistogram::Bucket& lhs, const HdrHistogram::Bucket& rhs,
                         double pct_margin_frac, double value_margin_frac);
 
 }  // namespace heyp
