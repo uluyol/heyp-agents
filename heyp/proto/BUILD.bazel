@@ -36,6 +36,16 @@ cc_proto_library(
 )
 
 proto_library(
+    name = "app_proto",
+    srcs = ["app.proto"],
+)
+
+cc_proto_library(
+    name = "app_cc_proto",
+    deps = [":app_proto"],
+)
+
+proto_library(
     name = "integration_proto",
     srcs = ["integration.proto"],
 )

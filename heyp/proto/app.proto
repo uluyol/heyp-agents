@@ -1,0 +1,21 @@
+// This file contains definitions of all configuration protos.
+// These messages should only be stored in textual or in-memory form (i.e. not
+// the binary format), so feed free to change any field numbers.
+
+syntax = "proto2";
+
+package heyp.proto;
+
+enum Distribution {
+  UNSET = 0;
+  CONSTANT = 1;
+  UNIFORM = 2;
+  EXPONENTIAL = 3;
+}
+
+message TestLopriClientConfig {
+  optional int32 num_conns = 1 [default = 20];
+  optional int32 rpc_size_bytes = 2 [default = 4096];
+  optional double target_average_bps = 3 [default = 10000000];
+  optional Distribution interarrival_dist = 4 [default = EXPONENTIAL];
+}
