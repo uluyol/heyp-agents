@@ -11,25 +11,25 @@
 #include <vector>
 
 #include "absl/status/status.h"
+#include "heyp/proto/stats.pb.h"
 
 struct hdr_histogram;
 
 namespace heyp {
 
-// TODO: support export to protobuf.
 class HdrHistogram {
  public:
-  struct Config {
-    int64_t lowest_discernible_value = 1;
-    int64_t highest_trackable_value = 30'000'000'000;
-    int significant_figures = 3;
-  };
+  // Returns a histogram for somewhat general use.
+  // It can resolve values between 1 ns and 30 sec up to 3 sigfigs.
+  static proto::HdrHistogram::Config DefaultConfig();
 
   // Returns a histogram for use on DC and WAN latencies.
   // It can resolve values between 100 ns and 30 sec up to 3 sigfigs.
-  static Config NetworkConfig();
+  static proto::HdrHistogram::Config NetworkConfig();
 
-  HdrHistogram(Config config);
+  static HdrHistogram FromProto(const proto::HdrHistogram& proto_hist);
+
+  HdrHistogram(proto::HdrHistogram::Config config = DefaultConfig());
   ~HdrHistogram();
 
   void Reset();
@@ -109,13 +109,7 @@ class HdrHistogram {
   int64_t CountAtIndex(int32_t index) const;
   int64_t ValueAtIndex(int32_t index) const;
 
-  struct Bucket {
-    double percentile;
-    int64_t value;
-    int64_t count;
-  };
-
-  std::vector<Bucket> Buckets() const;
+  proto::HdrHistogram ToProto() const;
 
   absl::Status PercentilesPrintClassic(FILE* stream, int32_t ticks_per_half_distance,
                                        double value_scale);
@@ -130,14 +124,13 @@ class HdrHistogram {
   HdrHistogram& operator=(const HdrHistogram& other);
 
  private:
-  Config config_;
+  proto::HdrHistogram::Config config_;
   struct hdr_histogram* h_;
 };
 
-std::ostream& operator<<(std::ostream& os, const HdrHistogram::Bucket& r);
-
-bool ApproximatelyEqual(const HdrHistogram::Bucket& lhs, const HdrHistogram::Bucket& rhs,
-                        double pct_margin_frac, double value_margin_frac);
+bool ApproximatelyEqual(const proto::HdrHistogram::Bucket& lhs,
+                        const proto::HdrHistogram::Bucket& rhs, double pct_margin_frac,
+                        double value_margin_frac);
 
 }  // namespace heyp
 

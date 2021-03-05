@@ -55,6 +55,16 @@ cc_proto_library(
     deps = [":integration_proto"],
 )
 
+proto_library(
+    name = "stats_proto",
+    srcs = ["stats.proto"],
+)
+
+cc_proto_library(
+    name = "stats_cc_proto",
+    deps = [":stats_proto"],
+)
+
 cc_library(
     name = "alg",
     srcs = ["alg.cc"],

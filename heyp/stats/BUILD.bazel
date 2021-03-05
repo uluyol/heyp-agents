@@ -7,6 +7,7 @@ cc_library(
     visibility = ["//heyp:__subpackages__"],
     deps = [
         "//heyp/posix:strerror",
+        "//heyp/proto:stats_cc_proto",
         "@com_google_absl//absl/status",
         "@glog",
         "@hdrhistogram_c",
@@ -19,5 +20,6 @@ cc_test(
     deps = [
         ":hdrhistogram",
         "//heyp/init:test-main",
+        "//heyp/proto:parse-text",
     ],
 )

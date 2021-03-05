@@ -2,13 +2,14 @@
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "heyp/proto/parse-text.h"
 
 namespace heyp {
 namespace {
 
 MATCHER_P2(BucketApproximatelyEq, pct_margin_frac, value_margin_frac, "") {
-  const HdrHistogram::Bucket& lhs = std::get<0>(arg);
-  const HdrHistogram::Bucket& rhs = std::get<1>(arg);
+  const proto::HdrHistogram::Bucket& lhs = std::get<0>(arg);
+  const proto::HdrHistogram::Bucket& rhs = std::get<1>(arg);
   return ApproximatelyEqual(lhs, rhs, pct_margin_frac, value_margin_frac);
 }
 
@@ -20,7 +21,7 @@ MATCHER_P2(Int64Near, want_a, abs_error_a, "") {
 }
 
 TEST(HdrHistogramTest, Basic) {
-  HdrHistogram h({});
+  HdrHistogram h;
 
   h.RecordValue(1);
   h.RecordValue(10001);
@@ -43,13 +44,45 @@ TEST(HdrHistogramTest, Basic) {
                   Int64Near(10000, 10000 / 1e3), Int64Near(100000, 100000 / 1e3),
                   Int64Near(200000, 200000 / 1e3), Int64Near(210000, 210000 / 1e3)));
 
-  std::vector<HdrHistogram::Bucket> expected_buckets{
-      {16.7, 1, 1},      {50, 10000, 2},   {66.7, 100000, 1},
-      {83.3, 200000, 1}, {100, 210000, 1},
-  };
+  auto expected_hist = ParseTextProto<proto::HdrHistogram>(
+      R"(
+        config {
+          lowest_discernible_value: 1
+          highest_trackable_value: 30000000000
+          significant_figures: 3
+        }
+        buckets { value: 1 count: 1 percentile: 16.7 }
+        buckets { value: 10000 count: 2 percentile: 50 }
+        buckets { value: 100000 count: 1 percentile: 66.7 }
+        buckets { value: 200000 count: 1 percentile: 83.3 }
+        buckets { value: 210000 count: 1 percentile: 100 }
+    )");
 
-  EXPECT_THAT(h.Buckets(),
-              testing::Pointwise(BucketApproximatelyEq(0.01, 0.001), expected_buckets));
+  proto::HdrHistogram proto_hist = h.ToProto();
+
+  EXPECT_EQ(proto_hist.config().lowest_discernible_value(),
+            expected_hist.config().lowest_discernible_value());
+  EXPECT_EQ(proto_hist.config().highest_trackable_value(),
+            expected_hist.config().highest_trackable_value());
+  EXPECT_EQ(proto_hist.config().significant_figures(),
+            expected_hist.config().significant_figures());
+
+  EXPECT_THAT(proto_hist.buckets(), testing::Pointwise(BucketApproximatelyEq(0.01, 0.001),
+                                                       expected_hist.buckets()));
+
+  // round trip
+
+  proto::HdrHistogram roundtripped = HdrHistogram::FromProto(proto_hist).ToProto();
+
+  EXPECT_EQ(roundtripped.config().lowest_discernible_value(),
+            expected_hist.config().lowest_discernible_value());
+  EXPECT_EQ(roundtripped.config().highest_trackable_value(),
+            expected_hist.config().highest_trackable_value());
+  EXPECT_EQ(roundtripped.config().significant_figures(),
+            expected_hist.config().significant_figures());
+
+  EXPECT_THAT(roundtripped.buckets(),
+              testing::Pointwise(BucketApproximatelyEq(0, 0), proto_hist.buckets()));
 }
 
 }  // namespace

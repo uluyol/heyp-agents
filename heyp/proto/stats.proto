@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package heyp.proto;
+
+message HdrHistogram {
+  message Config {
+    int64 lowest_discernible_value = 1;
+    int64 highest_trackable_value = 2;
+    int32 significant_figures = 3;
+  }
+  message Bucket {
+    int64 value = 1;
+    int64 count = 2;
+    double percentile = 3;
+  }
+  Config config = 1;
+  repeated Bucket buckets = 2;
+}

@@ -7,18 +7,27 @@
 
 namespace heyp {
 
-HdrHistogram::Config HdrHistogram::NetworkConfig() {
-  return {
-      .lowest_discernible_value = 100,
-      .highest_trackable_value = 30'000'000'000,
-      .significant_figures = 3,
-  };
+proto::HdrHistogram::Config HdrHistogram::DefaultConfig() {
+  proto::HdrHistogram::Config c;
+  c.set_lowest_discernible_value(1);
+  c.set_highest_trackable_value(30'000'000'000);
+  c.set_significant_figures(3);
+  return c;
 }
 
-HdrHistogram::HdrHistogram(Config config) : config_(config), h_(nullptr) {
+proto::HdrHistogram::Config HdrHistogram::NetworkConfig() {
+  proto::HdrHistogram::Config c;
+  c.set_lowest_discernible_value(100);
+  c.set_highest_trackable_value(30'000'000'000);
+  c.set_significant_figures(3);
+  return c;
+}
+
+HdrHistogram::HdrHistogram(proto::HdrHistogram::Config config)
+    : config_(config), h_(nullptr) {
   int init_result =
-      hdr_init(config_.lowest_discernible_value, config_.highest_trackable_value,
-               config_.significant_figures, &h_);
+      hdr_init(config_.lowest_discernible_value(), config_.highest_trackable_value(),
+               config_.significant_figures(), &h_);
   CHECK_EQ(init_result, 0);
 }
 
@@ -45,8 +54,8 @@ HdrHistogram& HdrHistogram::operator=(HdrHistogram&& other) {
 HdrHistogram::HdrHistogram(const HdrHistogram& other) {
   config_ = other.config_;
   int init_result =
-      hdr_init(config_.lowest_discernible_value, config_.highest_trackable_value,
-               config_.significant_figures, &h_);
+      hdr_init(config_.lowest_discernible_value(), config_.highest_trackable_value(),
+               config_.significant_figures(), &h_);
   CHECK_EQ(init_result, 0);
 
   hdr_add(h_, other.h_);
@@ -60,8 +69,8 @@ HdrHistogram& HdrHistogram::operator=(const HdrHistogram& other) {
 
   config_ = other.config_;
   int init_result =
-      hdr_init(config_.lowest_discernible_value, config_.highest_trackable_value,
-               config_.significant_figures, &h_);
+      hdr_init(config_.lowest_discernible_value(), config_.highest_trackable_value(),
+               config_.significant_figures(), &h_);
   CHECK_EQ(init_result, 0);
 
   hdr_add(h_, other.h_);
@@ -147,21 +156,29 @@ int64_t HdrHistogram::ValueAtIndex(int32_t index) const {
   return hdr_value_at_index(h_, index);
 }
 
-std::vector<HdrHistogram::Bucket> HdrHistogram::Buckets() const {
+proto::HdrHistogram HdrHistogram::ToProto() const {
   struct hdr_iter iter;
   hdr_iter_recorded_init(&iter, h_);
 
-  std::vector<Bucket> buckets;
+  proto::HdrHistogram proto_hist;
+  *proto_hist.mutable_config() = config_;
   while (hdr_iter_next(&iter)) {
     double perc = 100 * iter.cumulative_count;
     perc /= h_->total_count;
-    buckets.push_back({
-        .percentile = perc,
-        .value = iter.value,
-        .count = iter.count,
-    });
+    auto b = proto_hist.add_buckets();
+    b->set_percentile(perc);
+    b->set_value(iter.value);
+    b->set_count(iter.count);
   }
-  return buckets;
+  return proto_hist;
+}
+
+HdrHistogram HdrHistogram::FromProto(const proto::HdrHistogram& proto_hist) {
+  HdrHistogram h(proto_hist.config());
+  for (const auto& b : proto_hist.buckets()) {
+    h.RecordValues(b.value(), b.count());
+  }
+  return h;
 }
 
 static absl::Status ErrorCodeToStatus(int ret) {
@@ -194,26 +211,16 @@ static bool Within(T lhs_v, T rhs_v, double margin_frac) {
   return (rhs - err <= lhs) && (lhs <= rhs + err);
 }
 
-//  struct Record {
-//    double percentile;
-//    int64_t value;
-//    int64_t count;
-//  };
-
-std::ostream& operator<<(std::ostream& os, const HdrHistogram::Bucket& r) {
-  return os << "{p = " << r.percentile << ", v = " << r.value << ", c = " << r.count
-            << "}";
-}
-
-bool ApproximatelyEqual(const HdrHistogram::Bucket& lhs, const HdrHistogram::Bucket& rhs,
-                        double pct_margin_frac, double value_margin_frac) {
-  if (!Within(lhs.percentile, rhs.percentile, pct_margin_frac)) {
+bool ApproximatelyEqual(const proto::HdrHistogram::Bucket& lhs,
+                        const proto::HdrHistogram::Bucket& rhs, double pct_margin_frac,
+                        double value_margin_frac) {
+  if (!Within(lhs.percentile(), rhs.percentile(), pct_margin_frac)) {
     return false;
   }
-  if (!Within(lhs.value, rhs.value, value_margin_frac)) {
+  if (!Within(lhs.value(), rhs.value(), value_margin_frac)) {
     return false;
   }
-  if (rhs.count != lhs.count) {
+  if (rhs.count() != lhs.count()) {
     return false;
   }
   return true;
