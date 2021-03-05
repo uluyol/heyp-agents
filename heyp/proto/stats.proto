@@ -16,3 +16,24 @@ message HdrHistogram {
   Config config = 1;
   repeated Bucket buckets = 2;
 }
+
+message StatsRecord {
+  string label = 1;
+  string timestamp = 2; // ISO 8601
+  double dur_sec = 3;
+
+  // cumulative stats
+  int64 cum_num_bits = 10;
+  int64 cum_num_rpcs = 11;
+
+  // current stats
+  double mean_bits_per_sec = 21;
+  double mean_rpcs_per_sec = 22;
+  HdrHistogram latency_ns_hist = 23;
+
+  // convenience percentiles
+  int64 latency_ns_p50 = 31;
+  int64 latency_ns_p90 = 32;
+  int64 latency_ns_p95 = 33;
+  int64 latency_ns_p99 = 34;
+}

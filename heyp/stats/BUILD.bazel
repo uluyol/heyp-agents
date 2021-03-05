@@ -1,16 +1,36 @@
 load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
 
+package(
+    default_visibility = ["//visibility:public"],
+)
+
 cc_library(
     name = "hdrhistogram",
     srcs = ["hdrhistogram.cc"],
     hdrs = ["hdrhistogram.h"],
-    visibility = ["//heyp:__subpackages__"],
     deps = [
         "//heyp/posix:strerror",
         "//heyp/proto:stats_cc_proto",
         "@com_google_absl//absl/status",
         "@glog",
         "@hdrhistogram_c",
+    ],
+)
+
+cc_library(
+    name = "recorder",
+    srcs = ["recorder.cc"],
+    hdrs = ["recorder.h"],
+    deps = [
+        ":hdrhistogram",
+        "//heyp/posix:strerror",
+        "//heyp/proto:stats_cc_proto",
+        "//heyp/threads:executor",
+        "@com_google_absl//absl/memory",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/time",
+        "@com_google_protobuf//:protobuf",
+        "@glog",
     ],
 )
 
