@@ -1,0 +1,10 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+package(
+    default_visibility = ["//heyp:__subpackages__"],
+)
+
+cc_library(
+    name = "binary",
+    hdrs = ["binary.h"],
+)
