@@ -82,6 +82,7 @@ cc_library(
     name = "urls",
     srcs = ["urls.cc"],
     hdrs = ["urls.h"],
+    visibility = ["//heyp:__subpackages__"],
     deps = [
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
