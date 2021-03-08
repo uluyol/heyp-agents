@@ -1,3 +1,6 @@
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
 #include <uv.h>
 
 #include <deque>
@@ -5,8 +8,10 @@
 
 #include "absl/random/distributions.h"
 #include "absl/random/random.h"
+#include "absl/strings/match.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
+#include "absl/strings/strip.h"
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 #include "heyp/encoding/binary.h"
@@ -325,7 +330,6 @@ void OnConnect(uv_connect_t* req, int status) {
 
   if (status < 0) {
     LOG(ERROR) << "failed to connect; trying again";
-    client_conn_t* client_conn = new_client_conn();
     uv_tcp_init(state->loop, reinterpret_cast<uv_tcp_t*>(req->handle));
 
     uv_tcp_connect(req, reinterpret_cast<uv_tcp_t*>(req->handle),
@@ -394,9 +398,10 @@ DEFINE_string(server, "127.0.0.1:7777", "address of server");
 DEFINE_string(out, "testlopri-client.log", "path to log output");
 DEFINE_string(start_time, "", "wait until this time to start the run");
 
-int main(int argc, char** argv) {
+int ShardMain(int argc, char** argv, int shard_index, int num_shards) {
   heyp::MainInit(&argc, &argv);
-  auto srec = heyp::StatsRecorder::Create(FLAGS_out);
+  auto srec =
+      heyp::StatsRecorder::Create(absl::StrCat(FLAGS_out, ".shard.", shard_index));
   if (!srec.ok()) {
     std::cerr << "failed to create stats recorder: " << srec.status();
     return 2;
@@ -416,7 +421,67 @@ int main(int argc, char** argv) {
     std::cerr << "failed to parse config file\n";
     return 4;
   }
+  config.set_target_average_bps(config.target_average_bps() / num_shards);
 
   heyp::state = new heyp::State(config, uv_default_loop(), std::move(*srec));
   return heyp::InitAndRunAt(FLAGS_server, start_time);
+}
+
+int main(int argc, char** argv) {
+  int num_shards = 1;
+  bool next_is_num_shards = false;
+  for (int i = 1; i < argc;) {
+    if (strcmp(argv[i], "-shards") == 0) {
+      next_is_num_shards = true;
+      --argc;
+      memmove(argv + i, argv + i + 1, argc - i);
+      continue;
+    }
+    if (absl::StartsWith(argv[i], "-shards=")) {
+      if (!absl::SimpleAtoi(absl::StripPrefix(argv[i], "-shards="), &num_shards)) {
+        std::cerr << "failed to parse -shards value\n";
+        return 9;
+      }
+      --argc;
+      memmove(argv + i, argv + i + 1, argc - i);
+      continue;
+    }
+    if (next_is_num_shards) {
+      if (!absl::SimpleAtoi(argv[i], &num_shards)) {
+        std::cerr << "failed to parse -shards value\n";
+        return 9;
+      }
+      --argc;
+      memmove(argv + i, argv + i + 1, argc - i);
+      next_is_num_shards = false;
+      continue;
+    }
+
+    ++i;
+  }
+  if (next_is_num_shards) {
+    std::cerr << "-shards is missing value\n";
+    return 9;
+  }
+  if (num_shards == 0) {
+    std::cerr << "-shards must be > 0\n";
+    return 0;
+  }
+
+  pid_t* pids = static_cast<pid_t*>(malloc(sizeof(pid_t) * num_shards));
+  for (int i = 0; i < num_shards; ++i) {
+    pid_t pid = fork();
+    if (pid == 0) {
+      return ShardMain(argc, argv, i, num_shards);
+    }
+    pids[i] = pid;
+  }
+
+  int ret = 0;
+  for (int i = 0; i < num_shards; ++i) {
+    int status = 0;
+    waitpid(pids[i], &status, 0);
+    ret = std::max(ret, status);
+  }
+  return ret;
 }
