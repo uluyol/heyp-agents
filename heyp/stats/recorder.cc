@@ -121,7 +121,7 @@ void StatsRecorder::DoneStep(absl::string_view label) {
                           std::string(st.message()));
     }
 
-    if (fwrite(out.data(), out.size(), 1, fout) != out.size()) {
+    if (fwrite(out.data(), 1, out.size(), fout) != out.size()) {
       return absl::InternalError(StrError(errno));
     }
     if (fwrite("\n", 1, 1, fout) != 1) {
