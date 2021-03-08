@@ -49,6 +49,7 @@ struct State {
         hr_report_dur(1'000'000'000),
         tearing_down(false) {
     double rpcs_per_sec = config.target_average_bps() / (8 * config.rpc_size_bytes());
+    LOG(INFO) << "targeting an average of " << rpcs_per_sec << "rpcs/sec";
     switch (config.interarrival_dist()) {
       case proto::Distribution::CONSTANT:
         dist_param = 1.0 / rpcs_per_sec;
@@ -286,7 +287,9 @@ void OnReadAck(uv_stream_t* client_stream, ssize_t nread, const uv_buf_t* buf) {
         << "rpcs on a single connection were reordered!";
     state->stats_recorder->RecordRpc(
         state->config.rpc_size_bytes(),
-        absl::Nanoseconds(uv_hrtime() - client->hr_start_time[client->num_seen]));
+        absl::Nanoseconds(
+            uv_hrtime() -
+            client->hr_start_time[client->num_seen % kNumParallelRpcsPerConn]));
     ++client->num_seen;
     got_ack = true;
   };
