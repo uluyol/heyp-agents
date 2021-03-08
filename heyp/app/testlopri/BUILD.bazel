@@ -11,3 +11,23 @@ cc_binary(
         "@com_google_absl//absl/strings:str_format",
     ],
 )
+
+cc_binary(
+    name = "client",
+    srcs = ["client.cc"],
+    copts = ["-fno-strict-aliasing"],
+    malloc = "@com_google_tcmalloc//tcmalloc",
+    deps = [
+        "//heyp/encoding:binary",
+        "//heyp/host-agent:urls",
+        "//heyp/init",
+        "//heyp/proto:app_cc_proto",
+        "//heyp/proto:fileio",
+        "//heyp/stats:recorder",
+        "//third_party/libuv",
+        "@com_github_gflags_gflags//:gflags",
+        "@com_google_absl//absl/random",
+        "@com_google_absl//absl/strings:str_format",
+        "@glog",
+    ],
+)

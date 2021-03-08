@@ -13,6 +13,8 @@
 namespace heyp {
 namespace {
 
+constexpr bool kDebug = false;
+
 uv_loop_t *loop;
 
 void AllocBuf(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
@@ -38,36 +40,49 @@ void OnRpcAck(uv_write_t *req, int status) {
 
 typedef struct {
   uv_tcp_t client;
-  int bytes_left;
-  char header[16];
+  uint32_t bytes_left;
+  char header[12];
   int num_header_read;
 } client_stream_t;
 
-void rpc_read(uv_stream_t *client_stream, ssize_t nread, const uv_buf_t *buf) {
+void OnRpcRead(uv_stream_t *client_stream, ssize_t nread, const uv_buf_t *buf) {
   client_stream_t *client = (client_stream_t *)client_stream;
   if (nread < 0) {
     if (nread != UV_EOF) absl::FPrintF(stderr, "Read error %s\n", uv_err_name(nread));
     uv_close((uv_handle_t *)client, OnCloseConn);
   }
-  while (nread > 0) {
-    char *b = buf->base;
-    if (client->num_header_read < 16) {
-      --nread;
+  char *b = buf->base;
+  char *e = buf->base + nread;
+  while (b < e) {
+    if (client->num_header_read < 12) {
       client->header[client->num_header_read++] = *b;
       ++b;
-      if (client->num_header_read == 16) {
-        client->bytes_left = ReadI32LE(client->header);
+      if (client->num_header_read >= 12) {
+        client->bytes_left = ReadU32LE(client->header);
+        if (kDebug) {
+          absl::FPrintF(stderr, "got rpc_id=%d size=%d header=%s\n",
+                        ReadU64LE(client->header + 4), client->bytes_left,
+                        ToHex(client->header, 12));
+        }
       }
-    }
-    if (client->bytes_left > nread) {
-      client->bytes_left -= nread;
-      nread = 0;
       continue;
     }
-    nread -= client->bytes_left;
+    if (client->bytes_left > e - b) {
+      client->bytes_left -= e - b;
+      b = e;
+      if (kDebug) {
+        absl::FPrintF(stderr, "still have %d bytes to read\n", client->bytes_left);
+      }
+      continue;
+    }
+    b += client->bytes_left;
 
     write_req_t *req = (write_req_t *)malloc(sizeof(write_req_t));
     memcpy(req->bufdata, client->header + 4, 8);
+    if (kDebug) {
+      absl::FPrintF(stderr, "ack rpc id=%d header=%s\n", ReadU64LE(req->bufdata),
+                    ToHex(req->bufdata, 8));
+    }
     req->buf = uv_buf_init(req->bufdata, 8);
     uv_write((uv_write_t *)req, (uv_stream_t *)&client->client, &req->buf, 1, OnRpcAck);
 
@@ -88,7 +103,7 @@ void OnNewConnection(uv_stream_t *server, int status) {
   client->num_header_read = 0;
   uv_tcp_init(loop, &client->client);
   if (uv_accept(server, (uv_stream_t *)&client->client) == 0) {
-    uv_read_start((uv_stream_t *)&client->client, AllocBuf, rpc_read);
+    uv_read_start((uv_stream_t *)&client->client, AllocBuf, OnRpcRead);
   } else {
     uv_close((uv_handle_t *)client, OnCloseConn);
   }
