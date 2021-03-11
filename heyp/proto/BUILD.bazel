@@ -88,7 +88,11 @@ cc_library(
     name = "fileio",
     srcs = ["fileio.cc"],
     hdrs = ["fileio.h"],
-    deps = ["@com_google_protobuf//:protobuf"],
+    deps = [
+        "//heyp/posix:strerror",
+        "@com_google_absl//absl/status",
+        "@com_google_protobuf//:protobuf",
+    ],
 )
 
 cc_library(
