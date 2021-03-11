@@ -3,8 +3,8 @@
 #include "absl/memory/memory.h"
 #include "absl/time/clock.h"
 #include "glog/logging.h"
-#include "google/protobuf/util/json_util.h"
 #include "heyp/posix/strerror.h"
+#include "heyp/proto/fileio.h"
 
 namespace heyp {
 
@@ -94,7 +94,7 @@ void StatsRecorder::DoneStep(absl::string_view label) {
     proto::StatsRecord rec;
 
     rec.set_label(label_str);
-    rec.set_timestamp(absl::FormatTime(now));
+    rec.set_timestamp(absl::FormatTime(now, absl::UTCTimeZone()));
     rec.set_dur_sec(elapsed_sec);
 
     rec.set_cum_num_bits(cum_num_bits);
@@ -109,25 +109,7 @@ void StatsRecorder::DoneStep(absl::string_view label) {
     rec.set_latency_ns_p95(perc_latencies[2]);
     rec.set_latency_ns_p99(perc_latencies[3]);
 
-    google::protobuf::util::JsonPrintOptions opt;
-    opt.add_whitespace = false;
-    opt.always_print_primitive_fields = true;
-    opt.always_print_enums_as_ints = false;
-
-    std::string out;
-    auto st = google::protobuf::util::MessageToJsonString(rec, &out, opt);
-    if (!st.ok()) {
-      return absl::Status(static_cast<absl::StatusCode>(st.code()),
-                          std::string(st.message()));
-    }
-
-    if (fwrite(out.data(), 1, out.size(), fout) != out.size()) {
-      return absl::InternalError(StrError(errno));
-    }
-    if (fwrite("\n", 1, 1, fout) != 1) {
-      return absl::InternalError(StrError(errno));
-    }
-    return absl::OkStatus();
+    return WriteJsonLine(rec, fout);
   });
   prev_time_ = now;
   prev_cum_num_bits_ = cum_num_bits_;

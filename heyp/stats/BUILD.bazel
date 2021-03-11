@@ -24,6 +24,7 @@ cc_library(
     deps = [
         ":hdrhistogram",
         "//heyp/posix:strerror",
+        "//heyp/proto:fileio",
         "//heyp/proto:stats_cc_proto",
         "//heyp/threads:executor",
         "@com_google_absl//absl/memory",

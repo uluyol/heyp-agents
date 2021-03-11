@@ -9,9 +9,8 @@ message HdrHistogram {
     int32 significant_figures = 3;
   }
   message Bucket {
-    int64 value = 1;
-    int64 count = 2;
-    double percentile = 3;
+    int64 v = 1; // value
+    int64 c = 2; // count
   }
   Config config = 1;
   repeated Bucket buckets = 2;

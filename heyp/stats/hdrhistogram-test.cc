@@ -7,10 +7,10 @@
 namespace heyp {
 namespace {
 
-MATCHER_P2(BucketApproximatelyEq, pct_margin_frac, value_margin_frac, "") {
+MATCHER_P(BucketApproximatelyEq, value_margin_frac, "") {
   const proto::HdrHistogram::Bucket& lhs = std::get<0>(arg);
   const proto::HdrHistogram::Bucket& rhs = std::get<1>(arg);
-  return ApproximatelyEqual(lhs, rhs, pct_margin_frac, value_margin_frac);
+  return ApproximatelyEqual(lhs, rhs, value_margin_frac);
 }
 
 MATCHER_P2(Int64Near, want_a, abs_error_a, "") {
@@ -51,11 +51,11 @@ TEST(HdrHistogramTest, Basic) {
           highest_trackable_value: 30000000000
           significant_figures: 3
         }
-        buckets { value: 1 count: 1 percentile: 16.7 }
-        buckets { value: 10000 count: 2 percentile: 50 }
-        buckets { value: 100000 count: 1 percentile: 66.7 }
-        buckets { value: 200000 count: 1 percentile: 83.3 }
-        buckets { value: 210000 count: 1 percentile: 100 }
+        buckets { v: 1      c: 1 }
+        buckets { v: 10000  c: 2 }
+        buckets { v: 100000 c: 1 }
+        buckets { v: 200000 c: 1 }
+        buckets { v: 210000 c: 1 }
     )");
 
   proto::HdrHistogram proto_hist = h.ToProto();
@@ -67,8 +67,8 @@ TEST(HdrHistogramTest, Basic) {
   EXPECT_EQ(proto_hist.config().significant_figures(),
             expected_hist.config().significant_figures());
 
-  EXPECT_THAT(proto_hist.buckets(), testing::Pointwise(BucketApproximatelyEq(0.01, 0.001),
-                                                       expected_hist.buckets()));
+  EXPECT_THAT(proto_hist.buckets(),
+              testing::Pointwise(BucketApproximatelyEq(0.001), expected_hist.buckets()));
 
   // round trip
 
@@ -82,7 +82,7 @@ TEST(HdrHistogramTest, Basic) {
             expected_hist.config().significant_figures());
 
   EXPECT_THAT(roundtripped.buckets(),
-              testing::Pointwise(BucketApproximatelyEq(0, 0), proto_hist.buckets()));
+              testing::Pointwise(BucketApproximatelyEq(0), proto_hist.buckets()));
 }
 
 }  // namespace

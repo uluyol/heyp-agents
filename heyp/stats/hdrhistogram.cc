@@ -1,9 +1,18 @@
 #include "heyp/stats/hdrhistogram.h"
 
 #include <hdr_histogram.h>
+#include <hdr_histogram_log.h>
 
 #include "glog/logging.h"
 #include "heyp/posix/strerror.h"
+
+extern "C" {
+// Defined in hdr_histogram_log.c, sadly not exported.
+extern int hdr_encode_compressed(struct hdr_histogram* h, uint8_t** compressed_histogram,
+                                 size_t* compressed_len);
+extern int hdr_decode_compressed(uint8_t* buffer, size_t length,
+                                 struct hdr_histogram** histogram);
+}
 
 namespace heyp {
 
@@ -28,7 +37,7 @@ HdrHistogram::HdrHistogram(proto::HdrHistogram::Config config)
   int init_result =
       hdr_init(config_.lowest_discernible_value(), config_.highest_trackable_value(),
                config_.significant_figures(), &h_);
-  CHECK_EQ(init_result, 0);
+  CHECK_EQ(init_result, 0) << config.DebugString();
 }
 
 HdrHistogram::~HdrHistogram() {
@@ -166,9 +175,8 @@ proto::HdrHistogram HdrHistogram::ToProto() const {
     double perc = 100 * iter.cumulative_count;
     perc /= h_->total_count;
     auto b = proto_hist.add_buckets();
-    b->set_percentile(perc);
-    b->set_value(iter.value);
-    b->set_count(iter.count);
+    b->set_v(iter.value);
+    b->set_c(iter.count);
   }
   return proto_hist;
 }
@@ -176,7 +184,7 @@ proto::HdrHistogram HdrHistogram::ToProto() const {
 HdrHistogram HdrHistogram::FromProto(const proto::HdrHistogram& proto_hist) {
   HdrHistogram h(proto_hist.config());
   for (const auto& b : proto_hist.buckets()) {
-    h.RecordValues(b.value(), b.count());
+    h.RecordValues(b.v(), b.c());
   }
   return h;
 }
@@ -212,15 +220,12 @@ static bool Within(T lhs_v, T rhs_v, double margin_frac) {
 }
 
 bool ApproximatelyEqual(const proto::HdrHistogram::Bucket& lhs,
-                        const proto::HdrHistogram::Bucket& rhs, double pct_margin_frac,
+                        const proto::HdrHistogram::Bucket& rhs,
                         double value_margin_frac) {
-  if (!Within(lhs.percentile(), rhs.percentile(), pct_margin_frac)) {
+  if (!Within(lhs.v(), rhs.v(), value_margin_frac)) {
     return false;
   }
-  if (!Within(lhs.value(), rhs.value(), value_margin_frac)) {
-    return false;
-  }
-  if (rhs.count() != lhs.count()) {
+  if (rhs.c() != lhs.c()) {
     return false;
   }
   return true;

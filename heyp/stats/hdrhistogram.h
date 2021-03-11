@@ -123,14 +123,15 @@ class HdrHistogram {
   HdrHistogram(const HdrHistogram& other);
   HdrHistogram& operator=(const HdrHistogram& other);
 
+  const proto::HdrHistogram::Config& config() const { return config_; }
+
  private:
   proto::HdrHistogram::Config config_;
   struct hdr_histogram* h_;
 };
 
 bool ApproximatelyEqual(const proto::HdrHistogram::Bucket& lhs,
-                        const proto::HdrHistogram::Bucket& rhs, double pct_margin_frac,
-                        double value_margin_frac);
+                        const proto::HdrHistogram::Bucket& rhs, double value_margin_frac);
 
 }  // namespace heyp
 
