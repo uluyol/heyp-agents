@@ -1,18 +1,6 @@
 load("@rules_cc//cc:defs.bzl", "cc_binary")
 
 cc_binary(
-    name = "server",
-    srcs = ["server.cc"],
-    copts = ["-fno-strict-aliasing"],
-    malloc = "@com_google_tcmalloc//tcmalloc",
-    deps = [
-        "//heyp/encoding:binary",
-        "//third_party/libuv",
-        "@com_google_absl//absl/strings:str_format",
-    ],
-)
-
-cc_binary(
     name = "client",
     srcs = ["client.cc"],
     copts = ["-fno-strict-aliasing"],
@@ -29,5 +17,34 @@ cc_binary(
         "@com_google_absl//absl/random",
         "@com_google_absl//absl/strings:str_format",
         "@glog",
+    ],
+)
+
+cc_binary(
+    name = "merge-logs",
+    srcs = ["merge-logs.cc"],
+    malloc = "@com_google_tcmalloc//tcmalloc",
+    deps = [
+        "//heyp/init",
+        "//heyp/posix:strerror",
+        "//heyp/proto:fileio",
+        "//heyp/proto:stats_cc_proto",
+        "//heyp/stats:hdrhistogram",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_absl//absl/time",
+    ],
+)
+
+cc_binary(
+    name = "server",
+    srcs = ["server.cc"],
+    copts = ["-fno-strict-aliasing"],
+    malloc = "@com_google_tcmalloc//tcmalloc",
+    deps = [
+        "//heyp/encoding:binary",
+        "//third_party/libuv",
+        "@com_google_absl//absl/strings:str_format",
     ],
 )

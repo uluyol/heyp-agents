@@ -24,7 +24,22 @@
 namespace heyp {
 namespace {
 
-constexpr int kNumParallelRpcsPerConn = 16;
+class CachedTime {
+ public:
+  uint64_t Get() {
+    if (!did_get_) {
+      now_ = uv_hrtime();
+      did_get_ = true;
+    }
+    return did_get_;
+  }
+
+ private:
+  uint64_t now_ = 0;
+  bool did_get_ = false;
+};
+
+constexpr int kNumParallelRpcsPerConn = 32;
 constexpr bool kDebug = false;
 
 typedef struct {
@@ -44,14 +59,23 @@ typedef struct {
   bool in_pool;
 } client_conn_t;
 
+proto::HdrHistogram::Config InterarrivalConfig() {
+  proto::HdrHistogram::Config c;
+  c.set_highest_trackable_value(1'000'000'000);
+  c.set_lowest_discernible_value(100);
+  c.set_significant_figures(2);
+  return c;
+}
+
 struct State {
   State(const proto::TestLopriClientConfig& c, uv_loop_t* l,
-        std::unique_ptr<StatsRecorder> srec)
+        std::unique_ptr<StatsRecorder> srec, bool rec_interarrival)
       : config(c),
         stats_recorder(std::move(srec)),
         loop(l),
         issued_first_req(false),
         hr_report_dur(1'000'000'000),
+        record_interarrival_called(false),
         tearing_down(false) {
     double rpcs_per_sec = config.target_average_bps() / (8 * config.rpc_size_bytes());
     LOG(INFO) << "targeting an average of " << rpcs_per_sec << "rpcs/sec";
@@ -75,6 +99,10 @@ struct State {
       LOG(FATAL) << "invalid run duration: " << config.run_dur();
     }
     hr_run_dur = absl::ToInt64Nanoseconds(run_dur);
+
+    if (rec_interarrival) {
+      interarrival_hist.emplace(InterarrivalConfig());
+    }
   }
 
   std::vector<client_conn_t*> conns;
@@ -84,7 +112,7 @@ struct State {
   std::unique_ptr<StatsRecorder> stats_recorder;
   int64_t hr_run_dur;
   uv_loop_t* loop;
-  absl::BitGen rng;
+  absl::InsecureBitGen rng;
   uint64_t hr_next;
   double dist_param;
   bool issued_first_req;
@@ -94,6 +122,10 @@ struct State {
   uint64_t hr_next_report_time;
   uint64_t hr_report_dur;
   struct sockaddr_in dst_addr;
+
+  uint64_t hr_last_recorded_time;
+  absl::optional<HdrHistogram> interarrival_hist;
+  bool record_interarrival_called;
 
   bool tearing_down;
 };
@@ -174,11 +206,11 @@ uint64_t NextSendTimeHighRes() {
 }
 
 uint64_t UvTimeoutUntil(uint64_t hr_time) {
-  uint64_t now = uv_hrtime();
-  if (now >= hr_time) {
+  uint64_t now = uv_now(state->loop);
+  if (now >= hr_time / 1'000'000) {
     return 0;
   }
-  return (hr_time - now) / 1'000'000;  // to ms
+  return (hr_time / 1'000'000) - now;
 }
 
 void OnWriteDone(uv_write_t* req, int status) {
@@ -194,6 +226,19 @@ void OnWriteDone(uv_write_t* req, int status) {
     AddConn(conn);  // else OnRead will add it back
   }
   free(req);
+}
+
+void RecordInterarrivalIssuedNow() {
+  if (!state->interarrival_hist.has_value()) {
+    return;
+  }
+  uint64_t now = uv_hrtime();
+  if (!state->record_interarrival_called) {
+    state->hr_last_recorded_time = now;
+    state->record_interarrival_called = true;
+    return;
+  }
+  state->interarrival_hist->RecordValue(now - state->hr_last_recorded_time);
 }
 
 bool MaybeIssueRequest() {
@@ -234,6 +279,7 @@ bool MaybeIssueRequest() {
     uv_write_t* req = static_cast<uv_write_t*>(malloc(sizeof(uv_write_t)));
     uv_write(req, reinterpret_cast<uv_stream_t*>(&conn->client), &conn->buffer, 1,
              OnWriteDone);
+    RecordInterarrivalIssuedNow();
   });
 
   return true;
@@ -397,6 +443,8 @@ DEFINE_string(c, "config.textproto", "path to input config");
 DEFINE_string(server, "127.0.0.1:7777", "address of server");
 DEFINE_string(out, "testlopri-client.log", "path to log output");
 DEFINE_string(start_time, "", "wait until this time to start the run");
+DEFINE_string(interarrival, "",
+              "path to write out interarrival distribution (optional, for validation)");
 
 int ShardMain(int argc, char** argv, int shard_index, int num_shards) {
   heyp::MainInit(&argc, &argv);
@@ -423,8 +471,16 @@ int ShardMain(int argc, char** argv, int shard_index, int num_shards) {
   }
   config.set_target_average_bps(config.target_average_bps() / num_shards);
 
-  heyp::state = new heyp::State(config, uv_default_loop(), std::move(*srec));
-  return heyp::InitAndRunAt(FLAGS_server, start_time);
+  heyp::state = new heyp::State(config, uv_default_loop(), std::move(*srec),
+                                FLAGS_interarrival != "");
+  int ret = heyp::InitAndRunAt(FLAGS_server, start_time);
+  if (FLAGS_interarrival != "") {
+    CHECK(heyp::WriteTextProtoToFile(
+        heyp::state->interarrival_hist->ToProto(),
+        absl::StrCat(FLAGS_interarrival, ".shard.", shard_index)))
+        << "failed to write latency hist";
+  }
+  return ret;
 }
 
 int main(int argc, char** argv) {
@@ -466,6 +522,10 @@ int main(int argc, char** argv) {
   if (num_shards == 0) {
     std::cerr << "-shards must be > 0\n";
     return 0;
+  }
+
+  if (num_shards == 1) {
+    return ShardMain(argc, argv, 0, 1);
   }
 
   pid_t* pids = static_cast<pid_t*>(malloc(sizeof(pid_t) * num_shards));
