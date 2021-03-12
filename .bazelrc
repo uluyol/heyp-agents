@@ -1,5 +1,7 @@
 build --cxxopt=-std=c++17
 build --define absl=1
+build --action_env=CFLAGS=-fno-omit-frame-pointer
+build --action_env=CXXFLAGS=-fno-omit-frame-pointer
 
 build:libc++ --action_env=BAZEL_COMPILER=clang
 build:libc++ --linkopt=-fuse-ld=lld
