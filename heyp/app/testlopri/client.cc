@@ -31,7 +31,7 @@ class CachedTime {
       now_ = uv_hrtime();
       did_get_ = true;
     }
-    return did_get_;
+    return now_;
   }
 
  private:
@@ -241,8 +241,8 @@ void RecordInterarrivalIssuedNow() {
   state->interarrival_hist->RecordValue(now - state->hr_last_recorded_time);
 }
 
-bool MaybeIssueRequest() {
-  uint64_t hr_now = uv_hrtime();
+bool MaybeIssueRequest(CachedTime* time) {
+  uint64_t hr_now = time->Get();
   if (hr_now < state->hr_next) {
     return false;  // not yet
   }
@@ -287,7 +287,8 @@ bool MaybeIssueRequest() {
 
 // Called on every iteration of the event loop
 void OnCheckNextReq(uv_check_t* check) {
-  while (!state->tearing_down && MaybeIssueRequest()) {
+  CachedTime time;
+  while (!state->tearing_down && MaybeIssueRequest(&time)) {
     /* issue all requests whose time has passed */
     state->hr_next = NextSendTimeHighRes();
   }
@@ -297,18 +298,19 @@ void OnCheckNextReq(uv_check_t* check) {
 }
 
 void OnNextReq(uv_timer_t* timer) {
+  CachedTime time;
   if (!state->issued_first_req) {
     state->issued_first_req = true;
     LOG(INFO) << "starting to issue requests";
     state->stats_recorder->StartRecording();
-    state->hr_next = uv_hrtime();
+    state->hr_next = time.Get();
 
     auto check = static_cast<uv_check_t*>(malloc(sizeof(uv_check_t)));
     uv_check_init(state->loop, check);
     uv_check_start(check, OnCheckNextReq);
   }
 
-  while (!state->tearing_down && MaybeIssueRequest()) {
+  while (!state->tearing_down && MaybeIssueRequest(&time)) {
     /* issue all requests whose time has passed */
     state->hr_next = NextSendTimeHighRes();
   }
