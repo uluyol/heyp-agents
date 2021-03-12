@@ -36,6 +36,19 @@ heyp_cc_binary(
 )
 
 heyp_cc_binary(
+    name = "mk-expected-interarrival-dist",
+    srcs = ["mk-expected-interarrival-dist.cc"],
+    deps = [
+        "//heyp/init",
+        "//heyp/proto:app_cc_proto",
+        "//heyp/proto:fileio",
+        "@com_github_gflags_gflags//:gflags",
+        "@com_google_absl//absl/random",
+        "@com_google_absl//absl/strings:str_format",
+    ],
+)
+
+heyp_cc_binary(
     name = "server",
     srcs = ["server.cc"],
     copts = ["-fno-strict-aliasing"],
