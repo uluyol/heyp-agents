@@ -1,6 +1,7 @@
-load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
+load("@rules_cc//cc:defs.bzl", "cc_library")
+load("//bazel:cc_defs.bzl", "heyp_cc_binary")
 
-cc_binary(
+heyp_cc_binary(
     name = "host-agent-os-test",
     srcs = ["host-agent-os-test.cc"],
     deps = [
@@ -10,7 +11,7 @@ cc_binary(
     ],
 )
 
-cc_binary(
+heyp_cc_binary(
     name = "mk-want-vs-have-csv",
     srcs = ["mk-want-vs-have-csv.cc"],
     deps = [

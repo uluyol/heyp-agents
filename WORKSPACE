@@ -121,6 +121,6 @@ rules_foreign_cc_dependencies()
 
 http_archive(
     name = "com_google_tcmalloc",
-    strip_prefix = "tcmalloc-ca93361644ebe822c479a31018f9221549e07a87",
-    url = "https://github.com/google/tcmalloc/archive/ca93361644ebe822c479a31018f9221549e07a87.zip",
+    strip_prefix = "tcmalloc-2258a12ee4516d27c675c2e968210f1836cf49db",
+    url = "https://github.com/google/tcmalloc/archive/2258a12ee4516d27c675c2e968210f1836cf49db.zip",
 )

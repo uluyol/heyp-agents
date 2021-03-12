@@ -1,4 +1,5 @@
-load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+load("//bazel:cc_defs.bzl", "heyp_cc_binary")
 
 package(
     default_visibility = [
@@ -7,7 +8,7 @@ package(
     ],
 )
 
-cc_binary(
+heyp_cc_binary(
     name = "host-agent",
     srcs = ["host-agent.cc"],
     visibility = ["//visibility:public"],
@@ -103,7 +104,7 @@ cc_test(
     ],
 )
 
-cc_binary(
+heyp_cc_binary(
     name = "fake-ss-for-test",
     testonly = 1,
     srcs = ["fake-ss-for-test.cc"],

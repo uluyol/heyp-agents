@@ -1,4 +1,5 @@
-load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+load("//bazel:cc_defs.bzl", "heyp_cc_binary")
 
 cc_library(
     name = "enforcer",
@@ -68,13 +69,13 @@ cc_test(
     ],
 )
 
-cc_binary(
+heyp_cc_binary(
     name = "fake-iptables-save-for-test",
     testonly = 1,
     srcs = ["fake-iptables-save-for-test.c"],
 )
 
-cc_binary(
+heyp_cc_binary(
     name = "fake-iptables-restore-for-test",
     testonly = 1,
     srcs = ["fake-iptables-restore-for-test.c"],
@@ -93,7 +94,7 @@ cc_test(
     ],
 )
 
-cc_binary(
+heyp_cc_binary(
     name = "fake-tc-for-test",
     testonly = 1,
     srcs = ["fake-tc-for-test.c"],

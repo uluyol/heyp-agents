@@ -1,10 +1,11 @@
-load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+load("//bazel:cc_defs.bzl", "heyp_cc_binary")
 
 package(
     default_visibility = ["//visibility:public"],
 )
 
-cc_binary(
+heyp_cc_binary(
     name = "hdrhist2csv",
     srcs = ["hdrhist2csv.cc"],
     deps = [
