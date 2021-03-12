@@ -12,6 +12,7 @@
 
 #include "absl/status/status.h"
 #include "heyp/proto/stats.pb.h"
+#include "heyp/stats/cdf.h"
 
 struct hdr_histogram;
 
@@ -108,6 +109,8 @@ class HdrHistogram {
 
   int64_t CountAtIndex(int32_t index) const;
   int64_t ValueAtIndex(int32_t index) const;
+
+  Cdf ToCdf() const;
 
   proto::HdrHistogram ToProto() const;
 

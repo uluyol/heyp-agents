@@ -1,7 +1,23 @@
-load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
 
 package(
     default_visibility = ["//visibility:public"],
+)
+
+cc_binary(
+    name = "hdrhist2csv",
+    srcs = ["hdrhist2csv.cc"],
+    deps = [
+        "//heyp/init",
+        "//heyp/proto:fileio",
+        "//heyp/stats:hdrhistogram",
+        "@com_google_absl//absl/strings:str_format",
+    ],
+)
+
+cc_library(
+    name = "cdf",
+    hdrs = ["cdf.h"],
 )
 
 cc_library(
@@ -9,6 +25,7 @@ cc_library(
     srcs = ["hdrhistogram.cc"],
     hdrs = ["hdrhistogram.h"],
     deps = [
+        ":cdf",
         "//heyp/posix:strerror",
         "//heyp/proto:stats_cc_proto",
         "@com_google_absl//absl/status",

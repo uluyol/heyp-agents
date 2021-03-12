@@ -165,6 +165,23 @@ int64_t HdrHistogram::ValueAtIndex(int32_t index) const {
   return hdr_value_at_index(h_, index);
 }
 
+Cdf HdrHistogram::ToCdf() const {
+  struct hdr_iter iter;
+  hdr_iter_recorded_init(&iter, h_);
+
+  Cdf cdf;
+  while (hdr_iter_next(&iter)) {
+    double perc = 100 * iter.cumulative_count;
+    perc /= h_->total_count;
+    cdf.push_back(PctValue{
+        .percentile = perc,
+        .value = static_cast<double>(iter.value),
+        .num_samples = iter.count,
+    });
+  }
+  return cdf;
+}
+
 proto::HdrHistogram HdrHistogram::ToProto() const {
   struct hdr_iter iter;
   hdr_iter_recorded_init(&iter, h_);
@@ -172,8 +189,6 @@ proto::HdrHistogram HdrHistogram::ToProto() const {
   proto::HdrHistogram proto_hist;
   *proto_hist.mutable_config() = config_;
   while (hdr_iter_next(&iter)) {
-    double perc = 100 * iter.cumulative_count;
-    perc /= h_->total_count;
     auto b = proto_hist.add_buckets();
     b->set_v(iter.value);
     b->set_c(iter.count);
