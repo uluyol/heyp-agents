@@ -1,0 +1,5 @@
+rpc_size_bytes: 1024
+target_average_bps: 5000000
+run_dur: "10s"
+num_conns: 10
+interarrival_dist: UNIFORM
