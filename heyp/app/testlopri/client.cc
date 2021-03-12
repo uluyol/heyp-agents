@@ -239,6 +239,7 @@ void RecordInterarrivalIssuedNow() {
     return;
   }
   state->interarrival_hist->RecordValue(now - state->hr_last_recorded_time);
+  state->hr_last_recorded_time = now;
 }
 
 bool MaybeIssueRequest(CachedTime* time) {
