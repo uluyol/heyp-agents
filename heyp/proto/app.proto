@@ -16,7 +16,8 @@ enum Distribution {
 message TestLopriClientConfig {
   optional int32 num_conns = 1 [default = 20];
   optional int32 rpc_size_bytes = 2 [default = 4096];
-  optional double target_average_bps = 3 [default = 10000000];
-  optional Distribution interarrival_dist = 4 [default = EXPONENTIAL];
-  optional string run_dur = 5 [default = "30s"];
+  optional bool batch_when_waiting = 3 [default = true];
+  optional double target_average_bps = 4 [default = 10000000];
+  optional Distribution interarrival_dist = 5 [default = EXPONENTIAL];
+  optional string run_dur = 6 [default = "30s"];
 }

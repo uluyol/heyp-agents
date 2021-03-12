@@ -39,15 +39,26 @@ class CachedTime {
   bool did_get_ = false;
 };
 
-constexpr int kNumParallelRpcsPerConn = 32;
+constexpr int kMaxPipelinedBatches = 32;
 constexpr bool kDebug = false;
+constexpr size_t kMaxBatchSize = 64;
+
+typedef struct {
+  uint64_t hr_start_time;
+  uint64_t rpc_id;
+} rpc_input_t;
+
+typedef struct {
+  rpc_input_t data[kMaxBatchSize];
+  int done;
+  int size;
+} batch_t;
 
 typedef struct {
   uv_tcp_t client;
   uv_buf_t buffer;
   char* buf;
-  uint64_t hr_start_time[kNumParallelRpcsPerConn];
-  uint64_t rpc_id[kNumParallelRpcsPerConn];
+  batch_t batches[kMaxPipelinedBatches];
   int num_seen;
   int next_pos;
 
@@ -69,12 +80,14 @@ proto::HdrHistogram::Config InterarrivalConfig() {
 
 struct State {
   State(const proto::TestLopriClientConfig& c, uv_loop_t* l,
-        std::unique_ptr<StatsRecorder> srec, bool rec_interarrival)
+        std::unique_ptr<StatsRecorder> srec, bool should_batch_when_waiting,
+        bool rec_interarrival)
       : config(c),
         stats_recorder(std::move(srec)),
         loop(l),
         issued_first_req(false),
         hr_report_dur(1'000'000'000),
+        batch_when_waiting(should_batch_when_waiting),
         record_interarrival_called(false),
         tearing_down(false) {
     double rpcs_per_sec = config.target_average_bps() / (8 * config.rpc_size_bytes());
@@ -106,7 +119,7 @@ struct State {
   }
 
   std::vector<client_conn_t*> conns;
-  std::deque<std::function<void(client_conn_t*)>> to_exec;
+  std::deque<batch_t> to_exec;
 
   proto::TestLopriClientConfig config;
   std::unique_ptr<StatsRecorder> stats_recorder;
@@ -125,6 +138,7 @@ struct State {
 
   uint64_t hr_last_recorded_time;
   absl::optional<HdrHistogram> interarrival_hist;
+  bool batch_when_waiting;
   bool record_interarrival_called;
 
   bool tearing_down;
@@ -137,8 +151,11 @@ client_conn_t* new_client_conn() {
   CHECK_GE(state->config.rpc_size_bytes(), 12);
 
   client_conn_t* c = static_cast<client_conn_t*>(malloc(sizeof(client_conn_t)));
-  c->buf = static_cast<char*>(calloc(state->config.rpc_size_bytes(), 1));
-  WriteU32LE(state->config.rpc_size_bytes() - 12, c->buf);
+  c->buf = static_cast<char*>(calloc(state->config.rpc_size_bytes(), kMaxBatchSize));
+  for (size_t i = 0; i < kMaxBatchSize; ++i) {
+    WriteU32LE(state->config.rpc_size_bytes() - 12,
+               c->buf + state->config.rpc_size_bytes() * i);
+  }
   if (kDebug) {
     LOG(INFO) << "init buf header = " << ToHex(c->buf, 12)
               << " for rpc payload size = " << state->config.rpc_size_bytes() - 12;
@@ -156,13 +173,85 @@ void free_client_conn(client_conn_t* c) {
   free(c);
 }
 
+void OnWriteDone(uv_write_t* req, int status);
+
+void RecordInterarrivalIssuedNow(size_t count) {
+  if (!state->interarrival_hist.has_value()) {
+    return;
+  }
+  uint64_t now = uv_hrtime();
+  if (!state->record_interarrival_called) {
+    state->hr_last_recorded_time = now;
+    state->record_interarrival_called = true;
+    return;
+  }
+  state->interarrival_hist->RecordValue(now - state->hr_last_recorded_time);
+  while (count > 1) {
+    // A batch is all sent together
+    state->interarrival_hist->RecordValue(0);
+    --count;
+  }
+}
+
+void WriteBatch(const batch_t& b, client_conn_t* conn) {
+  conn->batches[conn->next_pos % kMaxPipelinedBatches] = b;
+  conn->batches[conn->next_pos % kMaxPipelinedBatches].done = 0;
+  ++conn->next_pos;
+  for (size_t i = 0; i < b.size; ++i) {
+    char* rpc_buf = conn->buf + state->config.rpc_size_bytes() * i;
+    WriteU64LE(b.data[i].rpc_id, rpc_buf + 4);
+    if (kDebug) {
+      VLOG(2) << "write(c=" << conn->conn_id << ") rpc id=" << b.data[i].rpc_id
+              << " header=" << ToHex(rpc_buf, 12);
+    }
+  }
+
+  conn->buffer = uv_buf_init(conn->buf, state->config.rpc_size_bytes() * b.size);
+  uv_write_t* req = static_cast<uv_write_t*>(malloc(sizeof(uv_write_t)));
+  uv_write(req, reinterpret_cast<uv_stream_t*>(&conn->client), &conn->buffer, 1,
+           OnWriteDone);
+  RecordInterarrivalIssuedNow(b.size);
+}
+
+void EnqueueSend(uint64_t hr_start_time, uint64_t rpc_id) {
+  if (!state->conns.empty()) {
+    client_conn_t* conn = state->conns.back();
+    state->conns.pop_back();
+    conn->in_pool = false;
+
+    batch_t b;
+    b.data[0].hr_start_time = hr_start_time;
+    b.data[0].rpc_id = rpc_id;
+    b.size = 1;
+    b.done = 0;
+    WriteBatch(b, conn);
+    return;
+  }
+
+  bool need_new_batch = true;
+  if (!state->to_exec.empty()) {
+    if (state->to_exec.back().size < kMaxBatchSize) {
+      // we have space in the current batch
+      need_new_batch = false;
+    }
+  }
+  if (need_new_batch) {
+    state->to_exec.push_back(batch_t{.done = 0, .size = 0});
+  }
+
+  batch_t& b = state->to_exec.back();
+  b.data[b.size].hr_start_time = hr_start_time;
+  b.data[b.size].rpc_id = rpc_id;
+  ++b.size;
+}
+
 bool AddConn(client_conn_t* conn) {
   if (conn->in_pool) {
     return state->conns.size() == state->config.num_conns();
   }
 
   if (!state->to_exec.empty()) {
-    state->to_exec.front()(conn);
+    WriteBatch(state->to_exec.front(), conn);
     state->to_exec.pop_front();
     return false;
   }
@@ -170,19 +259,6 @@ bool AddConn(client_conn_t* conn) {
   state->conns.push_back(conn);
   conn->in_pool = true;
   return state->conns.size() == state->config.num_conns();
-}
-
-void WithConn(const std::function<void(client_conn_t*)>& func) {
-  if (!state->conns.empty()) {
-    client_conn_t* conn = state->conns.back();
-    state->conns.pop_back();
-    conn->in_pool = false;
-
-    func(conn);
-    return;
-  }
-
-  state->to_exec.push_back(func);
 }
 
 uint64_t NextSendTimeHighRes() {
@@ -222,23 +298,10 @@ void OnWriteDone(uv_write_t* req, int status) {
     return;
   }
 
-  if (conn->next_pos - conn->num_seen < kNumParallelRpcsPerConn) {
+  if (conn->next_pos - conn->num_seen < kMaxPipelinedBatches) {
     AddConn(conn);  // else OnRead will add it back
   }
   free(req);
-}
-
-void RecordInterarrivalIssuedNow() {
-  if (!state->interarrival_hist.has_value()) {
-    return;
-  }
-  uint64_t now = uv_hrtime();
-  if (!state->record_interarrival_called) {
-    state->hr_last_recorded_time = now;
-    state->record_interarrival_called = true;
-    return;
-  }
-  state->interarrival_hist->RecordValue(now - state->hr_last_recorded_time);
 }
 
 bool MaybeIssueRequest(CachedTime* time) {
@@ -266,21 +329,7 @@ bool MaybeIssueRequest(CachedTime* time) {
 
   // Issue the request
   uint64_t rpc_id = ++state->rpc_id;
-  WithConn([hr_now, rpc_id](client_conn_t* conn) {
-    conn->hr_start_time[conn->next_pos % kNumParallelRpcsPerConn] = hr_now;
-    conn->rpc_id[conn->next_pos % kNumParallelRpcsPerConn] = rpc_id;
-    ++conn->next_pos;
-    WriteU64LE(rpc_id, conn->buf + 4);
-    if (kDebug) {
-      VLOG(2) << "write(c=" << conn->conn_id << ") rpc id=" << rpc_id
-              << " header=" << ToHex(conn->buf, 12);
-    }
-    conn->buffer = uv_buf_init(conn->buf, state->config.rpc_size_bytes());
-    uv_write_t* req = static_cast<uv_write_t*>(malloc(sizeof(uv_write_t)));
-    uv_write(req, reinterpret_cast<uv_stream_t*>(&conn->client), &conn->buffer, 1,
-             OnWriteDone);
-    RecordInterarrivalIssuedNow();
-  });
+  EnqueueSend(hr_now, rpc_id);
 
   return true;
 }
@@ -334,17 +383,19 @@ void OnReadAck(uv_stream_t* client_stream, ssize_t nread, const uv_buf_t* buf) {
     return;
   }
 
-  bool got_ack = false;
+  bool finished_batch = false;
   auto record_rpc_latency = [&](uint64_t rpc_id) {
-    CHECK_EQ(client->rpc_id[client->num_seen % kNumParallelRpcsPerConn], rpc_id)
-        << "rpcs on a single connection were reordered!";
+    batch_t& b = client->batches[client->num_seen % kMaxPipelinedBatches];
+    rpc_input_t input = b.data[b.done];
+    CHECK_EQ(input.rpc_id, rpc_id) << "rpcs on a single connection were reordered!";
     state->stats_recorder->RecordRpc(
         state->config.rpc_size_bytes(),
-        absl::Nanoseconds(
-            uv_hrtime() -
-            client->hr_start_time[client->num_seen % kNumParallelRpcsPerConn]));
-    ++client->num_seen;
-    got_ack = true;
+        absl::Nanoseconds(uv_hrtime() - input.hr_start_time));
+    ++b.done;
+    if (b.done >= b.size) {
+      ++client->num_seen;
+      finished_batch = true;
+    }
   };
 
   char* b = buf->base;
@@ -366,7 +417,7 @@ void OnReadAck(uv_stream_t* client_stream, ssize_t nread, const uv_buf_t* buf) {
     }
   }
   free(buf->base);
-  if (got_ack) {
+  if (finished_batch) {
     AddConn(client);  // will not add if present already
   }
 }
@@ -474,7 +525,7 @@ int ShardMain(int argc, char** argv, int shard_index, int num_shards) {
   config.set_target_average_bps(config.target_average_bps() / num_shards);
 
   heyp::state = new heyp::State(config, uv_default_loop(), std::move(*srec),
-                                FLAGS_interarrival != "");
+                                config.batch_when_waiting(), FLAGS_interarrival != "");
   int ret = heyp::InitAndRunAt(FLAGS_server, start_time);
   if (FLAGS_interarrival != "") {
     CHECK(heyp::WriteTextProtoToFile(
