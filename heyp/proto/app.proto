@@ -14,9 +14,13 @@ enum Distribution {
 }
 
 message TestLopriClientConfig {
+  message WorkloadStage {
+    optional int32 rpc_size_bytes = 1 [default = 4096];
+    optional double target_average_bps = 2 [default = 10000000];
+    optional Distribution interarrival_dist = 3 [default = EXPONENTIAL];
+    optional string run_dur = 4 [default = "30s"];
+  }
+
   optional int32 num_conns = 1 [default = 20];
-  optional int32 rpc_size_bytes = 2 [default = 4096];
-  optional double target_average_bps = 3 [default = 10000000];
-  optional Distribution interarrival_dist = 4 [default = EXPONENTIAL];
-  optional string run_dur = 5 [default = "30s"];
+  repeated WorkloadStage workload_stages = 2;
 }

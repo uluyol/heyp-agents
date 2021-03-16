@@ -3,7 +3,9 @@
 #include <unistd.h>
 #include <uv.h>
 
+#include <cstdint>
 #include <deque>
+#include <limits>
 #include <vector>
 
 #include "absl/random/distributions.h"
@@ -67,19 +69,26 @@ proto::HdrHistogram::Config InterarrivalConfig() {
   return c;
 }
 
-struct State {
-  State(const proto::TestLopriClientConfig& c, uv_loop_t* l,
-        std::unique_ptr<StatsRecorder> srec, bool rec_interarrival)
-      : config(c),
-        stats_recorder(std::move(srec)),
-        loop(l),
-        issued_first_req(false),
-        hr_report_dur(1'000'000'000),
-        record_interarrival_called(false),
-        tearing_down(false) {
-    double rpcs_per_sec = config.target_average_bps() / (8 * config.rpc_size_bytes());
-    LOG(INFO) << "targeting an average of " << rpcs_per_sec << "rpcs/sec";
-    switch (config.interarrival_dist()) {
+struct WorkloadStage {
+  int32_t num_conns;
+  int32_t rpc_size_bytes;
+  double target_average_bps;
+  proto::Distribution interarrival_dist;
+  double dist_param;
+  uint64_t hr_cum_run_dur;
+};
+
+std::vector<WorkloadStage> StagesFromConfig(const proto::TestLopriClientConfig& config) {
+  std::vector<WorkloadStage> stages;
+  uint64_t hr_cum_run_dur = 0;
+  stages.reserve(config.workload_stages_size());
+  for (const auto& p : config.workload_stages()) {
+    double rpcs_per_sec = p.target_average_bps() / (8 * p.rpc_size_bytes());
+    LOG(INFO) << "stage " << stages.size() << ": will target an average of "
+              << rpcs_per_sec << "rpcs/sec";
+
+    double dist_param;
+    switch (p.interarrival_dist()) {
       case proto::Distribution::CONSTANT:
         dist_param = 1.0 / rpcs_per_sec;
         break;
@@ -90,32 +99,86 @@ struct State {
         dist_param = rpcs_per_sec;
         break;
       default:
-        LOG(FATAL) << "unsupported interarrival distribution: "
-                   << config.interarrival_dist();
+        LOG(FATAL) << "unsupported interarrival distribution: " << p.interarrival_dist();
     }
 
     absl::Duration run_dur;
-    if (!absl::ParseDuration(config.run_dur(), &run_dur)) {
-      LOG(FATAL) << "invalid run duration: " << config.run_dur();
+    if (!absl::ParseDuration(p.run_dur(), &run_dur)) {
+      LOG(FATAL) << "invalid run duration: " << p.run_dur();
     }
-    hr_run_dur = absl::ToInt64Nanoseconds(run_dur);
 
+    hr_cum_run_dur += absl::ToInt64Nanoseconds(run_dur);
+
+    stages.push_back({
+        .rpc_size_bytes = p.rpc_size_bytes(),
+        .target_average_bps = p.target_average_bps(),
+        .interarrival_dist = p.interarrival_dist(),
+        .dist_param = dist_param,
+        .hr_cum_run_dur = hr_cum_run_dur,
+    });
+  }
+  return stages;
+}
+
+struct State {
+  State(const proto::TestLopriClientConfig& c, uv_loop_t* l,
+        std::unique_ptr<StatsRecorder> srec, bool rec_interarrival)
+      : num_conns(c.num_conns()),
+        workload_stages(StagesFromConfig(c)),
+        stats_recorder(std::move(srec)),
+        hr_total_run_dur(workload_stages.back().hr_cum_run_dur),
+        loop(l),
+        issued_first_req(false),
+        hr_report_dur(1'000'000'000),
+        record_interarrival_called(false),
+        tearing_down(false) {
     if (rec_interarrival) {
       interarrival_hist.emplace(InterarrivalConfig());
     }
   }
 
+  int32_t max_rpc_size_bytes() const {
+    int32_t max_size = -1;
+    for (const WorkloadStage& s : workload_stages) {
+      max_size = std::max(max_size, s.rpc_size_bytes);
+    }
+    return max_size;
+  }
+
+  client_conn_t* new_client_conn() {
+    int32_t max_rpc_size_bytes = this->max_rpc_size_bytes();
+
+    CHECK_GE(max_rpc_size_bytes, 12);
+    client_conn_t* c = static_cast<client_conn_t*>(malloc(sizeof(client_conn_t)));
+    c->buf = static_cast<char*>(calloc(max_rpc_size_bytes, 1));
+    c->num_seen = 0;
+    c->next_pos = 0;
+    c->read_buf_size = 0;
+    c->in_pool = false;
+    c->conn_id = ++next_conn_id;
+    return c;
+  }
+
+  const WorkloadStage* cur_stage() const {
+    if (cur_stage_index < workload_stages.size()) {
+      return &workload_stages[cur_stage_index];
+    }
+    return nullptr;
+  }
+
   std::vector<client_conn_t*> conns;
   std::deque<std::function<void(client_conn_t*)>> to_exec;
 
-  proto::TestLopriClientConfig config;
+  int32_t num_conns;
+  const std::vector<WorkloadStage> workload_stages;
+  int cur_stage_index = 0;
   std::unique_ptr<StatsRecorder> stats_recorder;
-  int64_t hr_run_dur;
+  int64_t hr_total_run_dur;
   uv_loop_t* loop;
   absl::InsecureBitGen rng;
   uint64_t hr_next;
-  double dist_param;
   bool issued_first_req;
+  int next_conn_id = 0;
 
   uint64_t rpc_id = 0;
   uint64_t hr_start_time;
@@ -131,25 +194,6 @@ struct State {
 };
 
 State* state;
-int next_conn_id = 0;
-
-client_conn_t* new_client_conn() {
-  CHECK_GE(state->config.rpc_size_bytes(), 12);
-
-  client_conn_t* c = static_cast<client_conn_t*>(malloc(sizeof(client_conn_t)));
-  c->buf = static_cast<char*>(calloc(state->config.rpc_size_bytes(), 1));
-  WriteU32LE(state->config.rpc_size_bytes() - 12, c->buf);
-  if (kDebug) {
-    LOG(INFO) << "init buf header = " << ToHex(c->buf, 12)
-              << " for rpc payload size = " << state->config.rpc_size_bytes() - 12;
-  }
-  c->num_seen = 0;
-  c->next_pos = 0;
-  c->read_buf_size = 0;
-  c->in_pool = false;
-  c->conn_id = ++next_conn_id;
-  return c;
-}
 
 void free_client_conn(client_conn_t* c) {
   free(c->buf);
@@ -158,7 +202,7 @@ void free_client_conn(client_conn_t* c) {
 
 bool AddConn(client_conn_t* conn) {
   if (conn->in_pool) {
-    return state->conns.size() == state->config.num_conns();
+    return state->conns.size() == state->num_conns;
   }
 
   if (!state->to_exec.empty()) {
@@ -169,7 +213,7 @@ bool AddConn(client_conn_t* conn) {
 
   state->conns.push_back(conn);
   conn->in_pool = true;
-  return state->conns.size() == state->config.num_conns();
+  return state->conns.size() == state->num_conns;
 }
 
 void WithConn(const std::function<void(client_conn_t*)>& func) {
@@ -186,16 +230,21 @@ void WithConn(const std::function<void(client_conn_t*)>& func) {
 }
 
 uint64_t NextSendTimeHighRes() {
+  const WorkloadStage* stage = state->cur_stage();
+  if (stage == nullptr) {
+    return std::numeric_limits<uint64_t>::max();
+  }
+
   double wait_sec = 0;
-  switch (state->config.interarrival_dist()) {
+  switch (stage->interarrival_dist) {
     case proto::Distribution::CONSTANT:
-      wait_sec = state->dist_param;
+      wait_sec = stage->dist_param;
       break;
     case proto::Distribution::UNIFORM:
-      wait_sec = absl::Uniform(state->rng, 0, 2 * state->dist_param);
+      wait_sec = absl::Uniform(state->rng, 0, 2 * stage->dist_param);
       break;
     case proto::Distribution::EXPONENTIAL:
-      wait_sec = absl::Exponential(state->rng, state->dist_param);
+      wait_sec = absl::Exponential(state->rng, stage->dist_param);
       break;
     default:
       LOG(FATAL) << "unreachable";
@@ -248,7 +297,13 @@ bool MaybeIssueRequest(CachedTime* time) {
     return false;  // not yet
   }
 
-  if (hr_now > state->hr_start_time + state->hr_run_dur) {
+  if (state->cur_stage() != nullptr &&
+      hr_now > state->hr_start_time + state->cur_stage()->hr_cum_run_dur) {
+    LOG(INFO) << "finished workload stage = " << state->cur_stage_index++;
+  }
+
+  if (state->cur_stage() == nullptr ||
+      hr_now > state->hr_start_time + state->hr_total_run_dur) {
     LOG(INFO) << "exiting event loop after "
               << static_cast<double>(hr_now - state->hr_start_time) / 1e9 << " sec";
     state->tearing_down = true;
@@ -271,12 +326,19 @@ bool MaybeIssueRequest(CachedTime* time) {
     conn->hr_start_time[conn->next_pos % kNumParallelRpcsPerConn] = hr_now;
     conn->rpc_id[conn->next_pos % kNumParallelRpcsPerConn] = rpc_id;
     ++conn->next_pos;
+    const WorkloadStage* stage = state->cur_stage();
+    if (stage == nullptr) {
+      AddConn(conn);
+      return;
+    }
+    int32_t rpc_size_bytes = stage->rpc_size_bytes;
+    WriteU32LE(rpc_size_bytes - 12, conn->buf);
     WriteU64LE(rpc_id, conn->buf + 4);
     if (kDebug) {
       VLOG(2) << "write(c=" << conn->conn_id << ") rpc id=" << rpc_id
               << " header=" << ToHex(conn->buf, 12);
     }
-    conn->buffer = uv_buf_init(conn->buf, state->config.rpc_size_bytes());
+    conn->buffer = uv_buf_init(conn->buf, rpc_size_bytes);
     uv_write_t* req = static_cast<uv_write_t*>(malloc(sizeof(uv_write_t)));
     uv_write(req, reinterpret_cast<uv_stream_t*>(&conn->client), &conn->buffer, 1,
              OnWriteDone);
@@ -340,10 +402,9 @@ void OnReadAck(uv_stream_t* client_stream, ssize_t nread, const uv_buf_t* buf) {
     CHECK_EQ(client->rpc_id[client->num_seen % kNumParallelRpcsPerConn], rpc_id)
         << "rpcs on a single connection were reordered!";
     state->stats_recorder->RecordRpc(
-        state->config.rpc_size_bytes(),
-        absl::Nanoseconds(
-            uv_hrtime() -
-            client->hr_start_time[client->num_seen % kNumParallelRpcsPerConn]));
+        buf->len, absl::Nanoseconds(
+                      uv_hrtime() -
+                      client->hr_start_time[client->num_seen % kNumParallelRpcsPerConn]));
     ++client->num_seen;
     got_ack = true;
   };
@@ -425,10 +486,10 @@ int InitAndRunAt(absl::string_view server_addr_full, absl::Time start_time) {
 
   // Start by creating connections.
   // Once all are created, the last will register a timer to start the run
-  for (int i = 0; i < state->config.num_conns(); ++i) {
+  for (int i = 0; i < state->num_conns; ++i) {
     uv_connect_t* req = static_cast<uv_connect_t*>(malloc(sizeof(uv_connect_t)));
 
-    client_conn_t* client_conn = new_client_conn();
+    client_conn_t* client_conn = state->new_client_conn();
     uv_tcp_init(state->loop, &client_conn->client);
 
     uv_tcp_connect(req, &client_conn->client,
@@ -472,7 +533,11 @@ int ShardMain(int argc, char** argv, int shard_index, int num_shards) {
     std::cerr << "failed to parse config file\n";
     return 4;
   }
-  config.set_target_average_bps(config.target_average_bps() / num_shards);
+
+  for (int i = 0; i < config.workload_stages_size(); ++i) {
+    config.mutable_workload_stages(i)->set_target_average_bps(
+        config.workload_stages(i).target_average_bps() / num_shards);
+  }
 
   heyp::state = new heyp::State(config, uv_default_loop(), std::move(*srec),
                                 FLAGS_interarrival != "");

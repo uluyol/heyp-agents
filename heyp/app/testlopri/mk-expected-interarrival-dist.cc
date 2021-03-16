@@ -5,6 +5,7 @@
 #include "absl/random/distributions.h"
 #include "absl/random/random.h"
 #include "absl/strings/str_format.h"
+#include "absl/time/time.h"
 #include "gflags/gflags.h"
 #include "heyp/init/init.h"
 #include "heyp/proto/app.pb.h"
@@ -13,11 +14,40 @@
 namespace heyp {
 namespace {
 
-int Run(const proto::TestLopriClientConfig& config) {
-  double rpcs_per_sec = config.target_average_bps() / (8 * config.rpc_size_bytes());
+std::vector<double> FracTimeInEachStage(const proto::TestLopriClientConfig& config) {
+  auto total_dur = absl::ZeroDuration();
+  std::vector<absl::Duration> durs;
+  for (auto s : config.workload_stages()) {
+    absl::Duration d;
+    if (!absl::ParseDuration(s.run_dur(), &d)) {
+      std::cerr << "bad duration '" << s.run_dur() << "'";
+      exit(2);
+    }
+    total_dur += d;
+    durs.push_back(d);
+  }
 
+  std::vector<double> fracs;
+  double accum = 0;
+  for (auto d : durs) {
+    accum += absl::ToDoubleSeconds(d) / absl::ToDoubleSeconds(total_dur);
+    fracs.push_back(accum);
+  }
+  fracs.back() = 1;
+
+  return fracs;
+}
+
+int64_t PickRandomInterarrival(const proto::TestLopriClientConfig& config,
+                               const std::vector<double>& fracs,
+                               absl::InsecureBitGen& rng) {
+  int index = std::lower_bound(fracs.begin(), fracs.end(), absl::Uniform(rng, 0, 1)) -
+              fracs.begin();
+
+  auto stage = config.workload_stages(index);
+  double rpcs_per_sec = stage.target_average_bps() / (8 * stage.rpc_size_bytes());
   double dist_param = 0;
-  switch (config.interarrival_dist()) {
+  switch (stage.interarrival_dist()) {
     case proto::Distribution::CONSTANT:
       dist_param = 1.0 / rpcs_per_sec;
       break;
@@ -28,32 +58,37 @@ int Run(const proto::TestLopriClientConfig& config) {
       dist_param = rpcs_per_sec;
       break;
     default:
-      std::cerr << "unsupported interarrival distribution: " << config.interarrival_dist()
+      std::cerr << "unsupported interarrival distribution: " << stage.interarrival_dist()
                 << "\n";
-      return 2;
+      exit(2);
   }
 
+  double wait_sec = 0;
+  switch (stage.interarrival_dist()) {
+    case proto::Distribution::CONSTANT:
+      wait_sec = dist_param;
+      break;
+    case proto::Distribution::UNIFORM:
+      wait_sec = absl::Uniform(rng, 0, 2 * dist_param);
+      break;
+    case proto::Distribution::EXPONENTIAL:
+      wait_sec = absl::Exponential(rng, dist_param);
+      break;
+    default:
+      std::cerr << "unreachable\n";
+      return 3;
+  }
+  return wait_sec * 1'000'000'000;  // to ns
+}
+
+int Run(const proto::TestLopriClientConfig& config) {
   absl::InsecureBitGen rng;
+  std::vector<double> fracs = FracTimeInEachStage(config);
 
   constexpr int kNumSamples = 1000;
   std::array<int64_t, kNumSamples> data;
   for (int i = 0; i < kNumSamples; ++i) {
-    double wait_sec = 0;
-    switch (config.interarrival_dist()) {
-      case proto::Distribution::CONSTANT:
-        wait_sec = dist_param;
-        break;
-      case proto::Distribution::UNIFORM:
-        wait_sec = absl::Uniform(rng, 0, 2 * dist_param);
-        break;
-      case proto::Distribution::EXPONENTIAL:
-        wait_sec = absl::Exponential(rng, dist_param);
-        break;
-      default:
-        std::cerr << "unreachable\n";
-        return 3;
-    }
-    data[i] = wait_sec * 1'000'000'000;  // to ns
+    data[i] = PickRandomInterarrival(config, fracs, rng);
   }
 
   std::sort(data.begin(), data.end());
