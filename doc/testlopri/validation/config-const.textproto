@@ -3,5 +3,5 @@ workload_stages {
   rpc_size_bytes: 1024
   target_average_bps: 5000000
   run_dur: "10s"
-  interarrival_dist: CONSTANT
+  interarrival_dist: DIST_CONSTANT
 }

@@ -89,13 +89,13 @@ std::vector<WorkloadStage> StagesFromConfig(const proto::TestLopriClientConfig& 
 
     double dist_param;
     switch (p.interarrival_dist()) {
-      case proto::Distribution::CONSTANT:
+      case proto::DIST_CONSTANT:
         dist_param = 1.0 / rpcs_per_sec;
         break;
-      case proto::Distribution::UNIFORM:
+      case proto::DIST_UNIFORM:
         dist_param = 1.0 / rpcs_per_sec;
         break;
-      case proto::Distribution::EXPONENTIAL:
+      case proto::DIST_EXPONENTIAL:
         dist_param = rpcs_per_sec;
         break;
       default:
@@ -237,13 +237,13 @@ uint64_t NextSendTimeHighRes() {
 
   double wait_sec = 0;
   switch (stage->interarrival_dist) {
-    case proto::Distribution::CONSTANT:
+    case proto::DIST_CONSTANT:
       wait_sec = stage->dist_param;
       break;
-    case proto::Distribution::UNIFORM:
+    case proto::DIST_UNIFORM:
       wait_sec = absl::Uniform(state->rng, 0, 2 * stage->dist_param);
       break;
-    case proto::Distribution::EXPONENTIAL:
+    case proto::DIST_EXPONENTIAL:
       wait_sec = absl::Exponential(state->rng, stage->dist_param);
       break;
     default:

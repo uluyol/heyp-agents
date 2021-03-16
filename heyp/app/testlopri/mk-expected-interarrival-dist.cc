@@ -48,13 +48,13 @@ int64_t PickRandomInterarrival(const proto::TestLopriClientConfig& config,
   double rpcs_per_sec = stage.target_average_bps() / (8 * stage.rpc_size_bytes());
   double dist_param = 0;
   switch (stage.interarrival_dist()) {
-    case proto::Distribution::CONSTANT:
+    case proto::DIST_CONSTANT:
       dist_param = 1.0 / rpcs_per_sec;
       break;
-    case proto::Distribution::UNIFORM:
+    case proto::DIST_UNIFORM:
       dist_param = 1.0 / rpcs_per_sec;
       break;
-    case proto::Distribution::EXPONENTIAL:
+    case proto::DIST_EXPONENTIAL:
       dist_param = rpcs_per_sec;
       break;
     default:
@@ -65,13 +65,13 @@ int64_t PickRandomInterarrival(const proto::TestLopriClientConfig& config,
 
   double wait_sec = 0;
   switch (stage.interarrival_dist()) {
-    case proto::Distribution::CONSTANT:
+    case proto::DIST_CONSTANT:
       wait_sec = dist_param;
       break;
-    case proto::Distribution::UNIFORM:
+    case proto::DIST_UNIFORM:
       wait_sec = absl::Uniform(rng, 0, 2 * dist_param);
       break;
-    case proto::Distribution::EXPONENTIAL:
+    case proto::DIST_EXPONENTIAL:
       wait_sec = absl::Exponential(rng, dist_param);
       break;
     default:

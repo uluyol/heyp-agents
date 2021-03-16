@@ -7,17 +7,17 @@ syntax = "proto2";
 package heyp.proto;
 
 enum Distribution {
-  UNSET = 0;
-  CONSTANT = 1;
-  UNIFORM = 2;
-  EXPONENTIAL = 3;
+  DIST_UNSET = 0;
+  DIST_CONSTANT = 1;
+  DIST_UNIFORM = 2;
+  DIST_EXPONENTIAL = 3;
 }
 
 message TestLopriClientConfig {
   message WorkloadStage {
     optional int32 rpc_size_bytes = 1 [default = 4096];
     optional double target_average_bps = 2 [default = 10000000];
-    optional Distribution interarrival_dist = 3 [default = EXPONENTIAL];
+    optional Distribution interarrival_dist = 3 [default = DIST_EXPONENTIAL];
     optional string run_dur = 4 [default = "30s"];
   }
 
