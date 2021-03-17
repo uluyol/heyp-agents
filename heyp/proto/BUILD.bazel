@@ -1,3 +1,5 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("@io_bazel_rules_go//proto:def.bzl", "go_proto_library")
 load("@rules_cc//cc:defs.bzl", "cc_library", "cc_proto_library")
 load("@rules_proto//proto:defs.bzl", "proto_library")
 load("@com_github_grpc_grpc//bazel:cc_grpc_library.bzl", "cc_grpc_library")
@@ -112,4 +114,36 @@ cc_library(
         ":alg",
         "@gtest",
     ],
+)
+
+proto_library(
+    name = "heyp_proto_proto",
+    srcs = [
+        "app.proto",
+        "config.proto",
+        "heyp.proto",
+        "integration.proto",
+        "stats.proto",
+    ],
+    deps = ["@com_google_protobuf//:timestamp_proto"],
+)
+
+go_proto_library(
+    name = "heyp_proto_go_proto",
+    compilers = ["@io_bazel_rules_go//proto:go_grpc"],
+    importpath = "github.com/uluyol/heyp-agents/heyp/proto",
+    proto = ":heyp_proto_proto",
+)
+
+go_library(
+    name = "proto",
+    srcs = [
+        "alg.h",
+        "constructors.h",
+        "fileio.h",
+        "parse-text.h",
+        "testing.h",
+    ],
+    embed = [":heyp_proto_go_proto"],
+    importpath = "github.com/uluyol/heyp-agents/heyp/proto",
 )

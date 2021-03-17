@@ -1,0 +1,7 @@
+scripts:
+
+* Configure network switch
+
+* Deploy host/cluster agents
+
+* Deploy/run application & collect results
