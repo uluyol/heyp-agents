@@ -7,9 +7,24 @@
 # Since we only need two classes, uses AF3 and 0.
 #
 # TODO: how many ports are there?
+#
+# Notes:
+# - Seems that the switches have Dell EMC Networking OS Release 9.13 installed.
+#   CLI Reference: https://downloads.dell.com/manuals/all-products/esuprt_ser_stor_net/esuprt_networking/esuprt_net_fxd_prt_swtchs/force10-s4048-on_white-papers_en-us.pdf#page=700&zoom=100,0,0
+# - Can't seem to get some of the documented commands working, for reasons that are unclear 
 
+# Was adding this messing AF3/4 up?
+#
+# hipri class:
+# Class-map match-any hipri                                     
+#   Seq 5 Match ip dscp 34    
+#
 policy-map-input hipri-policy2
 service-queue 7 class-name hipri
+exit
+
+policy-map-input heyp-trust-dscp
+trust diffserv
 exit
 
 qos-policy-output heyp-pri-qos
@@ -21,4 +36,6 @@ service-queue 2 qos-policy heyp-pri-qos
 exit
 
 interface range TenGigabitEthernet 1/1 - 1/46 ?
+service-policy input heyp-trust-dscp
 service-policy output heyp-pri-pol
+exit
