@@ -142,8 +142,8 @@ absl::Status LinuxHostEnforcerImpl::ResetTrafficControl() {
       /*force=*/true);
 }
 
-constexpr char kDscpHipri[] = "AF41";
-constexpr char kDscpLopri[] = "AF31";
+constexpr char kDscpHipri[] = "AF21";
+constexpr char kDscpLopri[] = "BE";
 
 void LinuxHostEnforcerImpl::StageIptablesForFlow(
     const MatchedHostFlows::Vec &matched_flows, const std::string &dscp,
