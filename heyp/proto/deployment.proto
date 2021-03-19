@@ -1,0 +1,38 @@
+// This file contains definitions of all configuration protos.
+// These messages should only be stored in textual or in-memory form (i.e. not
+// the binary format), so feed free to change any field numbers.
+
+syntax = "proto2";
+
+package heyp.proto;
+
+option go_package = "github.com/uluyol/heyp-agents/go/proto";
+
+import "heyp/proto/config.proto";
+import "heyp/proto/heyp.proto";
+
+message DeployedNode {
+  optional string name = 1;
+  optional string external_addr = 2;
+  optional string experiment_addr = 3;
+  repeated string roles = 10;
+}
+
+message DeployedCluster {
+  optional string name = 1;
+  repeated string node_names = 2;
+
+  optional AllocBundle limits = 3;
+}
+
+message DeploymentConfig {
+  repeated DeployedNode nodes = 1;
+  repeated DeployedCluster clusters = 2;
+
+  optional ClusterAgentConfig cluster_agent_config = 10;
+
+  // Fields that are autofilled:
+  // - host_agent_template.flow_state_reporter.this_host_addrs
+  // - host_agent_template.daemon.cluster_agent_addr
+  optional HostAgentConfig host_agent_template = 11;
+}

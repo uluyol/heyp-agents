@@ -6,6 +6,8 @@ syntax = "proto2";
 
 package heyp.proto;
 
+option go_package = "github.com/uluyol/heyp-agents/go/proto";
+
 import "heyp/proto/heyp.proto";
 
 message DemandPredictorConfig {

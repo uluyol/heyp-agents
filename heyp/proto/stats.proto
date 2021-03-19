@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package heyp.proto;
 
+option go_package = "github.com/uluyol/heyp-agents/go/proto";
+
 message HdrHistogram {
   message Config {
     int64 lowest_discernible_value = 1;
