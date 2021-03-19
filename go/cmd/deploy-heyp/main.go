@@ -3,11 +3,14 @@ package main
 import (
 	"context"
 	"flag"
+	"io/ioutil"
 	"log"
 	"os"
 
 	"github.com/google/subcommands"
 	"github.com/uluyol/heyp-agents/go/deploy/actions"
+	pb "github.com/uluyol/heyp-agents/go/proto"
+	"google.golang.org/protobuf/encoding/prototext"
 )
 
 type mkBundleCmd struct {
@@ -35,6 +38,91 @@ func (c *mkBundleCmd) Execute(ctx context.Context, fs *flag.FlagSet,
 	return subcommands.ExitSuccess
 }
 
+type installBundleCmd struct {
+	configPath string
+	bundlePath string
+	remDir     string
+}
+
+func (*installBundleCmd) Name() string     { return "install-bundle" }
+func (*installBundleCmd) Synopsis() string { return "install bundle on remote hosts" }
+func (*installBundleCmd) Usage() string    { return "" }
+
+func (c *installBundleCmd) SetFlags(fs *flag.FlagSet) {
+	configVar(&c.configPath, fs)
+	bundleVar(&c.bundlePath, fs)
+	remdirVar(&c.remDir, fs)
+}
+
+func (c *installBundleCmd) Execute(ctx context.Context, fs *flag.FlagSet,
+	args ...interface{}) subcommands.ExitStatus {
+	config := parseConfig(c.configPath)
+	if err := actions.InstallCodeBundle(config, c.bundlePath, c.remDir); err != nil {
+		log.Fatal(err)
+	}
+	return subcommands.ExitSuccess
+}
+
+type configAndRemDirCmd struct {
+	name     string
+	synopsis string
+	exec     func(*configAndRemDirCmd, *flag.FlagSet)
+
+	configPath string
+	remDir     string
+	config     *pb.DeploymentConfig
+}
+
+func (c *configAndRemDirCmd) Name() string     { return c.name }
+func (c *configAndRemDirCmd) Synopsis() string { return c.synopsis }
+func (c *configAndRemDirCmd) Usage() string    { return "" }
+
+func (c *configAndRemDirCmd) SetFlags(fs *flag.FlagSet) {
+	configVar(&c.configPath, fs)
+	remdirVar(&c.remDir, fs)
+}
+
+func (c *configAndRemDirCmd) Execute(ctx context.Context, fs *flag.FlagSet,
+	args ...interface{}) subcommands.ExitStatus {
+	c.config = parseConfig(c.configPath)
+	c.exec(c, fs)
+	return subcommands.ExitSuccess
+}
+
+var startHEYPAgentsCmd = &configAndRemDirCmd{
+	name:     "start-heyp-agents",
+	synopsis: "start heyp agents",
+	exec: func(cmd *configAndRemDirCmd, fs *flag.FlagSet) {
+		err := actions.StartHEYPAgents(cmd.config, cmd.remDir)
+		if err != nil {
+			log.Fatal(err)
+		}
+	},
+}
+
+var testLOPRIStartServersCmd = &configAndRemDirCmd{
+	name:     "testlopri-start-servers",
+	synopsis: "start servers for testlopri experiments",
+	exec: func(cmd *configAndRemDirCmd, fs *flag.FlagSet) {
+		err := actions.TestLOPRIStartServers(cmd.config, cmd.remDir)
+		if err != nil {
+			log.Fatal(err)
+		}
+	},
+}
+
+func parseConfig(s string) *pb.DeploymentConfig {
+	data, err := ioutil.ReadFile(s)
+	if err != nil {
+		log.Fatalf("failed to read config: %s", err)
+	}
+	c := new(pb.DeploymentConfig)
+	if err := prototext.Unmarshal(data, c); err != nil {
+		log.Fatalf("failed to parse config: %s", err)
+	}
+	return c
+}
+
 func bundleVar(v *string, fs *flag.FlagSet) {
 	fs.StringVar(v, "bundle", "heyp-bundle.tar.xz",
 		"path to xz'd output tarball")
@@ -45,11 +133,19 @@ func remdirVar(v *string, fs *flag.FlagSet) {
 		"root directory of deployed code/logs/etc. at remote")
 }
 
+func configVar(v *string, fs *flag.FlagSet) {
+	fs.StringVar(v, "c", "deploy-config.textproto",
+		"path to deployment config file")
+}
+
 func main() {
 	subcommands.Register(subcommands.HelpCommand(), "")
 	subcommands.Register(subcommands.FlagsCommand(), "")
 	subcommands.Register(subcommands.CommandsCommand(), "")
 	subcommands.Register(new(mkBundleCmd), "")
+	subcommands.Register(new(installBundleCmd), "")
+	subcommands.Register(startHEYPAgentsCmd, "")
+	subcommands.Register(testLOPRIStartServersCmd, "")
 
 	flag.Parse()
 

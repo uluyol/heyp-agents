@@ -8,6 +8,7 @@ package heyp.proto;
 
 option go_package = "github.com/uluyol/heyp-agents/go/proto";
 
+import "heyp/proto/app.proto";
 import "heyp/proto/config.proto";
 import "heyp/proto/heyp.proto";
 
@@ -25,6 +26,15 @@ message DeployedCluster {
   optional AllocBundle limits = 3;
 }
 
+message DeployedTestLopriInstance {
+  // Node roles:
+  // testlopri-[name]-client
+  // testlopri-[name]-server
+  optional string name = 1;
+  optional int32 serve_port = 2;
+  optional TestLopriClientConfig client = 3;
+}
+
 message DeploymentConfig {
   repeated DeployedNode nodes = 1;
   repeated DeployedCluster clusters = 2;
@@ -35,4 +45,6 @@ message DeploymentConfig {
   // - host_agent_template.flow_state_reporter.this_host_addrs
   // - host_agent_template.daemon.cluster_agent_addr
   optional HostAgentConfig host_agent_template = 11;
+
+  repeated DeployedTestLopriInstance testlopri_instances = 12;
 }
