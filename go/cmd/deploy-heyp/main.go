@@ -122,6 +122,32 @@ var testLOPRIRunClientsCmd = &configAndRemDirCmd{
 	},
 }
 
+type fetchLogsCmd struct {
+	configPath string
+	remDir     string
+	outdir     string
+}
+
+func (*fetchLogsCmd) Name() string     { return "fetch-logs" }
+func (*fetchLogsCmd) Synopsis() string { return "fetch logs from remote hosts" }
+func (*fetchLogsCmd) Usage() string    { return "" }
+
+func (c *fetchLogsCmd) SetFlags(fs *flag.FlagSet) {
+	configVar(&c.configPath, fs)
+	remdirVar(&c.remDir, fs)
+	flag.StringVar(&c.outdir, "o", "logs", "directory to store logs")
+}
+
+func (c *fetchLogsCmd) Execute(ctx context.Context, fs *flag.FlagSet,
+	args ...interface{}) subcommands.ExitStatus {
+	err := actions.FetchLogs(parseConfig(c.configPath),
+		c.remDir, c.outdir)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return subcommands.ExitSuccess
+}
+
 func parseConfig(s string) *pb.DeploymentConfig {
 	data, err := ioutil.ReadFile(s)
 	if err != nil {
@@ -158,6 +184,7 @@ func main() {
 	subcommands.Register(startHEYPAgentsCmd, "")
 	subcommands.Register(testLOPRIStartServersCmd, "")
 	subcommands.Register(testLOPRIRunClientsCmd, "")
+	subcommands.Register(new(fetchLogsCmd), "")
 
 	flag.Parse()
 

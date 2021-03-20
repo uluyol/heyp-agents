@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -304,6 +305,51 @@ func TestLOPRIRunClients(c *pb.DeploymentConfig, remoteTopdir string) error {
 				return cmd.Run()
 			})
 		}
+	}
+	return eg.Wait()
+}
+
+func FetchLogs(c *pb.DeploymentConfig, remoteTopdir, outdir string) error {
+	if err := os.RemoveAll(outdir); err != nil {
+		return fmt.Errorf("failed to remove existing data: %w", err)
+	}
+	if err := os.MkdirAll(outdir, 0755); err != nil {
+		return fmt.Errorf("failed to make output directory: %w", err)
+	}
+	var eg errgroup.Group
+	for _, n := range c.Nodes {
+		n := n
+		if err := os.MkdirAll(filepath.Join(outdir, n.GetName()), 0755); err != nil {
+			return fmt.Errorf("failed to make output directory for %s: %w",
+				n.GetName(), err)
+		}
+		eg.Go(func() error {
+			cmd := TracingCommand(
+				LogWithPrefix("fetch-logs: "),
+				"ssh", n.GetExternalAddr(),
+				fmt.Sprintf(
+					"cd '%[1]s/logs';"+
+						"tar cJf - .",
+					remoteTopdir))
+			rc, err := cmd.StdoutPipe("logs.tar.xz")
+			if err != nil {
+				return fmt.Errorf("failed to create stdout pipe: %w", err)
+			}
+			unTarCmd := TracingCommand(
+				LogWithPrefix("fetch-logs: "),
+				"tar", "xJf", "-")
+			unTarCmd.SetStdin("logs.tar.gz", rc)
+			if err := unTarCmd.Start(); err != nil {
+				return fmt.Errorf("failed to start decompressing logs: %w", err)
+			}
+			if err := cmd.Run(); err != nil {
+				return fmt.Errorf("failed to compress logs: %w", err)
+			}
+			if err := rc.Close(); err != nil {
+				return fmt.Errorf("failed to close log reader: %w", err)
+			}
+			return unTarCmd.Wait()
+		})
 	}
 	return eg.Wait()
 }
