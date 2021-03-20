@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"path/filepath"
 	"strings"
+	"time"
 
 	pb "github.com/uluyol/heyp-agents/go/proto"
 	"golang.org/x/sync/errgroup"
@@ -50,7 +52,7 @@ func InstallCodeBundle(c *pb.DeploymentConfig, localTarball, remoteTopdir string
 			cmd := TracingCommand(
 				LogWithPrefix("install-bundle: "),
 				"ssh", n.GetExternalAddr(),
-				fmt.Sprintf("mkdir -p '%[1]s'; cd '%[1]s' && tar xJf -",
+				fmt.Sprintf("mkdir -p '%[1]s/logs'; cd '%[1]s' && tar xJf -",
 					remoteTopdir))
 			cmd.SetStdin(localTarball, bytes.NewReader(bundle))
 			return cmd.Run()
@@ -129,7 +131,7 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string) error {
 				cmd := TracingCommand(
 					LogWithPrefix("start-heyp-agents: "),
 					"ssh", n.node.GetExternalAddr(),
-					fmt.Sprintf("mkdir -p %[1]s/logs; tar xf - -C %[1]s; tmux kill-session -t heyp-cluster-agent; tmux new-session -d -s heyp-cluster-agent '%[1]s/heyp/cluster-agent/cluster-agent %[1]s/cluster-agent-config.textproto %[1]s/cluster-limits.textproto 2>&1 | tee %[1]s/logs/cluster-agent.log; sleep 100000'", remoteTopdir))
+					fmt.Sprintf("tar xf - -C %[1]s; tmux kill-session -t heyp-cluster-agent; tmux new-session -d -s heyp-cluster-agent '%[1]s/heyp/cluster-agent/cluster-agent %[1]s/cluster-agent-config.textproto %[1]s/cluster-limits.textproto 2>&1 | tee %[1]s/logs/cluster-agent.log; sleep 100000'", remoteTopdir))
 				cmd.SetStdin("config.tar", bytes.NewReader(configTar))
 				return cmd.Run()
 			})
@@ -157,7 +159,7 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string) error {
 				cmd := TracingCommand(
 					LogWithPrefix("start-heyp-agents: "),
 					"ssh", n.host.GetExternalAddr(),
-					fmt.Sprintf("mkdir -p %[1]s/logs; cat >%[1]s/host-agent-config.textproto; tmux kill-session -t heyp-host-agent; tmux new-session -d -s heyp-host-agent '%[1]s/heyp/host-agent/host-agent %[1]s/host-agent-config.textproto 2>&1 | tee %[1]s/logs/host-agent.log; sleep 100000'", remoteTopdir))
+					fmt.Sprintf("cat >%[1]s/host-agent-config.textproto; tmux kill-session -t heyp-host-agent; tmux new-session -d -s heyp-host-agent '%[1]s/heyp/host-agent/host-agent %[1]s/host-agent-config.textproto 2>&1 | tee %[1]s/logs/host-agent.log; sleep 100000'", remoteTopdir))
 				cmd.SetStdin("host-agent-config.textproto", bytes.NewReader(hostConfigBytes))
 				return cmd.Run()
 			})
@@ -231,9 +233,64 @@ func TestLOPRIStartServers(c *pb.DeploymentConfig, remoteTopdir string) error {
 			cmd := TracingCommand(
 				LogWithPrefix("testlopri-start-servers: "),
 				"ssh", config.server.GetExternalAddr(),
-				fmt.Sprintf("mkdir -p %[1]s/logs; tmux kill-session -t testlopri-%[2]s-server; tmux new-session -d -s testlopri-%[2]s-server '%[1]s/heyp/app/testlopri/server %[3]d 2>&1 | tee %[1]s/logs/testlopri-%[2]s-server.log; sleep 100000'", remoteTopdir, config.config.GetName(), config.config.GetServePort()))
+				fmt.Sprintf("tmux kill-session -t testlopri-%[2]s-server; tmux new-session -d -s testlopri-%[2]s-server '%[1]s/heyp/app/testlopri/server %[3]d 2>&1 | tee %[1]s/logs/testlopri-%[2]s-server.log; sleep 100000'", remoteTopdir, config.config.GetName(), config.config.GetServePort()))
 			return cmd.Run()
 		})
+	}
+	return eg.Wait()
+}
+
+func TestLOPRIRunClients(c *pb.DeploymentConfig, remoteTopdir string) error {
+	configs, err := getAndValidateTestLOPRIConfig(c)
+	if err != nil {
+		return err
+	}
+
+	clientNodes := make(map[string]bool)
+	for _, config := range configs {
+		for _, client := range config.clients {
+			clientNodes[client.GetExternalAddr()] = true
+		}
+	}
+
+	log.Printf("delete old logs on %d nodes", len(clientNodes))
+	{
+		var eg errgroup.Group
+		for clientAddr := range clientNodes {
+			clientAddr := clientAddr
+			eg.Go(func() error {
+				cmd := TracingCommand(
+					LogWithPrefix("testlopri-run-clients: "),
+					"ssh", clientAddr,
+					fmt.Sprintf("rm %[1]s/logs/testlopri-*-client-*.out* %[1]s/logs/testlopri-*-client-*.log", remoteTopdir))
+				return cmd.Run()
+			})
+		}
+	}
+
+	startTimestamp := time.Now().Add(10 * time.Second).Format(time.RFC3339Nano)
+	log.Printf("will start runs at %s", startTimestamp)
+	var eg errgroup.Group
+	for _, config := range configs {
+		config := config
+
+		clientConfBytes, err := prototext.Marshal(config.config.GetClient())
+		if err != nil {
+			return fmt.Errorf("failed to marshal client config: %w", err)
+		}
+
+		for i, client := range config.clients {
+			i := i
+			client := client
+			eg.Go(func() error {
+				cmd := TracingCommand(
+					LogWithPrefix("testlopri-run-clients: "),
+					"ssh", client.GetExternalAddr(),
+					fmt.Sprintf("cat > %[1]s/testlopri-client-config-%[2]s-%[5]d.textproto && %[1]s/heyp/app/testlopri/client -c %[1]s/testlopri-client-config-%[2]s-%[5]d.textproto -server %[3]s:%[4]d -out %[1]s/logs/testlopri-%[2]s-client-%[5]d.out -start_time %[6]s -shards %[7]d &> %[1]s/logs/testlopri-%[2]s-client-%[5]d.log", remoteTopdir, config.config.GetName(), config.server.GetExperimentAddr(), config.config.GetServePort(), i, startTimestamp, config.config.GetNumClientShards()))
+				cmd.SetStdin(fmt.Sprintf("testlopri-client-config-%s-%d.textproto", config.config.GetName(), i), bytes.NewReader(clientConfBytes))
+				return cmd.Run()
+			})
+		}
 	}
 	return eg.Wait()
 }

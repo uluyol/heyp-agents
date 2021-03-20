@@ -111,6 +111,17 @@ var testLOPRIStartServersCmd = &configAndRemDirCmd{
 	},
 }
 
+var testLOPRIRunClientsCmd = &configAndRemDirCmd{
+	name:     "testlopri-run-clients",
+	synopsis: "run clients for testlopri experiments",
+	exec: func(cmd *configAndRemDirCmd, fs *flag.FlagSet) {
+		err := actions.TestLOPRIRunClients(cmd.config, cmd.remDir)
+		if err != nil {
+			log.Fatal(err)
+		}
+	},
+}
+
 func parseConfig(s string) *pb.DeploymentConfig {
 	data, err := ioutil.ReadFile(s)
 	if err != nil {
@@ -146,6 +157,7 @@ func main() {
 	subcommands.Register(new(installBundleCmd), "")
 	subcommands.Register(startHEYPAgentsCmd, "")
 	subcommands.Register(testLOPRIStartServersCmd, "")
+	subcommands.Register(testLOPRIRunClientsCmd, "")
 
 	flag.Parse()
 
