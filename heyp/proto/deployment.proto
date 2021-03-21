@@ -16,6 +16,12 @@ message DeployedNode {
   optional string name = 1;
   optional string external_addr = 2;
   optional string experiment_addr = 3;
+
+  // Valid roles:
+  // - host-agent
+  // - cluster-agent
+  // - testlopri-[name]-server
+  // - testlopri-[name]-client
   repeated string roles = 10;
 }
 
@@ -45,6 +51,7 @@ message DeploymentConfig {
   // Fields that are autofilled:
   // - host_agent_template.flow_state_reporter.this_host_addrs
   // - host_agent_template.daemon.cluster_agent_addr
+  // - host_agent_template.dc_mapper
   optional HostAgentConfig host_agent_template = 11;
 
   repeated DeployedTestLopriInstance testlopri_instances = 12;

@@ -78,6 +78,7 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string) error {
 	var clusterAgentNodes []clusterAgentNode
 	var hostAgentNodes []hostAgentNode
 
+	dcMapperConfig := new(pb.StaticDCMapperConfig)
 	numHostsFilled := 0
 	for _, cluster := range c.Clusters {
 		var thisClusterAgentNode *pb.DeployedNode
@@ -87,6 +88,11 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string) error {
 			if n == nil {
 				return fmt.Errorf("node not found: %s", nodeName)
 			}
+			dcMapperConfig.Mapping.Entries = append(dcMapperConfig.Mapping.Entries,
+				&pb.DCMapping_Entry{
+					HostAddr: n.GetExperimentAddr(),
+					Dc:       cluster.GetName(),
+				})
 			for _, role := range n.Roles {
 				switch role {
 				case "host-agent":
@@ -156,6 +162,7 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string) error {
 				hostConfig.FlowStateReporter.ThisHostAddrs = []string{
 					n.host.GetExperimentAddr()}
 				hostConfig.Daemon.ClusterAgentAddr = &n.clusterAgentAddr
+				hostConfig.DcMapper = dcMapperConfig
 
 				hostConfigBytes, err := prototext.Marshal(hostConfig)
 				if err != nil {
