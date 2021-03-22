@@ -528,6 +528,13 @@ int ShardMain(int argc, char** argv, int shard_index, int num_shards) {
     }
   }
 
+  if (shard_index == 0) {
+    std::cout << absl::StrFormat(
+        "start-time: %s start-time-unix-ms: %d\n",
+        absl::FormatTime(absl::RFC3339_full, start_time, absl::UTCTimeZone()),
+        absl::ToUnixMillis(start_time));
+  }
+
   heyp::proto::TestLopriClientConfig config;
   if (!heyp::ReadTextProtoFromFile(FLAGS_c, &config)) {
     std::cerr << "failed to parse config file\n";
@@ -542,6 +549,13 @@ int ShardMain(int argc, char** argv, int shard_index, int num_shards) {
   heyp::state = new heyp::State(config, uv_default_loop(), std::move(*srec),
                                 FLAGS_interarrival != "");
   int ret = heyp::InitAndRunAt(FLAGS_server, start_time);
+
+  absl::Time end_time = absl::Now();
+  std::cout << absl::StrFormat(
+      "end-time: %s end-time-unix-ms: %d\n",
+      absl::FormatTime(absl::RFC3339_full, end_time, absl::UTCTimeZone()),
+      absl::ToUnixMillis(end_time));
+
   if (FLAGS_interarrival != "") {
     CHECK(heyp::WriteTextProtoToFile(
         heyp::state->interarrival_hist->ToProto(),
