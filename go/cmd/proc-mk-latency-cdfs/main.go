@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/HdrHistogram/hdrhistogram-go"
 	"github.com/uluyol/heyp-agents/go/proc"
@@ -23,10 +24,21 @@ func (l *level) Set(s string) error {
 	return fmt.Errorf("invalid level %q, must be one of 'per-shard' 'per-client' or 'per-instance'", s)
 }
 
+type durFlag struct{ dur time.Duration }
+
+func (f *durFlag) String() string { return f.dur.String() }
+func (f *durFlag) Set(s string) error {
+	var err error
+	f.dur, err = time.ParseDuration(s)
+	return err
+}
+
 func main() {
 	getLevel := level("per-instance")
+	trimDur := durFlag{5 * time.Second}
 	flag.Var(&getLevel, "level", "level to compute at")
-	flag.Usage()
+	flag.Var(&trimDur, "trimdur", "amount of time to trim after start and before end")
+	flag.Parse()
 
 	log.SetFlags(0)
 	log.SetPrefix("proc-mk-timeseries: ")
@@ -40,6 +52,10 @@ func main() {
 		log.Fatalf("failed to group logs: %v", err)
 	}
 
+	startTime, endTime, err := proc.GetStartEndTestLopri(os.DirFS(flag.Arg(0)))
+	startTime = startTime.Add(trimDur.dur)
+	endTime = endTime.Add(trimDur.dur)
+
 	fmt.Println("Instance,Client,Shard,Percentile,LatencyNanos,NumSamples")
 
 	var hist *hdrhistogram.Histogram
@@ -49,6 +65,13 @@ func main() {
 			for _, shard := range client.Shards {
 				proc.ForEachStatsRec(&err, os.DirFS(flag.Arg(1)), shard.Path,
 					func(rec *pb.StatsRecord) error {
+						t, err := time.Parse(time.RFC3339Nano, rec.Timestamp)
+						if err != nil {
+							return err
+						}
+						if t.Before(startTime) || t.After(endTime) {
+							return nil
+						}
 						h := proc.HistFromProto(rec.LatencyNsHist)
 						if hist == nil {
 							hist = h
