@@ -51,9 +51,8 @@ def createNodes(nodeType, count):
     global ifaces
     for i in range(count):
         node = request.RawPC("node-" + str(counter))
-        # Optional hardware type.
-        if nodeType != "":
-            node.hardware_type = nodeType
+        node.disk_image = "urn:publicid:IDN+emulab.net+image+emulab-ops//UBUNTU20-64-STD"
+        node.hardware_type = nodeType
         # Create iface and assign IP
         iface = node.addInterface("eth1")
         # Specify the IPv4 address
