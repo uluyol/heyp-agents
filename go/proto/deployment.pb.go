@@ -29,10 +29,15 @@ type DeployedNode struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Name           *string  `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
-	ExternalAddr   *string  `protobuf:"bytes,2,opt,name=external_addr,json=externalAddr" json:"external_addr,omitempty"`
-	ExperimentAddr *string  `protobuf:"bytes,3,opt,name=experiment_addr,json=experimentAddr" json:"experiment_addr,omitempty"`
-	Roles          []string `protobuf:"bytes,10,rep,name=roles" json:"roles,omitempty"`
+	Name           *string `protobuf:"bytes,1,opt,name=name" json:"name,omitempty"`
+	ExternalAddr   *string `protobuf:"bytes,2,opt,name=external_addr,json=externalAddr" json:"external_addr,omitempty"`
+	ExperimentAddr *string `protobuf:"bytes,3,opt,name=experiment_addr,json=experimentAddr" json:"experiment_addr,omitempty"`
+	// Valid roles:
+	// - host-agent
+	// - cluster-agent
+	// - testlopri-[name]-server
+	// - testlopri-[name]-client
+	Roles []string `protobuf:"bytes,10,rep,name=roles" json:"roles,omitempty"`
 }
 
 func (x *DeployedNode) Reset() {
@@ -248,6 +253,7 @@ type DeploymentConfig struct {
 	// Fields that are autofilled:
 	// - host_agent_template.flow_state_reporter.this_host_addrs
 	// - host_agent_template.daemon.cluster_agent_addr
+	// - host_agent_template.dc_mapper
 	HostAgentTemplate  *HostAgentConfig             `protobuf:"bytes,11,opt,name=host_agent_template,json=hostAgentTemplate" json:"host_agent_template,omitempty"`
 	TestlopriInstances []*DeployedTestLopriInstance `protobuf:"bytes,12,rep,name=testlopri_instances,json=testlopriInstances" json:"testlopri_instances,omitempty"`
 }
