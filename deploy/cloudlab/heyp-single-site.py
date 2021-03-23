@@ -16,7 +16,7 @@ request = pc.makeRequestRSpec()
 # Variable number of nodes at two sites.
 pc.defineParameter("nodeCountPairs", "Physical node types and counts",
                    portal.ParameterType.STRING,
-                   "m510:2,xl170:4,d6515:2",
+                   "m510:2,xl170:11,d6515:2",
                    longDescription="PhysNodeType1:Count1,PhysNodeType2:Count2,...")
 
 
@@ -68,9 +68,12 @@ for t, c in nodeCounts.items():
 s3switch = request.Switch("Switch");
 s3switch.hardware_type = params.switchType
 for iface, ifaceName in ifaces:
+    siface = s3switch.addInterface()
+    siface.addAddress(pg.IPv4Address("192.168.1.254", "255.255.255.0"))
+
     link = request.L1Link("link-" + ifaceName)
     link.addInterface(iface)
-    link.addInterface(s3switch.addInterface())
+    link.addInterface(siface)
 
 # Print the RSpec to the enclosing page.
 pc.printRequestRSpec(request)
