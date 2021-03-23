@@ -80,7 +80,7 @@ int main(int argc, char** argv) {
   }
 
   heyp::proto::AllocBundle limits;
-  if (!heyp::ReadTextProtoFromFile(std::string(argv[2]), &config)) {
+  if (!heyp::ReadTextProtoFromFile(std::string(argv[2]), &limits)) {
     std::cerr << "failed to read limit file\n";
     return 2;
   }
