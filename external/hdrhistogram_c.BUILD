@@ -49,7 +49,9 @@ cc_library(
     linkopts = [
         "-pthread",
         "-lm",
-        "-lrt",
-    ],
+    ] + select({
+        "@platforms//os:linux": ["-lrt"],
+        "//conditions:default": [],
+    }),
     deps = ["@net_zlib//:zlib"],
 )
