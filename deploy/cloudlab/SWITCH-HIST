@@ -13,6 +13,11 @@
 #   CLI Reference: https://downloads.dell.com/manuals/all-products/esuprt_ser_stor_net/esuprt_networking/esuprt_net_fxd_prt_swtchs/force10-s4048-on_white-papers_en-us.pdf#page=700&zoom=100,0,0
 # - Can't seem to get some of the documented commands working, for reasons that are unclear 
 
+# COPY LINE BY LINE
+
+enable # turn on admin interface
+configure # enter configuration mode
+
 # Was adding this messing AF3/4 up?
 #
 # hipri class:
@@ -35,7 +40,7 @@ policy-map-output heyp-pri-pol
 service-queue 2 qos-policy heyp-pri-qos
 exit
 
-interface range TenGigabitEthernet 1/1 - 1/46 ?
+interface range TenGigabitEthernet 1/1 - 1/48
 service-policy input heyp-trust-dscp
 service-policy output heyp-pri-pol
 exit
