@@ -2,6 +2,41 @@ load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
 load("//bazel:cc_defs.bzl", "heyp_cc_binary")
 
 cc_library(
+    name = "data",
+    srcs = ["data.cc"],
+    hdrs = ["data.h"],
+    visibility = [
+        "//heyp/host-agent:__subpackages__",
+    ],
+    deps = [
+        "//third_party/simdjson",
+        "@boost//:process",
+        "@com_google_absl//absl/container:flat_hash_set",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/status:statusor",
+        "@glog",
+    ],
+)
+
+heyp_cc_binary(
+    name = "fake-ip-addr-for-test",
+    testonly = 1,
+    srcs = ["fake-ip-addr-for-test.c"],
+)
+
+cc_test(
+    name = "data-test",
+    srcs = ["data-test.cc"],
+    data = [
+        ":fake-ip-addr-for-test",
+    ],
+    deps = [
+        ":data",
+        "//heyp/init:test-main",
+    ],
+)
+
+cc_library(
     name = "enforcer",
     srcs = ["enforcer.cc"],
     hdrs = ["enforcer.h"],
