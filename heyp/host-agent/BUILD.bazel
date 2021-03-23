@@ -18,6 +18,7 @@ heyp_cc_binary(
         ":flow-tracker",
         "//heyp/cli:parse",
         "//heyp/flows:dc-mapper",
+        "//heyp/host-agent/linux-enforcer:data",
         "//heyp/host-agent/linux-enforcer:enforcer",
         "//heyp/init",
         "//heyp/posix:os",

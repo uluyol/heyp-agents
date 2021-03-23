@@ -26,15 +26,12 @@ message FlowAggregatorConfig {
 }
 
 message HostFlowStateReporterConfig {
-  repeated string this_host_addrs = 1;
-  optional string ss_binary_name = 2 [default = "ss"];
+  optional string ss_binary_name = 1 [default = "ss"];
 }
 
 message HostEnforcerConfig {
-  optional string device = 1 [default = "eth0"];
-
   // If specified, will periodically dump iptables and tc state here.
-  optional string debug_log_dir = 2;
+  optional string debug_log_dir = 1;
 }
 
 message HostDaemonConfig {
@@ -49,12 +46,13 @@ message StaticDCMapperConfig {
 }
 
 message HostAgentConfig {
-  optional HostFlowTrackerConfig flow_tracker = 1;
-  optional FlowAggregatorConfig socket_to_host_aggregator = 2;
-  optional HostFlowStateReporterConfig flow_state_reporter = 3;
-  optional HostEnforcerConfig enforcer = 4;
-  optional HostDaemonConfig daemon = 5;
-  optional StaticDCMapperConfig dc_mapper = 6;
+  repeated string this_host_addrs = 1;
+  optional HostFlowTrackerConfig flow_tracker = 2;
+  optional FlowAggregatorConfig socket_to_host_aggregator = 3;
+  optional HostFlowStateReporterConfig flow_state_reporter = 4;
+  optional HostEnforcerConfig enforcer = 5;
+  optional HostDaemonConfig daemon = 6;
+  optional StaticDCMapperConfig dc_mapper = 7;
 }
 
 enum ClusterAllocatorType {

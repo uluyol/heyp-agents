@@ -88,6 +88,9 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string) error {
 			if n == nil {
 				return fmt.Errorf("node not found: %s", nodeName)
 			}
+			if dcMapperConfig.Mapping == nil {
+				dcMapperConfig.Mapping = new(pb.DCMapping)
+			}
 			dcMapperConfig.Mapping.Entries = append(dcMapperConfig.Mapping.Entries,
 				&pb.DCMapping_Entry{
 					HostAddr: n.GetExperimentAddr(),
@@ -111,7 +114,11 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string) error {
 			}
 		} else {
 			for i := numHostsFilled; i < len(hostAgentNodes); i++ {
-				hostAgentNodes[i].clusterAgentAddr = thisClusterAgentNode.GetExperimentAddr()
+				port := c.ClusterAgentConfig.Server.GetAddress()
+				if colon := strings.LastIndex(port, ":"); colon != -1 {
+					port = port[colon:]
+				}
+				hostAgentNodes[i].clusterAgentAddr = thisClusterAgentNode.GetExperimentAddr() + port
 			}
 			numHostsFilled = len(hostAgentNodes)
 		}
@@ -143,7 +150,7 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string) error {
 					fmt.Sprintf(
 						"tar xf - -C %[1]s;"+
 							"tmux kill-session -t heyp-cluster-agent;"+
-							"tmux new-session -d -s heyp-cluster-agent '%[1]s/heyp/cluster-agent/cluster-agent %[1]s/cluster-agent-config.textproto %[1]s/cluster-limits.textproto 2>&1 | tee %[1]s/logs/cluster-agent.log; sleep 100000'", remoteTopdir))
+							"tmux new-session -d -s heyp-cluster-agent '%[1]s/heyp/cluster-agent/cluster-agent -logtostderr %[1]s/cluster-agent-config.textproto %[1]s/cluster-limits.textproto 2>&1 | tee %[1]s/logs/cluster-agent.log; sleep 100000'", remoteTopdir))
 				cmd.SetStdin("config.tar", bytes.NewReader(configTar))
 				return cmd.Run()
 			})
@@ -159,8 +166,7 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string) error {
 			n := n
 			eg.Go(func() error {
 				hostConfig := proto.Clone(c.HostAgentTemplate).(*pb.HostAgentConfig)
-				hostConfig.FlowStateReporter.ThisHostAddrs = []string{
-					n.host.GetExperimentAddr()}
+				hostConfig.ThisHostAddrs = []string{n.host.GetExperimentAddr()}
 				hostConfig.Daemon.ClusterAgentAddr = &n.clusterAgentAddr
 				hostConfig.DcMapper = dcMapperConfig
 
@@ -175,7 +181,7 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string) error {
 					fmt.Sprintf(
 						"cat >%[1]s/host-agent-config.textproto;"+
 							"tmux kill-session -t heyp-host-agent;"+
-							"tmux new-session -d -s heyp-host-agent '%[1]s/heyp/host-agent/host-agent %[1]s/host-agent-config.textproto 2>&1 | tee %[1]s/logs/host-agent.log; sleep 100000'", remoteTopdir))
+							"tmux new-session -d -s heyp-host-agent 'sudo %[1]s/heyp/host-agent/host-agent -logtostderr %[1]s/host-agent-config.textproto 2>&1 | tee %[1]s/logs/host-agent.log; sleep 100000'", remoteTopdir))
 				cmd.SetStdin("host-agent-config.textproto", bytes.NewReader(hostConfigBytes))
 				return cmd.Run()
 			})

@@ -16,6 +16,7 @@
 #include "heyp/host-agent/daemon.h"
 #include "heyp/host-agent/enforcer.h"
 #include "heyp/host-agent/flow-tracker.h"
+#include "heyp/host-agent/linux-enforcer/data.h"
 #include "heyp/host-agent/linux-enforcer/enforcer.h"
 #include "heyp/init/init.h"
 #include "heyp/posix/os.h"
@@ -96,8 +97,7 @@ absl::Status Run(const proto::HostAgentConfig& c) {
   auto flow_state_reporter_or = SSFlowStateReporter::Create(
       {
           .host_id = host_id,
-          .my_addrs = {c.flow_state_reporter().this_host_addrs().begin(),
-                       c.flow_state_reporter().this_host_addrs().end()},
+          .my_addrs = {c.this_host_addrs().begin(), c.this_host_addrs().end()},
           .ss_binary_name = c.flow_state_reporter().ss_binary_name(),
       },
       &flow_tracker);
@@ -111,13 +111,19 @@ absl::Status Run(const proto::HostAgentConfig& c) {
   LOG(INFO) << "creating host enforcer";
   std::unique_ptr<HostEnforcer> enforcer;
   if (kHostIsLinux) {
+    auto device_or = FindDeviceResponsibleFor(
+        {c.this_host_addrs().begin(), c.this_host_addrs().end()});
+    if (!device_or.ok()) {
+      return absl::InternalError(
+          absl::StrCat("failed to find device: ", device_or.status().message()));
+    }
+
     auto e = LinuxHostEnforcer::Create(
-        c.enforcer().device(),
-        absl::bind_front(&ExpandDestIntoHostsSinglePri, &dc_mapper),
+        device_or.value(), absl::bind_front(&ExpandDestIntoHostsSinglePri, &dc_mapper),
         c.enforcer().debug_log_dir());
     absl::Status st = e->ResetDeviceConfig();
     if (!st.ok()) {
-      LOG(ERROR) << "failed to reset config of device '" << c.enforcer().device()
+      LOG(ERROR) << "failed to reset config of device '" << device_or.value()
                  << "': " << st;
     }
     enforcer = std::move(e);
