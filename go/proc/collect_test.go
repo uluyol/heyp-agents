@@ -17,15 +17,17 @@ func emptyFile() *fstest.MapFile {
 
 func TestGlobAndCollectTestLopri(t *testing.T) {
 	fsys := fstest.MapFS{
-		"testlopri-green-client-node-1.out.shard.0":  emptyFile(),
-		"testlopri-green-client-node-1.out.shard.3":  emptyFile(),
-		"testlopri-green-client-node-1.out.shard.1":  emptyFile(),
-		"testlopri-green-client-node-2.out":          emptyFile(), // no shard
-		"testlopri-green-client-node-3.out":          emptyFile(), // no shard
-		"testlopri-red-client-node-5.out.shard.1":    emptyFile(),
-		"testlopri-red-client-node-5.out.shard.0":    emptyFile(),
-		"testlopri-red-client-node6.out.shard.1":     emptyFile(),
-		"testlopri-purple-client-node-1.out.shard.3": emptyFile(),
+		"a/b/c/testlopri-green-client-node-1.out.shard.0": emptyFile(),
+		"d/e/testlopri-green-client-node-1.out.shard.3":   emptyFile(),
+		"testlopri-green-client-node-1.out.shard.1":       emptyFile(),
+		"testlopri-green-client-node-2.out":               emptyFile(), // no shard
+		"f/testlopri-green-client-node-3.out":             emptyFile(), // no shard
+		"testlopri-red-client-node-5.out.shard.1":         emptyFile(),
+		"zzz/testlopri-red-client-node-5.out.shard.0":     emptyFile(),
+		"testlopri-red-client-node6.out.shard.1":          emptyFile(),
+		"testlopri-purple-client-node-1.out.shard.3":      emptyFile(),
+		"JUNK":     emptyFile(),
+		"zzz/junk": emptyFile(),
 	}
 
 	got, err := GlobAndCollectTestLopri(fsys)
@@ -40,9 +42,9 @@ func TestGlobAndCollectTestLopri(t *testing.T) {
 				{
 					Client: "node-1",
 					Shards: []TestLopriClientShardLog{
-						{Shard: 0, Path: "testlopri-green-client-node-1.out.shard.0"},
+						{Shard: 0, Path: "a/b/c/testlopri-green-client-node-1.out.shard.0"},
 						{Shard: 1, Path: "testlopri-green-client-node-1.out.shard.1"},
-						{Shard: 3, Path: "testlopri-green-client-node-1.out.shard.3"},
+						{Shard: 3, Path: "d/e/testlopri-green-client-node-1.out.shard.3"},
 					},
 				},
 				{
@@ -54,7 +56,7 @@ func TestGlobAndCollectTestLopri(t *testing.T) {
 				{
 					Client: "node-3",
 					Shards: []TestLopriClientShardLog{
-						{Shard: 0, Path: "testlopri-green-client-node-3.out"},
+						{Shard: 0, Path: "f/testlopri-green-client-node-3.out"},
 					},
 				},
 			},
@@ -76,7 +78,7 @@ func TestGlobAndCollectTestLopri(t *testing.T) {
 				{
 					Client: "node-5",
 					Shards: []TestLopriClientShardLog{
-						{Shard: 0, Path: "testlopri-red-client-node-5.out.shard.0"},
+						{Shard: 0, Path: "zzz/testlopri-red-client-node-5.out.shard.0"},
 						{Shard: 1, Path: "testlopri-red-client-node-5.out.shard.1"},
 					},
 				},

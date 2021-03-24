@@ -25,12 +25,23 @@ type TestLopriInstanceLogs struct {
 }
 
 var testLopriRegex = regexp.MustCompile(
-	`.*testlopri-([^-]+)-client-([^.]+).out(.shard.[0-9]+)?$`)
+	`(^|.*/)testlopri-([^-]+)-client-([^.]+).out(.shard.[0-9]+)?$`)
+
+func getTestLopriFiles(fsys fs.FS, prog *regexp.Regexp) ([]string, error) {
+	var all []string
+	err := fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
+		if d != nil && !d.IsDir() && prog.MatchString(path) {
+			all = append(all, path)
+		}
+		return nil
+	})
+	return all, err
+}
 
 func GlobAndCollectTestLopri(fsys fs.FS) ([]TestLopriInstanceLogs, error) {
-	all, err := fs.Glob(fsys, "testlopri-*client-*.out*")
+	all, err := getTestLopriFiles(fsys, testLopriRegex)
 	if err != nil {
-		return nil, fmt.Errorf("failed to glob: %w", err)
+		return nil, fmt.Errorf("failed to walk: %w", err)
 	}
 	instances := make(map[string]map[string][]TestLopriClientShardLog)
 	for _, p := range all {
@@ -38,11 +49,11 @@ func GlobAndCollectTestLopri(fsys fs.FS) ([]TestLopriInstanceLogs, error) {
 		if matches == nil {
 			continue
 		}
-		inst := matches[1]
-		client := matches[2]
+		inst := matches[2]
+		client := matches[3]
 		shard := 0
-		if matches[3] != "" {
-			shard, err = strconv.Atoi(strings.TrimPrefix(matches[3], ".shard."))
+		if matches[4] != "" {
+			shard, err = strconv.Atoi(strings.TrimPrefix(matches[4], ".shard."))
 			if err != nil {
 				panic(fmt.Errorf("got non-numeric shard num: %w", err))
 			}

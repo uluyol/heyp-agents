@@ -4,12 +4,16 @@ import (
 	"bufio"
 	"fmt"
 	"io/fs"
+	"regexp"
 	"strings"
 	"time"
 )
 
+var testLopriLogsRegex = regexp.MustCompile(
+	`(^|.*/)testlopri-.*-client-.*\.log$`)
+
 func GetStartEndTestLopri(fsys fs.FS) (time.Time, time.Time, error) {
-	logs, err := fs.Glob(fsys, "testlopri-*-client-*.log")
+	logs, err := getTestLopriFiles(fsys, testLopriLogsRegex)
 	if err != nil {
 		return time.Time{}, time.Time{}, fmt.Errorf("failed to glob: %w", err)
 	}
