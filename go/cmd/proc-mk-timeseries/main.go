@@ -38,8 +38,11 @@ func main() {
 	}
 
 	startTime, endTime, err := proc.GetStartEndTestLopri(os.DirFS(flag.Arg(0)))
+	if err != nil {
+		log.Fatalf("failed to get start/end time: %v", err)
+	}
 	startTime = startTime.Add(trimDur.dur)
-	endTime = endTime.Add(trimDur.dur)
+	endTime = endTime.Add(-trimDur.dur)
 
 	fmt.Println("Instance,Client,Shard,Timestamp,MeanBps,MeanRpcsPerSec,LatencyNanosP50,LatencyNanosP90,LatencyNanosP95,LatencyNanosP99")
 	for _, inst := range instances {

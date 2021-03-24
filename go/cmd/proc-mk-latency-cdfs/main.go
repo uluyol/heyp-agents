@@ -41,7 +41,7 @@ func main() {
 	flag.Parse()
 
 	log.SetFlags(0)
-	log.SetPrefix("proc-mk-timeseries: ")
+	log.SetPrefix("proc-mk-latency-cdfs: ")
 
 	if flag.NArg() != 1 {
 		log.Fatalf("usage: %s path/to/logs", os.Args[0])
@@ -53,8 +53,11 @@ func main() {
 	}
 
 	startTime, endTime, err := proc.GetStartEndTestLopri(os.DirFS(flag.Arg(0)))
+	if err != nil {
+		log.Fatalf("failed to get start/end time: %v", err)
+	}
 	startTime = startTime.Add(trimDur.dur)
-	endTime = endTime.Add(trimDur.dur)
+	endTime = endTime.Add(-trimDur.dur)
 
 	fmt.Println("Instance,Client,Shard,Percentile,LatencyNanos,NumSamples")
 
@@ -63,7 +66,7 @@ func main() {
 	for _, inst := range instances {
 		for _, client := range inst.Clients {
 			for _, shard := range client.Shards {
-				proc.ForEachStatsRec(&err, os.DirFS(flag.Arg(1)), shard.Path,
+				proc.ForEachStatsRec(&err, os.DirFS(flag.Arg(0)), shard.Path,
 					func(rec *pb.StatsRecord) error {
 						t, err := time.Parse(time.RFC3339Nano, rec.Timestamp)
 						if err != nil {
@@ -80,18 +83,20 @@ func main() {
 						}
 						return nil
 					})
-				if getLevel == "per-shard" {
+				if getLevel == "per-shard" && hist != nil {
 					printCDF(hist, inst.Instance, client.Client, shard.Shard)
 					hist = nil
 				}
 			}
-			if getLevel == "per-client" {
+			if getLevel == "per-client" && hist != nil {
 				printCDF(hist, inst.Instance, client.Client, -1)
 				hist = nil
 			}
 		}
-		printCDF(hist, inst.Instance, "", -1)
-		hist = nil
+		if hist != nil {
+			printCDF(hist, inst.Instance, "", -1)
+			hist = nil
+		}
 	}
 	if err != nil {
 		log.Fatalf("failed to read logs: %v", err)
