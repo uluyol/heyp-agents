@@ -111,15 +111,29 @@ var testLOPRIStartServersCmd = &configAndRemDirCmd{
 	},
 }
 
-var testLOPRIRunClientsCmd = &configAndRemDirCmd{
-	name:     "testlopri-run-clients",
-	synopsis: "run clients for testlopri experiments",
-	exec: func(cmd *configAndRemDirCmd, fs *flag.FlagSet) {
-		err := actions.TestLOPRIRunClients(cmd.config, cmd.remDir)
-		if err != nil {
-			log.Fatal(err)
-		}
-	},
+type testLOPRIRunClientsCmd struct {
+	configPath string
+	remDir     string
+	showOut    bool
+}
+
+func (*testLOPRIRunClientsCmd) Name() string     { return "testlopri-run-clients" }
+func (*testLOPRIRunClientsCmd) Synopsis() string { return "run clients for testlopri experiments" }
+func (*testLOPRIRunClientsCmd) Usage() string    { return "" }
+
+func (c *testLOPRIRunClientsCmd) SetFlags(fs *flag.FlagSet) {
+	configVar(&c.configPath, fs)
+	remdirVar(&c.remDir, fs)
+	fs.BoolVar(&c.showOut, "verbose", true, "show command output")
+}
+
+func (c *testLOPRIRunClientsCmd) Execute(ctx context.Context, fs *flag.FlagSet,
+	args ...interface{}) subcommands.ExitStatus {
+	err := actions.TestLOPRIRunClients(parseConfig(c.configPath), c.remDir, c.showOut)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return subcommands.ExitSuccess
 }
 
 type fetchLogsCmd struct {
@@ -135,7 +149,7 @@ func (*fetchLogsCmd) Usage() string    { return "" }
 func (c *fetchLogsCmd) SetFlags(fs *flag.FlagSet) {
 	configVar(&c.configPath, fs)
 	remdirVar(&c.remDir, fs)
-	flag.StringVar(&c.outdir, "o", "logs", "directory to store logs")
+	fs.StringVar(&c.outdir, "o", "logs", "directory to store logs")
 }
 
 func (c *fetchLogsCmd) Execute(ctx context.Context, fs *flag.FlagSet,
@@ -183,7 +197,7 @@ func main() {
 	subcommands.Register(new(installBundleCmd), "")
 	subcommands.Register(startHEYPAgentsCmd, "")
 	subcommands.Register(testLOPRIStartServersCmd, "")
-	subcommands.Register(testLOPRIRunClientsCmd, "")
+	subcommands.Register(new(testLOPRIRunClientsCmd), "")
 	subcommands.Register(new(fetchLogsCmd), "")
 
 	flag.Parse()

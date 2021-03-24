@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -196,7 +197,7 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string) error {
 
 type testLOPRIConfig struct {
 	config  *pb.DeployedTestLopriInstance
-	server  *pb.DeployedNode
+	servers []*pb.DeployedNode
 	clients []*pb.DeployedNode
 }
 
@@ -220,10 +221,7 @@ func getAndValidateTestLOPRIConfig(c *pb.DeploymentConfig) (map[string]*testLOPR
 				return nil, fmt.Errorf("undefined testlopri instance %q in %s", instName, r)
 			}
 			if strings.HasSuffix(r, "-server") {
-				if config.server != nil {
-					return nil, fmt.Errorf("found multiple server roles for testlopri instance %q", instName)
-				}
-				config.server = n
+				config.servers = append(config.servers, n)
 			} else {
 				config.clients = append(config.clients, n)
 			}
@@ -231,8 +229,8 @@ func getAndValidateTestLOPRIConfig(c *pb.DeploymentConfig) (map[string]*testLOPR
 	}
 
 	for _, config := range configs {
-		if config.server == nil {
-			return nil, fmt.Errorf("no server found for testlopri instance %q", config.config.GetName())
+		if len(config.servers) == 0 {
+			return nil, fmt.Errorf("no servers found for testlopri instance %q", config.config.GetName())
 		}
 		if len(config.clients) == 0 {
 			return nil, fmt.Errorf("no clients found for testlopri instance %q", config.config.GetName())
@@ -251,20 +249,23 @@ func TestLOPRIStartServers(c *pb.DeploymentConfig, remoteTopdir string) error {
 	var eg errgroup.Group
 	for _, config := range configs {
 		config := config
-		eg.Go(func() error {
-			cmd := TracingCommand(
-				LogWithPrefix("testlopri-start-servers: "),
-				"ssh", config.server.GetExternalAddr(),
-				fmt.Sprintf(
-					"tmux kill-session -t testlopri-%[2]s-server;"+
-						"tmux new-session -d -s testlopri-%[2]s-server '%[1]s/heyp/app/testlopri/server %[3]d 2>&1 | tee %[1]s/logs/testlopri-%[2]s-server.log; sleep 100000'", remoteTopdir, config.config.GetName(), config.config.GetServePort()))
-			return cmd.Run()
-		})
+		for _, server := range config.servers {
+			server := server
+			eg.Go(func() error {
+				cmd := TracingCommand(
+					LogWithPrefix("testlopri-start-servers: "),
+					"ssh", server.GetExternalAddr(),
+					fmt.Sprintf(
+						"tmux kill-session -t testlopri-%[2]s-server;"+
+							"tmux new-session -d -s testlopri-%[2]s-server '%[1]s/heyp/app/testlopri/server %[3]d 2>&1 | tee %[1]s/logs/testlopri-%[2]s-server.log; sleep 100000'", remoteTopdir, config.config.GetName(), config.config.GetServePort()))
+				return cmd.Run()
+			})
+		}
 	}
 	return eg.Wait()
 }
 
-func TestLOPRIRunClients(c *pb.DeploymentConfig, remoteTopdir string) error {
+func TestLOPRIRunClients(c *pb.DeploymentConfig, remoteTopdir string, showOut bool) error {
 	configs, err := getAndValidateTestLOPRIConfig(c)
 	if err != nil {
 		return err
@@ -294,8 +295,9 @@ func TestLOPRIRunClients(c *pb.DeploymentConfig, remoteTopdir string) error {
 		}
 	}
 
-	startTimestamp := time.Now().Add(10 * time.Second).Format(time.RFC3339Nano)
-	log.Printf("will start runs at %s", startTimestamp)
+	startTime := time.Now().Add(10 * time.Second)
+	startTimestamp := startTime.Format(time.RFC3339Nano)
+	log.Printf("will start runs at %s (in %s)", startTimestamp, time.Until(startTime))
 	var eg errgroup.Group
 	for _, config := range configs {
 		config := config
@@ -309,12 +311,21 @@ func TestLOPRIRunClients(c *pb.DeploymentConfig, remoteTopdir string) error {
 			i := i
 			client := client
 			eg.Go(func() error {
+				allAddrs := make([]string, len(config.servers))
+				for i, s := range config.servers {
+					allAddrs[i] = s.GetExperimentAddr() + ":" + strconv.Itoa(
+						int(config.config.GetServePort()))
+				}
+
 				cmd := TracingCommand(
 					LogWithPrefix("testlopri-run-clients: "),
 					"ssh", client.GetExternalAddr(),
-					fmt.Sprintf("cat > %[1]s/testlopri-client-config-%[2]s-%[5]d.textproto && "+
-						"%[1]s/heyp/app/testlopri/client -c %[1]s/testlopri-client-config-%[2]s-%[5]d.textproto -server %[3]s:%[4]d -out %[1]s/logs/testlopri-%[2]s-client-%[5]d.out -start_time %[6]s -shards %[7]d &> %[1]s/logs/testlopri-%[2]s-client-%[5]d.log", remoteTopdir, config.config.GetName(), config.server.GetExperimentAddr(), config.config.GetServePort(), i, startTimestamp, config.config.GetNumClientShards()))
+					fmt.Sprintf("cat > %[1]s/testlopri-client-config-%[2]s-%[4]d.textproto && "+
+						"%[1]s/heyp/app/testlopri/client -logtostderr -c %[1]s/testlopri-client-config-%[2]s-%[4]d.textproto -server %[3]s -out %[1]s/logs/testlopri-%[2]s-client-%[4]d.out -start_time %[5]s -shards %[6]d 2>&1 | tee %[1]s/logs/testlopri-%[2]s-client-%[4]d.log", remoteTopdir, config.config.GetName(), strings.Join(allAddrs, ","), i, startTimestamp, config.config.GetNumClientShards()))
 				cmd.SetStdin(fmt.Sprintf("testlopri-client-config-%s-%d.textproto", config.config.GetName(), i), bytes.NewReader(clientConfBytes))
+				if showOut {
+					cmd.Stdout = os.Stdout
+				}
 				return cmd.Run()
 			})
 		}
@@ -322,7 +333,14 @@ func TestLOPRIRunClients(c *pb.DeploymentConfig, remoteTopdir string) error {
 	return eg.Wait()
 }
 
-func FetchLogs(c *pb.DeploymentConfig, remoteTopdir, outdir string) error {
+func FetchLogs(c *pb.DeploymentConfig, remoteTopdir, outdirPath string) error {
+	os.MkdirAll(outdirPath, 0755)
+
+	outdir, err := filepath.Abs(outdirPath)
+	if err != nil {
+		return fmt.Errorf("failed to get absolute path for %s: %w", outdir, err)
+	}
+
 	if err := os.RemoveAll(outdir); err != nil {
 		return fmt.Errorf("failed to remove existing data: %w", err)
 	}
@@ -351,6 +369,7 @@ func FetchLogs(c *pb.DeploymentConfig, remoteTopdir, outdir string) error {
 			unTarCmd := TracingCommand(
 				LogWithPrefix("fetch-logs: "),
 				"tar", "xJf", "-")
+			unTarCmd.Dir = filepath.Join(outdir, n.GetName())
 			unTarCmd.SetStdin("logs.tar.gz", rc)
 			if err := unTarCmd.Start(); err != nil {
 				return fmt.Errorf("failed to start decompressing logs: %w", err)
@@ -358,9 +377,7 @@ func FetchLogs(c *pb.DeploymentConfig, remoteTopdir, outdir string) error {
 			if err := cmd.Run(); err != nil {
 				return fmt.Errorf("failed to compress logs: %w", err)
 			}
-			if err := rc.Close(); err != nil {
-				return fmt.Errorf("failed to close log reader: %w", err)
-			}
+			rc.Close()
 			return unTarCmd.Wait()
 		})
 	}
