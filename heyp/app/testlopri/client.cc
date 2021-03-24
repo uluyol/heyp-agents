@@ -12,6 +12,8 @@
 #include "absl/random/random.h"
 #include "absl/strings/match.h"
 #include "absl/strings/str_format.h"
+#include "absl/strings/str_join.h"
+#include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
 #include "gflags/gflags.h"
@@ -46,6 +48,7 @@ constexpr bool kDebug = false;
 
 typedef struct {
   uv_tcp_t client;
+  size_t addr_index;
   uv_buf_t buffer;
   char* buf;
   uint64_t hr_start_time[kNumParallelRpcsPerConn];
@@ -85,7 +88,7 @@ std::vector<WorkloadStage> StagesFromConfig(const proto::TestLopriClientConfig& 
   for (const auto& p : config.workload_stages()) {
     double rpcs_per_sec = p.target_average_bps() / (8 * p.rpc_size_bytes());
     LOG(INFO) << "stage " << stages.size() << ": will target an average of "
-              << rpcs_per_sec << "rpcs/sec";
+              << rpcs_per_sec << " rpcs/sec";
 
     double dist_param;
     switch (p.interarrival_dist()) {
@@ -145,7 +148,7 @@ struct State {
     return max_size;
   }
 
-  client_conn_t* new_client_conn() {
+  client_conn_t* new_client_conn(size_t addr_index) {
     int32_t max_rpc_size_bytes = this->max_rpc_size_bytes();
 
     CHECK_GE(max_rpc_size_bytes, 12);
@@ -156,6 +159,7 @@ struct State {
     c->read_buf_size = 0;
     c->in_pool = false;
     c->conn_id = ++next_conn_id;
+    c->addr_index = addr_index;
     return c;
   }
 
@@ -166,7 +170,7 @@ struct State {
     return nullptr;
   }
 
-  std::vector<client_conn_t*> conns;
+  std::deque<client_conn_t*> conns;
   std::deque<std::function<void(client_conn_t*)>> to_exec;
 
   int32_t num_conns;
@@ -184,7 +188,7 @@ struct State {
   uint64_t hr_start_time;
   uint64_t hr_next_report_time;
   uint64_t hr_report_dur;
-  struct sockaddr_in dst_addr;
+  std::vector<struct sockaddr_in> dst_addrs;
 
   uint64_t hr_last_recorded_time;
   absl::optional<HdrHistogram> interarrival_hist;
@@ -201,6 +205,10 @@ void free_client_conn(client_conn_t* c) {
 }
 
 bool AddConn(client_conn_t* conn) {
+  if (state->tearing_down) {
+    return false;
+  }
+
   if (conn->in_pool) {
     return state->conns.size() == state->num_conns;
   }
@@ -218,8 +226,8 @@ bool AddConn(client_conn_t* conn) {
 
 void WithConn(const std::function<void(client_conn_t*)>& func) {
   if (!state->conns.empty()) {
-    client_conn_t* conn = state->conns.back();
-    state->conns.pop_back();
+    client_conn_t* conn = state->conns.front();
+    state->conns.pop_front();
     conn->in_pool = false;
 
     func(conn);
@@ -438,18 +446,22 @@ void OnConnect(uv_connect_t* req, int status) {
     LOG(FATAL) << "took too long to connect";
   }
 
+  auto client = reinterpret_cast<client_conn_t*>(req->handle);
+
   if (status < 0) {
-    LOG(ERROR) << "failed to connect; trying again";
+    LOG(ERROR) << "failed to connect (" << uv_strerror(status) << "); trying again";
     uv_tcp_init(state->loop, reinterpret_cast<uv_tcp_t*>(req->handle));
 
-    uv_tcp_connect(req, reinterpret_cast<uv_tcp_t*>(req->handle),
-                   reinterpret_cast<const struct sockaddr*>(&state->dst_addr), OnConnect);
+    usleep(rand() % 50000);
+
+    uv_tcp_connect(
+        req, reinterpret_cast<uv_tcp_t*>(req->handle),
+        reinterpret_cast<const struct sockaddr*>(&state->dst_addrs[client->addr_index]),
+        OnConnect);
     return;
   }
 
   LOG(INFO) << "connection established; adding to pool";
-
-  auto client = reinterpret_cast<client_conn_t*>(req->handle);
   uv_read_start(reinterpret_cast<uv_stream_t*>(&client->client), AllocBuf, OnReadAck);
 
   if (AddConn(client)) {
@@ -465,14 +477,32 @@ void OnConnect(uv_connect_t* req, int status) {
   free(req);
 }
 
-int InitAndRunAt(absl::string_view server_addr_full, absl::Time start_time) {
-  absl::string_view addr_view;
-  int32_t port;
-  auto st = ParseHostPort(server_addr_full, &addr_view, &port);
-  if (!st.ok()) {
-    LOG(FATAL) << "invalid host/port: " << server_addr_full << ": " << st;
+std::string IP4Name(const struct sockaddr_in* src) {
+  char buf[24];
+  memset(buf, 0, 24);
+  uv_ip4_name(src, buf, 24);
+  return std::string(buf);
+}
+
+int InitAndRunAt(absl::string_view server_addrs, absl::Time start_time) {
+  for (absl::string_view addr_full : absl::StrSplit(server_addrs, ",")) {
+    absl::string_view addr_view;
+    int32_t port;
+    auto st = ParseHostPort(addr_full, &addr_view, &port);
+    if (!st.ok()) {
+      LOG(FATAL) << "invalid host/port: " << addr_full << ": " << st;
+    }
+    std::string addr(addr_view);
+    state->dst_addrs.push_back({});
+    uv_ip4_addr(addr.c_str(), port, &state->dst_addrs.back());
   }
-  std::string addr(addr_view);
+
+  std::vector<std::string> addrs_to_print;
+  addrs_to_print.reserve(state->dst_addrs.size());
+  for (int i = 0; i < state->dst_addrs.size(); ++i) {
+    addrs_to_print.push_back(IP4Name(&state->dst_addrs[i]));
+  }
+  LOG(INFO) << "will connect to addresses: " << absl::StrJoin(addrs_to_print, ", ");
 
   int64_t ns_until_start = absl::ToInt64Nanoseconds(start_time - absl::Now());
   if (ns_until_start < 0) {
@@ -482,18 +512,18 @@ int InitAndRunAt(absl::string_view server_addr_full, absl::Time start_time) {
   }
   state->hr_next_report_time = state->hr_start_time + state->hr_report_dur;
 
-  uv_ip4_addr(addr.c_str(), port, &state->dst_addr);
-
   // Start by creating connections.
   // Once all are created, the last will register a timer to start the run
   for (int i = 0; i < state->num_conns; ++i) {
     uv_connect_t* req = static_cast<uv_connect_t*>(malloc(sizeof(uv_connect_t)));
 
-    client_conn_t* client_conn = state->new_client_conn();
+    client_conn_t* client_conn = state->new_client_conn(i % state->dst_addrs.size());
     uv_tcp_init(state->loop, &client_conn->client);
 
     uv_tcp_connect(req, &client_conn->client,
-                   reinterpret_cast<const struct sockaddr*>(&state->dst_addr), OnConnect);
+                   reinterpret_cast<const struct sockaddr*>(
+                       &state->dst_addrs[client_conn->addr_index]),
+                   OnConnect);
   }
 
   uv_run(state->loop, UV_RUN_DEFAULT);
@@ -504,7 +534,7 @@ int InitAndRunAt(absl::string_view server_addr_full, absl::Time start_time) {
 }  // namespace heyp
 
 DEFINE_string(c, "config.textproto", "path to input config");
-DEFINE_string(server, "127.0.0.1:7777", "address of server");
+DEFINE_string(server, "127.0.0.1:7777", "comma-separated addresses of servers");
 DEFINE_string(out, "testlopri-client.log", "path to log output");
 DEFINE_string(start_time, "", "wait until this time to start the run");
 DEFINE_string(interarrival, "",
