@@ -113,7 +113,7 @@ struct SSFlowStateReporter::Impl {
   FlowTracker *flow_tracker;
 
   bp::child monitor_done_proc;
-  bp::ipstream monitor_done_out;
+  std::unique_ptr<bp::ipstream> monitor_done_out;
 
   std::thread monitor_done_thread;
   bool is_dying;
@@ -122,7 +122,7 @@ struct SSFlowStateReporter::Impl {
 SSFlowStateReporter::~SSFlowStateReporter() {
   impl_->is_dying = true;
   impl_->monitor_done_proc.terminate();
-  impl_->monitor_done_out.pipe().close();
+  impl_->monitor_done_out->pipe().close();
 
   if (impl_->monitor_done_thread.joinable()) {
     impl_->monitor_done_thread.join();
@@ -195,6 +195,18 @@ absl::Status ParseLine(uint64_t host_id, absl::string_view line,
   return absl::OkStatus();
 }
 
+absl::Status StartDoneMonitor(const std::string &ss_binary_name,
+                              std::unique_ptr<bp::ipstream> *out, bp::child *proc) {
+  try {
+    *out = absl::make_unique<bp::ipstream>();
+    *proc = bp::child(bp::search_path(ss_binary_name), "-E", "-i", "-t", "-n", "-H", "-O",
+                      bp::std_out > **out);
+  } catch (const std::system_error &e) {
+    return absl::UnknownError(absl::StrCat("failed to start ss subprocess: ", e.what()));
+  }
+  return absl::OkStatus();
+}
+
 }  // namespace
 
 bool SSFlowStateReporter::IgnoreFlow(const proto::FlowMarker &f) {
@@ -206,25 +218,35 @@ bool SSFlowStateReporter::IgnoreFlow(const proto::FlowMarker &f) {
 void SSFlowStateReporter::MonitorDone() {
   std::string line;
 
-  while (std::getline(impl_->monitor_done_out, line) && !line.empty()) {
-    absl::Time now = absl::Now();
-    proto::FlowMarker f;
-    int64_t usage_bps = 0;
-    int64_t cum_usage_bytes = 0;
-    auto status = ParseLine(impl_->config.host_id, line, f, usage_bps, cum_usage_bytes);
-    if (!status.ok()) {
-      VLOG(2) << "failed to parse done line: " << status << " on " << line;
-      continue;
-    }
-    if (IgnoreFlow(f)) {
-      continue;
-    }
+  while (true) {
+    while (std::getline(*impl_->monitor_done_out, line) && !line.empty()) {
+      absl::Time now = absl::Now();
+      proto::FlowMarker f;
+      int64_t usage_bps = 0;
+      int64_t cum_usage_bytes = 0;
+      auto status = ParseLine(impl_->config.host_id, line, f, usage_bps, cum_usage_bytes);
+      if (!status.ok()) {
+        VLOG(2) << "failed to parse done line: " << status << " on " << line;
+        continue;
+      }
+      if (IgnoreFlow(f)) {
+        continue;
+      }
 
-    impl_->flow_tracker->FinalizeFlows(
-        now, {{f, usage_bps, cum_usage_bytes, FlowPri::kUnset}});
+      impl_->flow_tracker->FinalizeFlows(
+          now, {{f, usage_bps, cum_usage_bytes, FlowPri::kUnset}});
+    }
+    if (impl_->is_dying) {
+      break;
+    } else {
+      LOG(WARNING) << "restarting ss to monitor done flows";
+      if (!StartDoneMonitor(impl_->config.ss_binary_name, &impl_->monitor_done_out,
+                            &impl_->monitor_done_proc)
+               .ok()) {
+        absl::SleepFor(absl::Milliseconds(500));
+      }
+    }
   }
-
-  CHECK(impl_->is_dying);
 }
 
 absl::Status SSFlowStateReporter::ReportState(
@@ -277,12 +299,11 @@ absl::StatusOr<std::unique_ptr<SSFlowStateReporter>> SSFlowStateReporter::Create
 
   auto tracker = absl::WrapUnique(new SSFlowStateReporter(config, flow_tracker));
 
-  try {
-    bp::child c(bp::search_path(config.ss_binary_name), "-E", "-i", "-t", "-n", "-H",
-                "-O", bp::std_out > tracker->impl_->monitor_done_out);
-    tracker->impl_->monitor_done_proc = std::move(c);
-  } catch (const std::system_error &e) {
-    return absl::UnknownError(absl::StrCat("failed to start ss subprocess: ", e.what()));
+  absl::Status st =
+      StartDoneMonitor(config.ss_binary_name, &tracker->impl_->monitor_done_out,
+                       &tracker->impl_->monitor_done_proc);
+  if (!st.ok()) {
+    return st;
   }
 
   tracker->impl_->monitor_done_thread =
