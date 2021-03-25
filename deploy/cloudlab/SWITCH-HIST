@@ -24,9 +24,9 @@ configure # enter configuration mode
 # Class-map match-any hipri                                     
 #   Seq 5 Match ip dscp 34    
 #
-policy-map-input hipri-policy2
-service-queue 7 class-name hipri
-exit
+# policy-map-input hipri-policy2
+# service-queue 7 class-name hipri
+# exit
 
 policy-map-input heyp-trust-dscp
 trust diffserv
