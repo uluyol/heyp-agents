@@ -40,6 +40,7 @@ message DeployedTestLopriInstance {
   optional int32 serve_port = 2;
   optional TestLopriClientConfig client = 3;
   optional int32 num_client_shards = 4 [default = 1];
+  optional int32 num_server_shards = 5 [default = 1];
 }
 
 message DeploymentConfig {

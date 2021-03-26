@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/uluyol/heyp-agents/go/multierrgroup"
 	pb "github.com/uluyol/heyp-agents/go/proto"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/encoding/prototext"
@@ -257,7 +258,7 @@ func TestLOPRIStartServers(c *pb.DeploymentConfig, remoteTopdir string) error {
 					"ssh", server.GetExternalAddr(),
 					fmt.Sprintf(
 						"tmux kill-session -t testlopri-%[2]s-server;"+
-							"tmux new-session -d -s testlopri-%[2]s-server '%[1]s/heyp/app/testlopri/server %[3]d 2>&1 | tee %[1]s/logs/testlopri-%[2]s-server.log; sleep 100000'", remoteTopdir, config.config.GetName(), config.config.GetServePort()))
+							"tmux new-session -d -s testlopri-%[2]s-server '%[1]s/heyp/app/testlopri/server %[4]d %[3]d 2>&1 | tee %[1]s/logs/testlopri-%[2]s-server.log; sleep 100000'", remoteTopdir, config.config.GetName(), config.config.GetServePort(), config.config.GetNumServerShards()))
 				return cmd.Run()
 			})
 		}
@@ -298,7 +299,7 @@ func TestLOPRIRunClients(c *pb.DeploymentConfig, remoteTopdir string, showOut bo
 	startTime := time.Now().Add(10 * time.Second)
 	startTimestamp := startTime.Format(time.RFC3339Nano)
 	log.Printf("will start runs at %s (in %s)", startTimestamp, time.Until(startTime))
-	var eg errgroup.Group
+	var eg multierrgroup.Group
 	for _, config := range configs {
 		config := config
 
@@ -321,12 +322,16 @@ func TestLOPRIRunClients(c *pb.DeploymentConfig, remoteTopdir string, showOut bo
 					LogWithPrefix("testlopri-run-clients: "),
 					"ssh", client.GetExternalAddr(),
 					fmt.Sprintf("cat > %[1]s/testlopri-client-config-%[2]s-%[4]d.textproto && "+
-						"%[1]s/heyp/app/testlopri/client -logtostderr -c %[1]s/testlopri-client-config-%[2]s-%[4]d.textproto -server %[3]s -out %[1]s/logs/testlopri-%[2]s-client-%[4]d.out -start_time %[5]s -shards %[6]d 2>&1 | tee %[1]s/logs/testlopri-%[2]s-client-%[4]d.log", remoteTopdir, config.config.GetName(), strings.Join(allAddrs, ","), i, startTimestamp, config.config.GetNumClientShards()))
+						"%[1]s/heyp/app/testlopri/client -logtostderr -c %[1]s/testlopri-client-config-%[2]s-%[4]d.textproto -server %[3]s -out %[1]s/logs/testlopri-%[2]s-client-%[4]d.out -start_time %[5]s -shards %[6]d 2>&1 | tee %[1]s/logs/testlopri-%[2]s-client-%[4]d.log; exit ${PIPESTATUS[0}", remoteTopdir, config.config.GetName(), strings.Join(allAddrs, ","), i, startTimestamp, config.config.GetNumClientShards()))
 				cmd.SetStdin(fmt.Sprintf("testlopri-client-config-%s-%d.textproto", config.config.GetName(), i), bytes.NewReader(clientConfBytes))
 				if showOut {
 					cmd.Stdout = os.Stdout
 				}
-				return cmd.Run()
+				err := cmd.Run()
+				if err != nil {
+					return fmt.Errorf("client %d failed: %w", i, err)
+				}
+				return nil
 			})
 		}
 	}

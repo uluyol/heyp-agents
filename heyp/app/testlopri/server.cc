@@ -2,13 +2,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
 #include <uv.h>
 
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_format.h"
 #include "heyp/encoding/binary.h"
 
-#define DEFAULT_BACKLOG 128
+#define DEFAULT_BACKLOG 2048
 
 namespace heyp {
 namespace {
@@ -109,35 +112,67 @@ void OnNewConnection(uv_stream_t *server, int status) {
   }
 }
 
-}  // namespace
-}  // namespace heyp
-
-int main(int argc, char **argv) {
-  heyp::loop = uv_default_loop();
-
-  if (argc != 2) {
-    absl::FPrintF(stderr, "usage: %s port\n", argv[0]);
-    return 2;
-  }
-
-  int port;
-  if (!absl::SimpleAtoi(argv[1], &port)) {
-    absl::FPrintF(stderr, "failed to parse port\n");
-  }
+int ShardMain(int port) {
+  loop = uv_default_loop();
 
   struct sockaddr_in addr;
   uv_tcp_t server;
-  uv_tcp_init(heyp::loop, &server);
-  uv_ip4_addr("0.0.0.0", port, &addr);
+  uv_tcp_init_ex(loop, &server, AF_INET);
+  int fd = -1;
+  uv_fileno(reinterpret_cast<uv_handle_t *>(&server), &fd);
+  int reuse = 1;
+  setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, static_cast<void *>(&reuse), sizeof(reuse));
 
+  uv_ip4_addr("0.0.0.0", port, &addr);
   uv_tcp_bind(&server, (const struct sockaddr *)&addr, 0);
 
   absl::FPrintF(stderr, "Listening on port %d\n", port);
 
-  int r = uv_listen((uv_stream_t *)&server, DEFAULT_BACKLOG, heyp::OnNewConnection);
+  int r = uv_listen((uv_stream_t *)&server, DEFAULT_BACKLOG, OnNewConnection);
   if (r) {
     absl::FPrintF(stderr, "Listen error %s\n", uv_strerror(r));
     return 1;
   }
-  return uv_run(heyp::loop, UV_RUN_DEFAULT);
+  return uv_run(loop, UV_RUN_DEFAULT);
+}
+
+}  // namespace
+}  // namespace heyp
+
+int main(int argc, char **argv) {
+  if (argc != 3) {
+    absl::FPrintF(stderr, "usage: %s num_shards port\n", argv[0]);
+    return 2;
+  }
+
+  int num_shards;
+  if (!absl::SimpleAtoi(argv[1], &num_shards)) {
+    absl::FPrintF(stderr, "failed to parse num_shards\n");
+  }
+
+  int port;
+  if (!absl::SimpleAtoi(argv[2], &port)) {
+    absl::FPrintF(stderr, "failed to parse port\n");
+  }
+
+  if (num_shards == 1) {
+    return heyp::ShardMain(port);
+  }
+
+  pid_t *pids = static_cast<pid_t *>(malloc(sizeof(pid_t) * num_shards));
+  for (int i = 0; i < num_shards; ++i) {
+    pid_t pid = fork();
+    if (pid == 0) {
+      return heyp::ShardMain(port);
+    }
+    pids[i] = pid;
+  }
+
+  int ret = 0;
+  for (int i = 0; i < num_shards; ++i) {
+    int status = 0;
+    waitpid(pids[i], &status, 0);
+    ret = std::max(ret, status);
+  }
+  return ret;
 }
