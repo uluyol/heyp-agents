@@ -64,6 +64,11 @@ typedef struct {
   bool in_pool;
 } client_conn_t;
 
+void AssertValid(const client_conn_t* conn) {
+  CHECK_LE(conn->num_seen, conn->next_pos);
+  CHECK_LT(conn->next_pos, conn->num_seen + kNumParallelRpcsPerConn);
+}
+
 proto::HdrHistogram::Config InterarrivalConfig() {
   proto::HdrHistogram::Config c;
   c.set_highest_trackable_value(1'000'000'000);
@@ -205,6 +210,7 @@ void free_client_conn(client_conn_t* c) {
 }
 
 bool AddConn(client_conn_t* conn) {
+  AssertValid(conn);
   if (state->tearing_down) {
     return false;
   }
@@ -227,6 +233,7 @@ bool AddConn(client_conn_t* conn) {
 void WithConn(const std::function<void(client_conn_t*)>& func) {
   if (!state->conns.empty()) {
     client_conn_t* conn = state->conns.front();
+    AssertValid(conn);
     state->conns.pop_front();
     conn->in_pool = false;
 
@@ -272,6 +279,7 @@ uint64_t UvTimeoutUntil(uint64_t hr_time) {
 
 void OnWriteDone(uv_write_t* req, int status) {
   client_conn_t* conn = reinterpret_cast<client_conn_t*>(req->handle);
+  AssertValid(conn);
   if (status < 0) {
     absl::FPrintF(stderr, "write error %s\n", uv_strerror(status));
     --conn->next_pos;
@@ -279,7 +287,7 @@ void OnWriteDone(uv_write_t* req, int status) {
     return;
   }
 
-  if (conn->next_pos - conn->num_seen < kNumParallelRpcsPerConn) {
+  if (conn->next_pos - conn->num_seen < kNumParallelRpcsPerConn - 1) {
     AddConn(conn);  // else OnRead will add it back
   }
   free(req);
@@ -331,6 +339,7 @@ bool MaybeIssueRequest(CachedTime* time) {
   // Issue the request
   uint64_t rpc_id = ++state->rpc_id;
   WithConn([hr_now, rpc_id](client_conn_t* conn) {
+    AssertValid(conn);
     conn->hr_start_time[conn->next_pos % kNumParallelRpcsPerConn] = hr_now;
     conn->rpc_id[conn->next_pos % kNumParallelRpcsPerConn] = rpc_id;
     ++conn->next_pos;
@@ -399,6 +408,7 @@ void AllocBuf(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf) {
 
 void OnReadAck(uv_stream_t* client_stream, ssize_t nread, const uv_buf_t* buf) {
   auto client = reinterpret_cast<client_conn_t*>(client_stream);
+  AssertValid(client);
   if (nread < 0) {
     if (nread != UV_EOF) absl::FPrintF(stderr, "Read error %s\n", uv_err_name(nread));
     uv_read_stop(client_stream);
@@ -447,6 +457,7 @@ void OnConnect(uv_connect_t* req, int status) {
   }
 
   auto client = reinterpret_cast<client_conn_t*>(req->handle);
+  AssertValid(client);
 
   if (status < 0) {
     LOG(ERROR) << "failed to connect (" << uv_strerror(status) << "); trying again";
