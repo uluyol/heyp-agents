@@ -401,29 +401,32 @@ class LoadGenerator {
  public:
   LoadGenerator(const proto::TestLopriClientConfig& c, uv_loop_t* l,
                 std::unique_ptr<StatsRecorder> srec, bool rec_interarrival,
-                std::vector<struct sockaddr_in> dst_addrs, uint64_t got_hr_start_time)
-      : workload_stages(StagesFromConfig(c)),
-        stats_recorder(std::move(srec)),
-        hr_total_run_dur(workload_stages.back().hr_cum_run_dur),
-        loop(l),
-        issued_first_req(false),
-        hr_start_time(got_hr_start_time),
-        hr_report_dur(1'000'000'000),
-        hr_next_report_time(hr_start_time + hr_report_dur),
-        record_interarrival_called(false),
-        tearing_down(false),
-        conn_pool(c.num_conns(), GetMaxRpcSizeBytes(workload_stages),
-                  std::move(dst_addrs), hr_start_time,
-                  absl::bind_front(&LoadGenerator::StartRequestLoop, this), loop,
-                  stats_recorder.get(), &tearing_down) {
+                std::vector<struct sockaddr_in> dst_addrs, uint64_t hr_start_time)
+      : workload_stages_(StagesFromConfig(c)),
+        stats_recorder_(std::move(srec)),
+        hr_total_run_dur_(workload_stages_.back().hr_cum_run_dur),
+        loop_(l),
+        issued_first_req_(false),
+        hr_start_time_(hr_start_time),
+        hr_report_dur_(1'000'000'000),
+        hr_next_report_time_(hr_start_time_ + hr_report_dur_),
+        record_interarrival_called_(false),
+        tearing_down_(false),
+        conn_pool_(c.num_conns(), GetMaxRpcSizeBytes(workload_stages_),
+                   std::move(dst_addrs), hr_start_time_,
+                   absl::bind_front(&LoadGenerator::StartRequestLoop, this), loop_,
+                   stats_recorder_.get(), &tearing_down_) {
     if (rec_interarrival) {
-      interarrival_hist.emplace(InterarrivalConfig());
+      interarrival_hist_.emplace(InterarrivalConfig());
     }
   }
 
-  void RunLoop() { uv_run(loop, UV_RUN_DEFAULT); }
+  void RunLoop() { uv_run(loop_, UV_RUN_DEFAULT); }
 
-  proto::HdrHistogram GetInterarrivalProto() { return interarrival_hist->ToProto(); }
+  proto::HdrHistogram GetInterarrivalProto() {
+    CHECK(interarrival_hist_.has_value());
+    return interarrival_hist_->ToProto();
+  }
 
  private:
   uint64_t NextSendTimeHighRes() {
@@ -438,67 +441,67 @@ class LoadGenerator {
         wait_sec = stage->dist_param;
         break;
       case proto::DIST_UNIFORM:
-        wait_sec = absl::Uniform(rng, 0, 2 * stage->dist_param);
+        wait_sec = absl::Uniform(rng_, 0, 2 * stage->dist_param);
         break;
       case proto::DIST_EXPONENTIAL:
-        wait_sec = absl::Exponential(rng, stage->dist_param);
+        wait_sec = absl::Exponential(rng_, stage->dist_param);
         break;
       default:
         LOG(FATAL) << "unreachable";
     }
-    hr_next += wait_sec * 1'000'000'000;  // to ns
+    hr_next_ += wait_sec * 1'000'000'000;  // to ns
 
-    return hr_next;
+    return hr_next_;
   }
 
   void RecordInterarrivalIssuedNow() {
-    if (!interarrival_hist.has_value()) {
+    if (!interarrival_hist_.has_value()) {
       return;
     }
     uint64_t now = uv_hrtime();
-    if (!record_interarrival_called) {
-      hr_last_recorded_time = now;
-      record_interarrival_called = true;
+    if (!record_interarrival_called_) {
+      hr_last_recorded_time_ = now;
+      record_interarrival_called_ = true;
       return;
     }
-    interarrival_hist->RecordValue(now - hr_last_recorded_time);
-    hr_last_recorded_time = now;
+    interarrival_hist_->RecordValue(now - hr_last_recorded_time_);
+    hr_last_recorded_time_ = now;
   }
 
   bool MaybeIssueRequest(CachedTime* time) {
     uint64_t hr_now = time->Get();
-    if (hr_now < hr_next) {
+    if (hr_now < hr_next_) {
       return false;  // not yet
     }
 
-    if (cur_stage() != nullptr && hr_now > hr_start_time + cur_stage()->hr_cum_run_dur) {
-      LOG(INFO) << "finished workload stage = " << cur_stage_index++;
+    if (cur_stage() != nullptr && hr_now > hr_start_time_ + cur_stage()->hr_cum_run_dur) {
+      LOG(INFO) << "finished workload stage = " << cur_stage_index_++;
     }
 
-    if (cur_stage() == nullptr || hr_now > hr_start_time + hr_total_run_dur) {
+    if (cur_stage() == nullptr || hr_now > hr_start_time_ + hr_total_run_dur_) {
       LOG(INFO) << "exiting event loop after "
-                << static_cast<double>(hr_now - hr_start_time) / 1e9 << " sec";
-      tearing_down = true;
-      uv_stop(loop);
-      auto st = stats_recorder->Close();
+                << static_cast<double>(hr_now - hr_start_time_) / 1e9 << " sec";
+      tearing_down_ = true;
+      uv_stop(loop_);
+      auto st = stats_recorder_->Close();
       if (!st.ok()) {
         LOG(FATAL) << "error while recording: " << st;
       }
       return false;
-    } else if (hr_now > hr_next_report_time) {
-      int step = (hr_next_report_time - hr_start_time) / hr_report_dur;
+    } else if (hr_now > hr_next_report_time_) {
+      int step = (hr_next_report_time_ - hr_start_time_) / hr_report_dur_;
       LOG(INFO) << "gathering stats for step " << step;
-      stats_recorder->DoneStep(absl::StrCat("step=", step));
-      hr_next_report_time += hr_report_dur;
+      stats_recorder_->DoneStep(absl::StrCat("step=", step));
+      hr_next_report_time_ += hr_report_dur_;
     }
 
     // Issue the request
-    uint64_t rpc_id = ++this->rpc_id;
-    conn_pool.WithConn([hr_now, rpc_id, this](ClientConn* conn) {
+    uint64_t rpc_id = ++rpc_id_;
+    conn_pool_.WithConn([hr_now, rpc_id, this](ClientConn* conn) {
       conn->AssertValid();
       const WorkloadStage* stage = cur_stage();
       if (stage == nullptr) {
-        conn_pool.AddConn(conn);
+        conn_pool_.AddConn(conn);
         return;
       }
       conn->IssueRpc(rpc_id, hr_now, stage->rpc_size_bytes);
@@ -509,12 +512,12 @@ class LoadGenerator {
   }
 
   void StartRequestLoop() {
-    auto hr_timeout = UvTimeoutUntil(loop, hr_start_time);
+    auto hr_timeout = UvTimeoutUntil(loop_, hr_start_time_);
     // Add callback to start the requests.
     LOG(INFO) << "will wait for " << static_cast<double>(hr_timeout) / 1e3
               << " seconds to issue requests";
     timer_ = absl::make_unique<uv_timer_t>();
-    uv_timer_init(loop, timer_.get());
+    uv_timer_init(loop_, timer_.get());
     timer_->data = this;
     uv_timer_start(
         timer_.get(),
@@ -528,11 +531,11 @@ class LoadGenerator {
   // Called on every iteration of the event loop
   void OnCheckNextReq() {
     CachedTime time;
-    while (!tearing_down && MaybeIssueRequest(&time)) {
+    while (!tearing_down_ && MaybeIssueRequest(&time)) {
       /* issue all requests whose time has passed */
-      hr_next = NextSendTimeHighRes();
+      hr_next_ = NextSendTimeHighRes();
     }
-    if (tearing_down) {
+    if (tearing_down_) {
       uv_check_stop(check_.get());
       check_ = nullptr;
     }
@@ -540,14 +543,14 @@ class LoadGenerator {
 
   void OnNextReq() {
     CachedTime time;
-    if (!issued_first_req) {
-      issued_first_req = true;
+    if (!issued_first_req_) {
+      issued_first_req_ = true;
       LOG(INFO) << "starting to issue requests";
-      stats_recorder->StartRecording();
-      hr_next = time.Get();
+      stats_recorder_->StartRecording();
+      hr_next_ = time.Get();
 
       check_ = absl::make_unique<uv_check_t>();
-      uv_check_init(loop, check_.get());
+      uv_check_init(loop_, check_.get());
       check_->data = this;
       uv_check_start(check_.get(), [](uv_check_t* c) {
         auto self = reinterpret_cast<LoadGenerator*>(c->data);
@@ -555,12 +558,12 @@ class LoadGenerator {
       });
     }
 
-    while (!tearing_down && MaybeIssueRequest(&time)) {
+    while (!tearing_down_ && MaybeIssueRequest(&time)) {
       /* issue all requests whose time has passed */
-      hr_next = NextSendTimeHighRes();
+      hr_next_ = NextSendTimeHighRes();
     }
 
-    if (!tearing_down) {
+    if (!tearing_down_) {
       // Schedule issuing of next request
       uv_timer_start(
           timer_.get(),
@@ -568,38 +571,38 @@ class LoadGenerator {
             auto self = reinterpret_cast<LoadGenerator*>(t->data);
             self->OnNextReq();
           },
-          UvTimeoutUntil(loop, hr_next), 0);
+          UvTimeoutUntil(loop_, hr_next_), 0);
     }
   }
 
   const WorkloadStage* cur_stage() const {
-    if (cur_stage_index < workload_stages.size()) {
-      return &workload_stages[cur_stage_index];
+    if (cur_stage_index_ < workload_stages_.size()) {
+      return &workload_stages_[cur_stage_index_];
     }
     return nullptr;
   }
 
-  const std::vector<WorkloadStage> workload_stages;
-  int cur_stage_index = 0;
-  std::unique_ptr<StatsRecorder> stats_recorder;
-  int64_t hr_total_run_dur;
-  uv_loop_t* loop;
-  absl::InsecureBitGen rng;
-  uint64_t hr_next;
-  bool issued_first_req;
+  const std::vector<WorkloadStage> workload_stages_;
+  int cur_stage_index_ = 0;
+  std::unique_ptr<StatsRecorder> stats_recorder_;
+  int64_t hr_total_run_dur_;
+  uv_loop_t* loop_;
+  absl::InsecureBitGen rng_;
+  uint64_t hr_next_;
+  bool issued_first_req_;
 
-  const uint64_t hr_start_time;
-  const uint64_t hr_report_dur;
-  uint64_t hr_next_report_time;
-  uint64_t rpc_id = 0;
+  const uint64_t hr_start_time_;
+  const uint64_t hr_report_dur_;
+  uint64_t hr_next_report_time_;
+  uint64_t rpc_id_ = 0;
 
-  uint64_t hr_last_recorded_time;
-  absl::optional<HdrHistogram> interarrival_hist;
-  bool record_interarrival_called;
+  uint64_t hr_last_recorded_time_;
+  absl::optional<HdrHistogram> interarrival_hist_;
+  bool record_interarrival_called_;
 
-  bool tearing_down;
+  bool tearing_down_;
 
-  ClientConnPool conn_pool;
+  ClientConnPool conn_pool_;
 
   std::unique_ptr<uv_timer_t> timer_;
   std::unique_ptr<uv_check_t> check_;
