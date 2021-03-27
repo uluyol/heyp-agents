@@ -608,8 +608,6 @@ class LoadGenerator {
   std::unique_ptr<uv_check_t> check_;
 };
 
-LoadGenerator* state;
-
 void ParseDestAddrs(absl::string_view server_addrs,
                     std::vector<struct sockaddr_in>* dst_addrs) {
   std::vector<std::string> addrs_to_print;
@@ -685,10 +683,10 @@ int ShardMain(int argc, char** argv, int shard_index, int num_shards) {
 
   std::vector<struct sockaddr_in> dst_addrs;
   heyp::ParseDestAddrs(FLAGS_server, &dst_addrs);
-  heyp::state = new heyp::LoadGenerator(config, uv_default_loop(), std::move(*srec),
-                                        FLAGS_interarrival != "", std::move(dst_addrs),
-                                        hr_start_time);
-  heyp::state->RunLoop();
+  heyp::LoadGenerator load_gen(config, uv_default_loop(), std::move(*srec),
+                               FLAGS_interarrival != "", std::move(dst_addrs),
+                               hr_start_time);
+  load_gen.RunLoop();
 
   absl::Time end_time = absl::Now();
   std::cout << absl::StrFormat(
@@ -698,7 +696,7 @@ int ShardMain(int argc, char** argv, int shard_index, int num_shards) {
 
   if (FLAGS_interarrival != "") {
     CHECK(heyp::WriteTextProtoToFile(
-        heyp::state->GetInterarrivalProto(),
+        load_gen.GetInterarrivalProto(),
         absl::StrCat(FLAGS_interarrival, ".shard.", shard_index)))
         << "failed to write latency hist";
   }
