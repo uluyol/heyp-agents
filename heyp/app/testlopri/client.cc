@@ -9,6 +9,7 @@
 #include <limits>
 #include <vector>
 
+#include "absl/functional/bind_front.h"
 #include "absl/random/distributions.h"
 #include "absl/random/random.h"
 #include "absl/strings/match.h"
@@ -70,14 +71,12 @@ constexpr bool kDebugPool = true;
 
 class ClientConn;
 
-// TODO: need to restructure
-void OnNextReq(uv_timer_t* timer);
-
 class ClientConnPool {
  public:
   ClientConnPool(int num_conns, int32_t max_rpc_size_bytes,
                  std::vector<struct sockaddr_in> dst_addrs, uint64_t hr_start_time,
-                 uv_loop_t* loop, StatsRecorder* stats_recorder, bool* tearing_down);
+                 const std::function<void()>& on_pool_ready, uv_loop_t* loop,
+                 StatsRecorder* stats_recorder, bool* tearing_down);
 
   bool AddConn(ClientConn* conn);
   void WithConn(const std::function<void(ClientConn*)>& func);
@@ -96,9 +95,10 @@ class ClientConnPool {
 class ClientConn {
  public:
   ClientConn(ClientConnPool* pool, int32_t max_rpc_size_bytes, int conn_id,
-             const struct sockaddr_in* addr, uv_loop_t* loop,
-             StatsRecorder* stats_recorder, uint64_t hr_start_run_time)
+             const struct sockaddr_in* addr, const std::function<void()>& on_pool_ready,
+             uv_loop_t* loop, StatsRecorder* stats_recorder, uint64_t hr_start_run_time)
       : pool_(pool),
+        on_pool_ready_(on_pool_ready),
         conn_id_(conn_id),
         addr_(addr),
         hr_start_run_time_(hr_start_run_time),
@@ -181,13 +181,10 @@ class ClientConn {
                   });
 
     if (pool_->AddConn(this)) {
-      auto hr_timeout = UvTimeoutUntil(loop_, hr_start_run_time_);
-      // Add callback to start the requests.
-      LOG(INFO) << "will wait for " << static_cast<double>(hr_timeout) / 1e3
-                << " seconds to issue requests";
-      uv_timer_t* timer = new uv_timer_t();
-      uv_timer_init(loop_, timer);
-      uv_timer_start(timer, OnNextReq, hr_timeout, 0);
+      if (kDebugPool) {
+        LOG(INFO) << "connection pool is fully initialized";
+      }
+      on_pool_ready_();
     }
 
     delete req;
@@ -252,6 +249,7 @@ class ClientConn {
   }
 
   ClientConnPool* pool_;
+  std::function<void()> on_pool_ready_;
 
   const int conn_id_;
   const struct sockaddr_in* addr_;
@@ -278,8 +276,10 @@ class ClientConn {
 
 ClientConnPool::ClientConnPool(int num_conns, int32_t max_rpc_size_bytes,
                                std::vector<struct sockaddr_in> dst_addrs,
-                               uint64_t hr_start_time, uv_loop_t* loop,
-                               StatsRecorder* stats_recorder, bool* tearing_down)
+                               uint64_t hr_start_time,
+                               const std::function<void()>& on_pool_ready,
+                               uv_loop_t* loop, StatsRecorder* stats_recorder,
+                               bool* tearing_down)
     : num_conns_(num_conns),
       dst_addrs_(std::move(dst_addrs)),
       tearing_down_(tearing_down) {
@@ -289,9 +289,9 @@ ClientConnPool::ClientConnPool(int num_conns, int32_t max_rpc_size_bytes,
     LOG(INFO) << "Starting " << num_conns_ << " connections";
   }
   for (int i = 0; i < num_conns_; ++i) {
-    all_.push_back(absl::make_unique<ClientConn>(this, max_rpc_size_bytes, all_.size(),
-                                                 &dst_addrs_.at(i % dst_addrs_.size()),
-                                                 loop, stats_recorder, hr_start_time));
+    all_.push_back(absl::make_unique<ClientConn>(
+        this, max_rpc_size_bytes, all_.size(), &dst_addrs_.at(i % dst_addrs_.size()),
+        on_pool_ready, loop, stats_recorder, hr_start_time));
   }
 }
 
@@ -389,10 +389,19 @@ std::vector<WorkloadStage> StagesFromConfig(const proto::TestLopriClientConfig& 
   return stages;
 }
 
-struct State {
-  State(const proto::TestLopriClientConfig& c, uv_loop_t* l,
-        std::unique_ptr<StatsRecorder> srec, bool rec_interarrival,
-        std::vector<struct sockaddr_in> dst_addrs, uint64_t got_hr_start_time)
+int32_t GetMaxRpcSizeBytes(const std::vector<WorkloadStage>& workload_stages) {
+  int32_t max_size = -1;
+  for (const WorkloadStage& s : workload_stages) {
+    max_size = std::max(max_size, s.rpc_size_bytes);
+  }
+  return max_size;
+}
+
+class LoadGenerator {
+ public:
+  LoadGenerator(const proto::TestLopriClientConfig& c, uv_loop_t* l,
+                std::unique_ptr<StatsRecorder> srec, bool rec_interarrival,
+                std::vector<struct sockaddr_in> dst_addrs, uint64_t got_hr_start_time)
       : workload_stages(StagesFromConfig(c)),
         stats_recorder(std::move(srec)),
         hr_total_run_dur(workload_stages.back().hr_cum_run_dur),
@@ -403,19 +412,164 @@ struct State {
         hr_next_report_time(hr_start_time + hr_report_dur),
         record_interarrival_called(false),
         tearing_down(false),
-        conn_pool(c.num_conns(), max_rpc_size_bytes(), std::move(dst_addrs),
-                  hr_start_time, loop, stats_recorder.get(), &tearing_down) {
+        conn_pool(c.num_conns(), GetMaxRpcSizeBytes(workload_stages),
+                  std::move(dst_addrs), hr_start_time,
+                  absl::bind_front(&LoadGenerator::StartRequestLoop, this), loop,
+                  stats_recorder.get(), &tearing_down) {
     if (rec_interarrival) {
       interarrival_hist.emplace(InterarrivalConfig());
     }
   }
 
-  int32_t max_rpc_size_bytes() const {
-    int32_t max_size = -1;
-    for (const WorkloadStage& s : workload_stages) {
-      max_size = std::max(max_size, s.rpc_size_bytes);
+  void RunLoop() { uv_run(loop, UV_RUN_DEFAULT); }
+
+  proto::HdrHistogram GetInterarrivalProto() { return interarrival_hist->ToProto(); }
+
+ private:
+  uint64_t NextSendTimeHighRes() {
+    const WorkloadStage* stage = cur_stage();
+    if (stage == nullptr) {
+      return std::numeric_limits<uint64_t>::max();
     }
-    return max_size;
+
+    double wait_sec = 0;
+    switch (stage->interarrival_dist) {
+      case proto::DIST_CONSTANT:
+        wait_sec = stage->dist_param;
+        break;
+      case proto::DIST_UNIFORM:
+        wait_sec = absl::Uniform(rng, 0, 2 * stage->dist_param);
+        break;
+      case proto::DIST_EXPONENTIAL:
+        wait_sec = absl::Exponential(rng, stage->dist_param);
+        break;
+      default:
+        LOG(FATAL) << "unreachable";
+    }
+    hr_next += wait_sec * 1'000'000'000;  // to ns
+
+    return hr_next;
+  }
+
+  void RecordInterarrivalIssuedNow() {
+    if (!interarrival_hist.has_value()) {
+      return;
+    }
+    uint64_t now = uv_hrtime();
+    if (!record_interarrival_called) {
+      hr_last_recorded_time = now;
+      record_interarrival_called = true;
+      return;
+    }
+    interarrival_hist->RecordValue(now - hr_last_recorded_time);
+    hr_last_recorded_time = now;
+  }
+
+  bool MaybeIssueRequest(CachedTime* time) {
+    uint64_t hr_now = time->Get();
+    if (hr_now < hr_next) {
+      return false;  // not yet
+    }
+
+    if (cur_stage() != nullptr && hr_now > hr_start_time + cur_stage()->hr_cum_run_dur) {
+      LOG(INFO) << "finished workload stage = " << cur_stage_index++;
+    }
+
+    if (cur_stage() == nullptr || hr_now > hr_start_time + hr_total_run_dur) {
+      LOG(INFO) << "exiting event loop after "
+                << static_cast<double>(hr_now - hr_start_time) / 1e9 << " sec";
+      tearing_down = true;
+      uv_stop(loop);
+      auto st = stats_recorder->Close();
+      if (!st.ok()) {
+        LOG(FATAL) << "error while recording: " << st;
+      }
+      return false;
+    } else if (hr_now > hr_next_report_time) {
+      int step = (hr_next_report_time - hr_start_time) / hr_report_dur;
+      LOG(INFO) << "gathering stats for step " << step;
+      stats_recorder->DoneStep(absl::StrCat("step=", step));
+      hr_next_report_time += hr_report_dur;
+    }
+
+    // Issue the request
+    uint64_t rpc_id = ++this->rpc_id;
+    conn_pool.WithConn([hr_now, rpc_id, this](ClientConn* conn) {
+      conn->AssertValid();
+      const WorkloadStage* stage = cur_stage();
+      if (stage == nullptr) {
+        conn_pool.AddConn(conn);
+        return;
+      }
+      conn->IssueRpc(rpc_id, hr_now, stage->rpc_size_bytes);
+      RecordInterarrivalIssuedNow();
+    });
+
+    return true;
+  }
+
+  void StartRequestLoop() {
+    auto hr_timeout = UvTimeoutUntil(loop, hr_start_time);
+    // Add callback to start the requests.
+    LOG(INFO) << "will wait for " << static_cast<double>(hr_timeout) / 1e3
+              << " seconds to issue requests";
+    timer_ = absl::make_unique<uv_timer_t>();
+    uv_timer_init(loop, timer_.get());
+    timer_->data = this;
+    uv_timer_start(
+        timer_.get(),
+        [](uv_timer_t* t) {
+          auto self = reinterpret_cast<LoadGenerator*>(t->data);
+          self->OnNextReq();
+        },
+        hr_timeout, 0);
+  }
+
+  // Called on every iteration of the event loop
+  void OnCheckNextReq() {
+    CachedTime time;
+    while (!tearing_down && MaybeIssueRequest(&time)) {
+      /* issue all requests whose time has passed */
+      hr_next = NextSendTimeHighRes();
+    }
+    if (tearing_down) {
+      uv_check_stop(check_.get());
+      check_ = nullptr;
+    }
+  }
+
+  void OnNextReq() {
+    CachedTime time;
+    if (!issued_first_req) {
+      issued_first_req = true;
+      LOG(INFO) << "starting to issue requests";
+      stats_recorder->StartRecording();
+      hr_next = time.Get();
+
+      check_ = absl::make_unique<uv_check_t>();
+      uv_check_init(loop, check_.get());
+      check_->data = this;
+      uv_check_start(check_.get(), [](uv_check_t* c) {
+        auto self = reinterpret_cast<LoadGenerator*>(c->data);
+        self->OnCheckNextReq();
+      });
+    }
+
+    while (!tearing_down && MaybeIssueRequest(&time)) {
+      /* issue all requests whose time has passed */
+      hr_next = NextSendTimeHighRes();
+    }
+
+    if (!tearing_down) {
+      // Schedule issuing of next request
+      uv_timer_start(
+          timer_.get(),
+          [](uv_timer_t* t) {
+            auto self = reinterpret_cast<LoadGenerator*>(t->data);
+            self->OnNextReq();
+          },
+          UvTimeoutUntil(loop, hr_next), 0);
+    }
   }
 
   const WorkloadStage* cur_stage() const {
@@ -433,12 +587,11 @@ struct State {
   absl::InsecureBitGen rng;
   uint64_t hr_next;
   bool issued_first_req;
-  std::vector<std::unique_ptr<ClientConn>> registered_conns;
 
-  uint64_t rpc_id = 0;
   const uint64_t hr_start_time;
   const uint64_t hr_report_dur;
   uint64_t hr_next_report_time;
+  uint64_t rpc_id = 0;
 
   uint64_t hr_last_recorded_time;
   absl::optional<HdrHistogram> interarrival_hist;
@@ -447,129 +600,12 @@ struct State {
   bool tearing_down;
 
   ClientConnPool conn_pool;
+
+  std::unique_ptr<uv_timer_t> timer_;
+  std::unique_ptr<uv_check_t> check_;
 };
 
-State* state;
-
-uint64_t NextSendTimeHighRes() {
-  const WorkloadStage* stage = state->cur_stage();
-  if (stage == nullptr) {
-    return std::numeric_limits<uint64_t>::max();
-  }
-
-  double wait_sec = 0;
-  switch (stage->interarrival_dist) {
-    case proto::DIST_CONSTANT:
-      wait_sec = stage->dist_param;
-      break;
-    case proto::DIST_UNIFORM:
-      wait_sec = absl::Uniform(state->rng, 0, 2 * stage->dist_param);
-      break;
-    case proto::DIST_EXPONENTIAL:
-      wait_sec = absl::Exponential(state->rng, stage->dist_param);
-      break;
-    default:
-      LOG(FATAL) << "unreachable";
-  }
-  state->hr_next += wait_sec * 1'000'000'000;  // to ns
-
-  return state->hr_next;
-}
-
-void RecordInterarrivalIssuedNow() {
-  if (!state->interarrival_hist.has_value()) {
-    return;
-  }
-  uint64_t now = uv_hrtime();
-  if (!state->record_interarrival_called) {
-    state->hr_last_recorded_time = now;
-    state->record_interarrival_called = true;
-    return;
-  }
-  state->interarrival_hist->RecordValue(now - state->hr_last_recorded_time);
-  state->hr_last_recorded_time = now;
-}
-
-bool MaybeIssueRequest(CachedTime* time) {
-  uint64_t hr_now = time->Get();
-  if (hr_now < state->hr_next) {
-    return false;  // not yet
-  }
-
-  if (state->cur_stage() != nullptr &&
-      hr_now > state->hr_start_time + state->cur_stage()->hr_cum_run_dur) {
-    LOG(INFO) << "finished workload stage = " << state->cur_stage_index++;
-  }
-
-  if (state->cur_stage() == nullptr ||
-      hr_now > state->hr_start_time + state->hr_total_run_dur) {
-    LOG(INFO) << "exiting event loop after "
-              << static_cast<double>(hr_now - state->hr_start_time) / 1e9 << " sec";
-    state->tearing_down = true;
-    uv_stop(state->loop);
-    auto st = state->stats_recorder->Close();
-    if (!st.ok()) {
-      LOG(FATAL) << "error while recording: " << st;
-    }
-    return false;
-  } else if (hr_now > state->hr_next_report_time) {
-    int step = (state->hr_next_report_time - state->hr_start_time) / state->hr_report_dur;
-    LOG(INFO) << "gathering stats for step " << step;
-    state->stats_recorder->DoneStep(absl::StrCat("step=", step));
-    state->hr_next_report_time += state->hr_report_dur;
-  }
-
-  // Issue the request
-  uint64_t rpc_id = ++state->rpc_id;
-  state->conn_pool.WithConn([hr_now, rpc_id](ClientConn* conn) {
-    conn->AssertValid();
-    const WorkloadStage* stage = state->cur_stage();
-    if (stage == nullptr) {
-      state->conn_pool.AddConn(conn);
-      return;
-    }
-    conn->IssueRpc(rpc_id, hr_now, stage->rpc_size_bytes);
-    RecordInterarrivalIssuedNow();
-  });
-
-  return true;
-}
-
-// Called on every iteration of the event loop
-void OnCheckNextReq(uv_check_t* check) {
-  CachedTime time;
-  while (!state->tearing_down && MaybeIssueRequest(&time)) {
-    /* issue all requests whose time has passed */
-    state->hr_next = NextSendTimeHighRes();
-  }
-  if (state->tearing_down) {
-    uv_check_stop(check);
-  }
-}
-
-void OnNextReq(uv_timer_t* timer) {
-  CachedTime time;
-  if (!state->issued_first_req) {
-    state->issued_first_req = true;
-    LOG(INFO) << "starting to issue requests";
-    state->stats_recorder->StartRecording();
-    state->hr_next = time.Get();
-
-    auto check = new uv_check_t();
-    uv_check_init(state->loop, check);
-    uv_check_start(check, OnCheckNextReq);
-  }
-
-  while (!state->tearing_down && MaybeIssueRequest(&time)) {
-    /* issue all requests whose time has passed */
-    state->hr_next = NextSendTimeHighRes();
-  }
-
-  if (!state->tearing_down) {
-    // Schedule issuing of next request
-    uv_timer_start(timer, OnNextReq, UvTimeoutUntil(state->loop, state->hr_next), 0);
-  }
-}
+LoadGenerator* state;
 
 void ParseDestAddrs(absl::string_view server_addrs,
                     std::vector<struct sockaddr_in>* dst_addrs) {
@@ -646,11 +682,10 @@ int ShardMain(int argc, char** argv, int shard_index, int num_shards) {
 
   std::vector<struct sockaddr_in> dst_addrs;
   heyp::ParseDestAddrs(FLAGS_server, &dst_addrs);
-  heyp::state =
-      new heyp::State(config, uv_default_loop(), std::move(*srec),
-                      FLAGS_interarrival != "", std::move(dst_addrs), hr_start_time);
-
-  uv_run(heyp::state->loop, UV_RUN_DEFAULT);
+  heyp::state = new heyp::LoadGenerator(config, uv_default_loop(), std::move(*srec),
+                                        FLAGS_interarrival != "", std::move(dst_addrs),
+                                        hr_start_time);
+  heyp::state->RunLoop();
 
   absl::Time end_time = absl::Now();
   std::cout << absl::StrFormat(
@@ -660,7 +695,7 @@ int ShardMain(int argc, char** argv, int shard_index, int num_shards) {
 
   if (FLAGS_interarrival != "") {
     CHECK(heyp::WriteTextProtoToFile(
-        heyp::state->interarrival_hist->ToProto(),
+        heyp::state->GetInterarrivalProto(),
         absl::StrCat(FLAGS_interarrival, ".shard.", shard_index)))
         << "failed to write latency hist";
   }
