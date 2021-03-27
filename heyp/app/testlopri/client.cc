@@ -56,6 +56,14 @@ std::string IP4Name(const struct sockaddr_in* src) {
   return std::string(buf);
 }
 
+uint64_t UvTimeoutUntil(uv_loop_t* loop, uint64_t hr_time) {
+  uint64_t now = uv_now(loop);
+  if (now >= hr_time / 1'000'000) {
+    return 0;
+  }
+  return (hr_time / 1'000'000) - now;
+}
+
 constexpr int kNumParallelRpcsPerConn = 32;
 constexpr bool kDebug = false;
 constexpr bool kDebugPool = true;
@@ -64,7 +72,6 @@ class ClientConn;
 
 // TODO: need to restructure
 void OnNextReq(uv_timer_t* timer);
-uint64_t UvTimeoutUntil(uint64_t hr_time);
 
 class ClientConnPool {
  public:
@@ -174,7 +181,7 @@ class ClientConn {
                   });
 
     if (pool_->AddConn(this)) {
-      auto hr_timeout = UvTimeoutUntil(hr_start_run_time_);
+      auto hr_timeout = UvTimeoutUntil(loop_, hr_start_run_time_);
       // Add callback to start the requests.
       LOG(INFO) << "will wait for " << static_cast<double>(hr_timeout) / 1e3
                 << " seconds to issue requests";
@@ -469,14 +476,6 @@ uint64_t NextSendTimeHighRes() {
   return state->hr_next;
 }
 
-uint64_t UvTimeoutUntil(uint64_t hr_time) {
-  uint64_t now = uv_now(state->loop);
-  if (now >= hr_time / 1'000'000) {
-    return 0;
-  }
-  return (hr_time / 1'000'000) - now;
-}
-
 void RecordInterarrivalIssuedNow() {
   if (!state->interarrival_hist.has_value()) {
     return;
@@ -568,7 +567,7 @@ void OnNextReq(uv_timer_t* timer) {
 
   if (!state->tearing_down) {
     // Schedule issuing of next request
-    uv_timer_start(timer, OnNextReq, UvTimeoutUntil(state->hr_next), 0);
+    uv_timer_start(timer, OnNextReq, UvTimeoutUntil(state->loop, state->hr_next), 0);
   }
 }
 
