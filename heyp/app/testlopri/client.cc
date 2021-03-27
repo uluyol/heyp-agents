@@ -339,15 +339,15 @@ proto::HdrHistogram::Config InterarrivalConfig() {
 }
 
 struct WorkloadStage {
-  int32_t num_conns;
+  constexpr static int kInterarrivalSamples = 10'000;
   int32_t rpc_size_bytes;
   double target_average_bps;
-  proto::Distribution interarrival_dist;
-  double dist_param;
+  std::unique_ptr<std::array<uint64_t, kInterarrivalSamples>> interarrival_ns;
   uint64_t hr_cum_run_dur;
 };
 
 std::vector<WorkloadStage> StagesFromConfig(const proto::TestLopriClientConfig& config) {
+  absl::InsecureBitGen rng;
   std::vector<WorkloadStage> stages;
   uint64_t hr_cum_run_dur = 0;
   stages.reserve(config.workload_stages_size());
@@ -356,17 +356,30 @@ std::vector<WorkloadStage> StagesFromConfig(const proto::TestLopriClientConfig& 
     LOG(INFO) << "stage " << stages.size() << ": will target an average of "
               << rpcs_per_sec << " rpcs/sec";
 
-    double dist_param;
+    auto interarrival_ns =
+        absl::make_unique<std::array<uint64_t, WorkloadStage::kInterarrivalSamples>>();
     switch (p.interarrival_dist()) {
-      case proto::DIST_CONSTANT:
-        dist_param = 1.0 / rpcs_per_sec;
+      case proto::DIST_CONSTANT: {
+        uint64_t v = 1e9 / rpcs_per_sec;
+        for (int i = 0; i < interarrival_ns->size(); ++i) {
+          (*interarrival_ns)[i] = v;
+        }
         break;
-      case proto::DIST_UNIFORM:
-        dist_param = 1.0 / rpcs_per_sec;
+      }
+      case proto::DIST_UNIFORM: {
+        double mean_ns = 1e9 / rpcs_per_sec;
+        for (int i = 0; i < interarrival_ns->size(); ++i) {
+          (*interarrival_ns)[i] = absl::Uniform(rng, 0, 2 * mean_ns);
+        }
         break;
-      case proto::DIST_EXPONENTIAL:
-        dist_param = rpcs_per_sec;
+      }
+      case proto::DIST_EXPONENTIAL: {
+        for (int i = 0; i < interarrival_ns->size(); ++i) {
+          (*interarrival_ns)[i] = 1e9 * absl::Exponential(rng, rpcs_per_sec);
+          ;
+        }
         break;
+      }
       default:
         LOG(FATAL) << "unsupported interarrival distribution: " << p.interarrival_dist();
     }
@@ -381,8 +394,7 @@ std::vector<WorkloadStage> StagesFromConfig(const proto::TestLopriClientConfig& 
     stages.push_back({
         .rpc_size_bytes = p.rpc_size_bytes(),
         .target_average_bps = p.target_average_bps(),
-        .interarrival_dist = p.interarrival_dist(),
-        .dist_param = dist_param,
+        .interarrival_ns = std::move(interarrival_ns),
         .hr_cum_run_dur = hr_cum_run_dur,
     });
   }
@@ -429,29 +441,16 @@ class LoadGenerator {
   }
 
  private:
-  uint64_t NextSendTimeHighRes() {
+  void UpdateNextSendTimeHighRes() {
     const WorkloadStage* stage = cur_stage();
     if (stage == nullptr) {
-      return std::numeric_limits<uint64_t>::max();
+      hr_next_ = std::numeric_limits<uint64_t>::max();
     }
 
-    double wait_sec = 0;
-    switch (stage->interarrival_dist) {
-      case proto::DIST_CONSTANT:
-        wait_sec = stage->dist_param;
-        break;
-      case proto::DIST_UNIFORM:
-        wait_sec = absl::Uniform(rng_, 0, 2 * stage->dist_param);
-        break;
-      case proto::DIST_EXPONENTIAL:
-        wait_sec = absl::Exponential(rng_, stage->dist_param);
-        break;
-      default:
-        LOG(FATAL) << "unreachable";
-    }
-    hr_next_ += wait_sec * 1'000'000'000;  // to ns
+    hr_next_ += stage->interarrival_ns->at(hr_next_i_ % stage->interarrival_ns->size());
+    ++hr_next_i_;
 
-    return hr_next_;
+    return;
   }
 
   void RecordInterarrivalIssuedNow() {
@@ -468,7 +467,7 @@ class LoadGenerator {
     hr_last_recorded_time_ = now;
   }
 
-  bool MaybeIssueRequest(CachedTime* time) {
+  bool TryIssueRequest(CachedTime* time) {
     uint64_t hr_now = time->Get();
     if (hr_now < hr_next_) {
       return false;  // not yet
@@ -508,6 +507,7 @@ class LoadGenerator {
       RecordInterarrivalIssuedNow();
     });
 
+    UpdateNextSendTimeHighRes();
     return true;
   }
 
@@ -531,9 +531,8 @@ class LoadGenerator {
   // Called on every iteration of the event loop
   void OnCheckNextReq() {
     CachedTime time;
-    while (!tearing_down_ && MaybeIssueRequest(&time)) {
+    while (!tearing_down_ && TryIssueRequest(&time)) {
       /* issue all requests whose time has passed */
-      hr_next_ = NextSendTimeHighRes();
     }
     if (tearing_down_) {
       uv_check_stop(check_.get());
@@ -558,9 +557,8 @@ class LoadGenerator {
       });
     }
 
-    while (!tearing_down_ && MaybeIssueRequest(&time)) {
+    while (!tearing_down_ && TryIssueRequest(&time)) {
       /* issue all requests whose time has passed */
-      hr_next_ = NextSendTimeHighRes();
     }
 
     if (!tearing_down_) {
@@ -587,8 +585,8 @@ class LoadGenerator {
   std::unique_ptr<StatsRecorder> stats_recorder_;
   int64_t hr_total_run_dur_;
   uv_loop_t* loop_;
-  absl::InsecureBitGen rng_;
   uint64_t hr_next_;
+  size_t hr_next_i_ = 0;
   bool issued_first_req_;
 
   const uint64_t hr_start_time_;
