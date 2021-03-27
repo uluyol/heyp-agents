@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <uv.h>
 
+#include <array>
 #include <cstdint>
 #include <deque>
 #include <limits>
@@ -43,30 +44,283 @@ class CachedTime {
   bool did_get_ = false;
 };
 
+void AllocBuf(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf) {
+  buf->base = new char[suggested_size];
+  buf->len = suggested_size;
+}
+
+std::string IP4Name(const struct sockaddr_in* src) {
+  char buf[24];
+  memset(buf, 0, 24);
+  uv_ip4_name(src, buf, 24);
+  return std::string(buf);
+}
+
 constexpr int kNumParallelRpcsPerConn = 32;
 constexpr bool kDebug = false;
+constexpr bool kDebugPool = true;
 
-typedef struct {
-  uv_tcp_t client;
-  size_t addr_index;
-  uv_buf_t buffer;
-  char* buf;
-  uint64_t hr_start_time[kNumParallelRpcsPerConn];
-  uint64_t rpc_id[kNumParallelRpcsPerConn];
-  int num_seen;
-  int next_pos;
+class ClientConn;
 
-  char read_buf[8];
-  int read_buf_size;
+// TODO: need to restructure
+void OnNextReq(uv_timer_t* timer);
+uint64_t UvTimeoutUntil(uint64_t hr_time);
 
-  int conn_id;
+class ClientConnPool {
+ public:
+  ClientConnPool(int num_conns, int32_t max_rpc_size_bytes,
+                 std::vector<struct sockaddr_in> dst_addrs, uint64_t hr_start_time,
+                 uv_loop_t* loop, StatsRecorder* stats_recorder, bool* tearing_down);
 
-  bool in_pool;
-} client_conn_t;
+  bool AddConn(ClientConn* conn);
+  void WithConn(const std::function<void(ClientConn*)>& func);
 
-void AssertValid(const client_conn_t* conn) {
-  CHECK_LE(conn->num_seen, conn->next_pos);
-  CHECK_LT(conn->next_pos, conn->num_seen + kNumParallelRpcsPerConn);
+ private:
+  const int num_conns_;
+  const std::vector<struct sockaddr_in> dst_addrs_;
+
+  std::deque<ClientConn*> ready_;
+  std::deque<std::function<void(ClientConn*)>> to_exec_;
+  std::vector<std::unique_ptr<ClientConn>> all_;
+
+  bool* tearing_down_;
+};
+
+class ClientConn {
+ public:
+  ClientConn(ClientConnPool* pool, int32_t max_rpc_size_bytes, int conn_id,
+             const struct sockaddr_in* addr, uv_loop_t* loop,
+             StatsRecorder* stats_recorder, uint64_t hr_start_run_time)
+      : pool_(pool),
+        conn_id_(conn_id),
+        addr_(addr),
+        hr_start_run_time_(hr_start_run_time),
+        loop_(loop),
+        stats_recorder_(stats_recorder),
+        buf_(max_rpc_size_bytes, 0),
+        num_seen_(0),
+        next_pos_(0),
+        read_buf_size_(0),
+        in_pool_(false) {
+    CHECK_GE(max_rpc_size_bytes, 12);
+
+    uv_tcp_init(loop_, &client_);
+    client_.data = this;
+
+    if (kDebugPool) {
+      LOG(INFO) << "requesting connection to " << IP4Name(addr_);
+    }
+    uv_connect_t* req = new uv_connect_t();
+
+    uv_tcp_connect(req, &client_, reinterpret_cast<const struct sockaddr*>(addr_),
+                   [](uv_connect_t* req, int status) {
+                     auto self = reinterpret_cast<ClientConn*>(req->handle->data);
+                     self->OnConnect(req, status);
+                   });
+  }
+
+  void IssueRpc(uint64_t rpc_id, uint64_t hr_now, int32_t rpc_size_bytes) {
+    hr_start_time_[next_pos_ % kNumParallelRpcsPerConn] = hr_now;
+    rpc_id_[next_pos_ % kNumParallelRpcsPerConn] = rpc_id;
+    ++next_pos_;
+    WriteU32LE(rpc_size_bytes - 12, buf_.data());
+    WriteU64LE(rpc_id, buf_.data() + 4);
+    if (kDebug) {
+      VLOG(2) << "write(c=" << conn_id_ << ") rpc id=" << rpc_id
+              << " header=" << ToHex(buf_.data(), 12);
+    }
+    buffer_ = uv_buf_init(buf_.data(), rpc_size_bytes);
+    uv_write_t* req = new uv_write_t();
+    uv_write(req, reinterpret_cast<uv_stream_t*>(&client_), &buffer_, 1,
+             [](uv_write_t* req, int status) {
+               auto self = reinterpret_cast<ClientConn*>(req->handle->data);
+               self->OnWriteDone(req, status);
+             });
+  }
+
+  void AssertValid() const {
+    CHECK_LE(num_seen_, next_pos_);
+    CHECK_LT(next_pos_, num_seen_ + kNumParallelRpcsPerConn);
+  }
+
+ private:
+  void OnConnect(uv_connect_t* req, int status) {
+    if (uv_hrtime() > hr_start_run_time_) {
+      LOG(FATAL) << "took too long to connect";
+    }
+
+    AssertValid();
+
+    if (status < 0) {
+      LOG(ERROR) << "failed to connect (" << uv_strerror(status) << "); trying again";
+      uv_tcp_init(loop_, &client_);
+      client_.data = this;
+
+      usleep(rand() % 50000);
+
+      uv_tcp_connect(req, &client_, reinterpret_cast<const struct sockaddr*>(addr_),
+                     [](uv_connect_t* req, int status) {
+                       auto self = reinterpret_cast<ClientConn*>(req->handle->data);
+                       self->OnConnect(req, status);
+                     });
+      return;
+    }
+
+    LOG(INFO) << "connection established; adding to pool";
+    uv_read_start(reinterpret_cast<uv_stream_t*>(&client_), AllocBuf,
+                  [](uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
+                    auto self = reinterpret_cast<ClientConn*>(stream->data);
+                    self->OnReadAck(nread, buf);
+                  });
+
+    if (pool_->AddConn(this)) {
+      auto hr_timeout = UvTimeoutUntil(hr_start_run_time_);
+      // Add callback to start the requests.
+      LOG(INFO) << "will wait for " << static_cast<double>(hr_timeout) / 1e3
+                << " seconds to issue requests";
+      uv_timer_t* timer = new uv_timer_t();
+      uv_timer_init(loop_, timer);
+      uv_timer_start(timer, OnNextReq, hr_timeout, 0);
+    }
+
+    delete req;
+  }
+
+  void OnReadAck(ssize_t nread, const uv_buf_t* buf) {
+    AssertValid();
+    if (nread < 0) {
+      if (nread != UV_EOF) absl::FPrintF(stderr, "Read error %s\n", uv_err_name(nread));
+      uv_read_stop(reinterpret_cast<uv_stream_t*>(&client_));
+      return;
+    }
+
+    bool got_ack = false;
+    auto record_rpc_latency = [&](uint64_t rpc_id) {
+      CHECK_EQ(rpc_id_[num_seen_ % kNumParallelRpcsPerConn], rpc_id)
+          << "rpcs on a single connection were reordered!";
+      stats_recorder_->RecordRpc(
+          buf->len,
+          absl::Nanoseconds(uv_hrtime() -
+                            hr_start_time_[num_seen_ % kNumParallelRpcsPerConn]));
+      ++num_seen_;
+      got_ack = true;
+    };
+
+    char* b = buf->base;
+    char* e = buf->base + nread;
+    while (b < e) {
+      int tocopy = std::min<int>(e - b, 8 - read_buf_size_);
+      memmove(read_buf_ + read_buf_size_, b, tocopy);
+      b += tocopy;
+      read_buf_size_ += tocopy;
+
+      if (read_buf_size_ == 8) {
+        if (kDebug) {
+          VLOG(2) << "read (c=" << conn_id_ << ") rpc id=" << ReadU64LE(read_buf_)
+                  << " header=" << ToHex(read_buf_, 8);
+        }
+        record_rpc_latency(ReadU64LE(read_buf_));
+        read_buf_size_ = 0;
+      }
+    }
+    delete buf->base;
+    if (got_ack) {
+      pool_->AddConn(this);  // will not add if present already
+    }
+  }
+
+  void OnWriteDone(uv_write_t* req, int status) {
+    AssertValid();
+    if (status < 0) {
+      absl::FPrintF(stderr, "write error %s\n", uv_strerror(status));
+      --next_pos_;
+      delete req;
+      return;
+    }
+
+    if (next_pos_ - num_seen_ < kNumParallelRpcsPerConn - 1) {
+      pool_->AddConn(this);  // else OnRead will add it back
+    }
+    delete req;
+  }
+
+  ClientConnPool* pool_;
+
+  const int conn_id_;
+  const struct sockaddr_in* addr_;
+  const uint64_t hr_start_run_time_;
+
+  uv_loop_t* loop_;
+  StatsRecorder* stats_recorder_;
+
+  uv_tcp_t client_;
+  uv_buf_t buffer_;
+  std::string buf_;
+  std::array<uint64_t, kNumParallelRpcsPerConn> hr_start_time_;
+  std::array<uint64_t, kNumParallelRpcsPerConn> rpc_id_;
+  int num_seen_;
+  int next_pos_;
+
+  char read_buf_[8];
+  int read_buf_size_;
+
+  bool in_pool_;
+
+  friend class ClientConnPool;
+};
+
+ClientConnPool::ClientConnPool(int num_conns, int32_t max_rpc_size_bytes,
+                               std::vector<struct sockaddr_in> dst_addrs,
+                               uint64_t hr_start_time, uv_loop_t* loop,
+                               StatsRecorder* stats_recorder, bool* tearing_down)
+    : num_conns_(num_conns),
+      dst_addrs_(std::move(dst_addrs)),
+      tearing_down_(tearing_down) {
+  // Start by creating connections.
+  // Once all are created, the last will register a timer to start the run
+  if (kDebugPool) {
+    LOG(INFO) << "Starting " << num_conns_ << " connections";
+  }
+  for (int i = 0; i < num_conns_; ++i) {
+    all_.push_back(absl::make_unique<ClientConn>(this, max_rpc_size_bytes, all_.size(),
+                                                 &dst_addrs_.at(i % dst_addrs_.size()),
+                                                 loop, stats_recorder, hr_start_time));
+  }
+}
+
+bool ClientConnPool::AddConn(ClientConn* conn) {
+  conn->AssertValid();
+  if (*tearing_down_) {
+    return false;
+  }
+
+  if (conn->in_pool_) {
+    return ready_.size() == num_conns_;
+  }
+
+  if (!to_exec_.empty()) {
+    to_exec_.front()(conn);
+    to_exec_.pop_front();
+    return false;
+  }
+
+  ready_.push_back(conn);
+  conn->in_pool_ = true;
+  return ready_.size() == num_conns_;
+}
+
+void ClientConnPool::WithConn(const std::function<void(ClientConn*)>& func) {
+  if (!ready_.empty()) {
+    ClientConn* conn = ready_.front();
+    conn->AssertValid();
+    ready_.pop_front();
+    conn->in_pool_ = false;
+
+    func(conn);
+    return;
+  }
+
+  to_exec_.push_back(func);
 }
 
 proto::HdrHistogram::Config InterarrivalConfig() {
@@ -130,16 +384,20 @@ std::vector<WorkloadStage> StagesFromConfig(const proto::TestLopriClientConfig& 
 
 struct State {
   State(const proto::TestLopriClientConfig& c, uv_loop_t* l,
-        std::unique_ptr<StatsRecorder> srec, bool rec_interarrival)
-      : num_conns(c.num_conns()),
-        workload_stages(StagesFromConfig(c)),
+        std::unique_ptr<StatsRecorder> srec, bool rec_interarrival,
+        std::vector<struct sockaddr_in> dst_addrs, uint64_t got_hr_start_time)
+      : workload_stages(StagesFromConfig(c)),
         stats_recorder(std::move(srec)),
         hr_total_run_dur(workload_stages.back().hr_cum_run_dur),
         loop(l),
         issued_first_req(false),
+        hr_start_time(got_hr_start_time),
         hr_report_dur(1'000'000'000),
+        hr_next_report_time(hr_start_time + hr_report_dur),
         record_interarrival_called(false),
-        tearing_down(false) {
+        tearing_down(false),
+        conn_pool(c.num_conns(), max_rpc_size_bytes(), std::move(dst_addrs),
+                  hr_start_time, loop, stats_recorder.get(), &tearing_down) {
     if (rec_interarrival) {
       interarrival_hist.emplace(InterarrivalConfig());
     }
@@ -153,21 +411,6 @@ struct State {
     return max_size;
   }
 
-  client_conn_t* new_client_conn(size_t addr_index) {
-    int32_t max_rpc_size_bytes = this->max_rpc_size_bytes();
-
-    CHECK_GE(max_rpc_size_bytes, 12);
-    client_conn_t* c = static_cast<client_conn_t*>(malloc(sizeof(client_conn_t)));
-    c->buf = static_cast<char*>(calloc(max_rpc_size_bytes, 1));
-    c->num_seen = 0;
-    c->next_pos = 0;
-    c->read_buf_size = 0;
-    c->in_pool = false;
-    c->conn_id = ++next_conn_id;
-    c->addr_index = addr_index;
-    return c;
-  }
-
   const WorkloadStage* cur_stage() const {
     if (cur_stage_index < workload_stages.size()) {
       return &workload_stages[cur_stage_index];
@@ -175,10 +418,6 @@ struct State {
     return nullptr;
   }
 
-  std::deque<client_conn_t*> conns;
-  std::deque<std::function<void(client_conn_t*)>> to_exec;
-
-  int32_t num_conns;
   const std::vector<WorkloadStage> workload_stages;
   int cur_stage_index = 0;
   std::unique_ptr<StatsRecorder> stats_recorder;
@@ -187,62 +426,23 @@ struct State {
   absl::InsecureBitGen rng;
   uint64_t hr_next;
   bool issued_first_req;
-  int next_conn_id = 0;
+  std::vector<std::unique_ptr<ClientConn>> registered_conns;
 
   uint64_t rpc_id = 0;
-  uint64_t hr_start_time;
+  const uint64_t hr_start_time;
+  const uint64_t hr_report_dur;
   uint64_t hr_next_report_time;
-  uint64_t hr_report_dur;
-  std::vector<struct sockaddr_in> dst_addrs;
 
   uint64_t hr_last_recorded_time;
   absl::optional<HdrHistogram> interarrival_hist;
   bool record_interarrival_called;
 
   bool tearing_down;
+
+  ClientConnPool conn_pool;
 };
 
 State* state;
-
-void free_client_conn(client_conn_t* c) {
-  free(c->buf);
-  free(c);
-}
-
-bool AddConn(client_conn_t* conn) {
-  AssertValid(conn);
-  if (state->tearing_down) {
-    return false;
-  }
-
-  if (conn->in_pool) {
-    return state->conns.size() == state->num_conns;
-  }
-
-  if (!state->to_exec.empty()) {
-    state->to_exec.front()(conn);
-    state->to_exec.pop_front();
-    return false;
-  }
-
-  state->conns.push_back(conn);
-  conn->in_pool = true;
-  return state->conns.size() == state->num_conns;
-}
-
-void WithConn(const std::function<void(client_conn_t*)>& func) {
-  if (!state->conns.empty()) {
-    client_conn_t* conn = state->conns.front();
-    AssertValid(conn);
-    state->conns.pop_front();
-    conn->in_pool = false;
-
-    func(conn);
-    return;
-  }
-
-  state->to_exec.push_back(func);
-}
 
 uint64_t NextSendTimeHighRes() {
   const WorkloadStage* stage = state->cur_stage();
@@ -275,22 +475,6 @@ uint64_t UvTimeoutUntil(uint64_t hr_time) {
     return 0;
   }
   return (hr_time / 1'000'000) - now;
-}
-
-void OnWriteDone(uv_write_t* req, int status) {
-  client_conn_t* conn = reinterpret_cast<client_conn_t*>(req->handle);
-  AssertValid(conn);
-  if (status < 0) {
-    absl::FPrintF(stderr, "write error %s\n", uv_strerror(status));
-    --conn->next_pos;
-    free(req);
-    return;
-  }
-
-  if (conn->next_pos - conn->num_seen < kNumParallelRpcsPerConn - 1) {
-    AddConn(conn);  // else OnRead will add it back
-  }
-  free(req);
 }
 
 void RecordInterarrivalIssuedNow() {
@@ -338,27 +522,14 @@ bool MaybeIssueRequest(CachedTime* time) {
 
   // Issue the request
   uint64_t rpc_id = ++state->rpc_id;
-  WithConn([hr_now, rpc_id](client_conn_t* conn) {
-    AssertValid(conn);
-    conn->hr_start_time[conn->next_pos % kNumParallelRpcsPerConn] = hr_now;
-    conn->rpc_id[conn->next_pos % kNumParallelRpcsPerConn] = rpc_id;
-    ++conn->next_pos;
+  state->conn_pool.WithConn([hr_now, rpc_id](ClientConn* conn) {
+    conn->AssertValid();
     const WorkloadStage* stage = state->cur_stage();
     if (stage == nullptr) {
-      AddConn(conn);
+      state->conn_pool.AddConn(conn);
       return;
     }
-    int32_t rpc_size_bytes = stage->rpc_size_bytes;
-    WriteU32LE(rpc_size_bytes - 12, conn->buf);
-    WriteU64LE(rpc_id, conn->buf + 4);
-    if (kDebug) {
-      VLOG(2) << "write(c=" << conn->conn_id << ") rpc id=" << rpc_id
-              << " header=" << ToHex(conn->buf, 12);
-    }
-    conn->buffer = uv_buf_init(conn->buf, rpc_size_bytes);
-    uv_write_t* req = static_cast<uv_write_t*>(malloc(sizeof(uv_write_t)));
-    uv_write(req, reinterpret_cast<uv_stream_t*>(&conn->client), &conn->buffer, 1,
-             OnWriteDone);
+    conn->IssueRpc(rpc_id, hr_now, stage->rpc_size_bytes);
     RecordInterarrivalIssuedNow();
   });
 
@@ -385,7 +556,7 @@ void OnNextReq(uv_timer_t* timer) {
     state->stats_recorder->StartRecording();
     state->hr_next = time.Get();
 
-    auto check = static_cast<uv_check_t*>(malloc(sizeof(uv_check_t)));
+    auto check = new uv_check_t();
     uv_check_init(state->loop, check);
     uv_check_start(check, OnCheckNextReq);
   }
@@ -401,101 +572,9 @@ void OnNextReq(uv_timer_t* timer) {
   }
 }
 
-void AllocBuf(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf) {
-  buf->base = static_cast<char*>(malloc(suggested_size));
-  buf->len = suggested_size;
-}
-
-void OnReadAck(uv_stream_t* client_stream, ssize_t nread, const uv_buf_t* buf) {
-  auto client = reinterpret_cast<client_conn_t*>(client_stream);
-  AssertValid(client);
-  if (nread < 0) {
-    if (nread != UV_EOF) absl::FPrintF(stderr, "Read error %s\n", uv_err_name(nread));
-    uv_read_stop(client_stream);
-    return;
-  }
-
-  bool got_ack = false;
-  auto record_rpc_latency = [&](uint64_t rpc_id) {
-    CHECK_EQ(client->rpc_id[client->num_seen % kNumParallelRpcsPerConn], rpc_id)
-        << "rpcs on a single connection were reordered!";
-    state->stats_recorder->RecordRpc(
-        buf->len, absl::Nanoseconds(
-                      uv_hrtime() -
-                      client->hr_start_time[client->num_seen % kNumParallelRpcsPerConn]));
-    ++client->num_seen;
-    got_ack = true;
-  };
-
-  char* b = buf->base;
-  char* e = buf->base + nread;
-  while (b < e) {
-    int tocopy = std::min<int>(e - b, 8 - client->read_buf_size);
-    memmove(client->read_buf + client->read_buf_size, b, tocopy);
-    b += tocopy;
-    client->read_buf_size += tocopy;
-
-    if (client->read_buf_size == 8) {
-      if (kDebug) {
-        VLOG(2) << "read (c=" << client->conn_id
-                << ") rpc id=" << ReadU64LE(client->read_buf)
-                << " header=" << ToHex(client->read_buf, 8);
-      }
-      record_rpc_latency(ReadU64LE(client->read_buf));
-      client->read_buf_size = 0;
-    }
-  }
-  free(buf->base);
-  if (got_ack) {
-    AddConn(client);  // will not add if present already
-  }
-}
-
-void OnConnect(uv_connect_t* req, int status) {
-  if (uv_hrtime() > state->hr_start_time) {
-    LOG(FATAL) << "took too long to connect";
-  }
-
-  auto client = reinterpret_cast<client_conn_t*>(req->handle);
-  AssertValid(client);
-
-  if (status < 0) {
-    LOG(ERROR) << "failed to connect (" << uv_strerror(status) << "); trying again";
-    uv_tcp_init(state->loop, reinterpret_cast<uv_tcp_t*>(req->handle));
-
-    usleep(rand() % 50000);
-
-    uv_tcp_connect(
-        req, reinterpret_cast<uv_tcp_t*>(req->handle),
-        reinterpret_cast<const struct sockaddr*>(&state->dst_addrs[client->addr_index]),
-        OnConnect);
-    return;
-  }
-
-  LOG(INFO) << "connection established; adding to pool";
-  uv_read_start(reinterpret_cast<uv_stream_t*>(&client->client), AllocBuf, OnReadAck);
-
-  if (AddConn(client)) {
-    auto hr_timeout = UvTimeoutUntil(state->hr_start_time);
-    // Add callback to start the requests.
-    LOG(INFO) << "will wait for " << static_cast<double>(hr_timeout) / 1e3
-              << " seconds to issue requests";
-    uv_timer_t* timer = static_cast<uv_timer_t*>(malloc(sizeof(uv_timer_t)));
-    uv_timer_init(state->loop, timer);
-    uv_timer_start(timer, OnNextReq, hr_timeout, 0);
-  }
-
-  free(req);
-}
-
-std::string IP4Name(const struct sockaddr_in* src) {
-  char buf[24];
-  memset(buf, 0, 24);
-  uv_ip4_name(src, buf, 24);
-  return std::string(buf);
-}
-
-int InitAndRunAt(absl::string_view server_addrs, absl::Time start_time) {
+void ParseDestAddrs(absl::string_view server_addrs,
+                    std::vector<struct sockaddr_in>* dst_addrs) {
+  std::vector<std::string> addrs_to_print;
   for (absl::string_view addr_full : absl::StrSplit(server_addrs, ",")) {
     absl::string_view addr_view;
     int32_t port;
@@ -504,41 +583,12 @@ int InitAndRunAt(absl::string_view server_addrs, absl::Time start_time) {
       LOG(FATAL) << "invalid host/port: " << addr_full << ": " << st;
     }
     std::string addr(addr_view);
-    state->dst_addrs.push_back({});
-    uv_ip4_addr(addr.c_str(), port, &state->dst_addrs.back());
+    dst_addrs->push_back({});
+    uv_ip4_addr(addr.c_str(), port, &dst_addrs->back());
+    addrs_to_print.push_back(IP4Name(&dst_addrs->back()));
   }
 
-  std::vector<std::string> addrs_to_print;
-  addrs_to_print.reserve(state->dst_addrs.size());
-  for (int i = 0; i < state->dst_addrs.size(); ++i) {
-    addrs_to_print.push_back(IP4Name(&state->dst_addrs[i]));
-  }
   LOG(INFO) << "will connect to addresses: " << absl::StrJoin(addrs_to_print, ", ");
-
-  int64_t ns_until_start = absl::ToInt64Nanoseconds(start_time - absl::Now());
-  if (ns_until_start < 0) {
-    state->hr_start_time = uv_hrtime();
-  } else {
-    state->hr_start_time = uv_hrtime() + ns_until_start;
-  }
-  state->hr_next_report_time = state->hr_start_time + state->hr_report_dur;
-
-  // Start by creating connections.
-  // Once all are created, the last will register a timer to start the run
-  for (int i = 0; i < state->num_conns; ++i) {
-    uv_connect_t* req = static_cast<uv_connect_t*>(malloc(sizeof(uv_connect_t)));
-
-    client_conn_t* client_conn = state->new_client_conn(i % state->dst_addrs.size());
-    uv_tcp_init(state->loop, &client_conn->client);
-
-    uv_tcp_connect(req, &client_conn->client,
-                   reinterpret_cast<const struct sockaddr*>(
-                       &state->dst_addrs[client_conn->addr_index]),
-                   OnConnect);
-  }
-
-  uv_run(state->loop, UV_RUN_DEFAULT);
-  return 0;
 }
 
 }  // namespace
@@ -587,9 +637,21 @@ int ShardMain(int argc, char** argv, int shard_index, int num_shards) {
         config.workload_stages(i).target_average_bps() / num_shards);
   }
 
-  heyp::state = new heyp::State(config, uv_default_loop(), std::move(*srec),
-                                FLAGS_interarrival != "");
-  int ret = heyp::InitAndRunAt(FLAGS_server, start_time);
+  int64_t ns_until_start = absl::ToInt64Nanoseconds(start_time - absl::Now());
+  uint64_t hr_start_time = 0;
+  if (ns_until_start < 0) {
+    hr_start_time = uv_hrtime();
+  } else {
+    hr_start_time = uv_hrtime() + ns_until_start;
+  }
+
+  std::vector<struct sockaddr_in> dst_addrs;
+  heyp::ParseDestAddrs(FLAGS_server, &dst_addrs);
+  heyp::state =
+      new heyp::State(config, uv_default_loop(), std::move(*srec),
+                      FLAGS_interarrival != "", std::move(dst_addrs), hr_start_time);
+
+  uv_run(heyp::state->loop, UV_RUN_DEFAULT);
 
   absl::Time end_time = absl::Now();
   std::cout << absl::StrFormat(
@@ -603,7 +665,7 @@ int ShardMain(int argc, char** argv, int shard_index, int num_shards) {
         absl::StrCat(FLAGS_interarrival, ".shard.", shard_index)))
         << "failed to write latency hist";
   }
-  return ret;
+  return 0;
 }
 
 int main(int argc, char** argv) {
@@ -651,7 +713,7 @@ int main(int argc, char** argv) {
     return ShardMain(argc, argv, 0, 1);
   }
 
-  pid_t* pids = static_cast<pid_t*>(malloc(sizeof(pid_t) * num_shards));
+  pid_t* pids = new pid_t[num_shards];
   for (int i = 0; i < num_shards; ++i) {
     pid_t pid = fork();
     if (pid == 0) {
