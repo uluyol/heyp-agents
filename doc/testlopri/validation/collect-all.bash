@@ -11,6 +11,7 @@ for dist in uni exp const; do
 
   bazel-bin/heyp/app/testlopri/client \
     -c doc/testlopri/validation/config-$dist.textproto \
+    -shards 1 \
     -server 127.0.0.1:19999 \
     -logtostderr \
     -interarrival doc/testlopri/validation/interarrival-$dist.textproto \
