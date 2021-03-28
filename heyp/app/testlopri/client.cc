@@ -30,6 +30,30 @@
 namespace heyp {
 namespace {
 
+// LOG_TO_CERR, if set, will cause std::cerr to be used for logging instead of glog.
+//#define LOG_TO_CERR
+#undef LOG_TO_CERR
+
+#ifdef LOG_TO_CERR
+#define WITH_NEWLINE << "\n"
+#define SHARD_LOG(level) std::cerr << "shard " << ::heyp::ThisShardIndex << ": "
+#else
+#define WITH_NEWLINE
+#define SHARD_LOG(level) LOG(level) << "shard " << ::heyp::ThisShardIndex << ": "
+#endif
+
+constexpr int kNumParallelRpcsPerConn = 32;
+constexpr bool kDebugReadWrite = false;
+constexpr bool kLimitedDebugReadWrite = false;
+constexpr bool kDebugPool = false;
+
+int ThisShardIndex = 0;  // Initialized by ShardMain
+
+bool InLimitedDebugReadWrite() {
+  static int32_t LimitedDebugReadWriteCounter = 0;
+  return kLimitedDebugReadWrite && LimitedDebugReadWriteCounter++ <= 300;
+}
+
 class CachedTime {
  public:
   uint64_t Get() {
@@ -64,10 +88,6 @@ uint64_t UvTimeoutUntil(uv_loop_t* loop, uint64_t hr_time) {
   }
   return (hr_time / 1'000'000) - now;
 }
-
-constexpr int kNumParallelRpcsPerConn = 32;
-constexpr bool kDebug = false;
-constexpr bool kDebugPool = true;
 
 class ClientConn;
 
@@ -115,7 +135,7 @@ class ClientConn {
     client_.data = this;
 
     if (kDebugPool) {
-      LOG(INFO) << "requesting connection to " << IP4Name(addr_);
+      SHARD_LOG(INFO) << "requesting connection to " << IP4Name(addr_) WITH_NEWLINE;
     }
     uv_connect_t* req = new uv_connect_t();
 
@@ -132,12 +152,16 @@ class ClientConn {
     ++next_pos_;
     WriteU32LE(rpc_size_bytes - 12, buf_.data());
     WriteU64LE(rpc_id, buf_.data() + 4);
-    if (kDebug) {
-      VLOG(2) << "write(c=" << conn_id_ << ") rpc id=" << rpc_id
-              << " header=" << ToHex(buf_.data(), 12);
+    if (kDebugReadWrite || InLimitedDebugReadWrite()) {
+      SHARD_LOG(INFO) << "write(c=" << conn_id_ << ") rpc id=" << rpc_id
+                      << " header=" << ToHex(buf_.data(), 12) WITH_NEWLINE;
     }
     buffer_ = uv_buf_init(buf_.data(), rpc_size_bytes);
     uv_write_t* req = new uv_write_t();
+    if (kDebugReadWrite || kLimitedDebugReadWrite) {
+      req->data = reinterpret_cast<void*>(static_cast<uintptr_t>(rpc_id));
+    }
+    has_pending_write_ = true;
     uv_write(req, reinterpret_cast<uv_stream_t*>(&client_), &buffer_, 1,
              [](uv_write_t* req, int status) {
                auto self = reinterpret_cast<ClientConn*>(req->handle->data);
@@ -153,13 +177,14 @@ class ClientConn {
  private:
   void OnConnect(uv_connect_t* req, int status) {
     if (uv_hrtime() > hr_start_run_time_) {
-      LOG(FATAL) << "took too long to connect";
+      SHARD_LOG(FATAL) << "took too long to connect" WITH_NEWLINE;
     }
 
     AssertValid();
 
     if (status < 0) {
-      LOG(ERROR) << "failed to connect (" << uv_strerror(status) << "); trying again";
+      SHARD_LOG(ERROR) << "failed to connect (" << uv_strerror(status)
+                       << "); trying again" WITH_NEWLINE;
       uv_tcp_init(loop_, &client_);
       client_.data = this;
 
@@ -173,7 +198,7 @@ class ClientConn {
       return;
     }
 
-    LOG(INFO) << "connection established; adding to pool";
+    SHARD_LOG(INFO) << "connection established; adding to pool" WITH_NEWLINE;
     uv_read_start(reinterpret_cast<uv_stream_t*>(&client_), AllocBuf,
                   [](uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
                     auto self = reinterpret_cast<ClientConn*>(stream->data);
@@ -182,7 +207,7 @@ class ClientConn {
 
     if (pool_->AddConn(this)) {
       if (kDebugPool) {
-        LOG(INFO) << "connection pool is fully initialized";
+        SHARD_LOG(INFO) << "connection pool is fully initialized" WITH_NEWLINE;
       }
       on_pool_ready_();
     }
@@ -219,16 +244,16 @@ class ClientConn {
       read_buf_size_ += tocopy;
 
       if (read_buf_size_ == 8) {
-        if (kDebug) {
-          VLOG(2) << "read (c=" << conn_id_ << ") rpc id=" << ReadU64LE(read_buf_)
-                  << " header=" << ToHex(read_buf_, 8);
+        if (kDebugReadWrite || InLimitedDebugReadWrite()) {
+          SHARD_LOG(INFO) << "read (c=" << conn_id_ << ") rpc id=" << ReadU64LE(read_buf_)
+                          << " header=" << ToHex(read_buf_, 8) WITH_NEWLINE;
         }
         record_rpc_latency(ReadU64LE(read_buf_));
         read_buf_size_ = 0;
       }
     }
     delete buf->base;
-    if (got_ack) {
+    if (got_ack && !has_pending_write_) {
       pool_->AddConn(this);  // will not add if present already
     }
   }
@@ -241,6 +266,14 @@ class ClientConn {
       delete req;
       return;
     }
+
+    if (kDebugReadWrite || InLimitedDebugReadWrite()) {
+      uint64_t rpc_id = reinterpret_cast<uintptr_t>(req->data);
+      SHARD_LOG(INFO) << "write(c=" << conn_id_ << ") rpc id=" << rpc_id
+                      << " done" WITH_NEWLINE;
+    }
+
+    has_pending_write_ = false;
 
     if (next_pos_ - num_seen_ < kNumParallelRpcsPerConn - 1) {
       pool_->AddConn(this);  // else OnRead will add it back
@@ -270,6 +303,7 @@ class ClientConn {
   int read_buf_size_;
 
   bool in_pool_;
+  bool has_pending_write_ = false;
 
   friend class ClientConnPool;
 };
@@ -286,7 +320,7 @@ ClientConnPool::ClientConnPool(int num_conns, int32_t max_rpc_size_bytes,
   // Start by creating connections.
   // Once all are created, the last will register a timer to start the run
   if (kDebugPool) {
-    LOG(INFO) << "Starting " << num_conns_ << " connections";
+    SHARD_LOG(INFO) << "Starting " << num_conns_ << " connections" WITH_NEWLINE;
   }
   for (int i = 0; i < num_conns_; ++i) {
     all_.push_back(absl::make_unique<ClientConn>(
@@ -353,8 +387,8 @@ std::vector<WorkloadStage> StagesFromConfig(const proto::TestLopriClientConfig& 
   stages.reserve(config.workload_stages_size());
   for (const auto& p : config.workload_stages()) {
     double rpcs_per_sec = p.target_average_bps() / (8 * p.rpc_size_bytes());
-    LOG(INFO) << "stage " << stages.size() << ": will target an average of "
-              << rpcs_per_sec << " rpcs/sec";
+    SHARD_LOG(INFO) << "stage " << stages.size() << ": will target an average of "
+                    << rpcs_per_sec << " rpcs/sec" WITH_NEWLINE;
 
     auto interarrival_ns =
         absl::make_unique<std::array<uint64_t, WorkloadStage::kInterarrivalSamples>>();
@@ -381,12 +415,13 @@ std::vector<WorkloadStage> StagesFromConfig(const proto::TestLopriClientConfig& 
         break;
       }
       default:
-        LOG(FATAL) << "unsupported interarrival distribution: " << p.interarrival_dist();
+        SHARD_LOG(FATAL) << "unsupported interarrival distribution: "
+                         << p.interarrival_dist() WITH_NEWLINE;
     }
 
     absl::Duration run_dur;
     if (!absl::ParseDuration(p.run_dur(), &run_dur)) {
-      LOG(FATAL) << "invalid run duration: " << p.run_dur();
+      SHARD_LOG(FATAL) << "invalid run duration: " << p.run_dur() WITH_NEWLINE;
     }
 
     hr_cum_run_dur += absl::ToInt64Nanoseconds(run_dur);
@@ -474,22 +509,23 @@ class LoadGenerator {
     }
 
     if (cur_stage() != nullptr && hr_now > hr_start_time_ + cur_stage()->hr_cum_run_dur) {
-      LOG(INFO) << "finished workload stage = " << cur_stage_index_++;
+      SHARD_LOG(INFO) << "finished workload stage = " << cur_stage_index_++ WITH_NEWLINE;
     }
 
     if (cur_stage() == nullptr || hr_now > hr_start_time_ + hr_total_run_dur_) {
-      LOG(INFO) << "exiting event loop after "
-                << static_cast<double>(hr_now - hr_start_time_) / 1e9 << " sec";
+      SHARD_LOG(INFO) << "exiting event loop after "
+                      << static_cast<double>(hr_now - hr_start_time_) / 1e9
+                      << " sec" WITH_NEWLINE;
       tearing_down_ = true;
       uv_stop(loop_);
       auto st = stats_recorder_->Close();
       if (!st.ok()) {
-        LOG(FATAL) << "error while recording: " << st;
+        SHARD_LOG(FATAL) << "error while recording: " << st WITH_NEWLINE;
       }
       return false;
     } else if (hr_now > hr_next_report_time_) {
       int step = (hr_next_report_time_ - hr_start_time_) / hr_report_dur_;
-      LOG(INFO) << "gathering stats for step " << step;
+      SHARD_LOG(INFO) << "gathering stats for step " << step WITH_NEWLINE;
       stats_recorder_->DoneStep(absl::StrCat("step=", step));
       hr_next_report_time_ += hr_report_dur_;
     }
@@ -514,8 +550,8 @@ class LoadGenerator {
   void StartRequestLoop() {
     auto hr_timeout = UvTimeoutUntil(loop_, hr_start_time_);
     // Add callback to start the requests.
-    LOG(INFO) << "will wait for " << static_cast<double>(hr_timeout) / 1e3
-              << " seconds to issue requests";
+    SHARD_LOG(INFO) << "will wait for " << static_cast<double>(hr_timeout) / 1e3
+                    << " seconds to issue requests" WITH_NEWLINE;
     timer_ = absl::make_unique<uv_timer_t>();
     uv_timer_init(loop_, timer_.get());
     timer_->data = this;
@@ -544,7 +580,7 @@ class LoadGenerator {
     CachedTime time;
     if (!issued_first_req_) {
       issued_first_req_ = true;
-      LOG(INFO) << "starting to issue requests";
+      SHARD_LOG(INFO) << "starting to issue requests" WITH_NEWLINE;
       stats_recorder_->StartRecording();
       hr_next_ = time.Get();
 
@@ -614,7 +650,7 @@ void ParseDestAddrs(absl::string_view server_addrs,
     int32_t port;
     auto st = ParseHostPort(addr_full, &addr_view, &port);
     if (!st.ok()) {
-      LOG(FATAL) << "invalid host/port: " << addr_full << ": " << st;
+      SHARD_LOG(FATAL) << "invalid host/port: " << addr_full << ": " << st WITH_NEWLINE;
     }
     std::string addr(addr_view);
     dst_addrs->push_back({});
@@ -622,7 +658,8 @@ void ParseDestAddrs(absl::string_view server_addrs,
     addrs_to_print.push_back(IP4Name(&dst_addrs->back()));
   }
 
-  LOG(INFO) << "will connect to addresses: " << absl::StrJoin(addrs_to_print, ", ");
+  SHARD_LOG(INFO) << "will connect to addresses: "
+                  << absl::StrJoin(addrs_to_print, ", ") WITH_NEWLINE;
 }
 
 }  // namespace
@@ -636,6 +673,7 @@ DEFINE_string(interarrival, "",
               "path to write out interarrival distribution (optional, for validation)");
 
 int ShardMain(int argc, char** argv, int shard_index, int num_shards) {
+  heyp::ThisShardIndex = shard_index;
   heyp::MainInit(&argc, &argv);
   auto srec =
       heyp::StatsRecorder::Create(absl::StrCat(FLAGS_out, ".shard.", shard_index));
