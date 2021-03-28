@@ -148,11 +148,13 @@ int main(int argc, char **argv) {
   int num_shards;
   if (!absl::SimpleAtoi(argv[1], &num_shards)) {
     absl::FPrintF(stderr, "failed to parse num_shards\n");
+    return 3;
   }
 
   int port;
   if (!absl::SimpleAtoi(argv[2], &port)) {
     absl::FPrintF(stderr, "failed to parse port\n");
+    return 4;
   }
 
   if (num_shards == 1) {
