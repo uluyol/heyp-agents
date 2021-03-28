@@ -42,7 +42,6 @@ namespace {
 #define SHARD_LOG(level) LOG(level) << "shard " << ::heyp::ThisShardIndex << ": "
 #endif
 
-constexpr int kNumParallelRpcsPerConn = 32;
 constexpr bool kDebugReadWrite = false;
 constexpr bool kLimitedDebugReadWrite = false;
 constexpr bool kDebugPool = false;
@@ -129,7 +128,7 @@ class ClientConn {
         next_pos_(0),
         read_buf_size_(0),
         in_pool_(false) {
-    CHECK_GE(max_rpc_size_bytes, 12);
+    CHECK_GE(max_rpc_size_bytes, 20);
 
     uv_tcp_init(loop_, &client_);
     client_.data = this;
@@ -147,14 +146,13 @@ class ClientConn {
   }
 
   void IssueRpc(uint64_t rpc_id, uint64_t hr_now, int32_t rpc_size_bytes) {
-    hr_start_time_[next_pos_ % kNumParallelRpcsPerConn] = hr_now;
-    rpc_id_[next_pos_ % kNumParallelRpcsPerConn] = rpc_id;
     ++next_pos_;
-    WriteU32LE(rpc_size_bytes - 12, buf_.data());
+    WriteU32LE(rpc_size_bytes - 20, buf_.data());
     WriteU64LE(rpc_id, buf_.data() + 4);
+    WriteU64LE(hr_now, buf_.data() + 12);
     if (kDebugReadWrite || InLimitedDebugReadWrite()) {
       SHARD_LOG(INFO) << "write(c=" << conn_id_ << ") rpc id=" << rpc_id
-                      << " header=" << ToHex(buf_.data(), 12) WITH_NEWLINE;
+                      << " header=" << ToHex(buf_.data(), 20) WITH_NEWLINE;
     }
     buffer_ = uv_buf_init(buf_.data(), rpc_size_bytes);
     uv_write_t* req = new uv_write_t();
@@ -169,10 +167,7 @@ class ClientConn {
              });
   }
 
-  void AssertValid() const {
-    CHECK_LE(num_seen_, next_pos_);
-    CHECK_LT(next_pos_, num_seen_ + kNumParallelRpcsPerConn);
-  }
+  void AssertValid() const { CHECK_LE(num_seen_, next_pos_); }
 
  private:
   void OnConnect(uv_connect_t* req, int status) {
@@ -224,13 +219,10 @@ class ClientConn {
     }
 
     bool got_ack = false;
-    auto record_rpc_latency = [&](uint64_t rpc_id) {
-      CHECK_EQ(rpc_id_[num_seen_ % kNumParallelRpcsPerConn], rpc_id)
-          << "rpcs on a single connection were reordered!";
-      stats_recorder_->RecordRpc(
-          buf->len,
-          absl::Nanoseconds(uv_hrtime() -
-                            hr_start_time_[num_seen_ % kNumParallelRpcsPerConn]));
+    auto record_rpc_latency = [&](uint32_t size, uint64_t rpc_id,
+                                  uint64_t got_hr_start_time) {
+      stats_recorder_->RecordRpc(size,
+                                 absl::Nanoseconds(uv_hrtime() - got_hr_start_time));
       ++num_seen_;
       got_ack = true;
     };
@@ -238,23 +230,24 @@ class ClientConn {
     char* b = buf->base;
     char* e = buf->base + nread;
     while (b < e) {
-      int tocopy = std::min<int>(e - b, 8 - read_buf_size_);
+      int tocopy = std::min<int>(e - b, 20 - read_buf_size_);
       memmove(read_buf_ + read_buf_size_, b, tocopy);
       b += tocopy;
       read_buf_size_ += tocopy;
 
-      if (read_buf_size_ == 8) {
+      if (read_buf_size_ == 20) {
         if (kDebugReadWrite || InLimitedDebugReadWrite()) {
           SHARD_LOG(INFO) << "read (c=" << conn_id_ << ") rpc id=" << ReadU64LE(read_buf_)
-                          << " header=" << ToHex(read_buf_, 8) WITH_NEWLINE;
+                          << " header=" << ToHex(read_buf_, 20) WITH_NEWLINE;
         }
-        record_rpc_latency(ReadU64LE(read_buf_));
+        record_rpc_latency(20 + ReadU32LE(read_buf_), ReadU64LE(read_buf_ + 4),
+                           ReadU64LE(read_buf_ + 12));
         read_buf_size_ = 0;
       }
     }
     delete buf->base;
     if (got_ack && !has_pending_write_) {
-      pool_->AddConn(this);  // will not add if present already
+      pool_->AddConn(this);
     }
   }
 
@@ -275,9 +268,7 @@ class ClientConn {
 
     has_pending_write_ = false;
 
-    if (next_pos_ - num_seen_ < kNumParallelRpcsPerConn - 1) {
-      pool_->AddConn(this);  // else OnRead will add it back
-    }
+    pool_->AddConn(this);
     delete req;
   }
 
@@ -294,12 +285,10 @@ class ClientConn {
   uv_tcp_t client_;
   uv_buf_t buffer_;
   std::string buf_;
-  std::array<uint64_t, kNumParallelRpcsPerConn> hr_start_time_;
-  std::array<uint64_t, kNumParallelRpcsPerConn> rpc_id_;
   int num_seen_;
   int next_pos_;
 
-  char read_buf_[8];
+  char read_buf_[20];
   int read_buf_size_;
 
   bool in_pool_;
@@ -380,6 +369,30 @@ struct WorkloadStage {
   uint64_t hr_cum_run_dur;
 };
 
+double MeanOf(const std::array<uint64_t, WorkloadStage::kInterarrivalSamples>& dist) {
+  constexpr int kChunkSize = 100;
+  constexpr int kNumChunks = WorkloadStage::kInterarrivalSamples / kChunkSize;
+  CHECK_EQ(kChunkSize * kNumChunks, WorkloadStage::kInterarrivalSamples);
+  std::array<double, kNumChunks> partial_sums;
+  memset(partial_sums.data(), 0, partial_sums.size() * sizeof(double));
+  for (int i = 0; i < kNumChunks; ++i) {
+    for (int j = i * kChunkSize; j < (i + 1) * kChunkSize; ++j) {
+      double prev = partial_sums[i];
+      CHECK_GE(dist[j], 0);
+      partial_sums[i] += dist[j];
+      CHECK(!isnan(partial_sums[i]))
+          << "got nan partial_sum: i: " << i << " j: " << j
+          << " value: " << partial_sums[i] << " prev: " << prev << " inc: " << dist[j];
+    }
+    partial_sums[i] /= kChunkSize;
+  }
+  double total = 0;
+  for (double s : partial_sums) {
+    total += s;
+  }
+  return total / kNumChunks;
+}
+
 std::vector<WorkloadStage> StagesFromConfig(const proto::TestLopriClientConfig& config) {
   absl::InsecureBitGen rng;
   std::vector<WorkloadStage> stages;
@@ -418,6 +431,10 @@ std::vector<WorkloadStage> StagesFromConfig(const proto::TestLopriClientConfig& 
         SHARD_LOG(FATAL) << "unsupported interarrival distribution: "
                          << p.interarrival_dist() WITH_NEWLINE;
     }
+
+    const double mean_interarrival_ns = MeanOf(*interarrival_ns);
+    CHECK_GT(mean_interarrival_ns, 0.95 * 1e9 / rpcs_per_sec);
+    CHECK_LT(mean_interarrival_ns, 1.05 * 1e9 / rpcs_per_sec);
 
     absl::Duration run_dur;
     if (!absl::ParseDuration(p.run_dur(), &run_dur)) {
