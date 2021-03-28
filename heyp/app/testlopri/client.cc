@@ -104,8 +104,7 @@ class ClientConnPool {
   const int num_conns_;
   const std::vector<struct sockaddr_in> dst_addrs_;
 
-  std::deque<ClientConn*> ready_;
-  std::deque<std::function<void(ClientConn*)>> to_exec_;
+  std::vector<ClientConn*> ready_;
   std::vector<std::unique_ptr<ClientConn>> all_;
 
   bool* tearing_down_;
@@ -125,7 +124,7 @@ class ClientConn {
         stats_recorder_(stats_recorder),
         buf_(max_rpc_size_bytes, 0),
         num_seen_(0),
-        next_pos_(0),
+        num_issued_(0),
         read_buf_size_(0),
         in_pool_(false) {
     CHECK_GE(max_rpc_size_bytes, 20);
@@ -146,7 +145,7 @@ class ClientConn {
   }
 
   void IssueRpc(uint64_t rpc_id, uint64_t hr_now, int32_t rpc_size_bytes) {
-    ++next_pos_;
+    ++num_issued_;
     WriteU32LE(rpc_size_bytes - 20, buf_.data());
     WriteU64LE(rpc_id, buf_.data() + 4);
     WriteU64LE(hr_now, buf_.data() + 12);
@@ -167,7 +166,7 @@ class ClientConn {
              });
   }
 
-  void AssertValid() const { CHECK_LE(num_seen_, next_pos_); }
+  void AssertValid() const { CHECK_LE(num_seen_, num_issued_); }
 
  private:
   void OnConnect(uv_connect_t* req, int status) {
@@ -255,7 +254,7 @@ class ClientConn {
     AssertValid();
     if (status < 0) {
       absl::FPrintF(stderr, "write error %s\n", uv_strerror(status));
-      --next_pos_;
+      --num_issued_;
       delete req;
       return;
     }
@@ -286,7 +285,7 @@ class ClientConn {
   uv_buf_t buffer_;
   std::string buf_;
   int num_seen_;
-  int next_pos_;
+  int num_issued_;
 
   char read_buf_[20];
   int read_buf_size_;
@@ -328,29 +327,25 @@ bool ClientConnPool::AddConn(ClientConn* conn) {
     return ready_.size() == num_conns_;
   }
 
-  if (!to_exec_.empty()) {
-    to_exec_.front()(conn);
-    to_exec_.pop_front();
-    return false;
-  }
-
   ready_.push_back(conn);
   conn->in_pool_ = true;
   return ready_.size() == num_conns_;
 }
 
 void ClientConnPool::WithConn(const std::function<void(ClientConn*)>& func) {
-  if (!ready_.empty()) {
-    ClientConn* conn = ready_.front();
-    conn->AssertValid();
-    ready_.pop_front();
-    conn->in_pool_ = false;
+  int min_waiting = std::numeric_limits<int>::max();
+  ClientConn* best = nullptr;
 
-    func(conn);
-    return;
+  for (ClientConn* c : ready_) {
+    int t = c->num_issued_ - c->num_seen_;
+    if (min_waiting > t) {
+      min_waiting = t;
+      best = c;
+    }
   }
 
-  to_exec_.push_back(func);
+  CHECK_NE(best, nullptr);
+  func(best);
 }
 
 proto::HdrHistogram::Config InterarrivalConfig() {
@@ -762,8 +757,8 @@ int main(int argc, char** argv) {
   for (int i = 1; i < argc;) {
     if (strcmp(argv[i], "-shards") == 0) {
       next_is_num_shards = true;
+      memmove(argv + i, argv + i + 1, sizeof(char*) * argc - i);
       --argc;
-      memmove(argv + i, argv + i + 1, argc - i);
       continue;
     }
     if (absl::StartsWith(argv[i], "-shards=")) {
@@ -771,8 +766,8 @@ int main(int argc, char** argv) {
         std::cerr << "failed to parse -shards value\n";
         return 9;
       }
+      memmove(argv + i, argv + i + 1, sizeof(char*) * argc - i);
       --argc;
-      memmove(argv + i, argv + i + 1, argc - i);
       continue;
     }
     if (next_is_num_shards) {
@@ -780,14 +775,21 @@ int main(int argc, char** argv) {
         std::cerr << "failed to parse -shards value\n";
         return 9;
       }
+      memmove(argv + i, argv + i + 1, sizeof(char*) * argc - i);
       --argc;
-      memmove(argv + i, argv + i + 1, argc - i);
       next_is_num_shards = false;
       continue;
     }
 
     ++i;
   }
+
+  std::string args;
+  for (int i = 0; i < argc; ++i) {
+    args += std::string(argv[i]);
+    args += " ";
+  }
+
   if (next_is_num_shards) {
     std::cerr << "-shards is missing value\n";
     return 9;
