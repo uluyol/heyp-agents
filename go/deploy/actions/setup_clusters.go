@@ -338,7 +338,7 @@ func TestLOPRIRunClients(c *pb.DeploymentConfig, remoteTopdir string, showOut bo
 					LogWithPrefix("testlopri-run-clients: "),
 					"ssh", client.GetExternalAddr(),
 					fmt.Sprintf("cat > %[1]s/testlopri-client-config-%[2]s-%[4]d.textproto && "+
-						"%[1]s/heyp/app/testlopri/client -logtostderr -c %[1]s/testlopri-client-config-%[2]s-%[4]d.textproto -server %[3]s -out %[1]s/logs/testlopri-%[2]s-client-%[4]d.out -start_time %[5]s -shards %[6]d 2>&1 | tee %[1]s/logs/testlopri-%[2]s-client-%[4]d.log; exit ${PIPESTATUS[0}", remoteTopdir, config.config.GetName(), strings.Join(allAddrs, ","), i, startTimestamp, config.config.GetNumClientShards()))
+						"%[1]s/heyp/app/testlopri/client -logtostderr -c %[1]s/testlopri-client-config-%[2]s-%[4]d.textproto -server %[3]s -out %[1]s/logs/testlopri-%[2]s-client-%[4]d.out -start_time %[5]s -shards %[6]d 2>&1 | tee %[1]s/logs/testlopri-%[2]s-client-%[4]d.log; exit ${PIPESTATUS[0]}", remoteTopdir, config.config.GetName(), strings.Join(allAddrs, ","), i, startTimestamp, config.config.GetNumClientShards()))
 				cmd.SetStdin(fmt.Sprintf("testlopri-client-config-%s-%d.textproto", config.config.GetName(), i), bytes.NewReader(clientConfBytes))
 				if showOut {
 					cmd.Stdout = os.Stdout
