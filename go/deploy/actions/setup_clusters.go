@@ -66,6 +66,15 @@ func InstallCodeBundle(c *pb.DeploymentConfig, localTarball, remoteTopdir string
 	return eg.Wait()
 }
 
+func hasRole(n *pb.DeployedNode, want string) bool {
+	for _, r := range n.GetRoles() {
+		if r == want {
+			return true
+		}
+	}
+	return false
+}
+
 func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string) error {
 	type hostAgentNode struct {
 		host             *pb.DeployedNode
@@ -73,8 +82,9 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string) error {
 	}
 
 	type clusterAgentNode struct {
-		node   *pb.DeployedNode
-		limits *pb.AllocBundle
+		node    *pb.DeployedNode
+		cluster *pb.DeployedCluster
+		address string
 	}
 
 	var clusterAgentNodes []clusterAgentNode
@@ -90,20 +100,22 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string) error {
 			if n == nil {
 				return fmt.Errorf("node not found: %s", nodeName)
 			}
-			if dcMapperConfig.Mapping == nil {
-				dcMapperConfig.Mapping = new(pb.DCMapping)
+			if hasRole(n, "host-agent") {
+				if dcMapperConfig.Mapping == nil {
+					dcMapperConfig.Mapping = new(pb.DCMapping)
+				}
+				dcMapperConfig.Mapping.Entries = append(dcMapperConfig.Mapping.Entries,
+					&pb.DCMapping_Entry{
+						HostAddr: n.GetExperimentAddr(),
+						Dc:       cluster.GetName(),
+					})
 			}
-			dcMapperConfig.Mapping.Entries = append(dcMapperConfig.Mapping.Entries,
-				&pb.DCMapping_Entry{
-					HostAddr: n.GetExperimentAddr(),
-					Dc:       cluster.GetName(),
-				})
 			for _, role := range n.Roles {
 				switch role {
 				case "host-agent":
 					hostAgentNodes = append(hostAgentNodes, hostAgentNode{host: n})
 				case "cluster-agent":
-					clusterAgentNodes = append(clusterAgentNodes, clusterAgentNode{n, cluster.Limits})
+					clusterAgentNodes = append(clusterAgentNodes, clusterAgentNode{n, cluster, "0.0.0.0:" + strconv.Itoa(int(cluster.GetClusterAgentPort()))})
 					thisClusterAgentNode = n
 				}
 			}
@@ -116,34 +128,34 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string) error {
 			}
 		} else {
 			for i := numHostsFilled; i < len(hostAgentNodes); i++ {
-				port := c.ClusterAgentConfig.Server.GetAddress()
-				if colon := strings.LastIndex(port, ":"); colon != -1 {
-					port = port[colon:]
-				}
-				hostAgentNodes[i].clusterAgentAddr = thisClusterAgentNode.GetExperimentAddr() + port
+				hostAgentNodes[i].clusterAgentAddr = thisClusterAgentNode.GetExperimentAddr() + ":" + strconv.Itoa(int(cluster.GetClusterAgentPort()))
 			}
 			numHostsFilled = len(hostAgentNodes)
 		}
 	}
 
 	{
-		clusterAgentConfigBytes, err := prototext.Marshal(c.ClusterAgentConfig)
-		if err != nil {
-			return fmt.Errorf("failed to marshal cluster_agent_config: %w", err)
-		}
 
-		var eg errgroup.Group
+		var eg multierrgroup.Group
 		for _, n := range clusterAgentNodes {
 			n := n
+
+			t := c.ClusterAgentConfig
+			t.Server.Address = &n.address
+			clusterAgentConfigBytes, err := prototext.Marshal(t)
+			if err != nil {
+				return fmt.Errorf("failed to marshal cluster_agent_config: %w", err)
+			}
+
 			eg.Go(func() error {
-				limitsBytes, err := prototext.Marshal(n.limits)
+				limitsBytes, err := prototext.Marshal(n.cluster.GetLimits())
 				if err != nil {
 					return fmt.Errorf("failed to marshal limits: %w", err)
 				}
 
 				configTar := ConcatTarInMem(
-					AddTar("cluster-agent-config.textproto", clusterAgentConfigBytes),
-					AddTar("cluster-limits.textproto", limitsBytes),
+					AddTar("cluster-agent-config-"+n.cluster.GetName()+".textproto", clusterAgentConfigBytes),
+					AddTar("cluster-limits"+n.cluster.GetName()+".textproto", limitsBytes),
 				)
 
 				cmd := TracingCommand(
@@ -151,10 +163,14 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string) error {
 					"ssh", n.node.GetExternalAddr(),
 					fmt.Sprintf(
 						"tar xf - -C %[1]s;"+
-							"tmux kill-session -t heyp-cluster-agent;"+
-							"tmux new-session -d -s heyp-cluster-agent '%[1]s/heyp/cluster-agent/cluster-agent -logtostderr %[1]s/cluster-agent-config.textproto %[1]s/cluster-limits.textproto 2>&1 | tee %[1]s/logs/cluster-agent.log; sleep 100000'", remoteTopdir))
+							"tmux kill-session -t heyp-cluster-agent-%[2]s;"+
+							"tmux new-session -d -s heyp-cluster-agent-%[2]s '%[1]s/heyp/cluster-agent/cluster-agent -logtostderr %[1]s/cluster-agent-config-%[2]s.textproto %[1]s/cluster-limits%[2]s.textproto 2>&1 | tee %[1]s/logs/cluster-agent-%[2]s.log; sleep 100000'", remoteTopdir, n.cluster.GetName()))
 				cmd.SetStdin("config.tar", bytes.NewReader(configTar))
-				return cmd.Run()
+				err = cmd.Run()
+				if err != nil {
+					return fmt.Errorf("failed to deploy cluster agent to Node %q: %w", n.node.GetName(), err)
+				}
+				return nil
 			})
 		}
 		if err := eg.Wait(); err != nil {
@@ -329,7 +345,7 @@ func TestLOPRIRunClients(c *pb.DeploymentConfig, remoteTopdir string, showOut bo
 				}
 				err := cmd.Run()
 				if err != nil {
-					return fmt.Errorf("client %d failed: %w", i, err)
+					return fmt.Errorf("instance %s client %d on Node %q failed: %w", config.config.GetName(), i, client.GetName(), err)
 				}
 				return nil
 			})

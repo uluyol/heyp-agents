@@ -30,6 +30,7 @@ message DeployedCluster {
   repeated string node_names = 2;
 
   optional AllocBundle limits = 3;
+  optional int32 cluster_agent_port = 4;
 }
 
 message DeployedTestLopriInstance {
@@ -47,6 +48,8 @@ message DeploymentConfig {
   repeated DeployedNode nodes = 1;
   repeated DeployedCluster clusters = 2;
 
+  // Fields that are autofilled:
+  // - cluster_agent_config.server.address (using clusters.cluster_agent_port)
   optional ClusterAgentConfig cluster_agent_config = 10;
 
   // Fields that are autofilled:
