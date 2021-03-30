@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"time"
@@ -59,7 +61,9 @@ func main() {
 	startTime = startTime.Add(trimDur.dur)
 	endTime = endTime.Add(-trimDur.dur)
 
-	fmt.Println("Instance,Client,Shard,Percentile,LatencyNanos,NumSamples")
+	bw := bufio.NewWriter(os.Stdout)
+	defer bw.Flush()
+	fmt.Fprintln(bw, "Instance,Client,Shard,Percentile,LatencyNanos,NumSamples")
 
 	var hist *hdrhistogram.Histogram
 
@@ -84,17 +88,17 @@ func main() {
 						return nil
 					})
 				if getLevel == "per-shard" && hist != nil {
-					printCDF(hist, inst.Instance, client.Client, shard.Shard)
+					printCDF(bw, hist, inst.Instance, client.Client, shard.Shard)
 					hist = nil
 				}
 			}
 			if getLevel == "per-client" && hist != nil {
-				printCDF(hist, inst.Instance, client.Client, -1)
+				printCDF(bw, hist, inst.Instance, client.Client, -1)
 				hist = nil
 			}
 		}
 		if hist != nil {
-			printCDF(hist, inst.Instance, "", -1)
+			printCDF(bw, hist, inst.Instance, "", -1)
 			hist = nil
 		}
 	}
@@ -103,9 +107,9 @@ func main() {
 	}
 }
 
-func printCDF(h *hdrhistogram.Histogram, inst, client string, shard int) {
+func printCDF(w io.Writer, h *hdrhistogram.Histogram, inst, client string, shard int) {
 	for _, b := range h.CumulativeDistribution() {
-		fmt.Printf("%s,%s,%d,%f,%d,%d\n",
+		fmt.Fprintf(w, "%s,%s,%d,%f,%d,%d\n",
 			inst, client, shard, b.Quantile, b.ValueAt, b.Count)
 	}
 }

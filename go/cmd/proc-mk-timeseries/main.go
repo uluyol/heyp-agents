@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"log"
@@ -44,7 +45,9 @@ func main() {
 	startTime = startTime.Add(trimDur.dur)
 	endTime = endTime.Add(-trimDur.dur)
 
-	fmt.Println("Instance,Client,Shard,Timestamp,MeanBps,MeanRpcsPerSec,LatencyNanosP50,LatencyNanosP90,LatencyNanosP95,LatencyNanosP99")
+	bw := bufio.NewWriter(os.Stdout)
+	defer bw.Flush()
+	fmt.Fprintln(bw, "Instance,Client,Shard,Timestamp,MeanBps,MeanRpcsPerSec,LatencyNanosP50,LatencyNanosP90,LatencyNanosP95,LatencyNanosP99")
 	for _, inst := range instances {
 		for _, client := range inst.Clients {
 			for _, shard := range client.Shards {
@@ -58,7 +61,7 @@ func main() {
 							return nil
 						}
 						tunix := t.UTC().Sub(time.Unix(0, 0)).Seconds()
-						_, err = fmt.Printf("%s,%s,%d,%f,%f,%f,%d,%d,%d,%d\n",
+						_, err = fmt.Fprintf(bw, "%s,%s,%d,%f,%f,%f,%d,%d,%d,%d\n",
 							inst.Instance, client.Client, shard.Shard, tunix, rec.MeanBitsPerSec, rec.MeanRpcsPerSec, rec.LatencyNsP50,
 							rec.LatencyNsP90, rec.LatencyNsP95, rec.LatencyNsP99)
 						return err
