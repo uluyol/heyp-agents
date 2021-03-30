@@ -67,12 +67,9 @@ cc_library(
     deps = [
         ":allocator",
         ":controller",
-        "//heyp/flows:aggregator",
         "//heyp/proto:heyp_cc_grpc",
         "@com_github_grpc_grpc//:grpc++",
-        "@com_google_absl//absl/functional:bind_front",
-        "@com_google_absl//absl/functional:function_ref",
-        "@com_google_absl//absl/synchronization",
+        "@glog",
     ],
 )
 

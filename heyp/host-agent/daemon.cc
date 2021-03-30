@@ -88,6 +88,8 @@ void SendInfo(
         });
 
     // Step 5: send to cluster agent.
+    LOG(INFO) << "sending info bundle to cluster agent with " << bundle.flow_infos_size()
+              << " FGs";
     io_stream->Write(bundle);
   } while (!FlaggedOrWaitFor(inform_period, should_exit));
 
@@ -104,6 +106,8 @@ void EnforceAlloc(
       break;
     }
 
+    LOG(INFO) << "got alloc bundle from cluster agent for " << bundle.flow_allocs_size()
+              << " FGs";
     // Step 2: enforce the new allocation.
     enforcer->EnforceAllocs(*flow_state_provider, bundle);
   }
