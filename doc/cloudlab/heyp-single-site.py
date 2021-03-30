@@ -20,9 +20,13 @@ pc.defineParameter("nodeCountPairs", "Physical node types and counts",
                    longDescription="PhysNodeType1:Count1,PhysNodeType2:Count2,...")
 
 
-pc.defineParameter("switchType",  "Physical switch type",
+pc.defineParameter("switchType",  "Switch type",
                    portal.ParameterType.STRING, "dell-s4048",
-                   [('mlnx-sn2410', 'Mellanox SN2410'), ('dell-s4048',  'Dell S4048')],
+                   [
+                       ('mlnx-sn2410', 'Mellanox SN2410'),
+                       ('dell-s4048',  'Dell S4048'),
+                       ('none', 'Just use a normal LAN')
+                    ],
                    longDescription="Specify a physical switch type (dell-s4048,mlnx-sn2410,etc) ")
 
 # Retrieve the values the user specifies during instantiation.
@@ -45,7 +49,7 @@ if numNodes < 1:
 
 ifaces = []
 
-counter = 0
+counter = 1
 def createNodes(nodeType, count):
     global counter
     global ifaces
@@ -56,23 +60,28 @@ def createNodes(nodeType, count):
         # Create iface and assign IP
         iface = node.addInterface("eth1")
         # Specify the IPv4 address
-        iface.addAddress(pg.IPv4Address("192.168.1." + str(counter + 1), "255.255.255.0"))
+        iface.addAddress(pg.IPv4Address("192.168.1." + str(counter), "255.255.255.0"))
         ifaces.append((iface, "iface-node-" + str(counter)))
         counter += 1
 
 for t, c in nodeCounts.items():
     createNodes(t, c)
 
-# Create and connect switch
-s3switch = request.Switch("Switch");
-s3switch.hardware_type = params.switchType
-for iface, ifaceName in ifaces:
-    siface = s3switch.addInterface()
-    siface.addAddress(pg.IPv4Address("192.168.1.254", "255.255.255.0"))
+if params.switchType == "none":
+    lan = request.LAN("lan")
+    for iface, ifaceName in ifaces:
+        lan.addInterface(iface)
+else:
+    # Create and connect switch
+    s3switch = request.Switch("Switch");
+    s3switch.hardware_type = params.switchType
+    for iface, ifaceName in ifaces:
+        siface = s3switch.addInterface()
+        siface.addAddress(pg.IPv4Address("192.168.1.254", "255.255.255.0"))
 
-    link = request.L1Link("link-" + ifaceName)
-    link.addInterface(iface)
-    link.addInterface(siface)
+        link = request.L1Link("link-" + ifaceName)
+        link.addInterface(iface)
+        link.addInterface(siface)
 
 # Print the RSpec to the enclosing page.
 pc.printRequestRSpec(request)

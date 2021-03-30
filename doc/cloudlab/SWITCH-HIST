@@ -21,8 +21,8 @@ configure # enter configuration mode
 # Was adding this messing AF3/4 up?
 #
 # hipri class:
-# Class-map match-any hipri                                     
-#   Seq 5 Match ip dscp 34    
+# Class-map match-any hipri
+#   Seq 5 Match ip dscp 34
 #
 # policy-map-input hipri-policy2
 # service-queue 7 class-name hipri
