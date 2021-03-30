@@ -48,7 +48,7 @@ func InstallCodeBundle(c *pb.DeploymentConfig, localTarball, remoteTopdir string
 	if err != nil {
 		return fmt.Errorf("failed to read bundle: %v", err)
 	}
-	var eg errgroup.Group
+	var eg multierrgroup.Group
 	for _, n := range c.Nodes {
 		n := n
 		eg.Go(func() error {
@@ -60,7 +60,11 @@ func InstallCodeBundle(c *pb.DeploymentConfig, localTarball, remoteTopdir string
 						"cd '%[1]s' && tar xJf -",
 					remoteTopdir))
 			cmd.SetStdin(localTarball, bytes.NewReader(bundle))
-			return cmd.Run()
+			err := cmd.Run()
+			if err != nil {
+				return fmt.Errorf("failed to install on Node %q: %v", n.GetName(), err)
+			}
+			return nil
 		})
 	}
 	return eg.Wait()
@@ -179,7 +183,7 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string) error {
 	}
 
 	{
-		var eg errgroup.Group
+		var eg multierrgroup.Group
 		for _, n := range hostAgentNodes {
 			n := n
 			eg.Go(func() error {
@@ -201,7 +205,11 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string) error {
 							"tmux kill-session -t heyp-host-agent;"+
 							"tmux new-session -d -s heyp-host-agent 'sudo %[1]s/heyp/host-agent/host-agent -logtostderr %[1]s/host-agent-config.textproto 2>&1 | tee %[1]s/logs/host-agent.log; sleep 100000'", remoteTopdir))
 				cmd.SetStdin("host-agent-config.textproto", bytes.NewReader(hostConfigBytes))
-				return cmd.Run()
+				err = cmd.Run()
+				if err != nil {
+					return fmt.Errorf("failed to deploy host agent to Node %q: %v", n.host.GetName(), err)
+				}
+				return nil
 			})
 		}
 		if err := eg.Wait(); err != nil {
@@ -263,7 +271,7 @@ func TestLOPRIStartServers(c *pb.DeploymentConfig, remoteTopdir string) error {
 		return err
 	}
 
-	var eg errgroup.Group
+	var eg multierrgroup.Group
 	for _, config := range configs {
 		config := config
 		for _, server := range config.servers {
@@ -275,7 +283,11 @@ func TestLOPRIStartServers(c *pb.DeploymentConfig, remoteTopdir string) error {
 					fmt.Sprintf(
 						"tmux kill-session -t testlopri-%[2]s-server;"+
 							"tmux new-session -d -s testlopri-%[2]s-server '%[1]s/heyp/app/testlopri/server %[4]d %[3]d 2>&1 | tee %[1]s/logs/testlopri-%[2]s-server.log; sleep 100000'", remoteTopdir, config.config.GetName(), config.config.GetServePort(), config.config.GetNumServerShards()))
-				return cmd.Run()
+				err := cmd.Run()
+				if err != nil {
+					return fmt.Errorf("failed to start server for %q on Node %q: %w", config.config.GetName(), server.GetName(), err)
+				}
+				return nil
 			})
 		}
 	}
