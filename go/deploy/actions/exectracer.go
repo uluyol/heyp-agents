@@ -2,11 +2,12 @@ package actions
 
 import (
 	"io"
+	"os"
 	"os/exec"
 	"strings"
 )
 
-var TraceCommands = false
+var TraceCommands = os.Getenv("TRACE_CMD") == "1"
 
 type TracingCmd struct {
 	*exec.Cmd
