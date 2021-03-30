@@ -52,10 +52,7 @@ absl::Status Run(const proto::ClusterAgentConfig& c, const proto::AllocBundle& a
           .BuildAndStart());
   LOG(INFO) << "Server listening on " << c.server().address();
 
-  while (!should_exit_flag.load()) {
-    absl::SleepFor(absl::Seconds(1));
-  }
-
+  service.RunLoop(&should_exit_flag);
   server->Shutdown();
   server->Wait();
   return absl::OkStatus();

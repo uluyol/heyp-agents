@@ -1,6 +1,8 @@
 #ifndef HEYP_CLUSTER_AGENT_SERVER_H_
 #define HEYP_CLUSTER_AGENT_SERVER_H_
 
+#include <atomic>
+
 #include "heyp/cluster-agent/controller.h"
 #include "heyp/proto/heyp.grpc.pb.h"
 
@@ -15,6 +17,8 @@ class ClusterAgentService final : public proto::ClusterAgent::Service {
   grpc::Status RegisterHost(
       grpc::ServerContext* context,
       grpc::ServerReaderWriter<proto::AllocBundle, proto::InfoBundle>* stream) override;
+
+  void RunLoop(std::atomic<bool>* should_exit);
 
  private:
   const absl::Duration control_period_;

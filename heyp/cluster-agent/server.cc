@@ -3,6 +3,7 @@
 #include "absl/functional/bind_front.h"
 #include "absl/functional/function_ref.h"
 #include "absl/synchronization/mutex.h"
+#include "glog/logging.h"
 #include "grpcpp/grpcpp.h"
 #include "heyp/cluster-agent/controller.h"
 
@@ -45,12 +46,14 @@ grpc::Status ClusterAgentService::RegisterHost(
   bool registered = false;
   ClusterController::Listener lis;
   WaitableAlloc waitable_alloc;
+  LOG(INFO) << __func__ << ": called by " << context->peer();
 
   while (true) {
     proto::InfoBundle info;
     if (!stream->Read(&info)) {
       break;
     }
+    LOG(INFO) << __func__ << ": got info from " << context->peer();
 
     if (!registered) {
       lis = controller_.RegisterListener(
@@ -60,8 +63,17 @@ grpc::Status ClusterAgentService::RegisterHost(
 
     waitable_alloc.BlockingRead(
         [&stream](const proto::AllocBundle& alloc) { stream->Write(alloc); });
+    LOG(INFO) << __func__ << ": sent allocs to " << context->peer();
   }
   return grpc::Status::OK;
+}
+
+void ClusterAgentService::RunLoop(std::atomic<bool>* should_exit) {
+  while (!should_exit->load()) {
+    LOG(INFO) << __func__ << ": compute new allocations";
+    controller_.ComputeAndBroadcast();
+    absl::SleepFor(control_period_);
+  }
 }
 
 }  // namespace heyp
