@@ -7,6 +7,7 @@ namespace heyp {
 StaticDCMapper::StaticDCMapper(const proto::StaticDCMapperConfig& config) {
   for (const auto& entry : config.mapping().entries()) {
     host_addr_to_dc_[entry.host_addr()] = entry.dc();
+    dc_to_all_hosts_[entry.dc()].push_back(entry.host_addr());
   }
 }
 
