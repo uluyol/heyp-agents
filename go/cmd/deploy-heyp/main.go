@@ -162,6 +162,27 @@ func (c *fetchLogsCmd) Execute(ctx context.Context, fs *flag.FlagSet,
 	return subcommands.ExitSuccess
 }
 
+type checkNodesCmd struct {
+	configPath string
+}
+
+func (*checkNodesCmd) Name() string     { return "check-nodes" }
+func (*checkNodesCmd) Synopsis() string { return "check node config (currently just ip addresses)" }
+func (*checkNodesCmd) Usage() string    { return "" }
+
+func (c *checkNodesCmd) SetFlags(fs *flag.FlagSet) {
+	configVar(&c.configPath, fs)
+}
+
+func (c *checkNodesCmd) Execute(ctx context.Context, fs *flag.FlagSet,
+	args ...interface{}) subcommands.ExitStatus {
+	err := actions.CheckNodeIPs(parseConfig(c.configPath))
+	if err != nil {
+		log.Fatal(err)
+	}
+	return subcommands.ExitSuccess
+}
+
 func parseConfig(s string) *pb.DeploymentConfig {
 	data, err := ioutil.ReadFile(s)
 	if err != nil {
@@ -199,6 +220,7 @@ func main() {
 	subcommands.Register(testLOPRIStartServersCmd, "")
 	subcommands.Register(new(testLOPRIRunClientsCmd), "")
 	subcommands.Register(new(fetchLogsCmd), "")
+	subcommands.Register(new(checkNodesCmd), "")
 
 	flag.Parse()
 
