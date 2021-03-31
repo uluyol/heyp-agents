@@ -17,8 +17,9 @@ class PerAggAllocator {
 
 constexpr int kNumAllocCores = 8;
 
-ClusterAllocator::ClusterAllocator(std::unique_ptr<PerAggAllocator> alloc)
-    : alloc_(std::move(alloc)), exec_(kNumAllocCores) {}
+ClusterAllocator::ClusterAllocator(std::unique_ptr<PerAggAllocator> alloc,
+                                   AllocRecorder* recorder)
+    : alloc_(std::move(alloc)), exec_(kNumAllocCores), recorder_(recorder) {}
 
 ClusterAllocator::~ClusterAllocator() {}
 
@@ -32,6 +33,9 @@ void ClusterAllocator::AddInfo(absl::Time time, const proto::AggInfo& info) {
   group_->AddTaskNoStatus([time, info, this] {
     auto a = this->alloc_->AllocAgg(time, info);
     absl::MutexLock l(&this->mu_);
+    if (this->recorder_ != nullptr) {
+      this->recorder_->Record(time, info, a);
+    }
     allocs_.partial_sets.push_back(std::move(a));
   });
 }
@@ -205,16 +209,18 @@ class HeypSigcomm20Allocator : public PerAggAllocator {
 
 std::unique_ptr<ClusterAllocator> ClusterAllocator::Create(
     const proto::ClusterAllocatorConfig& config,
-    const proto::AllocBundle& cluster_wide_allocs) {
+    const proto::AllocBundle& cluster_wide_allocs, AllocRecorder* recorder) {
   FlowMap<proto::FlowAlloc> cluster_admissions = ToAdmissionsMap(cluster_wide_allocs);
   switch (config.type()) {
     case proto::ClusterAllocatorType::BWE:
       return absl::WrapUnique(new ClusterAllocator(
-          absl::make_unique<BweAggAllocator>(config, std::move(cluster_admissions))));
+          absl::make_unique<BweAggAllocator>(config, std::move(cluster_admissions)),
+          recorder));
     case proto::ClusterAllocatorType::HEYP_SIGCOMM20:
       return absl::WrapUnique(
           new ClusterAllocator(absl::make_unique<HeypSigcomm20Allocator>(
-              config, std::move(cluster_admissions))));
+                                   config, std::move(cluster_admissions)),
+                               recorder));
   }
   LOG(FATAL) << "unreachable: got cluster allocator type: " << config.type();
   return nullptr;

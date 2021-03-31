@@ -5,9 +5,11 @@
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/time/time.h"
+#include "gflags/gflags.h"
 #include "glog/logging.h"
 #include "grpcpp/grpcpp.h"
 #include "heyp/cli/parse.h"
+#include "heyp/cluster-agent/alloc-recorder.h"
 #include "heyp/cluster-agent/allocator.h"
 #include "heyp/cluster-agent/server.h"
 #include "heyp/flows/aggregator.h"
@@ -25,7 +27,8 @@ static void InterruptHandler(int signal) {
 namespace heyp {
 namespace {
 
-absl::Status Run(const proto::ClusterAgentConfig& c, const proto::AllocBundle& allocs) {
+absl::Status Run(const proto::ClusterAgentConfig& c, const proto::AllocBundle& allocs,
+                 const std::string& alloc_records_file) {
   auto control_period_or =
       ParseAbslDuration(c.server().control_period(), "control period");
   if (!control_period_or.ok()) {
@@ -41,9 +44,19 @@ absl::Status Run(const proto::ClusterAgentConfig& c, const proto::AllocBundle& a
     return predictor_status;
   }
 
+  std::unique_ptr<AllocRecorder> alloc_recorder;
+  if (!alloc_records_file.empty()) {
+    auto alloc_recorder_or = AllocRecorder::Create(alloc_records_file);
+    if (!alloc_recorder_or.ok()) {
+      return alloc_recorder_or.status();
+    }
+    alloc_recorder = std::move(*alloc_recorder_or);
+  }
+
   ClusterAgentService service(
       NewHostToClusterAggregator(std::move(agg_demand_predictor), demand_time_window),
-      ClusterAllocator::Create(c.allocator(), allocs), *control_period_or);
+      ClusterAllocator::Create(c.allocator(), allocs, alloc_recorder.get()),
+      *control_period_or);
 
   std::unique_ptr<grpc::Server> server(
       grpc::ServerBuilder()
@@ -53,6 +66,9 @@ absl::Status Run(const proto::ClusterAgentConfig& c, const proto::AllocBundle& a
   LOG(INFO) << "Server listening on " << c.server().address();
 
   service.RunLoop(&should_exit_flag);
+  if (alloc_recorder != nullptr) {
+    alloc_recorder->Close().IgnoreError();
+  }
   server->Shutdown();
   server->Wait();
   return absl::OkStatus();
@@ -60,6 +76,8 @@ absl::Status Run(const proto::ClusterAgentConfig& c, const proto::AllocBundle& a
 
 }  // namespace
 }  // namespace heyp
+
+DEFINE_string(alloc_logs, "", "path to write allocation debug logs");
 
 int main(int argc, char** argv) {
   heyp::MainInit(&argc, &argv);
@@ -82,7 +100,7 @@ int main(int argc, char** argv) {
     return 2;
   }
 
-  absl::Status s = heyp::Run(config, limits);
+  absl::Status s = heyp::Run(config, limits, FLAGS_alloc_logs);
   if (!s.ok()) {
     std::cerr << "failed to run: " << s << "\n";
     return 3;

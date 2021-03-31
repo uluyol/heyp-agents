@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "absl/time/time.h"
+#include "heyp/cluster-agent/alloc-recorder.h"
 #include "heyp/cluster-agent/allocs.h"
 #include "heyp/proto/config.pb.h"
 #include "heyp/proto/heyp.pb.h"
@@ -18,7 +19,8 @@ class ClusterAllocator {
  public:
   static std::unique_ptr<ClusterAllocator> Create(
       const proto::ClusterAllocatorConfig& config,
-      const proto::AllocBundle& cluster_wide_allocs);
+      const proto::AllocBundle& cluster_wide_allocs,
+      AllocRecorder* recorder = nullptr /* optional */);
 
   ~ClusterAllocator();
 
@@ -27,13 +29,14 @@ class ClusterAllocator {
   AllocSet GetAllocs();
 
  private:
-  ClusterAllocator(std::unique_ptr<PerAggAllocator> alloc);
+  ClusterAllocator(std::unique_ptr<PerAggAllocator> alloc, AllocRecorder* recorder);
 
   std::unique_ptr<PerAggAllocator> alloc_;
   Executor exec_;
 
   std::unique_ptr<TaskGroup> group_;
   absl::Mutex mu_;
+  AllocRecorder* recorder_ ABSL_GUARDED_BY(mu_);
   AllocSet allocs_ ABSL_GUARDED_BY(mu_);
 };
 

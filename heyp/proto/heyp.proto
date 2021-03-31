@@ -54,6 +54,12 @@ message FlowAlloc {
 
 message AllocBundle { repeated FlowAlloc flow_allocs = 1; }
 
+message DebugAllocRecord {
+  string timestamp = 1;
+  AggInfo info = 2;
+  repeated FlowAlloc flow_allocs = 3;
+}
+
 message DCMapping {
   message Entry {
     string host_addr = 1;

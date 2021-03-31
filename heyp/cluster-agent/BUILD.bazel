@@ -5,6 +5,7 @@ heyp_cc_binary(
     name = "cluster-agent",
     srcs = ["cluster-agent.cc"],
     deps = [
+        ":alloc-recorder",
         ":allocator",
         ":server",
         "//heyp/cli:parse",
@@ -19,10 +20,25 @@ heyp_cc_binary(
 )
 
 cc_library(
+    name = "alloc-recorder",
+    srcs = ["alloc-recorder.cc"],
+    hdrs = ["alloc-recorder.h"],
+    deps = [
+        "//heyp/posix:strerror",
+        "//heyp/proto:fileio",
+        "//heyp/proto:heyp_cc_proto",
+        "@com_google_absl//absl/status:statusor",
+        "@com_google_absl//absl/time",
+        "@glog",
+    ],
+)
+
+cc_library(
     name = "allocator",
     srcs = ["allocator.cc"],
     hdrs = ["allocator.h"],
     deps = [
+        ":alloc-recorder",
         ":allocs",
         "//heyp/alg:qos-degradation",
         "//heyp/alg:rate-limits",
