@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -81,7 +82,7 @@ func hasRole(n *pb.DeployedNode, want string) bool {
 	return false
 }
 
-func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string) error {
+func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string, collectAllocLogs bool) error {
 	type hostAgentNode struct {
 		host             *pb.DeployedNode
 		clusterAgentAddr string
@@ -164,13 +165,18 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string) error {
 					AddTar("cluster-limits-"+n.cluster.GetName()+".textproto", limitsBytes),
 				)
 
+				allocLogsPath := ""
+				if collectAllocLogs {
+					allocLogsPath = path.Join(remoteTopdir, "logs", "cluster-agent-"+n.cluster.GetName()+"-alloc-log.json")
+				}
+
 				cmd := TracingCommand(
 					LogWithPrefix("start-heyp-agents: "),
 					"ssh", n.node.GetExternalAddr(),
 					fmt.Sprintf(
 						"tar xf - -C %[1]s/configs;"+
 							"tmux kill-session -t heyp-cluster-agent-%[2]s;"+
-							"tmux new-session -d -s heyp-cluster-agent-%[2]s '%[1]s/heyp/cluster-agent/cluster-agent -logtostderr %[1]s/configs/cluster-agent-config-%[2]s.textproto %[1]s/configs/cluster-limits-%[2]s.textproto 2>&1 | tee %[1]s/logs/cluster-agent-%[2]s.log; sleep 100000'", remoteTopdir, n.cluster.GetName()))
+							"tmux new-session -d -s heyp-cluster-agent-%[2]s '%[1]s/heyp/cluster-agent/cluster-agent -alloc_logs \"%[3]s\" -logtostderr %[1]s/configs/cluster-agent-config-%[2]s.textproto %[1]s/configs/cluster-limits-%[2]s.textproto 2>&1 | tee %[1]s/logs/cluster-agent-%[2]s.log; sleep 100000'", remoteTopdir, n.cluster.GetName(), allocLogsPath))
 				cmd.SetStdin("config.tar", bytes.NewReader(configTar))
 				err = cmd.Run()
 				if err != nil {

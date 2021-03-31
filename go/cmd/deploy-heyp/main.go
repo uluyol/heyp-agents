@@ -89,15 +89,29 @@ func (c *configAndRemDirCmd) Execute(ctx context.Context, fs *flag.FlagSet,
 	return subcommands.ExitSuccess
 }
 
-var startHEYPAgentsCmd = &configAndRemDirCmd{
-	name:     "start-heyp-agents",
-	synopsis: "start heyp agents",
-	exec: func(cmd *configAndRemDirCmd, fs *flag.FlagSet) {
-		err := actions.StartHEYPAgents(cmd.config, cmd.remDir)
-		if err != nil {
-			log.Fatal(err)
-		}
-	},
+type startHEYPAgentsCmd struct {
+	configPath       string
+	remDir           string
+	collectAllocLogs bool
+}
+
+func (*startHEYPAgentsCmd) Name() string     { return "start-heyp-agents" }
+func (*startHEYPAgentsCmd) Synopsis() string { return "start heyp agents" }
+func (*startHEYPAgentsCmd) Usage() string    { return "" }
+
+func (c *startHEYPAgentsCmd) SetFlags(fs *flag.FlagSet) {
+	configVar(&c.configPath, fs)
+	remdirVar(&c.remDir, fs)
+	fs.BoolVar(&c.collectAllocLogs, "collect-alloc-logs", true, "collect detailed logs with input/allocation info at cluster agents")
+}
+
+func (c *startHEYPAgentsCmd) Execute(ctx context.Context, fs *flag.FlagSet,
+	args ...interface{}) subcommands.ExitStatus {
+	err := actions.StartHEYPAgents(parseConfig(c.configPath), c.remDir, c.collectAllocLogs)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return subcommands.ExitSuccess
 }
 
 var testLOPRIStartServersCmd = &configAndRemDirCmd{
@@ -216,7 +230,7 @@ func main() {
 	subcommands.Register(subcommands.CommandsCommand(), "")
 	subcommands.Register(new(mkBundleCmd), "")
 	subcommands.Register(new(installBundleCmd), "")
-	subcommands.Register(startHEYPAgentsCmd, "")
+	subcommands.Register(new(startHEYPAgentsCmd), "")
 	subcommands.Register(testLOPRIStartServersCmd, "")
 	subcommands.Register(new(testLOPRIRunClientsCmd), "")
 	subcommands.Register(new(fetchDataCmd), "")
