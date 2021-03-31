@@ -56,7 +56,9 @@ func InstallCodeBundle(c *pb.DeploymentConfig, localTarball, remoteTopdir string
 				LogWithPrefix("install-bundle: "),
 				"ssh", n.GetExternalAddr(),
 				fmt.Sprintf(
-					"mkdir -p '%[1]s/logs';"+
+					"rm -rf '%[1]s/configs' '%[1]s/logs'; "+
+						"mkdir -p '%[1]s/logs'; "+
+						"mkdir -p '%[1]s/configs'; "+
 						"cd '%[1]s' && tar xJf -",
 					remoteTopdir))
 			cmd.SetStdin(localTarball, bytes.NewReader(bundle))
@@ -159,16 +161,16 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string) error {
 
 				configTar := ConcatTarInMem(
 					AddTar("cluster-agent-config-"+n.cluster.GetName()+".textproto", clusterAgentConfigBytes),
-					AddTar("cluster-limits"+n.cluster.GetName()+".textproto", limitsBytes),
+					AddTar("cluster-limits-"+n.cluster.GetName()+".textproto", limitsBytes),
 				)
 
 				cmd := TracingCommand(
 					LogWithPrefix("start-heyp-agents: "),
 					"ssh", n.node.GetExternalAddr(),
 					fmt.Sprintf(
-						"tar xf - -C %[1]s;"+
+						"tar xf - -C %[1]s/configs;"+
 							"tmux kill-session -t heyp-cluster-agent-%[2]s;"+
-							"tmux new-session -d -s heyp-cluster-agent-%[2]s '%[1]s/heyp/cluster-agent/cluster-agent -logtostderr %[1]s/cluster-agent-config-%[2]s.textproto %[1]s/cluster-limits%[2]s.textproto 2>&1 | tee %[1]s/logs/cluster-agent-%[2]s.log; sleep 100000'", remoteTopdir, n.cluster.GetName()))
+							"tmux new-session -d -s heyp-cluster-agent-%[2]s '%[1]s/heyp/cluster-agent/cluster-agent -logtostderr %[1]s/configs/cluster-agent-config-%[2]s.textproto %[1]s/configs/cluster-limits-%[2]s.textproto 2>&1 | tee %[1]s/logs/cluster-agent-%[2]s.log; sleep 100000'", remoteTopdir, n.cluster.GetName()))
 				cmd.SetStdin("config.tar", bytes.NewReader(configTar))
 				err = cmd.Run()
 				if err != nil {
@@ -201,9 +203,9 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string) error {
 					LogWithPrefix("start-heyp-agents: "),
 					"ssh", n.host.GetExternalAddr(),
 					fmt.Sprintf(
-						"cat >%[1]s/host-agent-config.textproto;"+
+						"cat >%[1]s/configs/host-agent-config.textproto;"+
 							"tmux kill-session -t heyp-host-agent;"+
-							"tmux new-session -d -s heyp-host-agent 'sudo %[1]s/heyp/host-agent/host-agent -logtostderr %[1]s/host-agent-config.textproto 2>&1 | tee %[1]s/logs/host-agent.log; sleep 100000'", remoteTopdir))
+							"tmux new-session -d -s heyp-host-agent 'sudo %[1]s/heyp/host-agent/host-agent -logtostderr %[1]s/configs/host-agent-config.textproto 2>&1 | tee %[1]s/logs/host-agent.log; sleep 100000'", remoteTopdir))
 				cmd.SetStdin("host-agent-config.textproto", bytes.NewReader(hostConfigBytes))
 				err = cmd.Run()
 				if err != nil {
@@ -349,8 +351,8 @@ func TestLOPRIRunClients(c *pb.DeploymentConfig, remoteTopdir string, showOut bo
 				cmd := TracingCommand(
 					LogWithPrefix("testlopri-run-clients: "),
 					"ssh", client.GetExternalAddr(),
-					fmt.Sprintf("cat > %[1]s/testlopri-client-config-%[2]s-%[4]d.textproto && "+
-						"%[1]s/heyp/app/testlopri/client -logtostderr -c %[1]s/testlopri-client-config-%[2]s-%[4]d.textproto -server %[3]s -out %[1]s/logs/testlopri-%[2]s-client-%[4]d.out -start_time %[5]s -shards %[6]d 2>&1 | tee %[1]s/logs/testlopri-%[2]s-client-%[4]d.log; exit ${PIPESTATUS[0]}", remoteTopdir, config.config.GetName(), strings.Join(allAddrs, ","), i, startTimestamp, config.config.GetNumClientShards()))
+					fmt.Sprintf("cat > %[1]s/configs/testlopri-client-config-%[2]s-%[4]d.textproto && "+
+						"%[1]s/heyp/app/testlopri/client -logtostderr -c %[1]s/configs/testlopri-client-config-%[2]s-%[4]d.textproto -server %[3]s -out %[1]s/logs/testlopri-%[2]s-client-%[4]d.out -start_time %[5]s -shards %[6]d 2>&1 | tee %[1]s/logs/testlopri-%[2]s-client-%[4]d.log; exit ${PIPESTATUS[0]}", remoteTopdir, config.config.GetName(), strings.Join(allAddrs, ","), i, startTimestamp, config.config.GetNumClientShards()))
 				cmd.SetStdin(fmt.Sprintf("testlopri-client-config-%s-%d.textproto", config.config.GetName(), i), bytes.NewReader(clientConfBytes))
 				if showOut {
 					cmd.Stdout = os.Stdout
@@ -366,7 +368,7 @@ func TestLOPRIRunClients(c *pb.DeploymentConfig, remoteTopdir string, showOut bo
 	return eg.Wait()
 }
 
-func FetchLogs(c *pb.DeploymentConfig, remoteTopdir, outdirPath string) error {
+func FetchData(c *pb.DeploymentConfig, remoteTopdir, outdirPath string) error {
 	os.MkdirAll(outdirPath, 0755)
 
 	outdir, err := filepath.Abs(outdirPath)
@@ -389,26 +391,26 @@ func FetchLogs(c *pb.DeploymentConfig, remoteTopdir, outdirPath string) error {
 		}
 		eg.Go(func() error {
 			cmd := TracingCommand(
-				LogWithPrefix("fetch-logs: "),
+				LogWithPrefix("fetch-data: "),
 				"ssh", n.GetExternalAddr(),
 				fmt.Sprintf(
-					"cd '%[1]s/logs';"+
-						"tar cJf - .",
+					"cd '%[1]s';"+
+						"tar cJf - configs logs",
 					remoteTopdir))
-			rc, err := cmd.StdoutPipe("logs.tar.xz")
+			rc, err := cmd.StdoutPipe("data.tar.xz")
 			if err != nil {
 				return fmt.Errorf("failed to create stdout pipe: %w", err)
 			}
 			unTarCmd := TracingCommand(
-				LogWithPrefix("fetch-logs: "),
+				LogWithPrefix("fetch-data: "),
 				"tar", "xJf", "-")
 			unTarCmd.Dir = filepath.Join(outdir, n.GetName())
-			unTarCmd.SetStdin("logs.tar.gz", rc)
+			unTarCmd.SetStdin("data.tar.gz", rc)
 			if err := unTarCmd.Start(); err != nil {
-				return fmt.Errorf("failed to start decompressing logs: %w", err)
+				return fmt.Errorf("failed to start decompressing data: %w", err)
 			}
 			if err := cmd.Run(); err != nil {
-				return fmt.Errorf("failed to compress logs: %w", err)
+				return fmt.Errorf("failed to compress data: %w", err)
 			}
 			rc.Close()
 			return unTarCmd.Wait()

@@ -136,25 +136,25 @@ func (c *testLOPRIRunClientsCmd) Execute(ctx context.Context, fs *flag.FlagSet,
 	return subcommands.ExitSuccess
 }
 
-type fetchLogsCmd struct {
+type fetchDataCmd struct {
 	configPath string
 	remDir     string
 	outdir     string
 }
 
-func (*fetchLogsCmd) Name() string     { return "fetch-logs" }
-func (*fetchLogsCmd) Synopsis() string { return "fetch logs from remote hosts" }
-func (*fetchLogsCmd) Usage() string    { return "" }
+func (*fetchDataCmd) Name() string     { return "fetch-data" }
+func (*fetchDataCmd) Synopsis() string { return "fetch data (configs, logs) from remote hosts" }
+func (*fetchDataCmd) Usage() string    { return "" }
 
-func (c *fetchLogsCmd) SetFlags(fs *flag.FlagSet) {
+func (c *fetchDataCmd) SetFlags(fs *flag.FlagSet) {
 	configVar(&c.configPath, fs)
 	remdirVar(&c.remDir, fs)
-	fs.StringVar(&c.outdir, "o", "logs", "directory to store logs")
+	fs.StringVar(&c.outdir, "o", "data", "directory to store data")
 }
 
-func (c *fetchLogsCmd) Execute(ctx context.Context, fs *flag.FlagSet,
+func (c *fetchDataCmd) Execute(ctx context.Context, fs *flag.FlagSet,
 	args ...interface{}) subcommands.ExitStatus {
-	err := actions.FetchLogs(parseConfig(c.configPath),
+	err := actions.FetchData(parseConfig(c.configPath),
 		c.remDir, c.outdir)
 	if err != nil {
 		log.Fatal(err)
@@ -219,7 +219,7 @@ func main() {
 	subcommands.Register(startHEYPAgentsCmd, "")
 	subcommands.Register(testLOPRIStartServersCmd, "")
 	subcommands.Register(new(testLOPRIRunClientsCmd), "")
-	subcommands.Register(new(fetchLogsCmd), "")
+	subcommands.Register(new(fetchDataCmd), "")
 	subcommands.Register(new(checkNodesCmd), "")
 
 	flag.Parse()
