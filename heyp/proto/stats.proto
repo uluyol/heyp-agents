@@ -19,6 +19,17 @@ message HdrHistogram {
 }
 
 message StatsRecord {
+  message LatencyStats {
+    string kind = 1;
+    HdrHistogram hist_ns = 2;
+
+    // convenience percentiles
+    int64 p50_ns = 11;
+    int64 p90_ns = 12;
+    int64 p95_ns = 13;
+    int64 p99_ns = 14;
+  }
+
   string label = 1;
   string timestamp = 2; // ISO 8601
   double dur_sec = 3;
@@ -30,11 +41,5 @@ message StatsRecord {
   // current stats
   double mean_bits_per_sec = 21;
   double mean_rpcs_per_sec = 22;
-  HdrHistogram latency_ns_hist = 23;
-
-  // convenience percentiles
-  int64 latency_ns_p50 = 31;
-  int64 latency_ns_p90 = 32;
-  int64 latency_ns_p95 = 33;
-  int64 latency_ns_p99 = 34;
+  repeated LatencyStats latency = 23;
 }

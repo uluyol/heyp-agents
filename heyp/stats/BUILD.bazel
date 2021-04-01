@@ -45,6 +45,7 @@ cc_library(
         "//heyp/proto:fileio",
         "//heyp/proto:stats_cc_proto",
         "//heyp/threads:executor",
+        "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/memory",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/time",

@@ -264,8 +264,10 @@ type DeploymentConfig struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Nodes              []*DeployedNode     `protobuf:"bytes,1,rep,name=nodes" json:"nodes,omitempty"`
-	Clusters           []*DeployedCluster  `protobuf:"bytes,2,rep,name=clusters" json:"clusters,omitempty"`
+	Nodes    []*DeployedNode    `protobuf:"bytes,1,rep,name=nodes" json:"nodes,omitempty"`
+	Clusters []*DeployedCluster `protobuf:"bytes,2,rep,name=clusters" json:"clusters,omitempty"`
+	// Fields that are autofilled:
+	// - cluster_agent_config.server.address (using clusters.cluster_agent_port)
 	ClusterAgentConfig *ClusterAgentConfig `protobuf:"bytes,10,opt,name=cluster_agent_config,json=clusterAgentConfig" json:"cluster_agent_config,omitempty"`
 	// Fields that are autofilled:
 	// - host_agent_template.flow_state_reporter.this_host_addrs

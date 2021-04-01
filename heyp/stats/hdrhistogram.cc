@@ -27,8 +27,8 @@ proto::HdrHistogram::Config HdrHistogram::DefaultConfig() {
 proto::HdrHistogram::Config HdrHistogram::NetworkConfig() {
   proto::HdrHistogram::Config c;
   c.set_lowest_discernible_value(100);
-  c.set_highest_trackable_value(30'000'000'000);
-  c.set_significant_figures(3);
+  c.set_highest_trackable_value(10'000'000'000);
+  c.set_significant_figures(2);
   return c;
 }
 

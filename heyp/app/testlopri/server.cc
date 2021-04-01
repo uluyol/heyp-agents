@@ -30,7 +30,7 @@ void OnCloseConn(uv_handle_t *handle) { free(handle); }
 typedef struct {
   uv_write_t req;
   uv_buf_t buf;
-  char bufdata[20];
+  char bufdata[28];
 } write_req_t;
 
 void OnRpcAck(uv_write_t *req, int status) {
@@ -44,7 +44,7 @@ void OnRpcAck(uv_write_t *req, int status) {
 typedef struct {
   uv_tcp_t client;
   uint32_t bytes_left;
-  char header[20];
+  char header[28];
   int num_header_read;
 } client_stream_t;
 
@@ -57,15 +57,15 @@ void OnRpcRead(uv_stream_t *client_stream, ssize_t nread, const uv_buf_t *buf) {
   char *b = buf->base;
   char *e = buf->base + nread;
   while (b < e) {
-    if (client->num_header_read < 20) {
+    if (client->num_header_read < 28) {
       client->header[client->num_header_read++] = *b;
       ++b;
-      if (client->num_header_read >= 20) {
+      if (client->num_header_read >= 28) {
         client->bytes_left = ReadU32LE(client->header);
         if (kDebug) {
           absl::FPrintF(stderr, "got rpc_id=%d size=%d header=%s\n",
                         ReadU64LE(client->header + 4), client->bytes_left,
-                        ToHex(client->header, 20));
+                        ToHex(client->header, 28));
         }
       }
       continue;
@@ -81,12 +81,12 @@ void OnRpcRead(uv_stream_t *client_stream, ssize_t nread, const uv_buf_t *buf) {
     b += client->bytes_left;
 
     write_req_t *req = (write_req_t *)malloc(sizeof(write_req_t));
-    memcpy(req->bufdata, client->header, 20);
+    memcpy(req->bufdata, client->header, 28);
     if (kDebug) {
       absl::FPrintF(stderr, "ack rpc id=%d header=%s\n", ReadU64LE(req->bufdata + 4),
-                    ToHex(req->bufdata, 20));
+                    ToHex(req->bufdata, 28));
     }
-    req->buf = uv_buf_init(req->bufdata, 20);
+    req->buf = uv_buf_init(req->bufdata, 28);
     uv_write((uv_write_t *)req, (uv_stream_t *)&client->client, &req->buf, 1, OnRpcAck);
 
     client->num_header_read = 0;

@@ -29,6 +29,8 @@ heyp_cc_binary(
         "//heyp/proto:fileio",
         "//heyp/proto:stats_cc_proto",
         "//heyp/stats:hdrhistogram",
+        "//heyp/stats:recorder",
+        "@com_google_absl//absl/container:btree",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",

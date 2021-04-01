@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 
+#include "absl/container/btree_map.h"
 #include "absl/strings/ascii.h"
 #include "absl/strings/str_format.h"
 #include "absl/time/time.h"
@@ -11,6 +12,7 @@
 #include "heyp/proto/fileio.h"
 #include "heyp/proto/stats.pb.h"
 #include "heyp/stats/hdrhistogram.h"
+#include "heyp/stats/recorder.h"
 
 namespace heyp {
 namespace {
@@ -65,7 +67,10 @@ absl::Status MergeTo(const std::vector<FILE*> input_files, FILE* output) {
       absl::Time earliest_time = absl::InfiniteFuture();
 
       proto::StatsRecord merged;
-      HdrHistogram hist(cur_records[0].latency_ns_hist().config());
+      absl::btree_map<std::string, HdrHistogram> hists;
+      for (const proto::StatsRecord::LatencyStats& l : cur_records[0].latency()) {
+        hists[l.kind()] = HdrHistogram(l.hist_ns().config());
+      }
 
       for (const proto::StatsRecord& rec : cur_records) {
         if (rec.label() != cur_label) {
@@ -87,17 +92,14 @@ absl::Status MergeTo(const std::vector<FILE*> input_files, FILE* output) {
 
         ADD_FIELD_FROM_TO(mean_bits_per_sec, rec, merged);
         ADD_FIELD_FROM_TO(mean_rpcs_per_sec, rec, merged);
-        hist.Add(HdrHistogram::FromProto(rec.latency_ns_hist()));
+        for (const proto::StatsRecord::LatencyStats& l : rec.latency()) {
+          hists[l.kind()].Add(HdrHistogram::FromProto(l.hist_ns()));
+        }
       }
       merged.set_label(std::string(cur_label));
       merged.set_timestamp(absl::FormatTime(earliest_time, absl::UTCTimeZone()));
 
-      *merged.mutable_latency_ns_hist() = hist.ToProto();
-
-      merged.set_latency_ns_p50(hist.ValueAtPercentile(50));
-      merged.set_latency_ns_p90(hist.ValueAtPercentile(90));
-      merged.set_latency_ns_p95(hist.ValueAtPercentile(95));
-      merged.set_latency_ns_p99(hist.ValueAtPercentile(99));
+      *merged.mutable_latency() = ToProtoLatencyStats(hists);
 
       auto st = WriteJsonLine(merged, output);
       if (!st.ok()) {

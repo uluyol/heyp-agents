@@ -127,7 +127,7 @@ class ClientConn {
         num_issued_(0),
         read_buf_size_(0),
         in_pool_(false) {
-    CHECK_GE(max_rpc_size_bytes, 20);
+    CHECK_GE(max_rpc_size_bytes, 28);
 
     uv_tcp_init(loop_, &client_);
     client_.data = this;
@@ -144,14 +144,15 @@ class ClientConn {
                    });
   }
 
-  void IssueRpc(uint64_t rpc_id, uint64_t hr_now, int32_t rpc_size_bytes) {
+  void IssueRpc(uint64_t rpc_id, uint64_t hr_scheduled_time, int32_t rpc_size_bytes) {
     ++num_issued_;
-    WriteU32LE(rpc_size_bytes - 20, buf_.data());
+    WriteU32LE(rpc_size_bytes - 28, buf_.data());
     WriteU64LE(rpc_id, buf_.data() + 4);
-    WriteU64LE(hr_now, buf_.data() + 12);
+    WriteU64LE(hr_scheduled_time, buf_.data() + 12);
+    WriteU64LE(uv_hrtime(), buf_.data() + 20);
     if (kDebugReadWrite || InLimitedDebugReadWrite()) {
       SHARD_LOG(INFO) << "write(c=" << conn_id_ << ") rpc id=" << rpc_id
-                      << " header=" << ToHex(buf_.data(), 20) WITH_NEWLINE;
+                      << " header=" << ToHex(buf_.data(), 28) WITH_NEWLINE;
     }
     buffer_ = uv_buf_init(buf_.data(), rpc_size_bytes);
     uv_write_t* req = new uv_write_t();
@@ -219,9 +220,12 @@ class ClientConn {
 
     bool got_ack = false;
     auto record_rpc_latency = [&](uint32_t size, uint64_t rpc_id,
-                                  uint64_t got_hr_start_time) {
-      stats_recorder_->RecordRpc(size,
-                                 absl::Nanoseconds(uv_hrtime() - got_hr_start_time));
+                                  uint64_t got_hr_scheduled_time,
+                                  uint64_t got_hr_client_write_time) {
+      uint64_t hr_now = uv_hrtime();
+      stats_recorder_->RecordRpc(size, "full",
+                                 absl::Nanoseconds(hr_now - got_hr_scheduled_time), "net",
+                                 absl::Nanoseconds(hr_now - got_hr_client_write_time));
       ++num_seen_;
       got_ack = true;
     };
@@ -229,18 +233,18 @@ class ClientConn {
     char* b = buf->base;
     char* e = buf->base + nread;
     while (b < e) {
-      int tocopy = std::min<int>(e - b, 20 - read_buf_size_);
+      int tocopy = std::min<int>(e - b, 28 - read_buf_size_);
       memmove(read_buf_ + read_buf_size_, b, tocopy);
       b += tocopy;
       read_buf_size_ += tocopy;
 
-      if (read_buf_size_ == 20) {
+      if (read_buf_size_ == 28) {
         if (kDebugReadWrite || InLimitedDebugReadWrite()) {
           SHARD_LOG(INFO) << "read (c=" << conn_id_ << ") rpc id=" << ReadU64LE(read_buf_)
-                          << " header=" << ToHex(read_buf_, 20) WITH_NEWLINE;
+                          << " header=" << ToHex(read_buf_, 28) WITH_NEWLINE;
         }
-        record_rpc_latency(20 + ReadU32LE(read_buf_), ReadU64LE(read_buf_ + 4),
-                           ReadU64LE(read_buf_ + 12));
+        record_rpc_latency(28 + ReadU32LE(read_buf_), ReadU64LE(read_buf_ + 4),
+                           ReadU64LE(read_buf_ + 12), ReadU64LE(read_buf_ + 20));
         read_buf_size_ = 0;
       }
     }
@@ -287,7 +291,7 @@ class ClientConn {
   int num_seen_;
   int num_issued_;
 
-  char read_buf_[20];
+  char read_buf_[28];
   int read_buf_size_;
 
   bool in_pool_;
@@ -542,16 +546,17 @@ class LoadGenerator {
       hr_next_report_time_ += hr_report_dur_;
     }
 
+    uint64_t hr_scheduled_time = hr_next_;
     // Issue the request
     uint64_t rpc_id = ++rpc_id_;
-    conn_pool_.WithConn([hr_now, rpc_id, this](ClientConn* conn) {
+    conn_pool_.WithConn([hr_scheduled_time, rpc_id, this](ClientConn* conn) {
       conn->AssertValid();
       const WorkloadStage* stage = cur_stage();
       if (stage == nullptr) {
         conn_pool_.AddConn(conn);
         return;
       }
-      conn->IssueRpc(rpc_id, hr_now, stage->rpc_size_bytes);
+      conn->IssueRpc(rpc_id, hr_scheduled_time, stage->rpc_size_bytes);
       RecordInterarrivalIssuedNow();
     });
 

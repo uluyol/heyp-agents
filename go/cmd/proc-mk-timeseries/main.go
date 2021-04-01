@@ -47,7 +47,7 @@ func main() {
 
 	bw := bufio.NewWriter(os.Stdout)
 	defer bw.Flush()
-	fmt.Fprintln(bw, "Instance,Client,Shard,Timestamp,MeanBps,MeanRpcsPerSec,LatencyNanosP50,LatencyNanosP90,LatencyNanosP95,LatencyNanosP99")
+	fmt.Fprintln(bw, "Instance,Client,Shard,Timestamp,MeanBps,MeanRpcsPerSec,FullLatencyNanosP50,FullLatencyNanosP90,FullLatencyNanosP95,FullLatencyNanosP99,NetLatencyNanosP50,NetLatencyNanosP90,NetLatencyNanosP95,NetLatencyNanosP99")
 	for _, inst := range instances {
 		for _, client := range inst.Clients {
 			for _, shard := range client.Shards {
@@ -61,9 +61,11 @@ func main() {
 							return nil
 						}
 						tunix := t.UTC().Sub(time.Unix(0, 0)).Seconds()
-						_, err = fmt.Fprintf(bw, "%s,%s,%d,%f,%f,%f,%d,%d,%d,%d\n",
-							inst.Instance, client.Client, shard.Shard, tunix, rec.MeanBitsPerSec, rec.MeanRpcsPerSec, rec.LatencyNsP50,
-							rec.LatencyNsP90, rec.LatencyNsP95, rec.LatencyNsP99)
+						full := findLat(rec, "full")
+						net := findLat(rec, "net")
+						_, err = fmt.Fprintf(bw, "%s,%s,%d,%f,%f,%f,%d,%d,%d,%d,%d,%d,%d,%d\n",
+							inst.Instance, client.Client, shard.Shard, tunix, rec.MeanBitsPerSec, rec.MeanRpcsPerSec, full.P50,
+							full.P90, full.P95, full.P99, net.P50, net.P90, net.P95, net.P99)
 						return err
 					})
 			}
@@ -72,4 +74,18 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to read logs: %v", err)
 	}
+}
+
+type Latencies struct {
+	P50, P90, P95, P99 int64
+}
+
+func findLat(rec *pb.StatsRecord, kind string) Latencies {
+	for _, l := range rec.Latency {
+		if l.GetKind() == kind {
+			return Latencies{l.P50Ns, l.P90Ns, l.P95Ns, l.P99Ns}
+		}
+	}
+
+	return Latencies{}
 }

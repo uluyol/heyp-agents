@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"sort"
 	"time"
 
 	"github.com/HdrHistogram/hdrhistogram-go"
@@ -63,9 +64,9 @@ func main() {
 
 	bw := bufio.NewWriter(os.Stdout)
 	defer bw.Flush()
-	fmt.Fprintln(bw, "Instance,Client,Shard,Percentile,LatencyNanos,NumSamples")
+	fmt.Fprintln(bw, "Instance,Client,Shard,LatencyKind,Percentile,LatencyNanos,NumSamples")
 
-	var hist *hdrhistogram.Histogram
+	hists := make(map[string]*hdrhistogram.Histogram)
 
 	for _, inst := range instances {
 		for _, client := range inst.Clients {
@@ -79,27 +80,29 @@ func main() {
 						if t.Before(startTime) || t.After(endTime) {
 							return nil
 						}
-						h := proc.HistFromProto(rec.LatencyNsHist)
-						if hist == nil {
-							hist = h
-						} else {
-							hist.Merge(h)
+						for _, l := range rec.Latency {
+							h := proc.HistFromProto(l.HistNs)
+							if hists[l.GetKind()] == nil {
+								hists[l.GetKind()] = h
+							} else {
+								hists[l.GetKind()].Merge(h)
+							}
 						}
 						return nil
 					})
-				if getLevel == "per-shard" && hist != nil {
-					printCDF(bw, hist, inst.Instance, client.Client, shard.Shard)
-					hist = nil
+				if getLevel == "per-shard" && len(hists) != 0 {
+					printCDF(bw, hists, inst.Instance, client.Client, shard.Shard)
+					hists = make(map[string]*hdrhistogram.Histogram)
 				}
 			}
-			if getLevel == "per-client" && hist != nil {
-				printCDF(bw, hist, inst.Instance, client.Client, -1)
-				hist = nil
+			if getLevel == "per-client" && len(hists) != 0 {
+				printCDF(bw, hists, inst.Instance, client.Client, -1)
+				hists = make(map[string]*hdrhistogram.Histogram)
 			}
 		}
-		if hist != nil {
-			printCDF(bw, hist, inst.Instance, "", -1)
-			hist = nil
+		if len(hists) != 0 {
+			printCDF(bw, hists, inst.Instance, "", -1)
+			hists = make(map[string]*hdrhistogram.Histogram)
 		}
 	}
 	if err != nil {
@@ -107,9 +110,17 @@ func main() {
 	}
 }
 
-func printCDF(w io.Writer, h *hdrhistogram.Histogram, inst, client string, shard int) {
-	for _, b := range h.CumulativeDistribution() {
-		fmt.Fprintf(w, "%s,%s,%d,%f,%d,%d\n",
-			inst, client, shard, b.Quantile, b.ValueAt, b.Count)
+func printCDF(w io.Writer, hists map[string]*hdrhistogram.Histogram, inst, client string, shard int) {
+	var kinds []string
+	for k := range hists {
+		kinds = append(kinds, k)
+	}
+	sort.Strings(kinds)
+	for _, k := range kinds {
+		h := hists[k]
+		for _, b := range h.CumulativeDistribution() {
+			fmt.Fprintf(w, "%s,%s,%d,%s,%f,%d,%d\n",
+				inst, client, shard, k, b.Quantile, b.ValueAt, b.Count)
+		}
 	}
 }

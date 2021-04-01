@@ -18,11 +18,7 @@ absl::StatusOr<std::unique_ptr<StatsRecorder>> StatsRecorder::Create(
   return absl::make_unique<StatsRecorder>(f);
 }
 
-StatsRecorder::StatsRecorder(FILE* out)
-    : out_(out),
-      executor_(1),
-      started_(false),
-      latency_hist_(HdrHistogram::NetworkConfig()) {}
+StatsRecorder::StatsRecorder(FILE* out) : out_(out), executor_(1), started_(false) {}
 
 StatsRecorder::~StatsRecorder() {
   if (out_ != nullptr) {
@@ -54,12 +50,20 @@ void StatsRecorder::StartRecording() {
   prev_time_ = absl::Now();
 }
 
-void StatsRecorder::RecordRpc(int bufsize_bytes, absl::Duration latency) {
-  cum_num_bits_ += bufsize_bytes * 8;
-  cum_num_rpcs_ += 1;
-  if (started_) {
-    latency_hist_.RecordValue(absl::ToInt64Nanoseconds(latency));
+google::protobuf::RepeatedPtrField<proto::StatsRecord::LatencyStats> ToProtoLatencyStats(
+    const absl::btree_map<std::string, HdrHistogram>& latency_stats) {
+  google::protobuf::RepeatedPtrField<proto::StatsRecord::LatencyStats> result;
+  result.Reserve(latency_stats.size());
+  for (auto p : latency_stats) {
+    proto::StatsRecord::LatencyStats* s = result.Add();
+    s->set_kind(p.first);
+    *s->mutable_hist_ns() = p.second.ToProto();
+    s->set_p50_ns(p.second.ValueAtPercentile(50));
+    s->set_p90_ns(p.second.ValueAtPercentile(90));
+    s->set_p95_ns(p.second.ValueAtPercentile(95));
+    s->set_p99_ns(p.second.ValueAtPercentile(99));
   }
+  return result;
 }
 
 void StatsRecorder::DoneStep(absl::string_view label) {
@@ -73,15 +77,9 @@ void StatsRecorder::DoneStep(absl::string_view label) {
   int64_t mean_rpcps = (cum_num_rpcs_ - prev_cum_num_rpcs_) / elapsed_sec;
   int64_t cum_num_bits = cum_num_bits_;
   int64_t cum_num_rpcs = cum_num_rpcs_;
-  proto::HdrHistogram proto_hist = latency_hist_.ToProto();
-  FILE* fout = out_;
 
-  std::array perc_latencies{
-      latency_hist_.ValueAtPercentile(50),
-      latency_hist_.ValueAtPercentile(90),
-      latency_hist_.ValueAtPercentile(95),
-      latency_hist_.ValueAtPercentile(99),
-  };
+  auto latency_data = ToProtoLatencyStats(latency_hists_);
+  FILE* fout = out_;
 
   // wait for any previous work
   if (prev_tg_ != nullptr) {
@@ -90,7 +88,7 @@ void StatsRecorder::DoneStep(absl::string_view label) {
 
   prev_tg_ = executor_.NewTaskGroup();
   prev_tg_->AddTask([label_str, now, elapsed_sec, cum_num_bits, cum_num_rpcs, mean_bps,
-                     mean_rpcps, proto_hist, perc_latencies, fout]() -> absl::Status {
+                     mean_rpcps, latency_data, fout]() -> absl::Status {
     proto::StatsRecord rec;
 
     rec.set_label(label_str);
@@ -102,19 +100,16 @@ void StatsRecorder::DoneStep(absl::string_view label) {
 
     rec.set_mean_bits_per_sec(mean_bps);
     rec.set_mean_rpcs_per_sec(mean_rpcps);
-    *rec.mutable_latency_ns_hist() = proto_hist;
-
-    rec.set_latency_ns_p50(perc_latencies[0]);
-    rec.set_latency_ns_p90(perc_latencies[1]);
-    rec.set_latency_ns_p95(perc_latencies[2]);
-    rec.set_latency_ns_p99(perc_latencies[3]);
+    *rec.mutable_latency() = latency_data;
 
     return WriteJsonLine(rec, fout);
   });
   prev_time_ = now;
   prev_cum_num_bits_ = cum_num_bits_;
   prev_cum_num_rpcs_ = cum_num_rpcs_;
-  latency_hist_.Reset();
+  for (auto iter : latency_hists_) {
+    iter.second.Reset();
+  }
 }
 
 }  // namespace heyp
