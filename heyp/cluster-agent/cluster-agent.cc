@@ -55,7 +55,9 @@ absl::Status Run(const proto::ClusterAgentConfig& c, const proto::AllocBundle& a
 
   ClusterAgentService service(
       NewHostToClusterAggregator(std::move(agg_demand_predictor), demand_time_window),
-      ClusterAllocator::Create(c.allocator(), allocs, alloc_recorder.get()),
+      ClusterAllocator::Create(c.allocator(), allocs,
+                               c.flow_aggregator().demand_predictor().usage_multiplier(),
+                               alloc_recorder.get()),
       *control_period_or);
 
   std::unique_ptr<grpc::Server> server(

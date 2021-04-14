@@ -13,4 +13,24 @@ absl::flat_hash_map<int64_t, proto::AllocBundle> BundleByHost(AllocSet allocs) {
   return by_host;
 }
 
+std::ostream& operator<<(std::ostream& os, const AllocSet& allocs) {
+  os << "AllocSet:\n";
+  bool first_set = true;
+  for (const std::vector<proto::FlowAlloc>& alloc_set : allocs.partial_sets) {
+    if (!first_set) {
+      os << "===========================================\n";
+    }
+    first_set = false;
+    bool first_alloc = true;
+    for (const proto::FlowAlloc& alloc : alloc_set) {
+      if (!first_alloc) {
+        os << "---------------------\n";
+      }
+      first_alloc = false;
+      os << alloc.DebugString();
+    }
+  }
+  return os;
+}
+
 }  // namespace heyp

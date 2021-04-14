@@ -5,6 +5,12 @@ package(
 )
 
 cc_library(
+    name = "debug",
+    srcs = ["debug.cc"],
+    hdrs = ["debug.h"],
+)
+
+cc_library(
     name = "demand-predictor",
     srcs = ["demand-predictor.cc"],
     hdrs = ["demand-predictor.h"],
@@ -19,6 +25,7 @@ cc_library(
     srcs = ["qos-degradation.cc"],
     hdrs = ["qos-degradation.h"],
     deps = [
+        ":debug",
         "//heyp/proto:heyp_cc_proto",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/time",

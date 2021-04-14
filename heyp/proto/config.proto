@@ -67,6 +67,7 @@ message ClusterAllocatorConfig {
   optional double oversub_factor = 4 [default = 1.15];
   optional double heyp_acceptable_measured_ratio_over_intended_ratio = 5
       [default = 0.9];
+  optional bool heyp_probe_lopri_when_ambiguous = 6 [default = true];
 }
 
 message ClusterServerConfig {

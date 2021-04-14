@@ -40,7 +40,8 @@ TEST(BweClusterAllocatorTest, Basic) {
                                    }
                                    hipri_rate_limit_bps: 666666
                                  }
-                               )"));
+                               )"),
+                                        1);
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
@@ -150,7 +151,8 @@ TEST(BweClusterAllocatorTest, WithOversub) {
                                    }
                                    hipri_rate_limit_bps: 600
                                  }
-                               )"));
+                               )"),
+                                        1);
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
@@ -228,7 +230,8 @@ TEST(BweClusterAllocatorTest, WithBonus) {
                                    }
                                    hipri_rate_limit_bps: 600
                                  }
-                               )"));
+                               )"),
+                                        1);
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
@@ -306,7 +309,8 @@ TEST(BweClusterAllocatorTest, WithBurstiness) {
                                    }
                                    hipri_rate_limit_bps: 600
                                  }
-                               )"));
+                               )"),
+                                        1);
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
@@ -385,7 +389,8 @@ TEST(BweClusterAllocatorTest, WithBurstinessAndCongestion) {
                                    }
                                    hipri_rate_limit_bps: 600
                                  }
-                               )"));
+                               )"),
+                                        1);
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
@@ -464,7 +469,8 @@ TEST(BweClusterAllocatorTest, ZeroDemand) {
                                    }
                                    hipri_rate_limit_bps: 600
                                  }
-                               )"));
+                               )"),
+                                        1);
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
@@ -527,7 +533,8 @@ TEST(BweClusterAllocatorTest, ZeroLimit) {
                                    }
                                    hipri_rate_limit_bps: 0
                                  }
-                               )"));
+                               )"),
+                                        1);
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
@@ -582,6 +589,7 @@ TEST(HeypSigcomm20ClusterAllocatorTest, Basic) {
                                  enable_bonus: true
                                  oversub_factor: 1.0
                                  heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
+                                 heyp_probe_lopri_when_ambiguous: false
                                )"),
                                         ParseTextProto<proto::AllocBundle>(R"(
                                  flow_allocs {
@@ -592,7 +600,8 @@ TEST(HeypSigcomm20ClusterAllocatorTest, Basic) {
                                    hipri_rate_limit_bps: 600000
                                    lopri_rate_limit_bps: 333333
                                  }
-                               )"));
+                               )"),
+                                        1);
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
@@ -695,6 +704,7 @@ TEST(HeypSigcomm20ClusterAllocatorTest, WithOversub) {
                                  enable_bonus: true
                                  oversub_factor: 1.5
                                  heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
+                                 heyp_probe_lopri_when_ambiguous: false
                                )"),
                                         ParseTextProto<proto::AllocBundle>(R"(
                                  flow_allocs {
@@ -704,7 +714,8 @@ TEST(HeypSigcomm20ClusterAllocatorTest, WithOversub) {
                                    }
                                    hipri_rate_limit_bps: 600
                                  }
-                               )"));
+                               )"),
+                                        1);
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
@@ -775,6 +786,7 @@ TEST(HeypSigcomm20ClusterAllocatorTest, WithBonus) {
                                  enable_bonus: true
                                  oversub_factor: 1.0
                                  heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
+                                 heyp_probe_lopri_when_ambiguous: false
                                )"),
                                         ParseTextProto<proto::AllocBundle>(R"(
                                  flow_allocs {
@@ -784,7 +796,8 @@ TEST(HeypSigcomm20ClusterAllocatorTest, WithBonus) {
                                    }
                                    hipri_rate_limit_bps: 600
                                  }
-                               )"));
+                               )"),
+                                        1);
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
@@ -855,6 +868,7 @@ TEST(HeypSigcomm20ClusterAllocatorTest, WithBurstiness) {
                                  enable_bonus: true
                                  oversub_factor: 1.0
                                  heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
+                                 heyp_probe_lopri_when_ambiguous: false
                                )"),
                                         ParseTextProto<proto::AllocBundle>(R"(
                                  flow_allocs {
@@ -864,7 +878,8 @@ TEST(HeypSigcomm20ClusterAllocatorTest, WithBurstiness) {
                                    }
                                    hipri_rate_limit_bps: 600
                                  }
-                               )"));
+                               )"),
+                                        1);
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
@@ -935,6 +950,7 @@ TEST(HeypSigcomm20ClusterAllocatorTest, WithBurstinessAndCongestion) {
                                  enable_bonus: true
                                  oversub_factor: 1.0
                                  heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
+                                 heyp_probe_lopri_when_ambiguous: false
                                )"),
                                         ParseTextProto<proto::AllocBundle>(R"(
                                  flow_allocs {
@@ -944,7 +960,8 @@ TEST(HeypSigcomm20ClusterAllocatorTest, WithBurstinessAndCongestion) {
                                    }
                                    hipri_rate_limit_bps: 600
                                  }
-                               )"));
+                               )"),
+                                        1);
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
@@ -1015,6 +1032,7 @@ TEST(HeypSigcomm20ClusterAllocatorTest, ZeroDemand) {
                                  enable_bonus: true
                                  oversub_factor: 1.1
                                  heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
+                                 heyp_probe_lopri_when_ambiguous: false
                                )"),
                                         ParseTextProto<proto::AllocBundle>(R"(
                                  flow_allocs {
@@ -1024,7 +1042,8 @@ TEST(HeypSigcomm20ClusterAllocatorTest, ZeroDemand) {
                                    }
                                    hipri_rate_limit_bps: 600
                                  }
-                               )"));
+                               )"),
+                                        1);
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
@@ -1079,6 +1098,7 @@ TEST(HeypSigcomm20ClusterAllocatorTest, ZeroLimit) {
                                  enable_bonus: true
                                  oversub_factor: 1.1
                                  heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
+                                 heyp_probe_lopri_when_ambiguous: false
                                )"),
                                         ParseTextProto<proto::AllocBundle>(R"(
                                  flow_allocs {
@@ -1088,7 +1108,8 @@ TEST(HeypSigcomm20ClusterAllocatorTest, ZeroLimit) {
                                    }
                                    hipri_rate_limit_bps: 0
                                  }
-                               )"));
+                               )"),
+                                        1);
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
@@ -1143,6 +1164,7 @@ TEST(HeypSigcomm20ClusterAllocatorTest, AllLOPRI) {
                                  enable_bonus: true
                                  oversub_factor: 1.1
                                  heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
+                                 heyp_probe_lopri_when_ambiguous: false
                                )"),
                                         ParseTextProto<proto::AllocBundle>(R"(
                                  flow_allocs {
@@ -1152,7 +1174,8 @@ TEST(HeypSigcomm20ClusterAllocatorTest, AllLOPRI) {
                                    }
                                    lopri_rate_limit_bps: 50
                                  }
-                               )"));
+                               )"),
+                                        1);
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
@@ -1318,6 +1341,7 @@ TEST(HeypSigcomm20ClusterAllocatorTest, BoundedLOPRICongestion) {
                                  enable_bonus: true
                                  oversub_factor: 1.1
                                  heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
+                                 heyp_probe_lopri_when_ambiguous: false
                                )"),
                                         ParseTextProto<proto::AllocBundle>(R"(
                                  flow_allocs {
@@ -1328,7 +1352,8 @@ TEST(HeypSigcomm20ClusterAllocatorTest, BoundedLOPRICongestion) {
                                    hipri_rate_limit_bps: 100000
                                    lopri_rate_limit_bps: 50000
                                  }
-                               )"));
+                               )"),
+                                        1.1);
 
   int64_t expected_max_lopri_usage = 0;
   proto::AllocBundle result;
@@ -1357,7 +1382,7 @@ TEST(HeypSigcomm20ClusterAllocatorTest, BoundedLOPRICongestion) {
   alloc->AddInfo(T(2), info_gen.AddUsage(16000, 5000));
   update_bundle_and_collect(alloc->GetAllocs());
   EXPECT_THAT(expected_max_lopri_usage,
-              testing::AllOf(testing::Ge(45000), testing::Le(kTotalOversub * 40000)));
+              testing::AllOf(testing::Ge(40000), testing::Le(kTotalOversub * 40000)));
 
   alloc->Reset();
   alloc->AddInfo(T(3), info_gen.AddUsage(16000, 4000));
@@ -1398,7 +1423,8 @@ TEST(HeypSigcomm20ClusterAllocatorTest, UnboundedLOPRICongestion) {
                                    hipri_rate_limit_bps: 100000
                                    lopri_rate_limit_bps: 50000
                                  }
-                               )"));
+                               )"),
+                                        1);
 
   int64_t expected_max_lopri_usage = 0;
   proto::AllocBundle result;
@@ -1427,7 +1453,7 @@ TEST(HeypSigcomm20ClusterAllocatorTest, UnboundedLOPRICongestion) {
   alloc->AddInfo(T(2), info_gen.AddUsage(16000, 5000));
   update_bundle_and_collect(alloc->GetAllocs());
   EXPECT_THAT(expected_max_lopri_usage,
-              testing::AllOf(testing::Ge(45000), testing::Le(kTotalOversub * 40000)));
+              testing::AllOf(testing::Ge(40000), testing::Le(kTotalOversub * 40000)));
 
   alloc->Reset();
   alloc->AddInfo(T(3), info_gen.AddUsage(16000, 4000));

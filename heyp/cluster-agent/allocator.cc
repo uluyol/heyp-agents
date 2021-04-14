@@ -119,12 +119,14 @@ class HeypSigcomm20Allocator : public PerAggAllocator {
   };
 
   const proto::ClusterAllocatorConfig config_;
+  const double demand_multiplier_;
   FlowMap<PerAggState> agg_states_;
 
  public:
   HeypSigcomm20Allocator(const proto::ClusterAllocatorConfig& config,
-                         FlowMap<proto::FlowAlloc> agg_admissions)
-      : config_(config) {
+                         FlowMap<proto::FlowAlloc> agg_admissions,
+                         double demand_multiplier)
+      : config_(config), demand_multiplier_(demand_multiplier) {
     for (const auto& flow_alloc_pair : agg_admissions) {
       agg_states_[flow_alloc_pair.first] = {.alloc = flow_alloc_pair.second};
     }
@@ -141,21 +143,28 @@ class HeypSigcomm20Allocator : public PerAggAllocator {
     cur_state.last_cum_hipri_usage_bytes = agg_info.parent().cum_hipri_usage_bytes();
     cur_state.last_cum_lopri_usage_bytes = agg_info.parent().cum_lopri_usage_bytes();
 
-    cur_state.frac_lopri = FracAdmittedAtLOPRI(agg_info.parent(), cur_state.alloc);
+    int64_t hipri_admission = cur_state.alloc.hipri_rate_limit_bps();
+    int64_t lopri_admission = cur_state.alloc.lopri_rate_limit_bps();
+
+    cur_state.frac_lopri =
+        FracAdmittedAtLOPRI(agg_info.parent(), hipri_admission, lopri_admission);
+    if (config_.heyp_probe_lopri_when_ambiguous()) {
+      ShouldProbeLOPRI(agg_info, hipri_admission, lopri_admission, demand_multiplier_,
+                       &cur_state.frac_lopri);
+    }
 
     ABSL_ASSERT(cur_state.frac_lopri >= 0);
     ABSL_ASSERT(cur_state.frac_lopri <= 1);
 
-    std::vector<bool> lopri_children =
-        HeypSigcomm20PickLOPRIChildren(agg_info, cur_state.frac_lopri);
-
-    int64_t hipri_admission = cur_state.alloc.hipri_rate_limit_bps();
-    int64_t lopri_admission = cur_state.alloc.lopri_rate_limit_bps();
+    // Burstiness matters for selecting children and assigning them rate limits.
     if (config_.enable_burstiness()) {
       double burstiness = BweBurstinessFactor(agg_info);
       hipri_admission = hipri_admission * burstiness;
       lopri_admission = lopri_admission * burstiness;
     }
+
+    std::vector<bool> lopri_children =
+        HeypSigcomm20PickLOPRIChildren(agg_info, cur_state.frac_lopri);
 
     std::vector<int64_t> hipri_demands;
     std::vector<int64_t> lopri_demands;
@@ -209,7 +218,8 @@ class HeypSigcomm20Allocator : public PerAggAllocator {
 
 std::unique_ptr<ClusterAllocator> ClusterAllocator::Create(
     const proto::ClusterAllocatorConfig& config,
-    const proto::AllocBundle& cluster_wide_allocs, AllocRecorder* recorder) {
+    const proto::AllocBundle& cluster_wide_allocs, double demand_multiplier,
+    AllocRecorder* recorder) {
   FlowMap<proto::FlowAlloc> cluster_admissions = ToAdmissionsMap(cluster_wide_allocs);
   switch (config.type()) {
     case proto::ClusterAllocatorType::BWE:
@@ -217,10 +227,10 @@ std::unique_ptr<ClusterAllocator> ClusterAllocator::Create(
           absl::make_unique<BweAggAllocator>(config, std::move(cluster_admissions)),
           recorder));
     case proto::ClusterAllocatorType::HEYP_SIGCOMM20:
-      return absl::WrapUnique(
-          new ClusterAllocator(absl::make_unique<HeypSigcomm20Allocator>(
-                                   config, std::move(cluster_admissions)),
-                               recorder));
+      return absl::WrapUnique(new ClusterAllocator(
+          absl::make_unique<HeypSigcomm20Allocator>(config, std::move(cluster_admissions),
+                                                    demand_multiplier),
+          recorder));
   }
   LOG(FATAL) << "unreachable: got cluster allocator type: " << config.type();
   return nullptr;

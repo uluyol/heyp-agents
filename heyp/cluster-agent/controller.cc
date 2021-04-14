@@ -1,6 +1,8 @@
 #include "heyp/cluster-agent/controller.h"
 
 #include "absl/base/macros.h"
+#include "glog/logging.h"
+#include "heyp/alg/debug.h"
 #include "heyp/cluster-agent/allocator.h"
 #include "heyp/cluster-agent/allocs.h"
 
@@ -52,16 +54,24 @@ void ClusterController::UpdateInfo(const proto::InfoBundle& info) {
 }
 
 void ClusterController::ComputeAndBroadcast() {
+  const bool should_debug = DebugQosAndRateLimitSelection();
   state_mu_.Lock();
   allocator_->Reset();
   {
     ClusterAllocator* alloc = allocator_.get();
-    aggregator_->ForEachAgg([alloc](absl::Time time, const proto::AggInfo& info) {
-      alloc->AddInfo(time, info);
-    });
+    aggregator_->ForEachAgg(
+        [alloc, should_debug](absl::Time time, const proto::AggInfo& info) {
+          if (should_debug) {
+            LOG(INFO) << "got info: " << info.DebugString();
+          }
+          alloc->AddInfo(time, info);
+        });
   }
   AllocSet allocs = allocator_->GetAllocs();
   state_mu_.Unlock();
+  if (should_debug) {
+    LOG(INFO) << "got allocs: " << allocs;
+  }
 
   absl::flat_hash_map<int64_t, proto::AllocBundle> alloc_bundles =
       BundleByHost(std::move(allocs));

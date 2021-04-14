@@ -120,69 +120,67 @@ TEST(HeypSigcomm20PickLOPRIChildrenTest, FlipCompletely) {
 }
 
 TEST(FracAdmittedAtLOPRITest, Basic) {
-  EXPECT_EQ(
-      FracAdmittedAtLOPRI(ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 1000"),
-                          ParseTextProto<proto::FlowAlloc>(R"(
-                  hipri_rate_limit_bps: 600
-                  lopri_rate_limit_bps: 200
-                )")),
-      0.25);
+  EXPECT_EQ(FracAdmittedAtLOPRI(
+                ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 1000"), 600, 200),
+            0.25);
 
-  EXPECT_EQ(
-      FracAdmittedAtLOPRI(ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 640"),
-                          ParseTextProto<proto::FlowAlloc>(R"(
-                  hipri_rate_limit_bps: 600
-                  lopri_rate_limit_bps: 200
-                )")),
-      0.0625);
+  EXPECT_EQ(FracAdmittedAtLOPRI(
+                ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 640"), 600, 200),
+            0.0625);
 
-  EXPECT_EQ(
-      FracAdmittedAtLOPRI(ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 500"),
-                          ParseTextProto<proto::FlowAlloc>(R"(
-                  hipri_rate_limit_bps: 600
-                  lopri_rate_limit_bps: 200
-                )")),
-      0);
+  EXPECT_EQ(FracAdmittedAtLOPRI(
+                ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 500"), 600, 200),
+            0);
 }
 
 TEST(FracAdmittedAtLOPRITest, AllLOPRI) {
-  EXPECT_EQ(
-      FracAdmittedAtLOPRI(ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 1000"),
-                          ParseTextProto<proto::FlowAlloc>(R"(
-                  hipri_rate_limit_bps: 0
-                  lopri_rate_limit_bps: 900
-                )")),
-      1);
+  EXPECT_EQ(FracAdmittedAtLOPRI(
+                ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 1000"), 0, 900),
+            1);
 }
 
 TEST(FracAdmittedAtLOPRITest, AllHIPRI) {
-  EXPECT_EQ(
-      FracAdmittedAtLOPRI(ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 1000"),
-                          ParseTextProto<proto::FlowAlloc>(R"(
-                  hipri_rate_limit_bps: 600
-                  lopri_rate_limit_bps: 0
-                )")),
-      0);
+  EXPECT_EQ(FracAdmittedAtLOPRI(
+                ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 1000"), 600, 0),
+            0);
 }
 
 TEST(FracAdmittedAtLOPRITest, ZeroLimit) {
-  EXPECT_EQ(
-      FracAdmittedAtLOPRI(ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 1000"),
-                          ParseTextProto<proto::FlowAlloc>(R"(
-                  hipri_rate_limit_bps: 0
-                  lopri_rate_limit_bps: 0
-                )")),
-      0);
+  EXPECT_EQ(FracAdmittedAtLOPRI(
+                ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 1000"), 0, 0),
+            0);
 }
 
 TEST(FracAdmittedAtLOPRITest, ZeroDemand) {
-  EXPECT_EQ(
-      FracAdmittedAtLOPRI(ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 0"),
-                          ParseTextProto<proto::FlowAlloc>(R"(
-                  hipri_rate_limit_bps: 600
-                  lopri_rate_limit_bps: 0
-                )")),
-      0);
+  EXPECT_EQ(FracAdmittedAtLOPRI(
+                ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 0"), 600, 0),
+            0);
+}
+
+TEST(ShouldProbeLOPRITest, Basic) {
+  proto::AggInfo info = ChildrenWithDemands({1000, 800, 600, 400, 200, 100});
+  info.mutable_parent()->set_predicted_demand_bps(2499);
+  double lopri_frac = -1;
+
+  EXPECT_FALSE(ShouldProbeLOPRI(info, 2500, 600, 1.9, &lopri_frac));
+  ASSERT_EQ(lopri_frac, -1);
+
+  info.mutable_parent()->set_predicted_demand_bps(2500);
+  EXPECT_TRUE(ShouldProbeLOPRI(info, 2500, 600, 1.9, &lopri_frac));
+  ASSERT_NEAR(lopri_frac, 0.04, 0.00001);
+
+  lopri_frac = 0.2;
+  info.mutable_parent()->set_predicted_demand_bps(3000);
+  EXPECT_TRUE(ShouldProbeLOPRI(info, 2500, 600, 1.9, &lopri_frac));
+  ASSERT_NEAR(lopri_frac, 0.2, 0.00001);
+
+  info.mutable_parent()->set_predicted_demand_bps(3000);
+  EXPECT_TRUE(ShouldProbeLOPRI(info, 2500, 600, 1.2, &lopri_frac));
+  ASSERT_NEAR(lopri_frac, 0.2, 0.00001);
+
+  lopri_frac = 0;
+  EXPECT_FALSE(ShouldProbeLOPRI(info, 2500, 0, 1.9, &lopri_frac));
+  ASSERT_EQ(lopri_frac, 0);
 }
 
 class HeypSigcomm20MaybeReviseLOPRIAdmissionTest : public testing::Test {

@@ -11,11 +11,29 @@
 
 namespace heyp {
 
+// HeypSigcomm20PickLOPRIChildren returns a bitmap of children that should use LOPRI.
+//
+// The total demand marked is aimed to be close to want_frac_lopri.
 std::vector<bool> HeypSigcomm20PickLOPRIChildren(const proto::AggInfo& agg_info,
                                                  const double want_frac_lopri);
 
+// FracAdmittedAtLOPRI returns the fraction of traffic that should ideally be sent at
+// LOPRI.
 double FracAdmittedAtLOPRI(const proto::FlowInfo& parent,
-                           const proto::FlowAlloc& cur_alloc);
+                           const int64_t hipri_rate_limit_bps,
+                           const int64_t lopri_rate_limit_bps);
+
+// ShouldProbeLOPRI returns true when the cluster controller should probe if there is
+// additional demand by sending traffic as LOPRI.
+//
+// This condition triggers when hipri_rate_limit ≤ demand ≤ demand_multiplier *
+// hipri_rate_limit.
+//
+// When returning true, the call will set lopri_frac to demand + the smallest child demand
+// (if larger than the current value of lopri_frac and fits within lopri_rate_limit_bps).
+bool ShouldProbeLOPRI(const proto::AggInfo& agg_info, const int64_t hipri_rate_limit_bps,
+                      const int64_t lopri_rate_limit_bps, double demand_multiplier,
+                      double* lopri_frac);
 
 // --- Following are mainly exposed for unit testing ---
 

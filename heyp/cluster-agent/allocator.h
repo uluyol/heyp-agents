@@ -19,7 +19,7 @@ class ClusterAllocator {
  public:
   static std::unique_ptr<ClusterAllocator> Create(
       const proto::ClusterAllocatorConfig& config,
-      const proto::AllocBundle& cluster_wide_allocs,
+      const proto::AllocBundle& cluster_wide_allocs, double demand_multiplier,
       AllocRecorder* recorder = nullptr /* optional */);
 
   ~ClusterAllocator();

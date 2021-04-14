@@ -70,6 +70,7 @@ cc_library(
     deps = [
         ":allocator",
         ":allocs",
+        "//heyp/alg:debug",
         "//heyp/flows:aggregator",
         "//heyp/proto:heyp_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
