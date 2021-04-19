@@ -3,6 +3,7 @@
 #include "absl/container/flat_hash_set.h"
 #include "absl/strings/ascii.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/str_join.h"
 #include "boost/process/args.hpp"
 #include "boost/process/child.hpp"
 #include "boost/process/io.hpp"
@@ -64,7 +65,8 @@ absl::StatusOr<std::string> FindDeviceResponsibleFor(
   } catch (const std::system_error& e) {
     return absl::InternalError(absl::StrCat("failed to run ip subprocess: ", e.what()));
   }
-  return absl::OkStatus();
+  return absl::NotFoundError(
+      absl::StrCat("requested addrs not found: ", absl::StrJoin(ip_addrs, " ")));
 }
 
 }  // namespace heyp
