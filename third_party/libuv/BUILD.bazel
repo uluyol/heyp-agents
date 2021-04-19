@@ -1,8 +1,9 @@
-load("@rules_foreign_cc//tools/build_defs:cmake.bzl", "cmake_external")
+load("@rules_foreign_cc//foreign_cc:cmake.bzl", "cmake")
 
-cmake_external(
+cmake(
     name = "libuv",
     lib_source = "@libuv//:all",
-    static_libraries = ["libuv_a.a"],
+    linkopts = ["-ldl"],
+    out_static_libs = ["libuv_a.a"],
     visibility = ["//heyp:__subpackages__"],
 )
