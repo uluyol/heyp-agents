@@ -113,8 +113,8 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string, collectAllocLo
 				}
 				dcMapperConfig.Mapping.Entries = append(dcMapperConfig.Mapping.Entries,
 					&pb.DCMapping_Entry{
-						HostAddr: n.GetExperimentAddr(),
-						Dc:       cluster.GetName(),
+						HostAddr: proto.String(n.GetExperimentAddr()),
+						Dc:       proto.String(cluster.GetName()),
 					})
 			}
 			for _, role := range n.Roles {

@@ -60,14 +60,6 @@ message DebugAllocRecord {
   repeated FlowAlloc flow_allocs = 3;
 }
 
-message DCMapping {
-  message Entry {
-    string host_addr = 1;
-    string dc = 2;
-  }
-  repeated Entry entries = 1;
-}
-
 service ClusterAgent {
   rpc RegisterHost(stream InfoBundle) returns(stream AllocBundle) {}
 }

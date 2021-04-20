@@ -8,8 +8,6 @@ package heyp.proto;
 
 option go_package = "github.com/uluyol/heyp-agents/go/proto";
 
-import "heyp/proto/heyp.proto";
-
 message DemandPredictorConfig {
   optional string time_window_dur = 1 [default = "10s"];
   optional double usage_multiplier = 2 [default = 1.1];
@@ -39,6 +37,14 @@ message HostDaemonConfig {
   optional string inform_period_dur = 2 [default = "2s"];
   optional string cluster_agent_addr = 3;
   optional string cluster_agent_connection_timeout_dur = 4 [default = "10s"];
+}
+
+message DCMapping {
+  message Entry {
+    optional string host_addr = 1;
+    optional string dc = 2;
+  }
+  repeated Entry entries = 1;
 }
 
 message StaticDCMapperConfig {
