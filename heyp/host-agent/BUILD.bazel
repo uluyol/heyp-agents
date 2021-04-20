@@ -81,6 +81,16 @@ cc_library(
 )
 
 cc_library(
+    name = "simulated-wan-db",
+    srcs = ["simulated-wan-db.cc"],
+    hdrs = ["simulated-wan-db.h"],
+    deps = [
+        "//heyp/proto:config_cc_proto",
+        "@com_google_absl//absl/container:flat_hash_map",
+    ],
+)
+
+cc_library(
     name = "urls",
     srcs = ["urls.cc"],
     hdrs = ["urls.h"],
@@ -126,6 +136,16 @@ cc_test(
         "//heyp/alg:demand-predictor",
         "//heyp/init:test-main",
         "//heyp/proto:constructors",
+    ],
+)
+
+cc_test(
+    name = "simulated-wan-db-test",
+    srcs = ["simulated-wan-db-test.cc"],
+    deps = [
+        ":simulated-wan-db",
+        "//heyp/init:test-main",
+        "//heyp/proto:parse-text",
     ],
 )
 

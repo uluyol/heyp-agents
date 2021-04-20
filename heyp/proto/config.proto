@@ -51,6 +51,29 @@ message StaticDCMapperConfig {
   optional DCMapping mapping = 1;
 }
 
+enum NetemDelayDist {
+  NORMAL = 0;
+  UNIFORM = 1;
+  PARETO = 2;
+  PARETONORMAL = 3;
+}
+
+message NetemConfig {
+  optional int32 delay_ms = 1;
+  optional int32 delay_jitter_ms = 2;
+  optional double delay_correlation_pct = 3;
+  optional NetemDelayDist delay_dist = 4 [default = NORMAL];
+}
+
+message SimulatedWanConfig {
+  message Pair {
+    optional string src_dc = 1;
+    optional string dst_dc = 2;
+    optional NetemConfig netem = 3;
+  }
+  repeated Pair dc_pairs = 1;
+}
+
 message HostAgentConfig {
   repeated string this_host_addrs = 1;
   optional HostFlowTrackerConfig flow_tracker = 2;
@@ -59,6 +82,7 @@ message HostAgentConfig {
   optional HostEnforcerConfig enforcer = 5;
   optional HostDaemonConfig daemon = 6;
   optional StaticDCMapperConfig dc_mapper = 7;
+  optional SimulatedWanConfig simulated_wan = 8;
 }
 
 enum ClusterAllocatorType {
