@@ -1,5 +1,7 @@
 #include "heyp/flows/dc-mapper.h"
 
+#include <algorithm>
+
 #include "glog/logging.h"
 
 namespace heyp {
@@ -8,6 +10,9 @@ StaticDCMapper::StaticDCMapper(const proto::StaticDCMapperConfig& config) {
   for (const auto& entry : config.mapping().entries()) {
     host_addr_to_dc_[entry.host_addr()] = entry.dc();
     dc_to_all_hosts_[entry.dc()].push_back(entry.host_addr());
+    if (std::find(all_dcs_.begin(), all_dcs_.end(), entry.dc()) == all_dcs_.end()) {
+      all_dcs_.push_back(entry.dc());
+    }
   }
 }
 
@@ -26,5 +31,7 @@ const std::vector<std::string>* StaticDCMapper::HostsForDC(absl::string_view dc)
   }
   return &iter->second;
 }
+
+const std::vector<std::string>& StaticDCMapper::AllDCs() const { return all_dcs_; }
 
 }  // namespace heyp

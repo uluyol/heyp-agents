@@ -21,9 +21,12 @@ class StaticDCMapper : public DCMapper {
   explicit StaticDCMapper(const proto::StaticDCMapperConfig& config);
 
   const std::string* HostDC(absl::string_view host) const override;
+
   const std::vector<std::string>* HostsForDC(absl::string_view dc) const;
+  const std::vector<std::string>& AllDCs() const;
 
  private:
+  std::vector<std::string> all_dcs_;
   absl::flat_hash_map<std::string, std::string> host_addr_to_dc_;
   absl::flat_hash_map<std::string, std::vector<std::string>> dc_to_all_hosts_;
 };

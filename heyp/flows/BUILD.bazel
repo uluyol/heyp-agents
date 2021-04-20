@@ -54,6 +54,16 @@ cc_test(
 )
 
 cc_test(
+    name = "dc-mapper-test",
+    srcs = ["dc-mapper-test.cc"],
+    deps = [
+        ":dc-mapper",
+        "//heyp/init:test-main",
+        "//heyp/proto:parse-text",
+    ],
+)
+
+cc_test(
     name = "state-test",
     srcs = ["state-test.cc"],
     deps = [
