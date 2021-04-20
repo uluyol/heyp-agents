@@ -15,16 +15,16 @@ http_archive(
 
 http_archive(
     name = "com_google_absl",
-    sha256 = "46e8249a18be8968777890803b57f9d7a5e5f3b6e432951f121114161cb51427",
-    strip_prefix = "abseil-cpp-184d2f8364bcb05e413ec4c72cad0cf86e712d1c",
-    urls = ["https://github.com/abseil/abseil-cpp/archive/184d2f8364bcb05e413ec4c72cad0cf86e712d1c.zip"],
+    sha256 = "f8db92e5d3b9a880797b5f04839b36e1880253a97fd590db534f2efa5560fe43",
+    strip_prefix = "abseil-cpp-732c6540c19610d2653ce73c09eb6cb66da15f42",
+    urls = ["https://github.com/abseil/abseil-cpp/archive/732c6540c19610d2653ce73c09eb6cb66da15f42.zip"],
 )
 
 http_archive(
     name = "gtest",
-    sha256 = "355097d91fc3b412f122958f57cdc6ec42eb60d445b6c48be580ee639aed5b26",
-    strip_prefix = "googletest-18f8200e3079b0e54fa00cb7ac55d4c39dcf6da6",
-    urls = ["https://github.com/google/googletest/archive/18f8200e3079b0e54fa00cb7ac55d4c39dcf6da6.zip"],
+    sha256 = "03930e55830249eb0bf58c52bcacc7fbe309d9208f1048bb3e93466582cd7b0f",
+    strip_prefix = "googletest-eaf9a3fd77869cf95befb87455a2e2a2e85044ff",
+    urls = ["https://github.com/google/googletest/archive/eaf9a3fd77869cf95befb87455a2e2a2e85044ff.zip"],
 )
 
 http_archive(
@@ -36,9 +36,9 @@ http_archive(
 
 http_archive(
     name = "glog",
-    sha256 = "cbba86b5a63063999e0fc86de620a3ad22d6fd2aa5948bff4995dcd851074a0b",
-    strip_prefix = "glog-c8f8135a5720aee7de8328b42e4c43f8aa2e60aa",
-    urls = ["https://github.com/google/glog/archive/c8f8135a5720aee7de8328b42e4c43f8aa2e60aa.zip"],
+    sha256 = "83f3099c9c5fd81f0a4ee76a24b08134d83e8da4101771334e1fa52d41d27385",
+    strip_prefix = "glog-8d40d7564d4a06d77d707d7c4a50c8b5dc45dd80",
+    urls = ["https://github.com/google/glog/archive/8d40d7564d4a06d77d707d7c4a50c8b5dc45dd80.zip"],
 )
 
 http_archive(
@@ -49,9 +49,9 @@ http_archive(
 
 http_archive(
     name = "com_github_nelhage_rules_boost",
-    sha256 = "23365db335d049a97620ab6aa639eeee7bf0d0d262c778e8dbe70164b249c918",
-    strip_prefix = "rules_boost-fbac9be7640ecc0fab075233d394f08f1a37e449",
-    urls = ["https://github.com/nelhage/rules_boost/archive/fbac9be7640ecc0fab075233d394f08f1a37e449.zip"],
+    sha256 = "f37ef75e6dff554cd97cac3e4640a9933df3730ccb2a061f525528a69a622f42",
+    strip_prefix = "rules_boost-4ed7be18eef9798fb7f8c52c1235818be6b8d0fe",
+    urls = ["https://github.com/nelhage/rules_boost/archive/4ed7be18eef9798fb7f8c52c1235818be6b8d0fe.zip"],
 )
 
 load("@com_github_nelhage_rules_boost//:boost/boost.bzl", "boost_deps")
@@ -60,10 +60,10 @@ boost_deps()
 
 http_archive(
     name = "com_github_grpc_grpc",
-    sha256 = "0af0b937d5a766006f3dba6507ebbe698128a868bc0c7e5dd63f6cbb764a4e9c",
-    strip_prefix = "grpc-893466127810d97d8f9ce8f2b312423a11912b48",
+    sha256 = "509a2bc258e20a9573555733e6a126048f1beeb321c18c969758ccce1171ddf7",
+    strip_prefix = "grpc-ab3096f12c92044b9d0a38c1c2dfcbea58488da6",
     urls = [
-        "https://github.com/grpc/grpc/archive/893466127810d97d8f9ce8f2b312423a11912b48.tar.gz",
+        "https://github.com/grpc/grpc/archive/ab3096f12c92044b9d0a38c1c2dfcbea58488da6.tar.gz",
     ],
 )
 
@@ -120,6 +120,7 @@ rules_foreign_cc_dependencies()
 
 http_archive(
     name = "com_google_tcmalloc",
-    strip_prefix = "tcmalloc-2258a12ee4516d27c675c2e968210f1836cf49db",
-    url = "https://github.com/google/tcmalloc/archive/2258a12ee4516d27c675c2e968210f1836cf49db.zip",
+    sha256 = "1b806acb7abef750d1cbf50aa2cbd7600b51565fbffd5431d7bd4b0ff2285b83",
+    strip_prefix = "tcmalloc-c1938e80cb0d3610d6b4469c6a032076ceeafb7a",
+    url = "https://github.com/google/tcmalloc/archive/c1938e80cb0d3610d6b4469c6a032076ceeafb7a.zip",
 )
