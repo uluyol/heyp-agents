@@ -1,5 +1,13 @@
-build --cxxopt=-std=c++17
+# Pass PATH, CC, CXX and LLVM_CONFIG variables from the environment.
+build --action_env=CC
+build --action_env=CXX
+build --action_env=LLVM_CONFIG
+build --action_env=PATH
+
+# We already have absl in the build, define absl=1 to tell googletest to use absl for backtrace.
 build --define absl=1
+
+build --cxxopt=-std=c++17
 build --action_env=CFLAGS=-fno-omit-frame-pointer
 build --action_env=CXXFLAGS=-fno-omit-frame-pointer
 
