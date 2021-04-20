@@ -38,6 +38,10 @@ double BweBurstinessFactor(const proto::AggInfo& info);
 
 // EvenlyDistributeExtra computes how must extra bandwidth can be given to each
 // child if evenly distributed.
+//
+// num_demands is the number of demands in demands. This is useful when demands are
+// partitioned, but demands still contains an entry for each child. At other times,
+// num_demands should equal demands.size().
 int64_t EvenlyDistributeExtra(int64_t admission, const std::vector<int64_t>& demands,
                               int64_t waterlevel);
 

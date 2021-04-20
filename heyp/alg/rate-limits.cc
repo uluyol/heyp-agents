@@ -1,7 +1,5 @@
 #include "heyp/alg/rate-limits.h"
 
-#include "absl/base/macros.h"
-
 namespace heyp {
 
 std::ostream& operator<<(std::ostream& os, const RateLimits& limits) {
@@ -19,9 +17,17 @@ double BweBurstinessFactor(const proto::AggInfo& info) {
     return 1;
   }
 
-  double burstiness = sum_child_demand_bps / parent_demand_bps;
-  ABSL_ASSERT(burstiness >= 1);
-  return burstiness;
+  if (sum_child_demand_bps < parent_demand_bps) {
+    // Due to the fact that we have multiple ways of measuring usage (one-shot average
+    // over a window, EWMA based on multiple fine-grained values), it's possible that the
+    // parent has higher demand that the sum of all children.
+    //
+    // Rather than try and change usage measurement and demand estimation to make this
+    // impossible, just handle it here.
+    return 1.0;
+  }
+
+  return sum_child_demand_bps / parent_demand_bps;
 }
 
 int64_t EvenlyDistributeExtra(int64_t admission, const std::vector<int64_t>& demands,
