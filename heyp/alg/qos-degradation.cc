@@ -10,15 +10,25 @@ namespace heyp {
 template <bool StateToIncrease>
 void GreedyAssignToMinimizeGap(GreedyAssignToMinimizeGapArgs args,
                                std::vector<bool>& lopri_children) {
-  for (size_t child_i : args.children_sorted_by_dec_demand) {
+  for (size_t i = 0; i < args.children_sorted_by_dec_demand.size(); ++i) {
+    const size_t child_i = args.children_sorted_by_dec_demand[i];
     if (lopri_children[child_i] == StateToIncrease) {
       continue;  // child already belongs to our bin, don't flip
     }
     // Try to flip child_i to our bin.
     int64_t next_demand =
         args.cur_demand + args.agg_info.children(child_i).predicted_demand_bps();
+
     if (next_demand > args.want_demand) {
-      continue;  // flipping child_i overshoots the goal
+      // Don't flip child_i if there are more children with smaller demands to flip.
+      bool skip = i < args.children_sorted_by_dec_demand.size() - 1;
+
+      // Don't flip even the last child if its demand is > 2 * the gap.
+      skip = skip || (next_demand > 2 * args.want_demand - args.cur_demand);
+
+      if (skip) {
+        continue;  // flipping child_i overshoots the goal
+      }
     }
     // Safe to flip child_i;
     lopri_children[child_i] = StateToIncrease;
@@ -48,7 +58,6 @@ std::vector<bool> HeypSigcomm20PickLOPRIChildren(const proto::AggInfo& agg_info,
 
   if (should_debug) {
     LOG(INFO) << "agg_info: " << agg_info.DebugString();
-    LOG(INFO) << "want_frac_lopri: " << want_frac_lopri;
   }
 
   std::vector<bool> lopri_children(agg_info.children_size(), false);
@@ -85,7 +94,9 @@ std::vector<bool> HeypSigcomm20PickLOPRIChildren(const proto::AggInfo& agg_info,
 
   if (static_cast<double>(lopri_demand) / static_cast<double>(total_demand) >
       want_frac_lopri) {
-    // Move from LOPRI to HIPRI
+    if (should_debug) {
+      LOG(INFO) << "move from LOPRI to HIPRI";
+    }
     int64_t hipri_demand = total_demand - lopri_demand;
     int64_t want_demand = (1 - want_frac_lopri) * total_demand;
     GreedyAssignToMinimizeGap<false>(
@@ -97,7 +108,9 @@ std::vector<bool> HeypSigcomm20PickLOPRIChildren(const proto::AggInfo& agg_info,
         },
         lopri_children);
   } else {
-    // Move from HIPRI to LOPRI
+    if (should_debug) {
+      LOG(INFO) << "move from HIPRI to LOPRI";
+    }
     int64_t want_demand = want_frac_lopri * total_demand;
     GreedyAssignToMinimizeGap<true>(
         {
@@ -132,9 +145,11 @@ double FracAdmittedAtLOPRI(const proto::FlowInfo& parent,
   return 0;
 }
 
-bool ShouldProbeLOPRI(const proto::AggInfo& agg_info, const int64_t hipri_rate_limit_bps,
-                      const int64_t lopri_rate_limit_bps, double demand_multiplier,
-                      double* lopri_frac) {
+double FracAdmittedAtLOPRIToProbe(const proto::AggInfo& agg_info,
+                                  const int64_t hipri_rate_limit_bps,
+                                  const int64_t lopri_rate_limit_bps,
+                                  const double demand_multiplier,
+                                  const double lopri_frac) {
   const bool should_debug = DebugQosAndRateLimitSelection();
 
   if (should_debug) {
@@ -142,7 +157,7 @@ bool ShouldProbeLOPRI(const proto::AggInfo& agg_info, const int64_t hipri_rate_l
     LOG(INFO) << "cur limits: (" << hipri_rate_limit_bps << ", " << lopri_rate_limit_bps
               << ")";
     LOG(INFO) << "demand_multiplier: " << demand_multiplier;
-    LOG(INFO) << "(initial) lopri_frac: " << *lopri_frac;
+    LOG(INFO) << "initial lopri_frac: " << lopri_frac;
   }
 
   if (agg_info.parent().predicted_demand_bps() < hipri_rate_limit_bps) {
@@ -151,7 +166,7 @@ bool ShouldProbeLOPRI(const proto::AggInfo& agg_info, const int64_t hipri_rate_l
                 << agg_info.parent().predicted_demand_bps() << " < "
                 << hipri_rate_limit_bps << ")";
     }
-    return false;
+    return lopri_frac;
   }
   if (agg_info.parent().predicted_demand_bps() >
       demand_multiplier * hipri_rate_limit_bps) {
@@ -160,13 +175,13 @@ bool ShouldProbeLOPRI(const proto::AggInfo& agg_info, const int64_t hipri_rate_l
                 << agg_info.parent().predicted_demand_bps() << " > "
                 << demand_multiplier * hipri_rate_limit_bps << ")";
     }
-    return false;
+    return lopri_frac;
   }
   if (agg_info.children_size() == 0) {
     if (should_debug) {
       LOG(INFO) << "no children";
     }
-    return false;
+    return lopri_frac;
   }
   int64_t smallest_child_demand_bps = agg_info.children(0).predicted_demand_bps();
   for (const proto::FlowInfo& child : agg_info.children()) {
@@ -179,23 +194,22 @@ bool ShouldProbeLOPRI(const proto::AggInfo& agg_info, const int64_t hipri_rate_l
       LOG(INFO) << "smallest child demand > lopri rate limit ("
                 << smallest_child_demand_bps << " > " << lopri_rate_limit_bps << ")";
     }
-    return false;
+    return lopri_frac;
   }
 
   double revised_frac = 1.00001 /* account for rounding error */ *
                         static_cast<double>(smallest_child_demand_bps) /
                         static_cast<double>(agg_info.parent().predicted_demand_bps());
-  if (revised_frac > *lopri_frac) {
+  if (revised_frac > lopri_frac) {
     if (should_debug) {
-      LOG(INFO) << "revised lopri frac from " << *lopri_frac << " to " << revised_frac;
+      LOG(INFO) << "revised lopri frac from " << lopri_frac << " to " << revised_frac;
     }
-    *lopri_frac = revised_frac;
+    return revised_frac;
   } else if (should_debug) {
-    LOG(INFO) << "existing lopri frac (" << *lopri_frac
+    LOG(INFO) << "existing lopri frac (" << lopri_frac
               << ") is larger than needed for probing (" << revised_frac << ")";
   }
-
-  return true;
+  return lopri_frac;
 }
 
 }  // namespace heyp

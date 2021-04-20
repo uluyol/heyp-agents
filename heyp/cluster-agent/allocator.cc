@@ -1,6 +1,8 @@
 #include "heyp/cluster-agent/allocator.h"
 
 #include "absl/container/flat_hash_map.h"
+#include "absl/strings/str_join.h"
+#include "heyp/alg/debug.h"
 #include "heyp/alg/qos-degradation.h"
 #include "heyp/alg/rate-limits.h"
 #include "heyp/proto/alg.h"
@@ -113,6 +115,7 @@ class HeypSigcomm20Allocator : public PerAggAllocator {
   struct PerAggState {
     proto::FlowAlloc alloc;
     double frac_lopri = 0;
+    double frac_lopri_with_probing = 0;
     absl::Time last_time = absl::UnixEpoch();
     int64_t last_cum_hipri_usage_bytes = 0;
     int64_t last_cum_lopri_usage_bytes = 0;
@@ -134,6 +137,8 @@ class HeypSigcomm20Allocator : public PerAggAllocator {
 
   std::vector<proto::FlowAlloc> AllocAgg(absl::Time time,
                                          const proto::AggInfo& agg_info) override {
+    const bool should_debug = DebugQosAndRateLimitSelection();
+
     PerAggState& cur_state = agg_states_.at(agg_info.parent().flow());
     cur_state.alloc.set_lopri_rate_limit_bps(HeypSigcomm20MaybeReviseLOPRIAdmission(
         config_.heyp_acceptable_measured_ratio_over_intended_ratio(), time,
@@ -146,36 +151,68 @@ class HeypSigcomm20Allocator : public PerAggAllocator {
     int64_t hipri_admission = cur_state.alloc.hipri_rate_limit_bps();
     int64_t lopri_admission = cur_state.alloc.lopri_rate_limit_bps();
 
+    if (should_debug) {
+      LOG(INFO) << "allocating for time = " << time;
+      LOG(INFO) << "hipri admission = " << hipri_admission
+                << " lopri admission = " << lopri_admission;
+    }
+
     cur_state.frac_lopri =
         FracAdmittedAtLOPRI(agg_info.parent(), hipri_admission, lopri_admission);
     if (config_.heyp_probe_lopri_when_ambiguous()) {
-      ShouldProbeLOPRI(agg_info, hipri_admission, lopri_admission, demand_multiplier_,
-                       &cur_state.frac_lopri);
+      cur_state.frac_lopri_with_probing =
+          FracAdmittedAtLOPRIToProbe(agg_info, hipri_admission, lopri_admission,
+                                     demand_multiplier_, cur_state.frac_lopri);
+    } else {
+      cur_state.frac_lopri_with_probing = cur_state.frac_lopri;
     }
 
-    ABSL_ASSERT(cur_state.frac_lopri >= 0);
-    ABSL_ASSERT(cur_state.frac_lopri <= 1);
+    if (should_debug) {
+      LOG(INFO) << "lopri_frac = " << cur_state.frac_lopri
+                << " lopri_frac_with_debugging = " << cur_state.frac_lopri_with_probing;
+    }
+
+    ABSL_ASSERT(cur_state.frac_lopri_with_probing >= 0);
+    ABSL_ASSERT(cur_state.frac_lopri_with_probing <= 1);
 
     // Burstiness matters for selecting children and assigning them rate limits.
     if (config_.enable_burstiness()) {
       double burstiness = BweBurstinessFactor(agg_info);
+      if (should_debug) {
+        LOG(INFO) << "burstiness factor = " << burstiness;
+      }
       hipri_admission = hipri_admission * burstiness;
       lopri_admission = lopri_admission * burstiness;
     }
 
     std::vector<bool> lopri_children =
-        HeypSigcomm20PickLOPRIChildren(agg_info, cur_state.frac_lopri);
+        HeypSigcomm20PickLOPRIChildren(agg_info, cur_state.frac_lopri_with_probing);
 
     std::vector<int64_t> hipri_demands;
     std::vector<int64_t> lopri_demands;
     hipri_demands.reserve(agg_info.children_size());
     lopri_demands.reserve(agg_info.children_size());
+    double sum_hipri_demand = 0;
+    double sum_lopri_demand = 0;
     for (size_t i = 0; i < agg_info.children_size(); ++i) {
       if (lopri_children[i]) {
         lopri_demands.push_back(agg_info.children(i).predicted_demand_bps());
+        sum_lopri_demand += lopri_demands.back();
       } else {
         hipri_demands.push_back(agg_info.children(i).predicted_demand_bps());
+        sum_hipri_demand += hipri_demands.back();
       }
+    }
+
+    double post_partition_lopri_frac =
+        sum_lopri_demand / (sum_hipri_demand + sum_lopri_demand);
+    if (post_partition_lopri_frac < cur_state.frac_lopri) {
+      // We may not send as much demand using LOPRI as we'd like because we weren't able
+      // to partition children in the correct proportion.
+      //
+      // To avoid inferring congestion when there is none, record the actual fraction of
+      // demand using LOPRI as frac_lopri when it is lower.
+      cur_state.frac_lopri = post_partition_lopri_frac;
     }
 
     routing_algos::SingleLinkMaxMinFairnessProblem problem;
@@ -184,6 +221,10 @@ class HeypSigcomm20Allocator : public PerAggAllocator {
     int64_t lopri_waterlevel =
         problem.ComputeWaterlevel(lopri_admission, {lopri_demands});
 
+    if (should_debug) {
+      LOG(INFO) << "hipri waterlevel = " << hipri_waterlevel
+                << " lopri waterlevel = " << lopri_waterlevel;
+    }
     int64_t hipri_bonus = 0;
     int64_t lopri_bonus = 0;
     if (config_.enable_bonus()) {
@@ -191,12 +232,22 @@ class HeypSigcomm20Allocator : public PerAggAllocator {
           EvenlyDistributeExtra(hipri_admission, hipri_demands, hipri_waterlevel);
       lopri_bonus =
           EvenlyDistributeExtra(lopri_admission, lopri_demands, lopri_waterlevel);
+      if (should_debug) {
+        LOG(INFO) << "lopri admission = " << lopri_admission << " demands = ["
+                  << absl::StrJoin(lopri_demands, " ")
+                  << "] lopri waterlevel = " << lopri_waterlevel;
+        LOG(INFO) << "hipri bonus = " << hipri_bonus << " lopri bonus = " << lopri_bonus;
+      }
     }
 
     const int64_t hipri_limit =
         config_.oversub_factor() * (hipri_waterlevel + hipri_bonus);
     const int64_t lopri_limit =
         config_.oversub_factor() * (lopri_waterlevel + lopri_bonus);
+
+    if (should_debug) {
+      LOG(INFO) << "hipri limit = " << hipri_limit << " lopri limit = " << lopri_limit;
+    }
 
     std::vector<proto::FlowAlloc> allocs;
     allocs.reserve(agg_info.children_size());

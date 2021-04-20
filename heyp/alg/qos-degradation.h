@@ -23,17 +23,21 @@ double FracAdmittedAtLOPRI(const proto::FlowInfo& parent,
                            const int64_t hipri_rate_limit_bps,
                            const int64_t lopri_rate_limit_bps);
 
-// ShouldProbeLOPRI returns true when the cluster controller should probe if there is
-// additional demand by sending traffic as LOPRI.
+// FracAdmittedAtLOPRIToProbe returns the LOPRI frac to use when the cluster controller
+// should probe if there is additional demand by sending traffic as LOPRI.
 //
 // This condition triggers when hipri_rate_limit ≤ demand ≤ demand_multiplier *
 // hipri_rate_limit.
 //
-// When returning true, the call will set lopri_frac to demand + the smallest child demand
+// When triggered, the call will set lopri_frac to demand + the smallest child demand
 // (if larger than the current value of lopri_frac and fits within lopri_rate_limit_bps).
-bool ShouldProbeLOPRI(const proto::AggInfo& agg_info, const int64_t hipri_rate_limit_bps,
-                      const int64_t lopri_rate_limit_bps, double demand_multiplier,
-                      double* lopri_frac);
+//
+// Else the return value will equal lopri_frac.
+double FracAdmittedAtLOPRIToProbe(const proto::AggInfo& agg_info,
+                                  const int64_t hipri_rate_limit_bps,
+                                  const int64_t lopri_rate_limit_bps,
+                                  const double demand_multiplier,
+                                  const double lopri_frac);
 
 // --- Following are mainly exposed for unit testing ---
 
@@ -84,12 +88,6 @@ int64_t HeypSigcomm20MaybeReviseLOPRIAdmission(
       LOG(INFO) << absl::StrFormat("flow: %s: no HIPRI usage",
                                    parent.flow().ShortDebugString());
     } else {
-      ABSL_ASSERT(hipri_usage_bytes > 0);
-      const double measured_lopri_over_hipri = lopri_usage_bytes / hipri_usage_bytes;
-      ABSL_ASSERT(cur_state.frac_lopri > 0);
-      const double want_hipri_over_lopri =
-          (1 - cur_state.frac_lopri) / cur_state.frac_lopri;
-
       // Now, if we try to send X Gbps as LOPRI, but only succeed at sending
       // 0.8 * X Gbps as LOPRI, this indicates that we have some congestion on
       // LOPRI. Therefore, we should lower the LOPRI rate limit to mitigate
@@ -100,8 +98,11 @@ int64_t HeypSigcomm20MaybeReviseLOPRIAdmission(
       // and marked a smaller portion of traffic with LOPRI than we should
       // have. It says nothing about LOPRI or HIPRI being congested, so leave
       // the rate limits alone.
+      ABSL_ASSERT(hipri_usage_bytes > 0);
+      ABSL_ASSERT(cur_state.frac_lopri > 0);
       const double measured_ratio_over_intended_ratio =
-          measured_lopri_over_hipri * want_hipri_over_lopri;
+          lopri_usage_bytes * (1 - cur_state.frac_lopri) /
+          (hipri_usage_bytes * cur_state.frac_lopri);
 
       if (measured_ratio_over_intended_ratio <
           acceptable_measured_ratio_over_intended_ratio) {
@@ -114,13 +115,13 @@ int64_t HeypSigcomm20MaybeReviseLOPRIAdmission(
         const int64_t new_lopri_limit =
             std::min<int64_t>(lopri_usage_bps, cur_state.alloc.lopri_rate_limit_bps());
 
-        auto to_mbps = [](auto bps) { return static_cast<double>(bps) / 1'000'000; };
+        auto to_mbps = [](auto bps) { return static_cast<double>(bps) / (1024 * 1024); };
 
         LOG(INFO) << absl::StrFormat(
             "flow: %s: inferred congestion (ratio = %f): sent %f Mbps as HIPRI "
-            "but only %f Mbps as LOPRI ",
+            "but only %f Mbps as LOPRI (lopri_frac = %f)",
             parent.flow().ShortDebugString(), measured_ratio_over_intended_ratio,
-            to_mbps(hipri_usage_bps), to_mbps(lopri_usage_bps));
+            to_mbps(hipri_usage_bps), to_mbps(lopri_usage_bps), cur_state.frac_lopri);
         LOG(INFO) << absl::StrFormat(
             "flow: %s: old LOPRI limit: %f Mbps new LOPRI limit: %f Mbps",
             parent.flow().ShortDebugString(),

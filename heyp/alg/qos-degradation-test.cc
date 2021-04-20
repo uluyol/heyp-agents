@@ -160,27 +160,19 @@ TEST(FracAdmittedAtLOPRITest, ZeroDemand) {
 TEST(ShouldProbeLOPRITest, Basic) {
   proto::AggInfo info = ChildrenWithDemands({1000, 800, 600, 400, 200, 100});
   info.mutable_parent()->set_predicted_demand_bps(2499);
-  double lopri_frac = -1;
 
-  EXPECT_FALSE(ShouldProbeLOPRI(info, 2500, 600, 1.9, &lopri_frac));
-  ASSERT_EQ(lopri_frac, -1);
+  ASSERT_EQ(FracAdmittedAtLOPRIToProbe(info, 2500, 600, 1.9, -1), -1);
 
   info.mutable_parent()->set_predicted_demand_bps(2500);
-  EXPECT_TRUE(ShouldProbeLOPRI(info, 2500, 600, 1.9, &lopri_frac));
-  ASSERT_NEAR(lopri_frac, 0.04, 0.00001);
-
-  lopri_frac = 0.2;
-  info.mutable_parent()->set_predicted_demand_bps(3000);
-  EXPECT_TRUE(ShouldProbeLOPRI(info, 2500, 600, 1.9, &lopri_frac));
-  ASSERT_NEAR(lopri_frac, 0.2, 0.00001);
+  ASSERT_NEAR(FracAdmittedAtLOPRIToProbe(info, 2500, 600, 1.9, -1), 0.04, 0.00001);
 
   info.mutable_parent()->set_predicted_demand_bps(3000);
-  EXPECT_TRUE(ShouldProbeLOPRI(info, 2500, 600, 1.2, &lopri_frac));
-  ASSERT_NEAR(lopri_frac, 0.2, 0.00001);
+  ASSERT_NEAR(FracAdmittedAtLOPRIToProbe(info, 2500, 600, 1.9, 0.2), 0.2, 0.00001);
 
-  lopri_frac = 0;
-  EXPECT_FALSE(ShouldProbeLOPRI(info, 2500, 0, 1.9, &lopri_frac));
-  ASSERT_EQ(lopri_frac, 0);
+  info.mutable_parent()->set_predicted_demand_bps(3000);
+  ASSERT_NEAR(FracAdmittedAtLOPRIToProbe(info, 2500, 600, 1.2, 0.2), 0.2, 0.00001);
+
+  ASSERT_EQ(FracAdmittedAtLOPRIToProbe(info, 2500, 0, 1.9, 0), 0);
 }
 
 class HeypSigcomm20MaybeReviseLOPRIAdmissionTest : public testing::Test {

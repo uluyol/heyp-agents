@@ -5,12 +5,20 @@
 #include "absl/memory/memory.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "heyp/alg/debug.h"
 #include "heyp/alg/demand-predictor.h"
 #include "heyp/cluster-agent/allocator.h"
 #include "heyp/proto/config.pb.h"
 #include "heyp/proto/parse-text.h"
 #include "heyp/proto/testing.h"
 #include "routing-algos/alg/max-min-fairness.h"
+
+using ::testing::AllOf;
+using ::testing::Ge;
+using ::testing::Gt;
+using ::testing::Le;
+using ::testing::Lt;
+using ::testing::UnorderedElementsAre;
 
 namespace heyp {
 
@@ -184,6 +192,8 @@ class SingleFGAllocBundleCollector {
     int64_t host_id;
     int64_t predicted_demand_bps;
     int64_t ewma_usage_bps;
+    int64_t cum_hipri_usage_bytes;
+    int64_t cum_lopri_usage_bytes;
     bool currently_lopri;
   };
 
@@ -197,6 +207,9 @@ class SingleFGAllocBundleCollector {
       fi->mutable_flow()->set_host_id(got.host_id);
       fi->set_predicted_demand_bps(got.predicted_demand_bps);
       fi->set_ewma_usage_bps(got.ewma_usage_bps);
+      fi->set_cum_usage_bytes(got.cum_hipri_usage_bytes + got.cum_lopri_usage_bytes);
+      fi->set_cum_hipri_usage_bytes(got.cum_hipri_usage_bytes);
+      fi->set_cum_lopri_usage_bytes(got.cum_lopri_usage_bytes);
       fi->set_currently_lopri(got.currently_lopri);
       controller_->UpdateInfo(b);
     }
@@ -265,7 +278,10 @@ class FixedDemandHostSimulator {
         controller_(controller),
         limits_bps_(true_demands_bps_.size(),
                     Limits{std::numeric_limits<int64_t>::max(), 0}),
+        instant_usages_bps_(true_demands_bps_.size(), 0),
         ewma_usages_bps_(true_demands_bps_.size(), 0),
+        cum_hipri_usages_bytes_(true_demands_bps_.size(), 2345),
+        cum_lopri_usages_bytes_(true_demands_bps_.size(), 1234),
         usage_histories_(true_demands_bps_.size(), std::vector<UsageHistoryEntry>{}),
         currently_lopris_(true_demands_bps_.size(), false) {
     demand_predictors_.reserve(true_demands_bps_.size());
@@ -278,38 +294,70 @@ class FixedDemandHostSimulator {
   void UpdateWithAvailableBandwidth(int64_t timestamp_sec,
                                     int64_t hipri_bottleneck_available_bps,
                                     int64_t lopri_bottleneck_available_bps) {
+    if (DebugQosAndRateLimitSelection()) {
+      LOG(INFO) << "==== time = " << timestamp_sec << " ====";
+    }
+
+    absl::Time now = absl::FromUnixSeconds(timestamp_sec);
     std::vector<int64_t> per_host_hipri_send = true_demands_bps_;
     std::vector<int64_t> per_host_lopri_send = true_demands_bps_;
+    int hipri_count = 0;
+    int lopri_count = 0;
     for (int i = 0; i < true_demands_bps_.size(); ++i) {
       // Fill HIPRI first, overflow to LOPRI.
       per_host_hipri_send[i] = std::min(true_demands_bps_[i], limits_bps_[i].hipri);
       per_host_lopri_send[i] =
           std::min(true_demands_bps_[i] - per_host_hipri_send[i], limits_bps_[i].lopri);
+
+      if (per_host_hipri_send[i] > 0) {
+        ++hipri_count;
+      }
+      if (per_host_lopri_send[i] > 0) {
+        ++lopri_count;
+      }
     }
 
-    int64_t hipri_waterlevel =
+    const int64_t hipri_waterlevel =
         routing_algos::SingleLinkMaxMinFairnessProblem().ComputeWaterlevel(
             hipri_bottleneck_available_bps, {per_host_hipri_send});
-    int64_t lopri_waterlevel =
+    const int64_t lopri_waterlevel =
         routing_algos::SingleLinkMaxMinFairnessProblem().ComputeWaterlevel(
             lopri_bottleneck_available_bps, {per_host_lopri_send});
 
+    LOG(INFO) << "hipri_waterlevel: " << hipri_waterlevel << " across " << hipri_count
+              << " children";
+    LOG(INFO) << "lopri_waterlevel: " << lopri_waterlevel << " across " << lopri_count
+              << " children";
+
     for (int i = 0; i < true_demands_bps_.size(); ++i) {
-      int64_t saw = std::min(per_host_hipri_send[i], hipri_waterlevel) +
-                    std::min(per_host_lopri_send[i], lopri_waterlevel);
-      if (!did_init_usage_) {
-        ewma_usages_bps_[i] = saw;
+      const int64_t saw_hipri = std::min(per_host_hipri_send[i], hipri_waterlevel);
+      const int64_t saw_lopri = std::min(per_host_lopri_send[i], lopri_waterlevel);
+
+      instant_usages_bps_[i] = saw_hipri + saw_lopri;
+
+      if (usage_histories_.at(i).empty()) {
+        cum_hipri_usages_bytes_.at(i) += saw_hipri / 8;
+        cum_lopri_usages_bytes_.at(i) += saw_lopri / 8;
       } else {
-        constexpr double kAlpha = 0.3;
-        ewma_usages_bps_.at(i) = kAlpha * saw + (1 - kAlpha) * ewma_usages_bps_[i];
+        absl::Time last = usage_histories_.at(i).back().time;
+        cum_hipri_usages_bytes_[i] += saw_hipri * absl::ToDoubleSeconds(now - last) / 8;
+        cum_lopri_usages_bytes_[i] += saw_lopri * absl::ToDoubleSeconds(now - last) / 8;
       }
 
-      usage_histories_.at(i).push_back(
-          {absl::FromUnixSeconds(timestamp_sec), ewma_usages_bps_[i]});
+      if (!did_init_usage_) {
+        ewma_usages_bps_[i] = instant_usages_bps_[i];
+      } else {
+        constexpr double kAlpha = 0.3;
+        ewma_usages_bps_.at(i) =
+            kAlpha * instant_usages_bps_[i] + (1 - kAlpha) * ewma_usages_bps_[i];
+      }
+
+      usage_histories_.at(i).push_back({now, ewma_usages_bps_[i]});
     }
 
     did_init_usage_ = true;
 
+    collector_.ResetAllocs();
     for (int i = 0; i < true_demands_bps_.size(); ++i) {
       collector_.Update(
           timestamp_sec,
@@ -318,6 +366,8 @@ class FixedDemandHostSimulator {
               .predicted_demand_bps = demand_predictors_.at(i)->FromUsage(
                   absl::FromUnixSeconds(timestamp_sec), usage_histories_.at(i)),
               .ewma_usage_bps = ewma_usages_bps_.at(i),
+              .cum_hipri_usage_bytes = cum_hipri_usages_bytes_.at(i),
+              .cum_lopri_usage_bytes = cum_lopri_usages_bytes_.at(i),
               .currently_lopri = currently_lopris_.at(i),
           }});
     }
@@ -335,8 +385,9 @@ class FixedDemandHostSimulator {
   }
 
   const std::vector<Limits>& limits_bps() const { return limits_bps_; }
-
+  const std::vector<int64_t>& instant_usages_bps() const { return instant_usages_bps_; }
   const std::vector<int64_t>& ewma_usages_bps() const { return ewma_usages_bps_; }
+  const std::vector<bool>& currently_lopris() const { return currently_lopris_; }
 
  private:
   const std::vector<int64_t> true_demands_bps_;
@@ -345,7 +396,10 @@ class FixedDemandHostSimulator {
 
   std::vector<std::unique_ptr<BweDemandPredictor>> demand_predictors_;
   std::vector<Limits> limits_bps_;
+  std::vector<int64_t> instant_usages_bps_;
   std::vector<int64_t> ewma_usages_bps_;
+  std::vector<int64_t> cum_hipri_usages_bytes_;
+  std::vector<int64_t> cum_lopri_usages_bytes_;
   std::vector<std::vector<UsageHistoryEntry>> usage_histories_;  // not garbage collected
   bool did_init_usage_ = false;
   std::vector<bool> currently_lopris_;
@@ -420,16 +474,73 @@ TEST(ClusterControllerTest, HeypSigcomm20ConvergesNoCongestion) {
                                kUsageMultiplier));
   FixedDemandHostSimulator demand_sim(
       {Gbps(3), Gbps(3), Gbps(3), Gbps(3), Gbps(3), Gbps(3)}, &controller);
+
   demand_sim.UpdateWithAvailableBandwidth(1, Gbps(10), Gbps(5));
-  EXPECT_THAT(
-      demand_sim.ewma_usages_bps(),
-      testing::UnorderedElementsAre(Gbps(10.0 / 6), Gbps(10.0 / 6), Gbps(10.0 / 6),
-                                    Gbps(10.0 / 6), Gbps(10.0 / 6), Gbps(10.0 / 6)));
+  EXPECT_THAT(demand_sim.ewma_usages_bps(),
+              UnorderedElementsAre(Gbps(10.0 / 6), Gbps(10.0 / 6), Gbps(10.0 / 6),
+                                   Gbps(10.0 / 6), Gbps(10.0 / 6), Gbps(10.0 / 6)));
   EXPECT_THAT(demand_sim.limits_bps(),
-              testing::UnorderedElementsAre(
+              UnorderedElementsAre(
                   ApproxLimit(Gbps(1.15 * 2), 0), ApproxLimit(Gbps(1.15 * 2), 0),
                   ApproxLimit(Gbps(1.15 * 2), 0), ApproxLimit(Gbps(1.15 * 2), 0),
                   ApproxLimit(Gbps(1.15 * 2), 0), ApproxLimit(0, Gbps(1.15 * 5))));
+
+  demand_sim.UpdateWithAvailableBandwidth(2, Gbps(10), Gbps(5));
+  EXPECT_THAT(demand_sim.instant_usages_bps(),
+              UnorderedElementsAre(Gbps(2), Gbps(2), Gbps(2), Gbps(2), Gbps(2), Gbps(3)));
+  // ewma is smoothed, just check that it is getting closer to where we want
+  EXPECT_THAT(demand_sim.ewma_usages_bps(),
+              UnorderedElementsAre(Gt(Gbps(1.3)), Gt(Gbps(1.3)), Gt(Gbps(1.3)),
+                                   Gt(Gbps(1.3)), Gt(Gbps(1.3)), Gt(Gbps(1.3))));
+  EXPECT_THAT(
+      demand_sim.limits_bps(),
+      UnorderedElementsAre(
+          ApproxLimit(Gbps(1.15 * 2.5), 0), ApproxLimit(Gbps(1.15 * 2.5), 0),
+          ApproxLimit(Gbps(1.15 * 2.5), 0), ApproxLimit(Gbps(1.15 * 2.5), 0),
+          ApproxLimit(0,
+                      1.15 * (2440973078 /* predicted demand */ + 420548883 /* bonus */)),
+          ApproxLimit(
+              0, 1.15 * (2440973078 /* predicted demand */ + 420548883 /* bonus */))));
+
+  for (int i = 0; i < 100; ++i) {
+    demand_sim.UpdateWithAvailableBandwidth(3 + i, Gbps(10), Gbps(5));
+    EXPECT_THAT(demand_sim.instant_usages_bps(),
+                UnorderedElementsAre(Gbps(2.5), Gbps(2.5), Gbps(2.5), Gbps(2.5),
+                                     Gbps(2.5), Gbps(2.5)));
+  }
+
+  demand_sim.UpdateWithAvailableBandwidth(103, Gbps(10), Gbps(5));
+  EXPECT_THAT(demand_sim.instant_usages_bps(),
+              UnorderedElementsAre(Gbps(2.5), Gbps(2.5), Gbps(2.5), Gbps(2.5), Gbps(2.5),
+                                   Gbps(2.5)));
+  // ewma is smoothed, just check that it is getting closer to where we want
+  EXPECT_THAT(
+      demand_sim.ewma_usages_bps(),
+      UnorderedElementsAre(
+          AllOf(Gt(Gbps(2.4)), Le(Gbps(2.5))), AllOf(Gt(Gbps(2.4)), Le(Gbps(2.5))),
+          AllOf(Gt(Gbps(2.4)), Le(Gbps(2.5))), AllOf(Gt(Gbps(2.4)), Le(Gbps(2.5))),
+          AllOf(Gt(Gbps(2.4)), Le(Gbps(2.5))), AllOf(Gt(Gbps(2.4)), Le(Gbps(2.5)))));
+  EXPECT_THAT(demand_sim.limits_bps(),
+              UnorderedElementsAre(
+                  ApproxLimit(Gbps(1.15 * 2.5), 0), ApproxLimit(Gbps(1.15 * 2.5), 0),
+                  ApproxLimit(Gbps(1.15 * 2.5), 0), ApproxLimit(Gbps(1.15 * 2.5), 0),
+                  ApproxLimit(0, Gbps(1.15 * 2.5)), ApproxLimit(0, Gbps(1.15 * 2.5))));
+
+  SetDebugQosAndRateLimitSelection(true);
+
+  demand_sim.UpdateWithAvailableBandwidth(104, Gbps(10), Gbps(0.5));
+
+  EXPECT_THAT(demand_sim.currently_lopris(),
+              UnorderedElementsAre(false, false, false, false, false, false));
+  EXPECT_THAT(demand_sim.instant_usages_bps(),
+              UnorderedElementsAre(Gbps(2.5), Gbps(2.5), Gbps(2.5), Gbps(2.5), Gbps(0.25),
+                                   Gbps(0.25)));
+  EXPECT_THAT(
+      demand_sim.limits_bps(),
+      UnorderedElementsAre(
+          ApproxLimit(Gbps(1.15 * 10.0 / 6), 0), ApproxLimit(Gbps(1.15 * 10.0 / 6), 0),
+          ApproxLimit(Gbps(1.15 * 10.0 / 6), 0), ApproxLimit(Gbps(1.15 * 10.0 / 6), 0),
+          ApproxLimit(Gbps(1.15 * 10.0 / 6), 0), ApproxLimit(Gbps(1.15 * 10.0 / 6), 0)));
 }
 
 }  // namespace
