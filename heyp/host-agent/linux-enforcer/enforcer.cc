@@ -64,6 +64,8 @@ class LinuxHostEnforcerImpl : public LinuxHostEnforcer {
  public:
   LinuxHostEnforcerImpl(absl::string_view device,
                         const MatchHostFlowsFunc &match_host_flows_fn,
+                        const StaticDCMapper *dc_mapper,
+                        const SimulatedWanDB *simulated_wan,
                         absl::string_view debug_log_outdir);
 
   absl::Status ResetDeviceConfig() override;
@@ -99,6 +101,8 @@ class LinuxHostEnforcerImpl : public LinuxHostEnforcer {
 
   const std::string device_;
   const MatchHostFlowsFunc match_host_flows_fn_;
+  const StaticDCMapper *dc_mapper_;
+  const SimulatedWanDB *simulated_wan_;
   absl::Cord tc_batch_input_;
   TcCaller tc_caller_;
   iptables::Controller ipt_controller_;
@@ -111,12 +115,17 @@ class LinuxHostEnforcerImpl : public LinuxHostEnforcer {
 
 LinuxHostEnforcerImpl::LinuxHostEnforcerImpl(
     absl::string_view device, const MatchHostFlowsFunc &match_host_flows_fn,
+    const StaticDCMapper *dc_mapper, const SimulatedWanDB *simulated_wan,
     absl::string_view debug_log_outdir)
     : device_(device),
       match_host_flows_fn_(match_host_flows_fn),
+      dc_mapper_(dc_mapper),
+      simulated_wan_(simulated_wan),
       ipt_controller_(device),
       debug_logger_(debug_log_outdir),
-      next_class_id_(2) {}
+      next_class_id_(2) {
+  LOG(INFO) << "TODO: support WAN network emulation";
+}
 
 absl::Status LinuxHostEnforcerImpl::ResetDeviceConfig() {
   auto st = ResetTrafficControl();
@@ -371,9 +380,10 @@ bool LinuxHostEnforcerImpl::IsLopri(const proto::FlowMarker &flow) {
 
 std::unique_ptr<LinuxHostEnforcer> LinuxHostEnforcer::Create(
     absl::string_view device, const MatchHostFlowsFunc &match_host_flows_fn,
+    const StaticDCMapper *dc_mapper, const SimulatedWanDB *simulated_wan,
     absl::string_view debug_log_outdir) {
-  return absl::make_unique<LinuxHostEnforcerImpl>(device, match_host_flows_fn,
-                                                  debug_log_outdir);
+  return absl::make_unique<LinuxHostEnforcerImpl>(device, match_host_flows_fn, dc_mapper,
+                                                  simulated_wan, debug_log_outdir);
 }
 
 }  // namespace heyp

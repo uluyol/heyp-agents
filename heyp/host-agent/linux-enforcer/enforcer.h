@@ -10,6 +10,7 @@
 #include "absl/strings/string_view.h"
 #include "heyp/flows/dc-mapper.h"
 #include "heyp/host-agent/enforcer.h"
+#include "heyp/host-agent/simulated-wan-db.h"
 #include "heyp/proto/heyp.pb.h"
 
 namespace heyp {
@@ -37,6 +38,7 @@ class LinuxHostEnforcer : public HostEnforcer {
  public:
   static std::unique_ptr<LinuxHostEnforcer> Create(
       absl::string_view device, const MatchHostFlowsFunc& match_host_flows_fn,
+      const StaticDCMapper* dc_mapper, const SimulatedWanDB* simulated_wan,
       absl::string_view debug_log_outdir = "");
 
   virtual ~LinuxHostEnforcer() = default;

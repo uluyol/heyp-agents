@@ -49,6 +49,7 @@ cc_library(
         ":tc-caller",
         "//heyp/flows:dc-mapper",
         "//heyp/host-agent:enforcer",
+        "//heyp/host-agent:simulated-wan-db",
         "//heyp/io:debug-output-logger",
         "@com_google_absl//absl/cleanup",
         "@com_google_absl//absl/functional:function_ref",

@@ -85,10 +85,11 @@ class EasyEnforcer {
   explicit EasyEnforcer(absl::string_view device, bool use_hipri,
                         const std::vector<HostWorker::Flow>& all_flows,
                         absl::string_view log_dir)
-      : demand_provider_(all_flows) {
+      : demand_provider_(all_flows), dc_mapper_({}), simulated_wan_({}) {
     if (kHostIsLinux) {
-      auto e = LinuxHostEnforcer::Create(
-          device, absl::bind_front(WithFlowPriority, use_hipri), log_dir);
+      auto e =
+          LinuxHostEnforcer::Create(device, absl::bind_front(WithFlowPriority, use_hipri),
+                                    &dc_mapper_, &simulated_wan_, log_dir);
       auto st = e->ResetDeviceConfig();
       if (!st.ok()) {
         LOG(ERROR) << "failed to reset config of device '" << device << "': " << st;
@@ -117,6 +118,8 @@ class EasyEnforcer {
 
  private:
   InfiniteDemandProvider demand_provider_;
+  StaticDCMapper dc_mapper_;
+  SimulatedWanDB simulated_wan_;
   std::unique_ptr<HostEnforcer> enforcer_;
 };
 
