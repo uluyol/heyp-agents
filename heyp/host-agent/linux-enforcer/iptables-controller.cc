@@ -173,6 +173,8 @@ void AddRuleLinesToDelete(absl::string_view dev, const SettingBatch& batch,
     lines.Append(absl::StrFormat(
         "-D OUTPUT -o %s -p tcp -m tcp -d %s%s%s -j DSCP --set-dscp-class %s\n", dev,
         s.dst_addr, src_port_match, dst_port_match, s.dscp));
+    lines.Append(absl::StrFormat("-D OUTPUT -o %s -p tcp -m tcp -d %s%s%s -j RETURN\n",
+                                 dev, s.dst_addr, src_port_match, dst_port_match));
   }
 }
 
@@ -181,22 +183,38 @@ void AddRuleLinesToAdd(absl::string_view dev, const SettingBatch& batch,
   std::string src_port_match;
   std::string dst_port_match;
   for (const Setting& s : batch.settings) {
+    bool fine_grained = false;
     if (s.src_port != 0) {
       src_port_match = absl::StrCat(" --sport ", s.src_port);
+      fine_grained = true;
     } else {
       src_port_match.clear();
     }
     if (s.dst_port != 0) {
       dst_port_match = absl::StrCat(" --dport ", s.dst_port);
+      fine_grained = true;
     } else {
       dst_port_match.clear();
     }
-    lines.Append(absl::StrFormat(
-        "-A OUTPUT -o %s -p tcp -m tcp -d %s%s%s -j CLASSIFY --set-class %s\n", dev,
-        s.dst_addr, src_port_match, dst_port_match, s.class_id));
-    lines.Append(absl::StrFormat(
-        "-A OUTPUT -o %s -p tcp -m tcp -d %s%s%s -j DSCP --set-dscp-class %s\n", dev,
-        s.dst_addr, src_port_match, dst_port_match, s.dscp));
+    if (fine_grained) {
+      lines.Append(absl::StrFormat("-I OUTPUT -o %s -p tcp -m tcp -d %s%s%s -j RETURN\n",
+                                   dev, s.dst_addr, src_port_match, dst_port_match));
+      lines.Append(absl::StrFormat(
+          "-I OUTPUT -o %s -p tcp -m tcp -d %s%s%s -j DSCP --set-dscp-class %s\n", dev,
+          s.dst_addr, src_port_match, dst_port_match, s.dscp));
+      lines.Append(absl::StrFormat(
+          "-I OUTPUT -o %s -p tcp -m tcp -d %s%s%s -j CLASSIFY --set-class %s\n", dev,
+          s.dst_addr, src_port_match, dst_port_match, s.class_id));
+    } else {
+      lines.Append(absl::StrFormat(
+          "-A OUTPUT -o %s -p tcp -m tcp -d %s%s%s -j CLASSIFY --set-class %s\n", dev,
+          s.dst_addr, src_port_match, dst_port_match, s.class_id));
+      lines.Append(absl::StrFormat(
+          "-A OUTPUT -o %s -p tcp -m tcp -d %s%s%s -j DSCP --set-dscp-class %s\n", dev,
+          s.dst_addr, src_port_match, dst_port_match, s.dscp));
+      lines.Append(absl::StrFormat("-A OUTPUT -o %s -p tcp -m tcp -d %s%s%s -j RETURN\n",
+                                   dev, s.dst_addr, src_port_match, dst_port_match));
+    }
   }
 }
 
