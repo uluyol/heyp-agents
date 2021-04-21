@@ -28,6 +28,7 @@ func MakeCodeBundle(binDir, tarballPath string) error {
 		"heyp/app/testlopri/server",
 		"heyp/cluster-agent/cluster-agent",
 		"heyp/host-agent/host-agent",
+		"heyp/integration/host-agent-os-test",
 		"heyp/stats/hdrhist2csv",
 	}
 
