@@ -52,17 +52,17 @@ message StaticDCMapperConfig {
 }
 
 enum NetemDelayDist {
-  NORMAL = 0;
-  UNIFORM = 1;
-  PARETO = 2;
-  PARETONORMAL = 3;
+  NETEM_NORMAL = 0;
+  NETEM_UNIFORM = 1;
+  NETEM_PARETO = 2;
+  NETEM_PARETONORMAL = 3;
 }
 
 message NetemConfig {
   optional int32 delay_ms = 1;
   optional int32 delay_jitter_ms = 2;
   optional double delay_correlation_pct = 3;
-  optional NetemDelayDist delay_dist = 4 [default = NORMAL];
+  optional NetemDelayDist delay_dist = 4 [default = NETEM_NORMAL];
 }
 
 message SimulatedWanConfig {

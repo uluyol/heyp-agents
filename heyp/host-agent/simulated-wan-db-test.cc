@@ -13,12 +13,12 @@ TEST(SimulatedWanDBTest, Basic) {
     dc_pairs {
       src_dc: "chicago"
       dst_dc: "sydney"
-      netem { delay_ms: 321 delay_dist: PARETO }
+      netem { delay_ms: 321 delay_dist: NETEM_PARETO }
     }
     dc_pairs {
       src_dc: "chicago"
       dst_dc: "sanjose"
-      netem { delay_ms: 210 delay_dist: UNIFORM }
+      netem { delay_ms: 210 delay_dist: NETEM_UNIFORM }
     }
     dc_pairs {
       src_dc: "sydney"
@@ -30,17 +30,17 @@ TEST(SimulatedWanDBTest, Basic) {
   const proto::NetemConfig* c = db.GetNetem("chicago", "sydney");
   ASSERT_TRUE(c != nullptr);
   EXPECT_EQ(c->delay_ms(), 321);
-  EXPECT_EQ(c->delay_dist(), proto::NetemDelayDist::PARETO);
+  EXPECT_EQ(c->delay_dist(), proto::NETEM_PARETO);
 
   c = db.GetNetem("chicago", "sanjose");
   ASSERT_TRUE(c != nullptr);
   EXPECT_EQ(c->delay_ms(), 210);
-  EXPECT_EQ(c->delay_dist(), proto::NetemDelayDist::UNIFORM);
+  EXPECT_EQ(c->delay_dist(), proto::NETEM_UNIFORM);
 
   c = db.GetNetem("sydney", "chicago");
   ASSERT_TRUE(c != nullptr);
   EXPECT_EQ(c->delay_ms(), 100);
-  EXPECT_EQ(c->delay_dist(), proto::NetemDelayDist::NORMAL);
+  EXPECT_EQ(c->delay_dist(), proto::NETEM_NORMAL);
 }
 
 }  // namespace
