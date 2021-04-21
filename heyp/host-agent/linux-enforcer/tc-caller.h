@@ -14,6 +14,16 @@ class TcCaller {
  public:
   explicit TcCaller(const std::string& tc_name = "tc");
 
+  // Execute a batch of updates. The input should have a line for each tc command.
+  //
+  // Example:
+  //   qdisc add dev eth1 root handle 1:0 htb default 10
+  //   class add dev eth1 parent 1:0 classid 1:10 htb rate 1544kbit
+  //   qdisc add dev eth1 parent 1:10 handle 10:0 netem delay 10ms
+  // NOTE: lines do not begin with 'tc'.
+  //
+  // If force is set, tc will not stop at the first error. It will keep trying to apply
+  // the requested changes.
   absl::Status Batch(const absl::Cord& input, bool force);
 
   absl::Status Call(const std::vector<std::string>& tc_args, bool parse_into_json);
