@@ -34,16 +34,33 @@ MatchedHostFlows ExpandDestIntoHostsSinglePri(
     const StaticDCMapper* dc_mapper, const FlowStateProvider& flow_state_provider,
     const proto::FlowAlloc& flow_alloc);
 
+struct FlowNetemConfig {
+  proto::FlowMarker flow;
+  std::vector<proto::FlowMarker> matched_flows;
+  proto::NetemConfig netem;
+};
+
+std::vector<FlowNetemConfig> AllNetemConfigs(const StaticDCMapper& dc_mapper,
+                                             const SimulatedWanDB& simulated_wan,
+                                             const std::string& my_dc,
+                                             uint64_t my_host_id);
+
 class LinuxHostEnforcer : public HostEnforcer {
  public:
   static std::unique_ptr<LinuxHostEnforcer> Create(
       absl::string_view device, const MatchHostFlowsFunc& match_host_flows_fn,
-      const StaticDCMapper* dc_mapper, const SimulatedWanDB* simulated_wan,
       absl::string_view debug_log_outdir = "");
 
   virtual ~LinuxHostEnforcer() = default;
 
   virtual absl::Status ResetDeviceConfig() = 0;
+
+  // InitSimulatedWan creates qdiscs and iptables rules to simulate a wide-area network
+  // based on the provided netem configs. If all flows are provided now, EnforceAllocs
+  // will not create additional qdiscs. If contains_all_flows is true, then EnforceAllocs
+  // will report an error whenever it creates additional qdiscs.
+  virtual absl::Status InitSimulatedWan(std::vector<FlowNetemConfig> configs,
+                                        bool contains_all_flows) = 0;
 
   // Inherited from HostEnforcer
   //

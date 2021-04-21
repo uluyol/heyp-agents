@@ -108,7 +108,6 @@ absl::Status Run(const proto::HostAgentConfig& c) {
       std::move(*flow_state_reporter_or);
   LOG(INFO) << "creating dc mapper";
   StaticDCMapper dc_mapper(c.dc_mapper());
-  SimulatedWanDB simulated_wan(c.simulated_wan());
   LOG(INFO) << "creating host enforcer";
   std::unique_ptr<HostEnforcer> enforcer;
   if (kHostIsLinux) {
@@ -121,12 +120,29 @@ absl::Status Run(const proto::HostAgentConfig& c) {
 
     auto e = LinuxHostEnforcer::Create(
         device_or.value(), absl::bind_front(&ExpandDestIntoHostsSinglePri, &dc_mapper),
-        &dc_mapper, &simulated_wan, c.enforcer().debug_log_dir());
+        c.enforcer().debug_log_dir());
     absl::Status st = e->ResetDeviceConfig();
     if (!st.ok()) {
       LOG(ERROR) << "failed to reset config of device '" << device_or.value()
                  << "': " << st;
     }
+
+    std::string my_dc;
+    for (const std::string& addr : c.this_host_addrs()) {
+      const std::string* maybe = dc_mapper.HostDC(addr);
+      if (maybe != nullptr) {
+        my_dc = *maybe;
+        break;
+      }
+    }
+
+    st = e->InitSimulatedWan(
+        AllNetemConfigs(dc_mapper, SimulatedWanDB(c.simulated_wan()), my_dc, host_id),
+        /*contains_all_flows=*/true);
+    if (!st.ok()) {
+      LOG(ERROR) << "failed to init simulated WAN: " << st;
+    }
+
     enforcer = std::move(e);
   } else {
     LOG(WARNING) << "not on Linux: using nop enforcer and no WAN network emulation";
