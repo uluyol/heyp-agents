@@ -28,7 +28,11 @@ absl::Status TcCaller::Batch(const absl::Cord& input, bool force) {
   }
 
   try {
-    VLOG(2) << "running tc: " << tc_name_ << " " << absl::StrJoin(args, " ");
+    if (VLOG_IS_ON(2)) {
+      VLOG(2) << "running tc: " << tc_name_ << " " << absl::StrJoin(args, " ")
+              << " with input below:\n"
+              << input;
+    }
 
     bp::opstream input_stream;
     bp::child c(bp::search_path(tc_name_), bp::args(args), bp::std_out > stdout,
