@@ -189,7 +189,7 @@ absl::Status LinuxHostEnforcerImpl::InitSimulatedWan(std::vector<FlowNetemConfig
   for (const FlowNetemConfig &c : configs) {
     if (sys_info_[c.flow] != nullptr) {
       errors.push_back(
-          absl::StrCat("FlowSys already exists for flow: ", c.flow.DebugString()));
+          absl::StrCat("FlowSys already exists for flow: ", c.flow.ShortDebugString()));
       continue;
     }
     sys_info_[c.flow] = absl::make_unique<FlowSys>();
@@ -225,8 +225,8 @@ absl::Status LinuxHostEnforcerImpl::InitSimulatedWan(std::vector<FlowNetemConfig
     } else {
       errors.push_back(
           absl::StrCat("failed to create htb classes or qdiscs: ", st.message()));
-      return absl::Status(st.code(), absl::StrCat("multiple errors:\n\t%s",
-                                                  absl::StrJoin(errors, "\n\t")));
+      return absl::Status(
+          st.code(), absl::StrCat("multiple errors:\n\t", absl::StrJoin(errors, "\n\t")));
     }
   }
 
@@ -251,8 +251,8 @@ absl::Status LinuxHostEnforcerImpl::InitSimulatedWan(std::vector<FlowNetemConfig
           st.code(), absl::StrCat("failed to commit iptables config: ", st.message()));
     } else {
       errors.push_back(absl::StrCat("commit iptables config: ", st.message()));
-      return absl::Status(st.code(), absl::StrCat("multiple errors:\n\t%s",
-                                                  absl::StrJoin(errors, "\n\t")));
+      return absl::Status(
+          st.code(), absl::StrCat("multiple errors:\n\t", absl::StrJoin(errors, "\n\t")));
     }
   }
 
@@ -298,7 +298,7 @@ void LinuxHostEnforcerImpl::StageIptablesForFlow(
   }
 }
 
-absl::string_view ToString(proto::NetemDelayDist dist) {
+absl::string_view NetemDistToString(proto::NetemDelayDist dist) {
   switch (dist) {
     case proto::NETEM_NORMAL:
       return "normal";
@@ -333,7 +333,7 @@ void LinuxHostEnforcerImpl::StageTrafficControlForFlow(
           device_, args.sys->class_id, netem_handle, args.netem_config->delay_ms(),
           args.netem_config->delay_jitter_ms(),
           args.netem_config->delay_correlation_pct(),
-          ToString(args.netem_config->delay_dist())));
+          NetemDistToString(args.netem_config->delay_dist())));
     }
     if (args.classes_to_create != nullptr) {
       args.classes_to_create->push_back(args.sys);
