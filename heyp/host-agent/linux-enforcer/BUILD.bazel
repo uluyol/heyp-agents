@@ -18,24 +18,6 @@ cc_library(
     ],
 )
 
-heyp_cc_binary(
-    name = "fake-ip-addr-for-test",
-    testonly = 1,
-    srcs = ["fake-ip-addr-for-test.c"],
-)
-
-cc_test(
-    name = "data-test",
-    srcs = ["data-test.cc"],
-    data = [
-        ":fake-ip-addr-for-test",
-    ],
-    deps = [
-        ":data",
-        "//heyp/init:test-main",
-    ],
-)
-
 cc_library(
     name = "enforcer",
     srcs = ["enforcer.cc"],
@@ -93,6 +75,34 @@ cc_library(
         "@boost//:process",
         "@com_google_absl//absl/status",
         "@glog",
+    ],
+)
+
+heyp_cc_binary(
+    name = "fake-ip-addr-for-test",
+    testonly = 1,
+    srcs = ["fake-ip-addr-for-test.c"],
+)
+
+cc_test(
+    name = "data-test",
+    srcs = ["data-test.cc"],
+    data = [
+        ":fake-ip-addr-for-test",
+    ],
+    deps = [
+        ":data",
+        "//heyp/init:test-main",
+    ],
+)
+
+cc_test(
+    name = "enforcer-test",
+    srcs = ["enforcer-test.cc"],
+    deps = [
+        ":enforcer",
+        "//heyp/init:test-main",
+        "//heyp/proto:parse-text",
     ],
 )
 

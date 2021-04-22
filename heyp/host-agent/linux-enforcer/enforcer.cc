@@ -9,6 +9,7 @@
 #include "absl/strings/str_join.h"
 #include "absl/strings/str_split.h"
 #include "glog/logging.h"
+#include "google/protobuf/util/message_differencer.h"
 #include "heyp/host-agent/linux-enforcer/iptables-controller.h"
 #include "heyp/host-agent/linux-enforcer/iptables.h"
 #include "heyp/host-agent/linux-enforcer/tc-caller.h"
@@ -49,6 +50,39 @@ MatchedHostFlows ExpandDestIntoHostsSinglePri(
   return matched;
 }
 
+bool operator==(const FlowNetemConfig &lhs, const FlowNetemConfig &rhs) {
+  if (!IsSameFlow(lhs.flow, rhs.flow)) {
+    return false;
+  }
+  if (!google::protobuf::util::MessageDifferencer::Equivalent(lhs.netem, rhs.netem)) {
+    return false;
+  }
+  if (lhs.matched_flows.size() != rhs.matched_flows.size()) {
+    return false;
+  }
+  for (size_t i = 0; i < lhs.matched_flows.size(); ++i) {
+    if (!IsSameFlow(lhs.matched_flows[i], rhs.matched_flows[i])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+template <typename Proto>
+struct ShortDebugFormatter {
+  void operator()(std::string *out, const Proto &mesg) const {
+    out->append(mesg.ShortDebugString());
+  }
+};
+
+std::ostream &operator<<(std::ostream &os, const FlowNetemConfig &c) {
+  return os << "FlowNetemConfig{\n"
+            << "  flow = " << c.flow.ShortDebugString() << "\n  matched_flows = [\n    "
+            << absl::StrJoin(c.matched_flows, "\n    ",
+                             ShortDebugFormatter<proto::FlowMarker>())
+            << "\n  ]\n  netem = " << c.netem.ShortDebugString() << "\n}";
+}
+
 std::vector<FlowNetemConfig> AllNetemConfigs(const StaticDCMapper &dc_mapper,
                                              const SimulatedWanDB &simulated_wan,
                                              const std::string &my_dc,
@@ -65,7 +99,7 @@ std::vector<FlowNetemConfig> AllNetemConfigs(const StaticDCMapper &dc_mapper,
     FlowNetemConfig c;
     c.netem = *maybe_config;
     c.flow.set_src_dc(my_dc);
-    c.flow.set_dst_dc(my_dc);
+    c.flow.set_dst_dc(dst);
     c.flow.set_host_id(my_host_id);
 
     for (const std::string &host : *dc_mapper.HostsForDC(dst)) {
@@ -329,7 +363,8 @@ void LinuxHostEnforcerImpl::StageTrafficControlForFlow(
       std::string netem_handle =
           absl::StrCat(absl::StripPrefix(args.sys->class_id, "1:"), ":0");
       tc_batch_input_.Append(absl::StrFormat(
-          "qdisc add dev %s parent %s handle %s netem delay %d %d %f%% distribution %s",
+          "qdisc add dev %s parent %s handle %s netem delay %dms %dms %f%% distribution "
+          "%s\n",
           device_, args.sys->class_id, netem_handle, args.netem_config->delay_ms(),
           args.netem_config->delay_jitter_ms(),
           args.netem_config->delay_correlation_pct(),

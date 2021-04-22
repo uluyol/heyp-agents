@@ -2,6 +2,7 @@
 #define HEYP_HOST_AGENT_LINUX_ENFORCER_ENFORCER_H_
 
 #include <functional>
+#include <ostream>
 #include <string>
 #include <vector>
 
@@ -39,6 +40,9 @@ struct FlowNetemConfig {
   std::vector<proto::FlowMarker> matched_flows;
   proto::NetemConfig netem;
 };
+
+bool operator==(const FlowNetemConfig& lhs, const FlowNetemConfig& rhs);
+std::ostream& operator<<(std::ostream& os, const FlowNetemConfig& c);
 
 std::vector<FlowNetemConfig> AllNetemConfigs(const StaticDCMapper& dc_mapper,
                                              const SimulatedWanDB& simulated_wan,
