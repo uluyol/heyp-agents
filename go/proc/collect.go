@@ -27,7 +27,7 @@ type TestLopriInstanceLogs struct {
 var testLopriRegex = regexp.MustCompile(
 	`(^|.*/)testlopri-([^-]+)-client-([^.]+).out(.shard.[0-9]+)?$`)
 
-func getTestLopriFiles(fsys fs.FS, prog *regexp.Regexp) ([]string, error) {
+func regGlobFiles(fsys fs.FS, prog *regexp.Regexp) ([]string, error) {
 	var all []string
 	err := fs.WalkDir(fsys, ".", func(path string, d fs.DirEntry, err error) error {
 		if d != nil && !d.IsDir() && prog.MatchString(path) {
@@ -39,7 +39,7 @@ func getTestLopriFiles(fsys fs.FS, prog *regexp.Regexp) ([]string, error) {
 }
 
 func GlobAndCollectTestLopri(fsys fs.FS) ([]TestLopriInstanceLogs, error) {
-	all, err := getTestLopriFiles(fsys, testLopriRegex)
+	all, err := regGlobFiles(fsys, testLopriRegex)
 	if err != nil {
 		return nil, fmt.Errorf("failed to walk: %w", err)
 	}
