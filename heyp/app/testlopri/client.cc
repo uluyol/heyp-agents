@@ -5,6 +5,7 @@
 
 #include <array>
 #include <cstdint>
+#include <cstdio>
 #include <deque>
 #include <limits>
 #include <vector>
@@ -23,6 +24,7 @@
 #include "heyp/encoding/binary.h"
 #include "heyp/host-agent/urls.h"
 #include "heyp/init/init.h"
+#include "heyp/posix/strerror.h"
 #include "heyp/proto/app.pb.h"
 #include "heyp/proto/fileio.h"
 #include "heyp/stats/recorder.h"
@@ -95,7 +97,9 @@ class ClientConnPool {
   ClientConnPool(int num_conns, int32_t max_rpc_size_bytes,
                  std::vector<struct sockaddr_in> dst_addrs, uint64_t hr_start_time,
                  const std::function<void()>& on_pool_ready, uv_loop_t* loop,
-                 StatsRecorder* stats_recorder, bool* tearing_down);
+                 StatsRecorder* stats_recorder,
+                 std::vector<std::pair<uint64_t, uint64_t>>* goodput_ts,
+                 bool* tearing_down);
 
   bool AddConn(ClientConn* conn);
   void WithConn(const std::function<void(ClientConn*)>& func);
@@ -114,7 +118,9 @@ class ClientConn {
  public:
   ClientConn(ClientConnPool* pool, int32_t max_rpc_size_bytes, int conn_id,
              const struct sockaddr_in* addr, const std::function<void()>& on_pool_ready,
-             uv_loop_t* loop, StatsRecorder* stats_recorder, uint64_t hr_start_run_time)
+             uv_loop_t* loop, StatsRecorder* stats_recorder,
+             std::vector<std::pair<uint64_t, uint64_t>>* goodput_ts,
+             uint64_t hr_start_run_time)
       : pool_(pool),
         on_pool_ready_(on_pool_ready),
         conn_id_(conn_id),
@@ -122,6 +128,7 @@ class ClientConn {
         hr_start_run_time_(hr_start_run_time),
         loop_(loop),
         stats_recorder_(stats_recorder),
+        goodput_ts_(goodput_ts),
         buf_(max_rpc_size_bytes, 0),
         num_seen_(0),
         num_issued_(0),
@@ -226,6 +233,9 @@ class ClientConn {
       stats_recorder_->RecordRpc(size, "full",
                                  absl::Nanoseconds(hr_now - got_hr_scheduled_time), "net",
                                  absl::Nanoseconds(hr_now - got_hr_client_write_time));
+      if (goodput_ts_ != nullptr) {
+        IncrementGoodput(hr_now);
+      }
       ++num_seen_;
       got_ack = true;
     };
@@ -252,6 +262,17 @@ class ClientConn {
     if (got_ack && !has_pending_write_) {
       pool_->AddConn(this);
     }
+  }
+
+  void IncrementGoodput(uint64_t hr_now) {
+    if (goodput_ts_->empty()) {
+      goodput_ts_->push_back({hr_now, 1});
+    }
+    while (hr_now > goodput_ts_->back().first + 1'000'000) {
+      std::pair<uint64_t, uint64_t> last = goodput_ts_->back();
+      goodput_ts_->push_back({last.first + 1'000'000, 0});
+    }
+    goodput_ts_->back().second++;
   }
 
   void OnWriteDone(uv_write_t* req, int status) {
@@ -284,6 +305,7 @@ class ClientConn {
 
   uv_loop_t* loop_;
   StatsRecorder* stats_recorder_;
+  std::vector<std::pair<uint64_t, uint64_t>>* goodput_ts_;
 
   uv_tcp_t client_;
   uv_buf_t buffer_;
@@ -305,6 +327,7 @@ ClientConnPool::ClientConnPool(int num_conns, int32_t max_rpc_size_bytes,
                                uint64_t hr_start_time,
                                const std::function<void()>& on_pool_ready,
                                uv_loop_t* loop, StatsRecorder* stats_recorder,
+                               std::vector<std::pair<uint64_t, uint64_t>>* goodput_ts,
                                bool* tearing_down)
     : num_conns_(num_conns),
       dst_addrs_(std::move(dst_addrs)),
@@ -317,7 +340,7 @@ ClientConnPool::ClientConnPool(int num_conns, int32_t max_rpc_size_bytes,
   for (int i = 0; i < num_conns_; ++i) {
     all_.push_back(absl::make_unique<ClientConn>(
         this, max_rpc_size_bytes, all_.size(), &dst_addrs_.at(i % dst_addrs_.size()),
-        on_pool_ready, loop, stats_recorder, hr_start_time));
+        on_pool_ready, loop, stats_recorder, goodput_ts, hr_start_time));
   }
 }
 
@@ -464,6 +487,7 @@ class LoadGenerator {
  public:
   LoadGenerator(const proto::TestLopriClientConfig& c, uv_loop_t* l,
                 std::unique_ptr<StatsRecorder> srec, bool rec_interarrival,
+                std::vector<std::pair<uint64_t, uint64_t>>* goodput_ts,
                 std::vector<struct sockaddr_in> dst_addrs, uint64_t hr_start_time)
       : workload_stages_(StagesFromConfig(c)),
         stats_recorder_(std::move(srec)),
@@ -478,7 +502,7 @@ class LoadGenerator {
         conn_pool_(c.num_conns(), GetMaxRpcSizeBytes(workload_stages_),
                    std::move(dst_addrs), hr_start_time_,
                    absl::bind_front(&LoadGenerator::StartRequestLoop, this), loop_,
-                   stats_recorder_.get(), &tearing_down_) {
+                   stats_recorder_.get(), goodput_ts, &tearing_down_) {
     if (rec_interarrival) {
       interarrival_hist_.emplace(InterarrivalConfig());
     }
@@ -679,6 +703,23 @@ void ParseDestAddrs(absl::string_view server_addrs,
                   << absl::StrJoin(addrs_to_print, ", ") WITH_NEWLINE;
 }
 
+absl::Status WriteGoodputTS(
+    const std::vector<std::pair<uint64_t, uint64_t>>& per_ms_goodput,
+    const std::string& path) {
+  FILE* f = fopen(path.c_str(), "w");
+  if (f == nullptr) {
+    return absl::UnknownError(
+        absl::StrFormat("failed to open file '%s': %s\n", path, heyp::StrError(errno)));
+  }
+  for (const auto& time_gp_pair : per_ms_goodput) {
+    absl::FPrintF(f, "%d,%d\n", time_gp_pair.first, time_gp_pair.second);
+  }
+  if (fclose(f) != 0) {
+    return absl::UnknownError("failed to write data");
+  }
+  return absl::OkStatus();
+}
+
 }  // namespace
 }  // namespace heyp
 
@@ -688,6 +729,8 @@ DEFINE_string(out, "testlopri-client.log", "path to log output");
 DEFINE_string(start_time, "", "wait until this time to start the run");
 DEFINE_string(interarrival, "",
               "path to write out interarrival distribution (optional, for validation)");
+DEFINE_string(msgput, "",
+              "path to write out per-ms goodput distribution (optional, for validation)");
 
 int ShardMain(int argc, char** argv, int shard_index, int num_shards) {
   heyp::ThisShardIndex = shard_index;
@@ -734,11 +777,16 @@ int ShardMain(int argc, char** argv, int shard_index, int num_shards) {
     hr_start_time = uv_hrtime() + ns_until_start;
   }
 
+  std::unique_ptr<std::vector<std::pair<uint64_t, uint64_t>>> goodput_ts;
+  if (FLAGS_msgput != "") {
+    goodput_ts = absl::make_unique<std::vector<std::pair<uint64_t, uint64_t>>>();
+  }
+
   std::vector<struct sockaddr_in> dst_addrs;
   heyp::ParseDestAddrs(FLAGS_server, &dst_addrs);
   heyp::LoadGenerator load_gen(config, uv_default_loop(), std::move(*srec),
-                               FLAGS_interarrival != "", std::move(dst_addrs),
-                               hr_start_time);
+                               FLAGS_interarrival != "", goodput_ts.get(),
+                               std::move(dst_addrs), hr_start_time);
   load_gen.RunLoop();
 
   absl::Time end_time = absl::Now();
@@ -752,6 +800,13 @@ int ShardMain(int argc, char** argv, int shard_index, int num_shards) {
         load_gen.GetInterarrivalProto(),
         absl::StrCat(FLAGS_interarrival, ".shard.", shard_index)))
         << "failed to write latency hist";
+  }
+  if (FLAGS_msgput != "") {
+    absl::Status st = heyp::WriteGoodputTS(
+        *goodput_ts, absl::StrCat(FLAGS_msgput, ".shard.", shard_index));
+    if (!st.ok()) {
+      LOG(FATAL) << "failed to write goodput timeseries: " << st;
+    }
   }
   return 0;
 }
