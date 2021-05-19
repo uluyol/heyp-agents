@@ -17,7 +17,7 @@ void WaitGroup::Done(int n) {
 
 void WaitGroup::Wait() {
   mu_.LockWhen(absl::Condition(
-      +[](int *c) { return (*c) == 0; }, &count_));
+      +[](int* c) { return (*c) == 0; }, &count_));
   // done
   mu_.Unlock();
 }

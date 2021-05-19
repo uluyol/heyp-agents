@@ -14,7 +14,7 @@ class DebugOutputLogger {
  public:
   explicit DebugOutputLogger(std::string_view outdir = "");
 
-  void Write(std::string_view data_kind, const absl::Cord &data,
+  void Write(std::string_view data_kind, const absl::Cord& data,
              absl::Time time = absl::Now());
 
   bool should_log() const;

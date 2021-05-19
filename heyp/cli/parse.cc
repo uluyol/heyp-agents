@@ -16,9 +16,9 @@ absl::StatusOr<absl::Duration> ParseAbslDuration(absl::string_view dur,
   return d;
 }
 
-absl::Status ParseDemandPredictorConfig(const proto::DemandPredictorConfig &c,
-                                        std::unique_ptr<DemandPredictor> *predictor,
-                                        absl::Duration *time_window) {
+absl::Status ParseDemandPredictorConfig(const proto::DemandPredictorConfig& c,
+                                        std::unique_ptr<DemandPredictor>* predictor,
+                                        absl::Duration* time_window) {
   auto window_or = ParseAbslDuration(c.time_window_dur(), "time_window");
   if (!window_or.ok()) {
     return window_or.status();

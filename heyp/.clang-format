@@ -1,0 +1,13 @@
+---
+BasedOnStyle: Google
+ColumnLimit: 90
+...
+Language: Cpp
+DerivePointerAlignment: false
+RawStringFormats:
+  - Language: TextProto
+    Delimiters:
+      - 'pb'
+    EnclosingFunctions:
+      - 'ParseTextProto'
+    BasedOnStyle: google

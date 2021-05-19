@@ -27,563 +27,348 @@ proto::AllocBundle Bundle(const AllocSet& alloc_set) {
 
 TEST(BweClusterAllocatorTest, Basic) {
   auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
-                                 type: BWE
-                                 enable_burstiness: false
-                                 enable_bonus: true
-                                 oversub_factor: 1.0
-                               )"),
+                                          type: BWE
+                                          enable_burstiness: false
+                                          enable_bonus: true
+                                          oversub_factor: 1.0
+                                        )"),
                                         ParseTextProto<proto::AllocBundle>(R"(
-                                 flow_allocs {
-                                   flow {
-                                     src_dc: "east-us"
-                                     dst_dc: "west-us"
-                                   }
-                                   hipri_rate_limit_bps: 666666
-                                 }
-                               )"),
+                                          flow_allocs {
+                                            flow { src_dc: "east-us" dst_dc: "west-us" }
+                                            hipri_rate_limit_bps: 666666
+                                          }
+                                        )"),
                                         1);
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
-                             parent {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                               }
-                             }
+                             parent { flow { src_dc: "east-us" dst_dc: "west-us" } }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 1
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
                                predicted_demand_bps: 600000
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 2
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
                                predicted_demand_bps: 60000
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 3
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 3 }
                                predicted_demand_bps: 6000
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 4
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 4 }
                                predicted_demand_bps: 600
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 5
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 5 }
                                predicted_demand_bps: 67
                              }
                            )"));
   EXPECT_THAT(Bundle(alloc->GetAllocs()),
               AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 1
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
                   hipri_rate_limit_bps: 599999
                 }
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 2
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
                   hipri_rate_limit_bps: 599999
                 }
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 3
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 3 }
                   hipri_rate_limit_bps: 599999
                 }
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 4
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 4 }
                   hipri_rate_limit_bps: 599999
                 }
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 5
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 5 }
                   hipri_rate_limit_bps: 599999
                 })")));
 }
 
 TEST(BweClusterAllocatorTest, WithOversub) {
   auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
-                                 type: BWE
-                                 enable_burstiness: false
-                                 enable_bonus: true
-                                 oversub_factor: 1.5
-                               )"),
+                                          type: BWE
+                                          enable_burstiness: false
+                                          enable_bonus: true
+                                          oversub_factor: 1.5
+                                        )"),
                                         ParseTextProto<proto::AllocBundle>(R"(
-                                 flow_allocs {
-                                   flow {
-                                     src_dc: "east-us"
-                                     dst_dc: "west-us"
-                                   }
-                                   hipri_rate_limit_bps: 600
-                                 }
-                               )"),
+                                          flow_allocs {
+                                            flow { src_dc: "east-us" dst_dc: "west-us" }
+                                            hipri_rate_limit_bps: 600
+                                          }
+                                        )"),
                                         1);
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
-                             parent {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                               }
-                             }
+                             parent { flow { src_dc: "east-us" dst_dc: "west-us" } }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 1
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
                                predicted_demand_bps: 400
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 2
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
                                predicted_demand_bps: 200
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 3
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 3 }
                                predicted_demand_bps: 200
                              }
                            )"));
   EXPECT_THAT(Bundle(alloc->GetAllocs()),
               AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 1
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
                   hipri_rate_limit_bps: 300
                 }
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 2
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
                   hipri_rate_limit_bps: 300
                 }
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 3
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 3 }
                   hipri_rate_limit_bps: 300
                 })")));
 }
 
 TEST(BweClusterAllocatorTest, WithBonus) {
   auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
-                                 type: BWE
-                                 enable_burstiness: false
-                                 enable_bonus: true
-                                 oversub_factor: 1.0
-                               )"),
+                                          type: BWE
+                                          enable_burstiness: false
+                                          enable_bonus: true
+                                          oversub_factor: 1.0
+                                        )"),
                                         ParseTextProto<proto::AllocBundle>(R"(
-                                 flow_allocs {
-                                   flow {
-                                     src_dc: "east-us"
-                                     dst_dc: "west-us"
-                                   }
-                                   hipri_rate_limit_bps: 600
-                                 }
-                               )"),
+                                          flow_allocs {
+                                            flow { src_dc: "east-us" dst_dc: "west-us" }
+                                            hipri_rate_limit_bps: 600
+                                          }
+                                        )"),
                                         1);
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
-                             parent {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                               }
-                             }
+                             parent { flow { src_dc: "east-us" dst_dc: "west-us" } }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 1
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
                                predicted_demand_bps: 100
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 2
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
                                predicted_demand_bps: 200
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 3
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 3 }
                                predicted_demand_bps: 150
                              }
                            )"));
   EXPECT_THAT(Bundle(alloc->GetAllocs()),
               AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 1
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
                   hipri_rate_limit_bps: 250
                 }
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 2
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
                   hipri_rate_limit_bps: 250
                 }
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 3
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 3 }
                   hipri_rate_limit_bps: 250
                 })")));
 }
 
 TEST(BweClusterAllocatorTest, WithBurstiness) {
   auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
-                                 type: BWE
-                                 enable_burstiness: true
-                                 enable_bonus: true
-                                 oversub_factor: 1.0
-                               )"),
+                                          type: BWE
+                                          enable_burstiness: true
+                                          enable_bonus: true
+                                          oversub_factor: 1.0
+                                        )"),
                                         ParseTextProto<proto::AllocBundle>(R"(
-                                 flow_allocs {
-                                   flow {
-                                     src_dc: "east-us"
-                                     dst_dc: "west-us"
-                                   }
-                                   hipri_rate_limit_bps: 600
-                                 }
-                               )"),
+                                          flow_allocs {
+                                            flow { src_dc: "east-us" dst_dc: "west-us" }
+                                            hipri_rate_limit_bps: 600
+                                          }
+                                        )"),
                                         1);
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
                              parent {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" }
                                predicted_demand_bps: 600
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 1
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
                                predicted_demand_bps: 400
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 2
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
                                predicted_demand_bps: 300
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 3
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 3 }
                                predicted_demand_bps: 200
                              }
                            )"));
   EXPECT_THAT(Bundle(alloc->GetAllocs()),
               AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 1
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
                   hipri_rate_limit_bps: 400
                 }
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 2
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
                   hipri_rate_limit_bps: 400
                 }
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 3
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 3 }
                   hipri_rate_limit_bps: 400
                 })")));
 }
 
 TEST(BweClusterAllocatorTest, WithBurstinessAndCongestion) {
   auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
-                                 type: BWE
-                                 enable_burstiness: true
-                                 enable_bonus: true
-                                 oversub_factor: 1.0
-                               )"),
+                                          type: BWE
+                                          enable_burstiness: true
+                                          enable_bonus: true
+                                          oversub_factor: 1.0
+                                        )"),
                                         ParseTextProto<proto::AllocBundle>(R"(
-                                 flow_allocs {
-                                   flow {
-                                     src_dc: "east-us"
-                                     dst_dc: "west-us"
-                                   }
-                                   hipri_rate_limit_bps: 600
-                                 }
-                               )"),
+                                          flow_allocs {
+                                            flow { src_dc: "east-us" dst_dc: "west-us" }
+                                            hipri_rate_limit_bps: 600
+                                          }
+                                        )"),
                                         1);
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
                              parent {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" }
                                predicted_demand_bps: 800
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 1
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
                                predicted_demand_bps: 400
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 2
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
                                predicted_demand_bps: 300
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 3
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 3 }
                                predicted_demand_bps: 200
                              }
                            )"));
   EXPECT_THAT(Bundle(alloc->GetAllocs()),
               AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 1
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
                   hipri_rate_limit_bps: 237
                 }
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 2
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
                   hipri_rate_limit_bps: 237
                 }
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 3
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 3 }
                   hipri_rate_limit_bps: 237
                 })")));
 }
 
 TEST(BweClusterAllocatorTest, ZeroDemand) {
   auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
-                                 type: BWE
-                                 enable_burstiness: true
-                                 enable_bonus: true
-                                 oversub_factor: 1.1
-                               )"),
+                                          type: BWE
+                                          enable_burstiness: true
+                                          enable_bonus: true
+                                          oversub_factor: 1.1
+                                        )"),
                                         ParseTextProto<proto::AllocBundle>(R"(
-                                 flow_allocs {
-                                   flow {
-                                     src_dc: "east-us"
-                                     dst_dc: "west-us"
-                                   }
-                                   hipri_rate_limit_bps: 600
-                                 }
-                               )"),
+                                          flow_allocs {
+                                            flow { src_dc: "east-us" dst_dc: "west-us" }
+                                            hipri_rate_limit_bps: 600
+                                          }
+                                        )"),
                                         1);
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
                              parent {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" }
                                predicted_demand_bps: 50
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 1
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
                                predicted_demand_bps: 0
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 2
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
                                predicted_demand_bps: 0
                              }
                            )"));
   EXPECT_THAT(Bundle(alloc->GetAllocs()),
               AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 1
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
                   hipri_rate_limit_bps: 330
                 }
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 2
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
                   hipri_rate_limit_bps: 330
                 })")));
 }
 
 TEST(BweClusterAllocatorTest, ZeroLimit) {
   auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
-                                 type: BWE
-                                 enable_burstiness: true
-                                 enable_bonus: true
-                                 oversub_factor: 1.1
-                               )"),
+                                          type: BWE
+                                          enable_burstiness: true
+                                          enable_bonus: true
+                                          oversub_factor: 1.1
+                                        )"),
                                         ParseTextProto<proto::AllocBundle>(R"(
-                                 flow_allocs {
-                                   flow {
-                                     src_dc: "east-us"
-                                     dst_dc: "west-us"
-                                   }
-                                   hipri_rate_limit_bps: 0
-                                 }
-                               )"),
+                                          flow_allocs {
+                                            flow { src_dc: "east-us" dst_dc: "west-us" }
+                                            hipri_rate_limit_bps: 0
+                                          }
+                                        )"),
                                         1);
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
                              parent {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" }
                                predicted_demand_bps: 50
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 1
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
                                predicted_demand_bps: 50
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 2
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
                                predicted_demand_bps: 20
                              }
                            )"));
   EXPECT_THAT(Bundle(alloc->GetAllocs()),
               AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 1
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
                   hipri_rate_limit_bps: 0
                 }
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 2
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
                   hipri_rate_limit_bps: 0
                 })")));
 }
 
 TEST(HeypSigcomm20ClusterAllocatorTest, Basic) {
-  auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+  auto alloc =
+      ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
                                  type: HEYP_SIGCOMM20
                                  enable_burstiness: false
                                  enable_bonus: true
@@ -591,114 +376,69 @@ TEST(HeypSigcomm20ClusterAllocatorTest, Basic) {
                                  heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
                                  heyp_probe_lopri_when_ambiguous: false
                                )"),
-                                        ParseTextProto<proto::AllocBundle>(R"(
+                               ParseTextProto<proto::AllocBundle>(R"(
                                  flow_allocs {
-                                   flow {
-                                     src_dc: "east-us"
-                                     dst_dc: "west-us"
-                                   }
+                                   flow { src_dc: "east-us" dst_dc: "west-us" }
                                    hipri_rate_limit_bps: 600000
                                    lopri_rate_limit_bps: 333333
                                  }
                                )"),
-                                        1);
+                               1);
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
                              parent {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" }
                                predicted_demand_bps: 933300
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 1
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
                                predicted_demand_bps: 600000
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 2
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
                                predicted_demand_bps: 300000
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 3
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 3 }
                                predicted_demand_bps: 30000
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 4
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 4 }
                                predicted_demand_bps: 3000
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 5
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 5 }
                                predicted_demand_bps: 300
                              }
                            )"));
   EXPECT_THAT(Bundle(alloc->GetAllocs()),
               AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 1
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
                   hipri_rate_limit_bps: 600000
                 }
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 2
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
                   lopri_rate_limit_bps: 300008
                 }
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 3
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 3 }
                   lopri_rate_limit_bps: 300008
                 }
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 4
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 4 }
                   lopri_rate_limit_bps: 300008
                 }
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 5
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 5 }
                   lopri_rate_limit_bps: 300008
                 })")));
 }
 
 TEST(HeypSigcomm20ClusterAllocatorTest, WithOversub) {
-  auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+  auto alloc =
+      ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
                                  type: HEYP_SIGCOMM20
                                  enable_burstiness: false
                                  enable_bonus: true
@@ -706,81 +446,52 @@ TEST(HeypSigcomm20ClusterAllocatorTest, WithOversub) {
                                  heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
                                  heyp_probe_lopri_when_ambiguous: false
                                )"),
-                                        ParseTextProto<proto::AllocBundle>(R"(
+                               ParseTextProto<proto::AllocBundle>(R"(
                                  flow_allocs {
-                                   flow {
-                                     src_dc: "east-us"
-                                     dst_dc: "west-us"
-                                   }
+                                   flow { src_dc: "east-us" dst_dc: "west-us" }
                                    hipri_rate_limit_bps: 600
                                  }
                                )"),
-                                        1);
+                               1);
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
                              parent {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" }
                                predicted_demand_bps: 600
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 1
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
                                predicted_demand_bps: 400
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 2
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
                                predicted_demand_bps: 200
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 3
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 3 }
                                predicted_demand_bps: 200
                              }
                            )"));
   EXPECT_THAT(Bundle(alloc->GetAllocs()),
               AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 1
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
                   hipri_rate_limit_bps: 300
                 }
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 2
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
                   hipri_rate_limit_bps: 300
                 }
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 3
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 3 }
                   hipri_rate_limit_bps: 300
                 })")));
 }
 
 TEST(HeypSigcomm20ClusterAllocatorTest, WithBonus) {
-  auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+  auto alloc =
+      ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
                                  type: HEYP_SIGCOMM20
                                  enable_burstiness: false
                                  enable_bonus: true
@@ -788,81 +499,52 @@ TEST(HeypSigcomm20ClusterAllocatorTest, WithBonus) {
                                  heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
                                  heyp_probe_lopri_when_ambiguous: false
                                )"),
-                                        ParseTextProto<proto::AllocBundle>(R"(
+                               ParseTextProto<proto::AllocBundle>(R"(
                                  flow_allocs {
-                                   flow {
-                                     src_dc: "east-us"
-                                     dst_dc: "west-us"
-                                   }
+                                   flow { src_dc: "east-us" dst_dc: "west-us" }
                                    hipri_rate_limit_bps: 600
                                  }
                                )"),
-                                        1);
+                               1);
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
                              parent {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" }
                                predicted_demand_bps: 450
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 1
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
                                predicted_demand_bps: 100
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 2
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
                                predicted_demand_bps: 200
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 3
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 3 }
                                predicted_demand_bps: 150
                              }
                            )"));
   EXPECT_THAT(Bundle(alloc->GetAllocs()),
               AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 1
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
                   hipri_rate_limit_bps: 250
                 }
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 2
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
                   hipri_rate_limit_bps: 250
                 }
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 3
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 3 }
                   hipri_rate_limit_bps: 250
                 })")));
 }
 
 TEST(HeypSigcomm20ClusterAllocatorTest, WithBurstiness) {
-  auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+  auto alloc =
+      ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
                                  type: HEYP_SIGCOMM20
                                  enable_burstiness: true
                                  enable_bonus: true
@@ -870,81 +552,52 @@ TEST(HeypSigcomm20ClusterAllocatorTest, WithBurstiness) {
                                  heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
                                  heyp_probe_lopri_when_ambiguous: false
                                )"),
-                                        ParseTextProto<proto::AllocBundle>(R"(
+                               ParseTextProto<proto::AllocBundle>(R"(
                                  flow_allocs {
-                                   flow {
-                                     src_dc: "east-us"
-                                     dst_dc: "west-us"
-                                   }
+                                   flow { src_dc: "east-us" dst_dc: "west-us" }
                                    hipri_rate_limit_bps: 600
                                  }
                                )"),
-                                        1);
+                               1);
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
                              parent {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" }
                                predicted_demand_bps: 600
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 1
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
                                predicted_demand_bps: 400
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 2
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
                                predicted_demand_bps: 300
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 3
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 3 }
                                predicted_demand_bps: 200
                              }
                            )"));
   EXPECT_THAT(Bundle(alloc->GetAllocs()),
               AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 1
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
                   hipri_rate_limit_bps: 400
                 }
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 2
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
                   hipri_rate_limit_bps: 400
                 }
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 3
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 3 }
                   hipri_rate_limit_bps: 400
                 })")));
 }
 
 TEST(HeypSigcomm20ClusterAllocatorTest, WithBurstinessAndCongestion) {
-  auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+  auto alloc =
+      ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
                                  type: HEYP_SIGCOMM20
                                  enable_burstiness: true
                                  enable_bonus: true
@@ -952,81 +605,52 @@ TEST(HeypSigcomm20ClusterAllocatorTest, WithBurstinessAndCongestion) {
                                  heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
                                  heyp_probe_lopri_when_ambiguous: false
                                )"),
-                                        ParseTextProto<proto::AllocBundle>(R"(
+                               ParseTextProto<proto::AllocBundle>(R"(
                                  flow_allocs {
-                                   flow {
-                                     src_dc: "east-us"
-                                     dst_dc: "west-us"
-                                   }
+                                   flow { src_dc: "east-us" dst_dc: "west-us" }
                                    hipri_rate_limit_bps: 600
                                  }
                                )"),
-                                        1);
+                               1);
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
                              parent {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" }
                                predicted_demand_bps: 800
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 1
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
                                predicted_demand_bps: 400
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 2
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
                                predicted_demand_bps: 300
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 3
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 3 }
                                predicted_demand_bps: 200
                              }
                            )"));
   EXPECT_THAT(Bundle(alloc->GetAllocs()),
               AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 1
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
                   hipri_rate_limit_bps: 237
                 }
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 2
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
                   hipri_rate_limit_bps: 237
                 }
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 3
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 3 }
                   hipri_rate_limit_bps: 237
                 })")));
 }
 
 TEST(HeypSigcomm20ClusterAllocatorTest, ZeroDemand) {
-  auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+  auto alloc =
+      ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
                                  type: HEYP_SIGCOMM20
                                  enable_burstiness: true
                                  enable_bonus: true
@@ -1034,65 +658,44 @@ TEST(HeypSigcomm20ClusterAllocatorTest, ZeroDemand) {
                                  heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
                                  heyp_probe_lopri_when_ambiguous: false
                                )"),
-                                        ParseTextProto<proto::AllocBundle>(R"(
+                               ParseTextProto<proto::AllocBundle>(R"(
                                  flow_allocs {
-                                   flow {
-                                     src_dc: "east-us"
-                                     dst_dc: "west-us"
-                                   }
+                                   flow { src_dc: "east-us" dst_dc: "west-us" }
                                    hipri_rate_limit_bps: 600
                                  }
                                )"),
-                                        1);
+                               1);
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
                              parent {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" }
                                predicted_demand_bps: 50
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 1
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
                                predicted_demand_bps: 0
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 2
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
                                predicted_demand_bps: 0
                              }
                            )"));
   EXPECT_THAT(Bundle(alloc->GetAllocs()),
               AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 1
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
                   hipri_rate_limit_bps: 330
                 }
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 2
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
                   hipri_rate_limit_bps: 330
                 })")));
 }
 
 TEST(HeypSigcomm20ClusterAllocatorTest, ZeroLimit) {
-  auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+  auto alloc =
+      ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
                                  type: HEYP_SIGCOMM20
                                  enable_burstiness: true
                                  enable_bonus: true
@@ -1100,65 +703,44 @@ TEST(HeypSigcomm20ClusterAllocatorTest, ZeroLimit) {
                                  heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
                                  heyp_probe_lopri_when_ambiguous: false
                                )"),
-                                        ParseTextProto<proto::AllocBundle>(R"(
+                               ParseTextProto<proto::AllocBundle>(R"(
                                  flow_allocs {
-                                   flow {
-                                     src_dc: "east-us"
-                                     dst_dc: "west-us"
-                                   }
+                                   flow { src_dc: "east-us" dst_dc: "west-us" }
                                    hipri_rate_limit_bps: 0
                                  }
                                )"),
-                                        1);
+                               1);
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
                              parent {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" }
                                predicted_demand_bps: 50
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 1
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
                                predicted_demand_bps: 50
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 2
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
                                predicted_demand_bps: 20
                              }
                            )"));
   EXPECT_THAT(Bundle(alloc->GetAllocs()),
               AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 1
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
                   hipri_rate_limit_bps: 0
                 }
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 2
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
                   hipri_rate_limit_bps: 0
                 })")));
 }
 
 TEST(HeypSigcomm20ClusterAllocatorTest, AllLOPRI) {
-  auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+  auto alloc =
+      ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
                                  type: HEYP_SIGCOMM20
                                  enable_burstiness: true
                                  enable_bonus: true
@@ -1166,61 +748,39 @@ TEST(HeypSigcomm20ClusterAllocatorTest, AllLOPRI) {
                                  heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
                                  heyp_probe_lopri_when_ambiguous: false
                                )"),
-                                        ParseTextProto<proto::AllocBundle>(R"(
+                               ParseTextProto<proto::AllocBundle>(R"(
                                  flow_allocs {
-                                   flow {
-                                     src_dc: "east-us"
-                                     dst_dc: "west-us"
-                                   }
+                                   flow { src_dc: "east-us" dst_dc: "west-us" }
                                    lopri_rate_limit_bps: 50
                                  }
                                )"),
-                                        1);
+                               1);
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
                              parent {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" }
                                predicted_demand_bps: 50
                                cum_hipri_usage_bytes: 0
                                cum_lopri_usage_bytes: 380
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 1
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
                                predicted_demand_bps: 50
                              }
                              children {
-                               flow {
-                                 src_dc: "east-us"
-                                 dst_dc: "west-us"
-                                 host_id: 2
-                               }
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
                                predicted_demand_bps: 20
                              }
                            )"));
   EXPECT_THAT(Bundle(alloc->GetAllocs()),
               AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 1
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
                   lopri_rate_limit_bps: 55
                 }
                 flow_allocs {
-                  flow {
-                    src_dc: "east-us"
-                    dst_dc: "west-us"
-                    host_id: 2
-                  }
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
                   lopri_rate_limit_bps: 55
                 })")));
 }
@@ -1230,78 +790,43 @@ class LOPRICongestionInfoGenerator {
   LOPRICongestionInfoGenerator()
       : info_(ParseTextProto<proto::AggInfo>(
             R"(
-          parent {
-            flow {
-              src_dc: "east-us"
-              dst_dc: "west-us"
-            }
-            predicted_demand_bps: 150000
-          }
-          children {
-            flow {
-              src_dc: "east-us"
-              dst_dc: "west-us"
-              host_id: 1
-            }
-            predicted_demand_bps: 40000
-          }
-          children {
-            flow {
-              src_dc: "east-us"
-              dst_dc: "west-us"
-              host_id: 2
-            }
-            predicted_demand_bps: 30000
-          }
-          children {
-            flow {
-              src_dc: "east-us"
-              dst_dc: "west-us"
-              host_id: 3
-            }
-            predicted_demand_bps: 30000
-          }
-          children {
-            flow {
-              src_dc: "east-us"
-              dst_dc: "west-us"
-              host_id: 4
-            }
-            predicted_demand_bps: 20000
-          }
-          children {
-            flow {
-              src_dc: "east-us"
-              dst_dc: "west-us"
-              host_id: 5
-            }
-            predicted_demand_bps: 20000
-          }
-          children {
-            flow {
-              src_dc: "east-us"
-              dst_dc: "west-us"
-              host_id: 6
-            }
-            predicted_demand_bps: 20000
-          }
-          children {
-            flow {
-              src_dc: "east-us"
-              dst_dc: "west-us"
-              host_id: 7
-            }
-            predicted_demand_bps: 5000
-          }
-          children {
-            flow {
-              src_dc: "east-us"
-              dst_dc: "west-us"
-              host_id: 8
-            }
-            predicted_demand_bps: 5000
-          }
-        )")) {}
+              parent {
+                flow { src_dc: "east-us" dst_dc: "west-us" }
+                predicted_demand_bps: 150000
+              }
+              children {
+                flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
+                predicted_demand_bps: 40000
+              }
+              children {
+                flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
+                predicted_demand_bps: 30000
+              }
+              children {
+                flow { src_dc: "east-us" dst_dc: "west-us" host_id: 3 }
+                predicted_demand_bps: 30000
+              }
+              children {
+                flow { src_dc: "east-us" dst_dc: "west-us" host_id: 4 }
+                predicted_demand_bps: 20000
+              }
+              children {
+                flow { src_dc: "east-us" dst_dc: "west-us" host_id: 5 }
+                predicted_demand_bps: 20000
+              }
+              children {
+                flow { src_dc: "east-us" dst_dc: "west-us" host_id: 6 }
+                predicted_demand_bps: 20000
+              }
+              children {
+                flow { src_dc: "east-us" dst_dc: "west-us" host_id: 7 }
+                predicted_demand_bps: 5000
+              }
+              children {
+                flow { src_dc: "east-us" dst_dc: "west-us" host_id: 8 }
+                predicted_demand_bps: 5000
+              }
+            )")) {}
 
   proto::AggInfo AddUsage(int64_t hipri_bytes, int64_t lopri_bytes) {
     auto p = info_.mutable_parent();
@@ -1335,7 +860,8 @@ class LOPRICongestionInfoGenerator {
 };
 
 TEST(HeypSigcomm20ClusterAllocatorTest, BoundedLOPRICongestion) {
-  auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+  auto alloc =
+      ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
                                  type: HEYP_SIGCOMM20
                                  enable_burstiness: true
                                  enable_bonus: true
@@ -1343,17 +869,14 @@ TEST(HeypSigcomm20ClusterAllocatorTest, BoundedLOPRICongestion) {
                                  heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
                                  heyp_probe_lopri_when_ambiguous: false
                                )"),
-                                        ParseTextProto<proto::AllocBundle>(R"(
+                               ParseTextProto<proto::AllocBundle>(R"(
                                  flow_allocs {
-                                   flow {
-                                     src_dc: "east-us"
-                                     dst_dc: "west-us"
-                                   }
+                                   flow { src_dc: "east-us" dst_dc: "west-us" }
                                    hipri_rate_limit_bps: 100000
                                    lopri_rate_limit_bps: 50000
                                  }
                                )"),
-                                        1.1);
+                               1.1);
 
   int64_t expected_max_lopri_usage = 0;
   proto::AllocBundle result;
@@ -1407,24 +930,22 @@ TEST(HeypSigcomm20ClusterAllocatorTest, BoundedLOPRICongestion) {
 }
 
 TEST(HeypSigcomm20ClusterAllocatorTest, UnboundedLOPRICongestion) {
-  auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+  auto alloc =
+      ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
                                  type: HEYP_SIGCOMM20
                                  enable_burstiness: true
                                  enable_bonus: true
                                  oversub_factor: 1.1
                                  heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
                                )"),
-                                        ParseTextProto<proto::AllocBundle>(R"(
+                               ParseTextProto<proto::AllocBundle>(R"(
                                  flow_allocs {
-                                   flow {
-                                     src_dc: "east-us"
-                                     dst_dc: "west-us"
-                                   }
+                                   flow { src_dc: "east-us" dst_dc: "west-us" }
                                    hipri_rate_limit_bps: 100000
                                    lopri_rate_limit_bps: 50000
                                  }
                                )"),
-                                        1);
+                               1);
 
   int64_t expected_max_lopri_usage = 0;
   proto::AllocBundle result;

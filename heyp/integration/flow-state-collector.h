@@ -16,10 +16,10 @@ namespace testing {
 class FlowStateCollector {
  public:
   static absl::StatusOr<std::unique_ptr<FlowStateCollector>> Create(
-      const std::vector<HostWorker::Flow> &all_flows, absl::Duration period,
+      const std::vector<HostWorker::Flow>& all_flows, absl::Duration period,
       bool ignore_instantaneous_usage);
 
-  void CollectStep(const std::string &label);
+  void CollectStep(const std::string& label);
   std::vector<proto::TestCompareMetrics::Metric> Finish();
 
  private:

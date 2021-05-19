@@ -7,7 +7,7 @@
 
 namespace heyp {
 
-void MainInit(int *argc, char ***argv) {
+void MainInit(int* argc, char*** argv) {
   google::InitGoogleLogging((*argv)[0]);
   absl::InitializeSymbolizer((*argv)[0]);
   absl::InstallFailureSignalHandler(absl::FailureSignalHandlerOptions());

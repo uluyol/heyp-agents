@@ -11,26 +11,11 @@ namespace {
 TEST(StaticDCMapperTest, Basic) {
   StaticDCMapper mapper(ParseTextProto<proto::StaticDCMapperConfig>(R"(
     mapping {
-      entries {
-        host_addr: "10.0.0.1"
-        dc: "chicago"
-      }
-      entries {
-        host_addr: "10.0.0.2"
-        dc: "minneapolis"
-      }
-      entries {
-        host_addr: "10.0.0.3"
-        dc: "chicago"
-      }
-      entries {
-        host_addr: "10.0.0.4"
-        dc: "chicago"
-      }
-      entries {
-        host_addr: "10.0.0.5"
-        dc: "minneapolis"
-      }
+      entries { host_addr: "10.0.0.1" dc: "chicago" }
+      entries { host_addr: "10.0.0.2" dc: "minneapolis" }
+      entries { host_addr: "10.0.0.3" dc: "chicago" }
+      entries { host_addr: "10.0.0.4" dc: "chicago" }
+      entries { host_addr: "10.0.0.5" dc: "minneapolis" }
     }
   )"));
 

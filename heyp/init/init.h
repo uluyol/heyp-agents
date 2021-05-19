@@ -3,7 +3,7 @@
 
 namespace heyp {
 
-void MainInit(int *argc, char ***argv);
+void MainInit(int* argc, char*** argv);
 
 }
 

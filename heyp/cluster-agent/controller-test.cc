@@ -32,28 +32,22 @@ ClusterController MakeClusterController() {
           absl::make_unique<BweDemandPredictor>(absl::Seconds(5), 1.0, 500),
           absl::Seconds(5)),
       ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
-                                  type: HEYP_SIGCOMM20
-                                  enable_burstiness: true
-                                  enable_bonus: true
-                                  oversub_factor: 1.0
-                                  heyp_acceptable_measured_ratio_over_intended_ratio: 1.0
-                                  )"),
+                                 type: HEYP_SIGCOMM20
+                                 enable_burstiness: true
+                                 enable_bonus: true
+                                 oversub_factor: 1.0
+                                 heyp_acceptable_measured_ratio_over_intended_ratio: 1.0
+                               )"),
                                ParseTextProto<proto::AllocBundle>(R"(
-                                  flow_allocs {
-                                    flow {
-                                      src_dc: "chicago"
-                                      dst_dc: "new_york"
-                                    }
-                                    hipri_rate_limit_bps: 1000
-                                  }
-                                  flow_allocs {
-                                    flow {
-                                      src_dc: "chicago"
-                                      dst_dc: "detroit"
-                                    }
-                                    hipri_rate_limit_bps: 1000
-                                    lopri_rate_limit_bps: 1000
-                                  }
+                                 flow_allocs {
+                                   flow { src_dc: "chicago" dst_dc: "new_york" }
+                                   hipri_rate_limit_bps: 1000
+                                 }
+                                 flow_allocs {
+                                   flow { src_dc: "chicago" dst_dc: "detroit" }
+                                   hipri_rate_limit_bps: 1000
+                                   lopri_rate_limit_bps: 1000
+                                 }
                                )"),
                                1));
 }
@@ -86,83 +80,51 @@ TEST(ClusterControllerTest, PlumbsDataCompletely) {
   int call_count = 0;
   auto lis1 = controller.RegisterListener(1, [&call_count](const proto::AllocBundle& b1) {
     EXPECT_THAT(b1, AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
-                                          flow_allocs {
-                                            flow {
-                                              src_dc: "chicago"
-                                              dst_dc: "new_york"
-                                              host_id: 1
-                                            }
-                                            hipri_rate_limit_bps: 1000
-                                          }
-                                          flow_allocs {
-                                            flow {
-                                              src_dc: "chicago"
-                                              dst_dc: "detroit"
-                                              host_id: 1
-                                            }
-                                            lopri_rate_limit_bps: 1000
-                                          }
-                                          )")));
+                  flow_allocs {
+                    flow { src_dc: "chicago" dst_dc: "new_york" host_id: 1 }
+                    hipri_rate_limit_bps: 1000
+                  }
+                  flow_allocs {
+                    flow { src_dc: "chicago" dst_dc: "detroit" host_id: 1 }
+                    lopri_rate_limit_bps: 1000
+                  }
+                )")));
     ++call_count;
   });
   auto lis2 = controller.RegisterListener(2, [&call_count](const proto::AllocBundle& b2) {
     EXPECT_THAT(b2, AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
-                                          flow_allocs {
-                                            flow {
-                                              src_dc: "chicago"
-                                              dst_dc: "detroit"
-                                              host_id: 2
-                                            }
-                                            hipri_rate_limit_bps: 1000
-                                          }
-                                          )")));
+                  flow_allocs {
+                    flow { src_dc: "chicago" dst_dc: "detroit" host_id: 2 }
+                    hipri_rate_limit_bps: 1000
+                  }
+                )")));
     ++call_count;
   });
 
   controller.UpdateInfo(ParseTextProto<proto::InfoBundle>(R"(
-                            bundler {
-                              host_id: 1
-                            }
-                            timestamp {
-                              seconds: 1
-                            }
-                            flow_infos {
-                              flow {
-                                src_dc: "chicago"
-                                dst_dc: "detroit"
-                                host_id: 1
-                              }
-                              predicted_demand_bps: 1000
-                              ewma_usage_bps: 1000
-                              currently_lopri: true
-                            }
-                            flow_infos {
-                              flow {
-                                src_dc: "chicago"
-                                dst_dc: "new_york"
-                                host_id: 1
-                              }
-                              predicted_demand_bps: 1000
-                              ewma_usage_bps: 1000
-                            }
-                            )"));
+    bundler { host_id: 1 }
+    timestamp { seconds: 1 }
+    flow_infos {
+      flow { src_dc: "chicago" dst_dc: "detroit" host_id: 1 }
+      predicted_demand_bps: 1000
+      ewma_usage_bps: 1000
+      currently_lopri: true
+    }
+    flow_infos {
+      flow { src_dc: "chicago" dst_dc: "new_york" host_id: 1 }
+      predicted_demand_bps: 1000
+      ewma_usage_bps: 1000
+    }
+  )"));
   controller.UpdateInfo(ParseTextProto<proto::InfoBundle>(R"(
-                            bundler {
-                              host_id: 2
-                            }
-                            timestamp {
-                              seconds: 1
-                            }
-                            flow_infos {
-                              flow {
-                                src_dc: "chicago"
-                                dst_dc: "detroit"
-                                host_id: 2
-                              }
-                              predicted_demand_bps: 1000
-                              ewma_usage_bps: 1000
-                            }
-                            )"));
+    bundler { host_id: 2 }
+    timestamp { seconds: 1 }
+    flow_infos {
+      flow { src_dc: "chicago" dst_dc: "detroit" host_id: 2 }
+      predicted_demand_bps: 1000
+      ewma_usage_bps: 1000
+    }
+  )"));
   controller.ComputeAndBroadcast();
 
   EXPECT_EQ(call_count, 2);
@@ -173,9 +135,8 @@ class SingleFGAllocBundleCollector {
   SingleFGAllocBundleCollector(int num_hosts, ClusterController* c)
       : num_hosts_(num_hosts),
         fg_(ParseTextProto<proto::FlowMarker>(R"(
-    src_dc: "east-us"
-    dst_dc: "central-us"
-  )")),
+          src_dc: "east-us" dst_dc: "central-us"
+        )")),
         controller_(c) {
     alloc_bundles_.resize(num_hosts_, {});
     has_alloc_bundle_.resize(num_hosts_, false);
@@ -454,23 +415,20 @@ TEST(ClusterControllerTest, HeypSigcomm20ConvergesNoCongestion) {
                                      absl::Seconds(30), kUsageMultiplier, 5'000'000),
                                  absl::Seconds(30)),
       ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
-        type: HEYP_SIGCOMM20
-        enable_burstiness: true
-        enable_bonus: true
-        oversub_factor: 1.15
-        heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
-        heyp_probe_lopri_when_ambiguous: true
-      )"),
+                                 type: HEYP_SIGCOMM20
+                                 enable_burstiness: true
+                                 enable_bonus: true
+                                 oversub_factor: 1.15
+                                 heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
+                                 heyp_probe_lopri_when_ambiguous: true
+                               )"),
                                ParseTextProto<proto::AllocBundle>(R"(
-        flow_allocs {
-          flow {
-            src_dc: "east-us"
-            dst_dc: "central-us"
-          }
-          hipri_rate_limit_bps: 10737418240 # 10 Gbps
-          lopri_rate_limit_bps:  5368709120 #  5 Gbps
-        }
-      )"),
+                                 flow_allocs {
+                                   flow { src_dc: "east-us" dst_dc: "central-us" }
+                                   hipri_rate_limit_bps: 10737418240  # 10 Gbps
+                                   lopri_rate_limit_bps: 5368709120   #  5 Gbps
+                                 }
+                               )"),
                                kUsageMultiplier));
   FixedDemandHostSimulator demand_sim(
       {Gbps(3), Gbps(3), Gbps(3), Gbps(3), Gbps(3), Gbps(3)}, &controller);

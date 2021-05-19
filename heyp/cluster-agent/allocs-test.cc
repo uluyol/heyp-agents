@@ -24,115 +24,92 @@ TEST(BundleByHostTest, Empty) {
 }
 
 TEST(BundleByHostTest, MultipleHostsAndFGs) {
-  EXPECT_THAT(BundleByHost(AllocSet{
-                  {
+  EXPECT_THAT(
+      BundleByHost(AllocSet{
+          {
+              {
+                  ProtoFlowAlloc(
                       {
-                          ProtoFlowAlloc(
-                              {
-                                  .src_dc = "east-us",
-                                  .dst_dc = "west-us",
-                                  .host_id = 1,
-                              },
-                              100, 10),
-                          ProtoFlowAlloc(
-                              {
-                                  .src_dc = "east-us",
-                                  .dst_dc = "west-us",
-                                  .host_id = 2,
-                              },
-                              200, 20),
-                          ProtoFlowAlloc(
-                              {
-                                  .src_dc = "east-us",
-                                  .dst_dc = "west-us",
-                                  .host_id = 5,
-                              },
-                              500, 50),
+                          .src_dc = "east-us",
+                          .dst_dc = "west-us",
+                          .host_id = 1,
                       },
+                      100, 10),
+                  ProtoFlowAlloc(
                       {
-                          ProtoFlowAlloc(
-                              {
-                                  .src_dc = "west-us",
-                                  .dst_dc = "uk",
-                                  .host_id = 3,
-                              },
-                              900, 90),
-                          ProtoFlowAlloc(
-                              {
-                                  .src_dc = "west-us",
-                                  .dst_dc = "uk",
-                                  .host_id = 2,
-                              },
-                              400, 40),
-                          ProtoFlowAlloc(
-                              {
-                                  .src_dc = "west-us",
-                                  .dst_dc = "uk",
-                                  .host_id = 5,
-                              },
-                              2500, 250),
+                          .src_dc = "east-us",
+                          .dst_dc = "west-us",
+                          .host_id = 2,
                       },
-                  },
-              }),
-              testing::UnorderedElementsAre(
-                  testing::Pair(1, AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
-              flow_allocs {
-                flow {
-                  src_dc: "east-us"
-                  dst_dc: "west-us"
-                  host_id: 1
-                }
-                hipri_rate_limit_bps: 100
-                lopri_rate_limit_bps: 10
-              })"))),
-                  testing::Pair(2, AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
-              flow_allocs {
-                flow {
-                  src_dc: "east-us"
-                  dst_dc: "west-us"
-                  host_id: 2
-                }
-                hipri_rate_limit_bps: 200
-                lopri_rate_limit_bps: 20
-              }
-              flow_allocs {
-                flow {
-                  src_dc: "west-us"
-                  dst_dc: "uk"
-                  host_id: 2
-                }
-                hipri_rate_limit_bps: 400
-                lopri_rate_limit_bps: 40
-              })"))),
-                  testing::Pair(3, AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
-              flow_allocs {
-                flow {
-                  src_dc: "west-us"
-                  dst_dc: "uk"
-                  host_id: 3
-                }
-                hipri_rate_limit_bps: 900
-                lopri_rate_limit_bps: 90
-              })"))),
-                  testing::Pair(5, AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
-              flow_allocs {
-                flow {
-                  src_dc: "east-us"
-                  dst_dc: "west-us"
-                  host_id: 5
-                }
-                hipri_rate_limit_bps: 500
-                lopri_rate_limit_bps: 50
-              }
-              flow_allocs {
-                flow {
-                  src_dc: "west-us"
-                  dst_dc: "uk"
-                  host_id: 5
-                }
-                hipri_rate_limit_bps: 2500
-                lopri_rate_limit_bps: 250
-              })")))));
+                      200, 20),
+                  ProtoFlowAlloc(
+                      {
+                          .src_dc = "east-us",
+                          .dst_dc = "west-us",
+                          .host_id = 5,
+                      },
+                      500, 50),
+              },
+              {
+                  ProtoFlowAlloc(
+                      {
+                          .src_dc = "west-us",
+                          .dst_dc = "uk",
+                          .host_id = 3,
+                      },
+                      900, 90),
+                  ProtoFlowAlloc(
+                      {
+                          .src_dc = "west-us",
+                          .dst_dc = "uk",
+                          .host_id = 2,
+                      },
+                      400, 40),
+                  ProtoFlowAlloc(
+                      {
+                          .src_dc = "west-us",
+                          .dst_dc = "uk",
+                          .host_id = 5,
+                      },
+                      2500, 250),
+              },
+          },
+      }),
+      testing::UnorderedElementsAre(
+          testing::Pair(1, AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
+                          flow_allocs {
+                            flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
+                            hipri_rate_limit_bps: 100
+                            lopri_rate_limit_bps: 10
+                          })"))),
+          testing::Pair(2, AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
+                          flow_allocs {
+                            flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
+                            hipri_rate_limit_bps: 200
+                            lopri_rate_limit_bps: 20
+                          }
+                          flow_allocs {
+                            flow { src_dc: "west-us" dst_dc: "uk" host_id: 2 }
+                            hipri_rate_limit_bps: 400
+                            lopri_rate_limit_bps: 40
+                          })"))),
+          testing::Pair(3, AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
+                          flow_allocs {
+                            flow { src_dc: "west-us" dst_dc: "uk" host_id: 3 }
+                            hipri_rate_limit_bps: 900
+                            lopri_rate_limit_bps: 90
+                          })"))),
+          testing::Pair(5, AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
+                          flow_allocs {
+                            flow { src_dc: "east-us" dst_dc: "west-us" host_id: 5 }
+                            hipri_rate_limit_bps: 500
+                            lopri_rate_limit_bps: 50
+                          }
+                          flow_allocs {
+                            flow { src_dc: "west-us" dst_dc: "uk" host_id: 5 }
+                            hipri_rate_limit_bps: 2500
+                            lopri_rate_limit_bps: 250
+                          })")))));
 }
 
 }  // namespace

@@ -18,14 +18,14 @@ namespace {
 
 constexpr bool kDebug = false;
 
-uv_loop_t *loop;
+uv_loop_t* loop;
 
-void AllocBuf(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
-  buf->base = (char *)malloc(suggested_size);
+void AllocBuf(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf) {
+  buf->base = (char*)malloc(suggested_size);
   buf->len = suggested_size;
 }
 
-void OnCloseConn(uv_handle_t *handle) { free(handle); }
+void OnCloseConn(uv_handle_t* handle) { free(handle); }
 
 typedef struct {
   uv_write_t req;
@@ -33,11 +33,11 @@ typedef struct {
   char bufdata[28];
 } write_req_t;
 
-void OnRpcAck(uv_write_t *req, int status) {
+void OnRpcAck(uv_write_t* req, int status) {
   if (status) {
     absl::FPrintF(stderr, "Write error %s\n", uv_strerror(status));
   }
-  write_req_t *wr = (write_req_t *)req;
+  write_req_t* wr = (write_req_t*)req;
   free(wr);
 }
 
@@ -48,14 +48,14 @@ typedef struct {
   int num_header_read;
 } client_stream_t;
 
-void OnRpcRead(uv_stream_t *client_stream, ssize_t nread, const uv_buf_t *buf) {
-  client_stream_t *client = (client_stream_t *)client_stream;
+void OnRpcRead(uv_stream_t* client_stream, ssize_t nread, const uv_buf_t* buf) {
+  client_stream_t* client = (client_stream_t*)client_stream;
   if (nread < 0) {
     if (nread != UV_EOF) absl::FPrintF(stderr, "Read error %s\n", uv_err_name(nread));
-    uv_close((uv_handle_t *)client, OnCloseConn);
+    uv_close((uv_handle_t*)client, OnCloseConn);
   }
-  char *b = buf->base;
-  char *e = buf->base + nread;
+  char* b = buf->base;
+  char* e = buf->base + nread;
   while (b < e) {
     if (client->num_header_read < 28) {
       client->header[client->num_header_read++] = *b;
@@ -80,21 +80,21 @@ void OnRpcRead(uv_stream_t *client_stream, ssize_t nread, const uv_buf_t *buf) {
     }
     b += client->bytes_left;
 
-    write_req_t *req = (write_req_t *)malloc(sizeof(write_req_t));
+    write_req_t* req = (write_req_t*)malloc(sizeof(write_req_t));
     memcpy(req->bufdata, client->header, 28);
     if (kDebug) {
       absl::FPrintF(stderr, "ack rpc id=%d header=%s\n", ReadU64LE(req->bufdata + 4),
                     ToHex(req->bufdata, 28));
     }
     req->buf = uv_buf_init(req->bufdata, 28);
-    uv_write((uv_write_t *)req, (uv_stream_t *)&client->client, &req->buf, 1, OnRpcAck);
+    uv_write((uv_write_t*)req, (uv_stream_t*)&client->client, &req->buf, 1, OnRpcAck);
 
     client->num_header_read = 0;
   }
   free(buf->base);
 }
 
-void OnNewConnection(uv_stream_t *server, int status) {
+void OnNewConnection(uv_stream_t* server, int status) {
   if (status < 0) {
     absl::FPrintF(stderr, "New connection error %s\n", uv_strerror(status));
     return;
@@ -102,13 +102,13 @@ void OnNewConnection(uv_stream_t *server, int status) {
 
   absl::FPrintF(stderr, "Got new connection...\n");
 
-  client_stream_t *client = (client_stream_t *)malloc(sizeof(client_stream_t));
+  client_stream_t* client = (client_stream_t*)malloc(sizeof(client_stream_t));
   client->num_header_read = 0;
   uv_tcp_init(loop, &client->client);
-  if (uv_accept(server, (uv_stream_t *)&client->client) == 0) {
-    uv_read_start((uv_stream_t *)&client->client, AllocBuf, OnRpcRead);
+  if (uv_accept(server, (uv_stream_t*)&client->client) == 0) {
+    uv_read_start((uv_stream_t*)&client->client, AllocBuf, OnRpcRead);
   } else {
-    uv_close((uv_handle_t *)client, OnCloseConn);
+    uv_close((uv_handle_t*)client, OnCloseConn);
   }
 }
 
@@ -119,16 +119,16 @@ int ShardMain(int port) {
   uv_tcp_t server;
   uv_tcp_init_ex(loop, &server, AF_INET);
   int fd = -1;
-  uv_fileno(reinterpret_cast<uv_handle_t *>(&server), &fd);
+  uv_fileno(reinterpret_cast<uv_handle_t*>(&server), &fd);
   int reuse = 1;
-  setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, static_cast<void *>(&reuse), sizeof(reuse));
+  setsockopt(fd, SOL_SOCKET, SO_REUSEPORT, static_cast<void*>(&reuse), sizeof(reuse));
 
   uv_ip4_addr("0.0.0.0", port, &addr);
-  uv_tcp_bind(&server, (const struct sockaddr *)&addr, 0);
+  uv_tcp_bind(&server, (const struct sockaddr*)&addr, 0);
 
   absl::FPrintF(stderr, "Listening on port %d\n", port);
 
-  int r = uv_listen((uv_stream_t *)&server, DEFAULT_BACKLOG, OnNewConnection);
+  int r = uv_listen((uv_stream_t*)&server, DEFAULT_BACKLOG, OnNewConnection);
   if (r) {
     absl::FPrintF(stderr, "Listen error %s\n", uv_strerror(r));
     return 1;
@@ -139,7 +139,7 @@ int ShardMain(int port) {
 }  // namespace
 }  // namespace heyp
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   if (argc != 3) {
     absl::FPrintF(stderr, "usage: %s num_shards port\n", argv[0]);
     return 2;
@@ -161,7 +161,7 @@ int main(int argc, char **argv) {
     return heyp::ShardMain(port);
   }
 
-  pid_t *pids = static_cast<pid_t *>(malloc(sizeof(pid_t) * num_shards));
+  pid_t* pids = static_cast<pid_t*>(malloc(sizeof(pid_t) * num_shards));
   for (int i = 0; i < num_shards; ++i) {
     pid_t pid = fork();
     if (pid == 0) {

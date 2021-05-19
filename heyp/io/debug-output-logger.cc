@@ -27,14 +27,14 @@ DebugOutputLogger::DebugOutputLogger(std::string_view outdir) : outdir_(outdir) 
   }
 }
 
-void DebugOutputLogger::Write(std::string_view data_kind, const absl::Cord &data,
+void DebugOutputLogger::Write(std::string_view data_kind, const absl::Cord& data,
                               absl::Time time) {
   if (!should_log()) {
     return;
   }
   std::string out_path = absl::StrCat(
       outdir_, "/", absl::FormatTime(time, absl::UTCTimeZone()), "-", data_kind);
-  FILE *f = fopen(out_path.c_str(), "w");
+  FILE* f = fopen(out_path.c_str(), "w");
   if (f == nullptr && status_.ok()) {
     status_ = absl::InternalError(
         absl::StrCat("failed to create file '", out_path, "': ", StrError(errno)));

@@ -30,10 +30,10 @@ class HostWorker {
     int src_port = 0;  // set by InitFlows
     int dst_port = 0;
   };
-  absl::Status InitFlows(std::vector<Flow> &flows);
+  absl::Status InitFlows(std::vector<Flow>& flows);
   void Go();
 
-  void CollectStep(const std::string &label);
+  void CollectStep(const std::string& label);
 
   std::vector<proto::TestCompareMetrics::Metric> Finish();
 
@@ -42,7 +42,7 @@ class HostWorker {
 
   // RecvFlow and SendFlow do not take ownership over fd.
   void RecvFlow(int fd);
-  void SendFlow(int fd, std::string name, std::atomic<int64_t> *counter);
+  void SendFlow(int fd, std::string name, std::atomic<int64_t>* counter);
 
   void Serve();
 
@@ -70,7 +70,7 @@ class HostWorker {
   absl::flat_hash_map<std::pair<std::string, bool>, std::unique_ptr<std::atomic<int64_t>>>
       counters_ ABSL_GUARDED_BY(mu_);
 
-  std::atomic<int64_t> *GetCounter(const std::string &name, bool recv)
+  std::atomic<int64_t>* GetCounter(const std::string& name, bool recv)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(mu_);
 };
 

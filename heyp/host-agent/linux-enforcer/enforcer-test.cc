@@ -11,22 +11,10 @@ TEST(AllNetemConfigs, Basic) {
   std::vector<FlowNetemConfig> configs =
       AllNetemConfigs(StaticDCMapper(ParseTextProto<proto::StaticDCMapperConfig>(R"(
                         mapping {
-                          entries {
-                            host_addr: "10.0.0.1"
-                            dc: "chicago"
-                          }
-                          entries {
-                            host_addr: "10.0.0.2"
-                            dc: "sanjose"
-                          }
-                          entries {
-                            host_addr: "10.0.0.3"
-                            dc: "sanjose"
-                          }
-                          entries {
-                            host_addr: "10.0.0.4"
-                            dc: "newyork"
-                          }
+                          entries { host_addr: "10.0.0.1" dc: "chicago" }
+                          entries { host_addr: "10.0.0.2" dc: "sanjose" }
+                          entries { host_addr: "10.0.0.3" dc: "sanjose" }
+                          entries { host_addr: "10.0.0.4" dc: "newyork" }
                         }
                       )")),
                       SimulatedWanDB(ParseTextProto<proto::SimulatedWanConfig>(R"(
@@ -66,7 +54,8 @@ TEST(AllNetemConfigs, Basic) {
                                        )"),
                                    },
                                .netem = ParseTextProto<proto::NetemConfig>(R"(
-                                 delay_ms: 53 delay_jitter_ms: 5
+                                 delay_ms: 53
+                                 delay_jitter_ms: 5
                                )"),
                            },
                            FlowNetemConfig{
@@ -85,7 +74,8 @@ TEST(AllNetemConfigs, Basic) {
                                        )"),
                                    },
                                .netem = ParseTextProto<proto::NetemConfig>(R"(
-                                 delay_ms: 25 delay_jitter_ms: 4
+                                 delay_ms: 25
+                                 delay_jitter_ms: 4
                                )"),
                            }));
 }

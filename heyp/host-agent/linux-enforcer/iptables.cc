@@ -174,20 +174,20 @@ class RunnerImpl : public Runner {
 
   // SaveInto calls `iptables-save` for table and stores result in a given
   // buffer.
-  absl::Status SaveInto(Table table, absl::Cord &buffer) override;
+  absl::Status SaveInto(Table table, absl::Cord& buffer) override;
 
   // Restore runs `iptables-restore` passing data through []byte.
   // table is the Table to restore
   // data should be formatted like the output of SaveInto()
   // flush sets the presence of the "--noflush" flag. see: FlushFlag
   // counters sets the "--counters" flag. see: RestoreCountersFlag
-  absl::Status Restore(Table table, const absl::Cord &data, RestoreFlags flags) override;
+  absl::Status Restore(Table table, const absl::Cord& data, RestoreFlags flags) override;
 
   // RestoreAll is the same as Restore except that no table is specified.
-  absl::Status RestoreAll(const absl::Cord &data, RestoreFlags flags) override;
+  absl::Status RestoreAll(const absl::Cord& data, RestoreFlags flags) override;
 
  private:
-  absl::Status RestoreInternal(std::vector<std::string> args, const absl::Cord &data,
+  absl::Status RestoreInternal(std::vector<std::string> args, const absl::Cord& data,
                                RestoreFlags flags);
 
   const IpFamily family_;
@@ -200,12 +200,12 @@ class RunnerImpl : public Runner {
 
   absl::Mutex mu_;
 
-  absl::StatusOr<std::string> Run(Operation op, const std::vector<std::string> &args,
-                                  int *exit_status = nullptr)
+  absl::StatusOr<std::string> Run(Operation op, const std::vector<std::string>& args,
+                                  int* exit_status = nullptr)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(mu_);
 
   absl::StatusOr<bool> CheckRule(Table table, Chain chain,
-                                 const std::vector<std::string> &args)
+                                 const std::vector<std::string>& args)
       ABSL_EXCLUSIVE_LOCKS_REQUIRED(mu_);
 
   absl::StatusOr<bool> CheckRuleUsingCheck(std::vector<std::string> args)
@@ -243,13 +243,13 @@ std::unique_ptr<Runner> Runner::CreateWithIptablesCommands(
 namespace {
 
 std::vector<std::string> MakeFullArgs(Table table, Chain chain,
-                                      const std::vector<std::string> &args = {}) {
+                                      const std::vector<std::string>& args = {}) {
   std::vector<std::string> result{
       std::string(ToString(chain)),
       "-t",
       std::string(ToString(table)),
   };
-  for (const std::string &arg : args) {
+  for (const std::string& arg : args) {
     result.push_back(arg);
   }
   return result;
@@ -258,11 +258,11 @@ std::vector<std::string> MakeFullArgs(Table table, Chain chain,
 }  // namespace
 
 absl::StatusOr<std::string> RunnerImpl::Run(Operation op,
-                                            const std::vector<std::string> &args,
-                                            int *exit_status) {
+                                            const std::vector<std::string>& args,
+                                            int* exit_status) {
   std::vector<std::string> full_args = wait_flag_;
   full_args.push_back(std::string(ToString(op)));
-  for (const std::string &arg : args) {
+  for (const std::string& arg : args) {
     full_args.push_back(arg);
   }
   VLOG(2) << "running iptables: " << iptables_cmd_ << " "
@@ -284,7 +284,7 @@ absl::StatusOr<std::string> RunnerImpl::Run(Operation op,
     }
 
     return out;
-  } catch (const std::system_error &e) {
+  } catch (const std::system_error& e) {
     return absl::InternalError(
         absl::StrCat("failed to run iptables subprocess: ", e.what()));
   }
@@ -335,7 +335,7 @@ absl::Status RunnerImpl::DeleteChain(Table table, Chain chain) {
 // Returns (bool, nil) if it was able to check the existence of the rule, or
 // (<undefined>, error) if the process of checking failed.
 absl::StatusOr<bool> RunnerImpl::CheckRule(Table table, Chain chain,
-                                           const std::vector<std::string> &args) {
+                                           const std::vector<std::string>& args) {
   if (has_check_) {
     return CheckRuleUsingCheck(MakeFullArgs(table, chain, args));
   }
@@ -397,7 +397,7 @@ absl::Status RunnerImpl::DeleteRule(Table table, Chain chain,
   return st;
 }
 
-absl::Status RunnerImpl::SaveInto(Table table, absl::Cord &buffer) {
+absl::Status RunnerImpl::SaveInto(Table table, absl::Cord& buffer) {
   std::vector<std::string> args{"-t", std::string(ToString(table))};
 
   absl::MutexLock lock(&mu_);
@@ -411,7 +411,7 @@ absl::Status RunnerImpl::SaveInto(Table table, absl::Cord &buffer) {
 
     {
       constexpr size_t kChunkSize = 4096;
-      char *chunk = nullptr;
+      char* chunk = nullptr;
       while (true) {
         chunk = new char[kChunkSize];
         if (!out_stream.read(chunk, kChunkSize)) {
@@ -435,24 +435,24 @@ absl::Status RunnerImpl::SaveInto(Table table, absl::Cord &buffer) {
           absl::StrCat("iptables save exit status ", c.exit_code()));
     }
     return absl::OkStatus();
-  } catch (const std::system_error &e) {
+  } catch (const std::system_error& e) {
     return absl::InternalError(
         absl::StrCat("failed to run iptables subprocess: ", e.what()));
   }
 }
 
-absl::Status RunnerImpl::Restore(Table table, const absl::Cord &data,
+absl::Status RunnerImpl::Restore(Table table, const absl::Cord& data,
                                  RestoreFlags flags) {
   return RestoreInternal({"-T", std::string(ToString(table))}, data, flags);
 }
 
-absl::Status RunnerImpl::RestoreAll(const absl::Cord &data, RestoreFlags flags) {
+absl::Status RunnerImpl::RestoreAll(const absl::Cord& data, RestoreFlags flags) {
   return RestoreInternal({}, data, flags);
 }
 
 // restoreInternal is the shared part of Restore/RestoreAll
 absl::Status RunnerImpl::RestoreInternal(std::vector<std::string> args,
-                                         const absl::Cord &data, RestoreFlags flags) {
+                                         const absl::Cord& data, RestoreFlags flags) {
   if (!flags.flush_tables) {
     args.push_back("--noflush");
   }
@@ -460,7 +460,7 @@ absl::Status RunnerImpl::RestoreInternal(std::vector<std::string> args,
     args.push_back("--counters");
   }
   std::vector<std::string> full_args = restore_wait_flag_;
-  for (const std::string &arg : args) {
+  for (const std::string& arg : args) {
     full_args.push_back(arg);
   }
 
@@ -486,7 +486,7 @@ absl::Status RunnerImpl::RestoreInternal(std::vector<std::string> args,
           absl::StrCat("iptables restore exit status ", c.exit_code()));
     }
     return absl::OkStatus();
-  } catch (const std::system_error &e) {
+  } catch (const std::system_error& e) {
     return absl::InternalError(
         absl::StrCat("failed to run iptables restore subprocess: ", e.what()));
   }

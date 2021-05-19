@@ -51,12 +51,12 @@ TEST(HdrHistogramTest, Basic) {
           highest_trackable_value: 30000000000
           significant_figures: 3
         }
-        buckets { v: 1      c: 1 }
-        buckets { v: 10000  c: 2 }
+        buckets { v: 1 c: 1 }
+        buckets { v: 10000 c: 2 }
         buckets { v: 100000 c: 1 }
         buckets { v: 200000 c: 1 }
         buckets { v: 210000 c: 1 }
-    )");
+      )");
 
   proto::HdrHistogram proto_hist = h.ToProto();
 

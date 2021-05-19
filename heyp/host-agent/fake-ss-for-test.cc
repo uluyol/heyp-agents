@@ -10,7 +10,7 @@ static void PrintRec(std::vector<std::string> recs) {
   std::cout << absl::StrJoin(recs, " ") << "\n";
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   for (int i = 0; i < argc; ++i) {
     if (strcmp(argv[i], "-E") == 0) {
       absl::SleepFor(absl::Milliseconds(40));

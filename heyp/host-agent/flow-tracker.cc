@@ -19,27 +19,27 @@ FlowTracker::FlowTracker(std::unique_ptr<DemandPredictor> demand_predictor, Conf
     : config_(config), demand_predictor_(std::move(demand_predictor)), next_seqnum_(0) {}
 
 void FlowTracker::ForEachActiveFlow(
-    absl::FunctionRef<void(absl::Time, const proto::FlowInfo &)> func) const {
+    absl::FunctionRef<void(absl::Time, const proto::FlowInfo&)> func) const {
   absl::MutexLock l(&mu_);
-  for (const auto &fs : active_flows_) {
+  for (const auto& fs : active_flows_) {
     func(fs.second.updated_time(), fs.second.cur());
   }
 }
 
 void FlowTracker::ForEachFlow(
-    absl::FunctionRef<void(absl::Time, const proto::FlowInfo &)> func) const {
+    absl::FunctionRef<void(absl::Time, const proto::FlowInfo&)> func) const {
   absl::MutexLock l(&mu_);
-  for (const auto &fs : active_flows_) {
+  for (const auto& fs : active_flows_) {
     func(fs.second.updated_time(), fs.second.cur());
   }
-  for (const LeafState &state : done_flows_) {
+  for (const LeafState& state : done_flows_) {
     func(state.updated_time(), state.cur());
   }
 }
 
 namespace {
 
-LeafState CreateLeafState(const proto::FlowMarker &f, uint64_t seqnum) {
+LeafState CreateLeafState(const proto::FlowMarker& f, uint64_t seqnum) {
   proto::FlowMarker flow = f;
   flow.set_seqnum(seqnum);
   return LeafState(flow);
@@ -51,11 +51,11 @@ void FlowTracker::UpdateFlows(absl::Time timestamp,
                               absl::Span<const Update> flow_update_batch) {
   absl::MutexLock lock(&mu_);
   for (size_t i = 0; i < flow_update_batch.size();) {
-    const Update &u = flow_update_batch[i];
+    const Update& u = flow_update_batch[i];
     if (!active_flows_.contains(u.flow)) {
       active_flows_.emplace(u.flow, CreateLeafState(u.flow, ++next_seqnum_));
     }
-    LeafState &state = active_flows_.at(u.flow);
+    LeafState& state = active_flows_.at(u.flow);
     if (state.cur().cum_usage_bytes() > u.cum_usage_bytes) {
       // Got a race, new usage lower than old usage, so this must be a new flow
       done_flows_.push_back(state);
@@ -84,11 +84,11 @@ void FlowTracker::UpdateFlows(absl::Time timestamp,
 void FlowTracker::FinalizeFlows(absl::Time timestamp,
                                 absl::Span<const Update> flow_update_batch) {
   absl::MutexLock lock(&mu_);
-  for (const Update &u : flow_update_batch) {
+  for (const Update& u : flow_update_batch) {
     if (!active_flows_.contains(u.flow)) {
       active_flows_.emplace(u.flow, CreateLeafState(u.flow, ++next_seqnum_));
     }
-    LeafState &state = active_flows_.at(u.flow);
+    LeafState& state = active_flows_.at(u.flow);
     bool is_lopri = u.used_priority == FlowPri::kLo;
     if (u.used_priority == FlowPri::kUnset && state.cur().currently_lopri()) {
       is_lopri = true;
@@ -110,7 +110,7 @@ void FlowTracker::FinalizeFlows(absl::Time timestamp,
 
 struct SSFlowStateReporter::Impl {
   const Config config;
-  FlowTracker *flow_tracker;
+  FlowTracker* flow_tracker;
 
   bp::child monitor_done_proc;
   std::unique_ptr<bp::ipstream> monitor_done_out;
@@ -132,8 +132,8 @@ SSFlowStateReporter::~SSFlowStateReporter() {
 namespace {
 
 absl::Status ParseLine(uint64_t host_id, absl::string_view line,
-                       proto::FlowMarker &parsed, int64_t &usage_bps,
-                       int64_t &cum_usage_bytes) {
+                       proto::FlowMarker& parsed, int64_t& usage_bps,
+                       int64_t& cum_usage_bytes) {
   parsed.Clear();
 
   std::vector<absl::string_view> fields =
@@ -195,13 +195,13 @@ absl::Status ParseLine(uint64_t host_id, absl::string_view line,
   return absl::OkStatus();
 }
 
-absl::Status StartDoneMonitor(const std::string &ss_binary_name,
-                              std::unique_ptr<bp::ipstream> *out, bp::child *proc) {
+absl::Status StartDoneMonitor(const std::string& ss_binary_name,
+                              std::unique_ptr<bp::ipstream>* out, bp::child* proc) {
   try {
     *out = absl::make_unique<bp::ipstream>();
     *proc = bp::child(bp::search_path(ss_binary_name), "-E", "-i", "-t", "-n", "-H", "-O",
                       bp::std_out > **out);
-  } catch (const std::system_error &e) {
+  } catch (const std::system_error& e) {
     return absl::UnknownError(absl::StrCat("failed to start ss subprocess: ", e.what()));
   }
   return absl::OkStatus();
@@ -209,7 +209,7 @@ absl::Status StartDoneMonitor(const std::string &ss_binary_name,
 
 }  // namespace
 
-bool SSFlowStateReporter::IgnoreFlow(const proto::FlowMarker &f) {
+bool SSFlowStateReporter::IgnoreFlow(const proto::FlowMarker& f) {
   bool keep = std::binary_search(impl_->config.my_addrs.begin(),
                                  impl_->config.my_addrs.end(), f.src_addr());
   return !keep;
@@ -250,7 +250,7 @@ void SSFlowStateReporter::MonitorDone() {
 }
 
 absl::Status SSFlowStateReporter::ReportState(
-    absl::FunctionRef<bool(const proto::FlowMarker &)> is_lopri) {
+    absl::FunctionRef<bool(const proto::FlowMarker&)> is_lopri) {
   try {
     bp::ipstream out;
     bp::child c(bp::search_path(impl_->config.ss_binary_name), "-i", "-t", "-n", "-H",
@@ -279,13 +279,13 @@ absl::Status SSFlowStateReporter::ReportState(
     }
     impl_->flow_tracker->UpdateFlows(now, flow_updates);
     c.wait();
-  } catch (const std::system_error &e) {
+  } catch (const std::system_error& e) {
     return absl::InternalError(absl::StrCat("failed to start ss subprocess: ", e.what()));
   }
   return absl::OkStatus();
 }
 
-SSFlowStateReporter::SSFlowStateReporter(Config config, FlowTracker *flow_tracker)
+SSFlowStateReporter::SSFlowStateReporter(Config config, FlowTracker* flow_tracker)
     : impl_(absl::WrapUnique(new Impl{
           .config = config,
           .flow_tracker = flow_tracker,
@@ -293,7 +293,7 @@ SSFlowStateReporter::SSFlowStateReporter(Config config, FlowTracker *flow_tracke
       })) {}
 
 absl::StatusOr<std::unique_ptr<SSFlowStateReporter>> SSFlowStateReporter::Create(
-    Config config, FlowTracker *flow_tracker) {
+    Config config, FlowTracker* flow_tracker) {
   // Sort addresses
   std::sort(config.my_addrs.begin(), config.my_addrs.end());
 

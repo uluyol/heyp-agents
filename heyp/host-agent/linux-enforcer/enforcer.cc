@@ -21,24 +21,24 @@
 namespace heyp {
 
 MatchedHostFlows ExpandDestIntoHostsSinglePri(
-    const StaticDCMapper *dc_mapper, const FlowStateProvider &flow_state_provider,
-    const proto::FlowAlloc &flow_alloc) {
+    const StaticDCMapper* dc_mapper, const FlowStateProvider& flow_state_provider,
+    const proto::FlowAlloc& flow_alloc) {
   MatchedHostFlows matched;
-  MatchedHostFlows::Vec *expanded = &matched.hipri;
+  MatchedHostFlows::Vec* expanded = &matched.hipri;
   if (flow_alloc.lopri_rate_limit_bps() > 0) {
     CHECK_EQ(flow_alloc.hipri_rate_limit_bps(), 0)
         << "ExpandDestIntoHostsSinglePri cannot accept both positive hipri and lopri "
            "rate limits";
     expanded = &matched.lopri;
   }
-  auto &flow = flow_alloc.flow();
+  auto& flow = flow_alloc.flow();
   if (flow.dst_addr().empty()) {
     auto hosts_ptr = dc_mapper->HostsForDC(flow.dst_dc());
     if (hosts_ptr == nullptr) {
       LOG(ERROR) << "no hosts match DC \"" << flow.dst_dc() << "\"";
     } else {
       expanded->reserve(hosts_ptr->size());
-      for (const std::string &host : *hosts_ptr) {
+      for (const std::string& host : *hosts_ptr) {
         proto::FlowMarker f = flow;
         f.set_dst_addr(host);
         expanded->push_back(std::move(f));
@@ -50,7 +50,7 @@ MatchedHostFlows ExpandDestIntoHostsSinglePri(
   return matched;
 }
 
-bool operator==(const FlowNetemConfig &lhs, const FlowNetemConfig &rhs) {
+bool operator==(const FlowNetemConfig& lhs, const FlowNetemConfig& rhs) {
   if (!IsSameFlow(lhs.flow, rhs.flow)) {
     return false;
   }
@@ -70,12 +70,12 @@ bool operator==(const FlowNetemConfig &lhs, const FlowNetemConfig &rhs) {
 
 template <typename Proto>
 struct ShortDebugFormatter {
-  void operator()(std::string *out, const Proto &mesg) const {
+  void operator()(std::string* out, const Proto& mesg) const {
     out->append(mesg.ShortDebugString());
   }
 };
 
-std::ostream &operator<<(std::ostream &os, const FlowNetemConfig &c) {
+std::ostream& operator<<(std::ostream& os, const FlowNetemConfig& c) {
   return os << "FlowNetemConfig{\n"
             << "  flow = " << c.flow.ShortDebugString() << "\n  matched_flows = [\n    "
             << absl::StrJoin(c.matched_flows, "\n    ",
@@ -83,16 +83,16 @@ std::ostream &operator<<(std::ostream &os, const FlowNetemConfig &c) {
             << "\n  ]\n  netem = " << c.netem.ShortDebugString() << "\n}";
 }
 
-std::vector<FlowNetemConfig> AllNetemConfigs(const StaticDCMapper &dc_mapper,
-                                             const SimulatedWanDB &simulated_wan,
-                                             const std::string &my_dc,
+std::vector<FlowNetemConfig> AllNetemConfigs(const StaticDCMapper& dc_mapper,
+                                             const SimulatedWanDB& simulated_wan,
+                                             const std::string& my_dc,
                                              uint64_t my_host_id) {
   std::vector<FlowNetemConfig> configs;
-  for (const std::string &dst : dc_mapper.AllDCs()) {
+  for (const std::string& dst : dc_mapper.AllDCs()) {
     if (dst == my_dc) {
       continue;
     }
-    const proto::NetemConfig *maybe_config = simulated_wan.GetNetem(my_dc, dst);
+    const proto::NetemConfig* maybe_config = simulated_wan.GetNetem(my_dc, dst);
     if (maybe_config == nullptr) {
       continue;
     }
@@ -102,7 +102,7 @@ std::vector<FlowNetemConfig> AllNetemConfigs(const StaticDCMapper &dc_mapper,
     c.flow.set_dst_dc(dst);
     c.flow.set_host_id(my_host_id);
 
-    for (const std::string &host : *dc_mapper.HostsForDC(dst)) {
+    for (const std::string& host : *dc_mapper.HostsForDC(dst)) {
       c.matched_flows.push_back(c.flow);
       c.matched_flows.back().set_dst_addr(host);
     }
@@ -127,7 +127,7 @@ uint16_t AssertValidPort(int32_t port32) {
 class LinuxHostEnforcerImpl : public LinuxHostEnforcer {
  public:
   LinuxHostEnforcerImpl(absl::string_view device,
-                        const MatchHostFlowsFunc &match_host_flows_fn,
+                        const MatchHostFlowsFunc& match_host_flows_fn,
                         absl::string_view debug_log_outdir);
 
   absl::Status ResetDeviceConfig() override;
@@ -135,10 +135,10 @@ class LinuxHostEnforcerImpl : public LinuxHostEnforcer {
   absl::Status InitSimulatedWan(std::vector<FlowNetemConfig> configs,
                                 bool contains_all_flows) override;
 
-  void EnforceAllocs(const FlowStateProvider &flow_state_provider,
-                     const proto::AllocBundle &bundle) override;
+  void EnforceAllocs(const FlowStateProvider& flow_state_provider,
+                     const proto::AllocBundle& bundle) override;
 
-  bool IsLopri(const proto::FlowMarker &flow) override;
+  bool IsLopri(const proto::FlowMarker& flow) override;
 
  private:
   struct FlowSys {
@@ -159,17 +159,17 @@ class LinuxHostEnforcerImpl : public LinuxHostEnforcer {
   absl::Status ResetTrafficControl();
 
   struct StageTrafficControlForFlowArgs {
-    int64_t rate_limit_bps;                                         // required
-    const proto::NetemConfig *netem_config = nullptr;               // optional
-    FlowSys::Priority *sys;                                         // required
-    std::vector<FlowSys::Priority *> *classes_to_create = nullptr;  // optional
-    int *create_count;                                              // required
-    int *update_count;                                              // required
+    int64_t rate_limit_bps;                                        // required
+    const proto::NetemConfig* netem_config = nullptr;              // optional
+    FlowSys::Priority* sys;                                        // required
+    std::vector<FlowSys::Priority*>* classes_to_create = nullptr;  // optional
+    int* create_count;                                             // required
+    int* update_count;                                             // required
   };
 
   void StageTrafficControlForFlow(StageTrafficControlForFlowArgs args);
-  void StageIptablesForFlow(const MatchedHostFlows::Vec &matched_flows,
-                            const std::string &dscp, const std::string &class_id);
+  void StageIptablesForFlow(const MatchedHostFlows::Vec& matched_flows,
+                            const std::string& dscp, const std::string& class_id);
 
   const std::string device_;
   const MatchHostFlowsFunc match_host_flows_fn_;
@@ -185,7 +185,7 @@ class LinuxHostEnforcerImpl : public LinuxHostEnforcer {
 };
 
 LinuxHostEnforcerImpl::LinuxHostEnforcerImpl(
-    absl::string_view device, const MatchHostFlowsFunc &match_host_flows_fn,
+    absl::string_view device, const MatchHostFlowsFunc& match_host_flows_fn,
     absl::string_view debug_log_outdir)
     : device_(device),
       match_host_flows_fn_(match_host_flows_fn),
@@ -220,14 +220,14 @@ absl::Status LinuxHostEnforcerImpl::InitSimulatedWan(std::vector<FlowNetemConfig
 
   std::vector<std::string> errors;
   tc_batch_input_.Clear();
-  for (const FlowNetemConfig &c : configs) {
+  for (const FlowNetemConfig& c : configs) {
     if (sys_info_[c.flow] != nullptr) {
       errors.push_back(
           absl::StrCat("FlowSys already exists for flow: ", c.flow.ShortDebugString()));
       continue;
     }
     sys_info_[c.flow] = absl::make_unique<FlowSys>();
-    FlowSys *sys = sys_info_[c.flow].get();
+    FlowSys* sys = sys_info_[c.flow].get();
     StageTrafficControlForFlow({
         .rate_limit_bps = kMaxBandwidthBps,
         .netem_config = &c.netem,
@@ -268,8 +268,8 @@ absl::Status LinuxHostEnforcerImpl::InitSimulatedWan(std::vector<FlowNetemConfig
 
   // ==== Stage 2: set up iptables ====
 
-  for (const FlowNetemConfig &c : configs) {
-    FlowSys *sys = sys_info_[c.flow].get();
+  for (const FlowNetemConfig& c : configs) {
+    FlowSys* sys = sys_info_[c.flow].get();
     sys->hipri.did_create_class = true;
     sys->lopri.did_create_class = true;
 
@@ -312,8 +312,8 @@ absl::Status LinuxHostEnforcerImpl::ResetTrafficControl() {
 }
 
 void LinuxHostEnforcerImpl::StageIptablesForFlow(
-    const MatchedHostFlows::Vec &matched_flows, const std::string &dscp,
-    const std::string &class_id) {
+    const MatchedHostFlows::Vec& matched_flows, const std::string& dscp,
+    const std::string& class_id) {
   if (matched_flows.empty()) {
     return;
   }
@@ -392,8 +392,8 @@ void LinuxHostEnforcerImpl::StageTrafficControlForFlow(
 //
 // 3. Reduce rate limits for appropriate (FG, QoS) pairs.
 //
-void LinuxHostEnforcerImpl::EnforceAllocs(const FlowStateProvider &flow_state_provider,
-                                          const proto::AllocBundle &bundle) {
+void LinuxHostEnforcerImpl::EnforceAllocs(const FlowStateProvider& flow_state_provider,
+                                          const proto::AllocBundle& bundle) {
   auto cleanup = absl::MakeCleanup([this] {
     if (debug_logger_.should_log()) {
       absl::Cord mangle_table;
@@ -426,15 +426,15 @@ void LinuxHostEnforcerImpl::EnforceAllocs(const FlowStateProvider &flow_state_pr
 
   // ==== Stage 1: Initialize qdiscs and increase any rate limits ====
 
-  std::vector<FlowSys::Priority *> classes_to_create;
+  std::vector<FlowSys::Priority*> classes_to_create;
   tc_batch_input_.Clear();
   int create_count = 0;
   int update_count = 0;
-  for (const proto::FlowAlloc &flow_alloc : bundle.flow_allocs()) {
+  for (const proto::FlowAlloc& flow_alloc : bundle.flow_allocs()) {
     if (sys_info_[flow_alloc.flow()] == nullptr) {
       sys_info_[flow_alloc.flow()] = absl::make_unique<FlowSys>();
     }
-    FlowSys *sys = sys_info_[flow_alloc.flow()].get();
+    FlowSys* sys = sys_info_[flow_alloc.flow()].get();
     sys->matched = match_host_flows_fn_(flow_state_provider, flow_alloc);
 
     // Early update for traffic control (HIPRI)
@@ -491,7 +491,7 @@ void LinuxHostEnforcerImpl::EnforceAllocs(const FlowStateProvider &flow_state_pr
       }
 
       std::sort(found_classes.begin(), found_classes.end());
-      for (FlowSys::Priority *sys : classes_to_create) {
+      for (FlowSys::Priority* sys : classes_to_create) {
         if (std::binary_search(found_classes.begin(), found_classes.end(),
                                sys->class_id)) {
           sys->did_create_class = true;
@@ -501,15 +501,15 @@ void LinuxHostEnforcerImpl::EnforceAllocs(const FlowStateProvider &flow_state_pr
       }
     }
   } else {
-    for (FlowSys::Priority *sys : classes_to_create) {
+    for (FlowSys::Priority* sys : classes_to_create) {
       sys->did_create_class = true;
     }
   }
 
   // ==== Stage 2: Update iptables ====
 
-  for (const proto::FlowAlloc &flow_alloc : bundle.flow_allocs()) {
-    FlowSys *sys = sys_info_[flow_alloc.flow()].get();
+  for (const proto::FlowAlloc& flow_alloc : bundle.flow_allocs()) {
+    FlowSys* sys = sys_info_[flow_alloc.flow()].get();
 
     if (!sys->matched.hipri.empty() && !sys->hipri.did_create_class) {
       LOG(ERROR) << "failed to create rate limiter for flow (HIPRI): alloc = "
@@ -542,8 +542,8 @@ void LinuxHostEnforcerImpl::EnforceAllocs(const FlowStateProvider &flow_state_pr
   tc_batch_input_.Clear();
   create_count = 0;
   update_count = 0;
-  for (const proto::FlowAlloc &flow_alloc : bundle.flow_allocs()) {
-    FlowSys *sys = sys_info_[flow_alloc.flow()].get();
+  for (const proto::FlowAlloc& flow_alloc : bundle.flow_allocs()) {
+    FlowSys* sys = sys_info_[flow_alloc.flow()].get();
 
     if (sys->hipri.update_after_ipt_change) {
       StageTrafficControlForFlow({
@@ -569,7 +569,7 @@ void LinuxHostEnforcerImpl::EnforceAllocs(const FlowStateProvider &flow_state_pr
   }
 }
 
-bool LinuxHostEnforcerImpl::IsLopri(const proto::FlowMarker &flow) {
+bool LinuxHostEnforcerImpl::IsLopri(const proto::FlowMarker& flow) {
   return ipt_controller_.DscpFor(flow.src_port(), flow.dst_port(), flow.dst_addr(),
                                  kDscpHipri) == kDscpLopri;
 }
@@ -577,7 +577,7 @@ bool LinuxHostEnforcerImpl::IsLopri(const proto::FlowMarker &flow) {
 }  // namespace
 
 std::unique_ptr<LinuxHostEnforcer> LinuxHostEnforcer::Create(
-    absl::string_view device, const MatchHostFlowsFunc &match_host_flows_fn,
+    absl::string_view device, const MatchHostFlowsFunc& match_host_flows_fn,
     absl::string_view debug_log_outdir) {
   return absl::make_unique<LinuxHostEnforcerImpl>(device, match_host_flows_fn,
                                                   debug_log_outdir);
