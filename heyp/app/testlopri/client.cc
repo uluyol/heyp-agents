@@ -91,52 +91,47 @@ uint64_t UvTimeoutUntil(uv_loop_t* loop, uint64_t hr_time) {
 }
 
 class ClientConn;
+struct ClientConnOptions {
+  uv_loop_t* loop;
+  StatsRecorder* stats_recorder;
+  std::vector<std::pair<uint64_t, uint64_t>>* goodput_ts;
+  int32_t max_rpc_size_bytes;
+  uint64_t hr_connect_deadline;
+  std::function<void()> on_pool_ready;
+  std::function<void()> on_write_done;
+};
 
 class ClientConnPool {
  public:
-  ClientConnPool(int num_conns, int32_t max_rpc_size_bytes,
-                 std::vector<struct sockaddr_in> dst_addrs, uint64_t hr_start_time,
-                 const std::function<void()>& on_pool_ready, uv_loop_t* loop,
-                 StatsRecorder* stats_recorder,
-                 std::vector<std::pair<uint64_t, uint64_t>>* goodput_ts,
-                 bool* tearing_down);
+  ClientConnPool(const ClientConnOptions& conn_options, int num_conns,
+                 std::vector<struct sockaddr_in> dst_addrs);
 
-  bool AddConn(ClientConn* conn);
+  void MarkConnReady();
+  bool AllConnsReady() const;
+
   void WithConn(const std::function<void(ClientConn*)>& func);
 
  private:
-  const int num_conns_;
   const std::vector<struct sockaddr_in> dst_addrs_;
-
-  std::vector<ClientConn*> ready_;
   std::vector<std::unique_ptr<ClientConn>> all_;
-
-  bool* tearing_down_;
+  int num_ready_;
 };
 
 class ClientConn {
  public:
-  ClientConn(ClientConnPool* pool, int32_t max_rpc_size_bytes, int conn_id,
-             const struct sockaddr_in* addr, const std::function<void()>& on_pool_ready,
-             uv_loop_t* loop, StatsRecorder* stats_recorder,
-             std::vector<std::pair<uint64_t, uint64_t>>* goodput_ts,
-             uint64_t hr_start_run_time)
-      : pool_(pool),
-        on_pool_ready_(on_pool_ready),
+  ClientConn(const ClientConnOptions& o, int conn_id, const struct sockaddr_in* addr,
+             ClientConnPool* pool)
+      : options_(o),
+        pool_(pool),
         conn_id_(conn_id),
         addr_(addr),
-        hr_start_run_time_(hr_start_run_time),
-        loop_(loop),
-        stats_recorder_(stats_recorder),
-        goodput_ts_(goodput_ts),
-        buf_(max_rpc_size_bytes, 0),
+        buf_(options_.max_rpc_size_bytes, 0),
         num_seen_(0),
         num_issued_(0),
-        read_buf_size_(0),
-        in_pool_(false) {
-    CHECK_GE(max_rpc_size_bytes, 28);
+        read_buf_size_(0) {
+    CHECK_GE(options_.max_rpc_size_bytes, 28);
 
-    uv_tcp_init(loop_, &client_);
+    uv_tcp_init(options_.loop, &client_);
     client_.data = this;
 
     if (kDebugPool) {
@@ -178,7 +173,7 @@ class ClientConn {
 
  private:
   void OnConnect(uv_connect_t* req, int status) {
-    if (uv_hrtime() > hr_start_run_time_) {
+    if (uv_hrtime() > options_.hr_connect_deadline) {
       SHARD_LOG(FATAL) << "took too long to connect" WITH_NEWLINE;
     }
 
@@ -187,7 +182,7 @@ class ClientConn {
     if (status < 0) {
       SHARD_LOG(ERROR) << "failed to connect (" << uv_strerror(status)
                        << "); trying again" WITH_NEWLINE;
-      uv_tcp_init(loop_, &client_);
+      uv_tcp_init(options_.loop, &client_);
       client_.data = this;
 
       usleep(rand() % 50000);
@@ -207,11 +202,12 @@ class ClientConn {
                     self->OnReadAck(nread, buf);
                   });
 
-    if (pool_->AddConn(this)) {
+    pool_->MarkConnReady();
+    if (pool_->AllConnsReady()) {
       if (kDebugPool) {
         SHARD_LOG(INFO) << "connection pool is fully initialized" WITH_NEWLINE;
       }
-      on_pool_ready_();
+      options_.on_pool_ready();
     }
 
     delete req;
@@ -230,10 +226,10 @@ class ClientConn {
                                   uint64_t got_hr_scheduled_time,
                                   uint64_t got_hr_client_write_time) {
       uint64_t hr_now = uv_hrtime();
-      stats_recorder_->RecordRpc(size, "full",
-                                 absl::Nanoseconds(hr_now - got_hr_scheduled_time), "net",
-                                 absl::Nanoseconds(hr_now - got_hr_client_write_time));
-      if (goodput_ts_ != nullptr) {
+      options_.stats_recorder->RecordRpc(
+          size, "full", absl::Nanoseconds(hr_now - got_hr_scheduled_time), "net",
+          absl::Nanoseconds(hr_now - got_hr_client_write_time));
+      if (options_.goodput_ts != nullptr) {
         IncrementGoodput(hr_now);
       }
       ++num_seen_;
@@ -259,20 +255,17 @@ class ClientConn {
       }
     }
     delete buf->base;
-    if (got_ack && !has_pending_write_) {
-      pool_->AddConn(this);
-    }
   }
 
   void IncrementGoodput(uint64_t hr_now) {
-    if (goodput_ts_->empty()) {
-      goodput_ts_->push_back({hr_now, 1});
+    if (options_.goodput_ts->empty()) {
+      options_.goodput_ts->push_back({hr_now, 1});
     }
-    while (hr_now > goodput_ts_->back().first + 1'000'000) {
-      std::pair<uint64_t, uint64_t> last = goodput_ts_->back();
-      goodput_ts_->push_back({last.first + 1'000'000, 0});
+    while (hr_now > options_.goodput_ts->back().first + 1'000'000) {
+      std::pair<uint64_t, uint64_t> last = options_.goodput_ts->back();
+      options_.goodput_ts->push_back({last.first + 1'000'000, 0});
     }
-    goodput_ts_->back().second++;
+    options_.goodput_ts->back().second++;
   }
 
   void OnWriteDone(uv_write_t* req, int status) {
@@ -291,21 +284,14 @@ class ClientConn {
     }
 
     has_pending_write_ = false;
-
-    pool_->AddConn(this);
     delete req;
   }
 
+  ClientConnOptions options_;
   ClientConnPool* pool_;
-  std::function<void()> on_pool_ready_;
 
   const int conn_id_;
   const struct sockaddr_in* addr_;
-  const uint64_t hr_start_run_time_;
-
-  uv_loop_t* loop_;
-  StatsRecorder* stats_recorder_;
-  std::vector<std::pair<uint64_t, uint64_t>>* goodput_ts_;
 
   uv_tcp_t client_;
   uv_buf_t buffer_;
@@ -316,58 +302,37 @@ class ClientConn {
   char read_buf_[28];
   int read_buf_size_;
 
-  bool in_pool_;
   bool has_pending_write_ = false;
 
   friend class ClientConnPool;
 };
 
-ClientConnPool::ClientConnPool(int num_conns, int32_t max_rpc_size_bytes,
-                               std::vector<struct sockaddr_in> dst_addrs,
-                               uint64_t hr_start_time,
-                               const std::function<void()>& on_pool_ready,
-                               uv_loop_t* loop, StatsRecorder* stats_recorder,
-                               std::vector<std::pair<uint64_t, uint64_t>>* goodput_ts,
-                               bool* tearing_down)
-    : num_conns_(num_conns),
-      dst_addrs_(std::move(dst_addrs)),
-      tearing_down_(tearing_down) {
+ClientConnPool::ClientConnPool(const ClientConnOptions& conn_options, int num_conns,
+                               std::vector<struct sockaddr_in> dst_addrs)
+    : dst_addrs_(std::move(dst_addrs)), num_ready_(0) {
   // Start by creating connections.
   // Once all are created, the last will register a timer to start the run
   if (kDebugPool) {
-    SHARD_LOG(INFO) << "Starting " << num_conns_ << " connections" WITH_NEWLINE;
+    SHARD_LOG(INFO) << "Starting " << num_conns << " connections" WITH_NEWLINE;
   }
-  for (int i = 0; i < num_conns_; ++i) {
+  for (int i = 0; i < num_conns; ++i) {
     all_.push_back(absl::make_unique<ClientConn>(
-        this, max_rpc_size_bytes, all_.size(), &dst_addrs_.at(i % dst_addrs_.size()),
-        on_pool_ready, loop, stats_recorder, goodput_ts, hr_start_time));
+        conn_options, all_.size(), &dst_addrs_.at(i % dst_addrs_.size()), this));
   }
 }
 
-bool ClientConnPool::AddConn(ClientConn* conn) {
-  conn->AssertValid();
-  if (*tearing_down_) {
-    return false;
-  }
-
-  if (conn->in_pool_) {
-    return ready_.size() == num_conns_;
-  }
-
-  ready_.push_back(conn);
-  conn->in_pool_ = true;
-  return ready_.size() == num_conns_;
-}
+void ClientConnPool::MarkConnReady() { ++num_ready_; }
+bool ClientConnPool::AllConnsReady() const { return num_ready_ == all_.size(); }
 
 void ClientConnPool::WithConn(const std::function<void(ClientConn*)>& func) {
   int min_waiting = std::numeric_limits<int>::max();
   ClientConn* best = nullptr;
 
-  for (ClientConn* c : ready_) {
+  for (auto& c : all_) {
     int t = c->num_issued_ - c->num_seen_;
     if (min_waiting > t) {
       min_waiting = t;
-      best = c;
+      best = c.get();
     }
   }
 
@@ -499,10 +464,16 @@ class LoadGenerator {
         hr_next_report_time_(hr_start_time_ + hr_report_dur_),
         record_interarrival_called_(false),
         tearing_down_(false),
-        conn_pool_(c.num_conns(), GetMaxRpcSizeBytes(workload_stages_),
-                   std::move(dst_addrs), hr_start_time_,
-                   absl::bind_front(&LoadGenerator::StartRequestLoop, this), loop_,
-                   stats_recorder_.get(), goodput_ts, &tearing_down_) {
+        conn_pool_(
+            ClientConnOptions{
+                .loop = loop_,
+                .stats_recorder = stats_recorder_.get(),
+                .goodput_ts = goodput_ts,
+                .max_rpc_size_bytes = GetMaxRpcSizeBytes(workload_stages_),
+                .hr_connect_deadline = hr_start_time_,
+                .on_pool_ready = absl::bind_front(&LoadGenerator::StartRequestLoop, this),
+            },
+            c.num_conns(), std::move(dst_addrs)) {
     if (rec_interarrival) {
       interarrival_hist_.emplace(InterarrivalConfig());
     }
@@ -577,7 +548,6 @@ class LoadGenerator {
       conn->AssertValid();
       const WorkloadStage* stage = cur_stage();
       if (stage == nullptr) {
-        conn_pool_.AddConn(conn);
         return;
       }
       conn->IssueRpc(rpc_id, hr_scheduled_time, stage->rpc_size_bytes);

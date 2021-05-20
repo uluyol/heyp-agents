@@ -1,7 +1,6 @@
 #!/usr/bin/env Rscript
 
 library(ggplot2)
-library(wesanderson)
 
 got.const <- read.csv("got-interarrival-const.csv", header=T, stringsAsFactors=F)
 got.uni <- read.csv("got-interarrival-uni.csv", header=T, stringsAsFactors=F)
