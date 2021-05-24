@@ -1,3 +1,4 @@
+load_gen: LG_OPEN
 num_conns: 10
 workload_stages {
   rpc_size_bytes: 1024

@@ -8,6 +8,12 @@ package heyp.proto;
 
 option go_package = "github.com/uluyol/heyp-agents/go/proto";
 
+enum LoadGenerator {
+  LG_UNSET = 0;
+  LG_OPEN = 1;
+  LG_SEMI_OPEN = 2;
+};
+
 enum Distribution {
   DIST_UNSET = 0;
   DIST_CONSTANT = 1;
@@ -23,6 +29,7 @@ message TestLopriClientConfig {
     optional string run_dur = 4 [default = "30s"];
   }
 
-  optional int32 num_conns = 1 [default = 20];
-  repeated WorkloadStage workload_stages = 2;
+  optional LoadGenerator load_gen = 1;
+  optional int32 num_conns = 2 [default = 20];
+  repeated WorkloadStage workload_stages = 3;
 }

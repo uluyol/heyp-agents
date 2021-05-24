@@ -1,0 +1,8 @@
+load_gen: LG_SEMI_OPEN
+num_conns: 10
+workload_stages {
+  rpc_size_bytes: 1024
+  target_average_bps: 300000000
+  run_dur: "10s"
+  interarrival_dist: DIST_UNIFORM
+}

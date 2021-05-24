@@ -4,7 +4,7 @@
 
 set -e
 
-for dist in uni exp const; do
+for dist in uni exp const semiopen-uni semiopen-exp semiopen-const; do
   bazel-bin/heyp/app/testlopri/mk-expected-interarrival-dist \
     -c doc/testlopri/validation/config-$dist.textproto \
     >doc/testlopri/validation/expected-interarrival-$dist.csv

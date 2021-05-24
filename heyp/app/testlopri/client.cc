@@ -9,8 +9,10 @@
 #include <cstdio>
 #include <deque>
 #include <limits>
+#include <list>
 #include <vector>
 
+#include "absl/base/attributes.h"
 #include "absl/functional/bind_front.h"
 #include "absl/random/distributions.h"
 #include "absl/random/random.h"
@@ -48,6 +50,7 @@ namespace {
 constexpr bool kDebugReadWrite = false;
 constexpr bool kLimitedDebugReadWrite = false;
 constexpr bool kDebugPool = false;
+constexpr bool kDebugLoadGen = false;
 
 int ThisShardIndex = 0;  // Initialized by ShardMain
 
@@ -55,21 +58,6 @@ bool InLimitedDebugReadWrite() {
   static int32_t LimitedDebugReadWriteCounter = 0;
   return kLimitedDebugReadWrite && LimitedDebugReadWriteCounter++ <= 300;
 }
-
-class CachedTime {
- public:
-  uint64_t Get() {
-    if (!did_get_) {
-      now_ = uv_hrtime();
-      did_get_ = true;
-    }
-    return now_;
-  }
-
- private:
-  uint64_t now_ = 0;
-  bool did_get_ = false;
-};
 
 void AllocBuf(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf) {
   buf->base = new char[suggested_size];
@@ -85,10 +73,10 @@ std::string IP4Name(const struct sockaddr_in* src) {
 
 uint64_t UvTimeoutUntil(uv_loop_t* loop, uint64_t hr_time) {
   uint64_t now = uv_now(loop);
-  if (now >= hr_time / 1'000'000) {
+  if (now * 1'000'000 >= hr_time) {
     return 0;
   }
-  return (hr_time / 1'000'000) - now;
+  return ((hr_time + 999'999) / 1'000'000) - now;  // round up
 }
 
 class ClientConn;
@@ -98,7 +86,7 @@ struct ClientConnOptions {
   std::vector<std::pair<uint64_t, uint64_t>>* goodput_ts;
   int32_t max_rpc_size_bytes;
   uint64_t hr_connect_deadline;
-  std::function<void()> on_pool_ready;
+  std::function<void()> on_pool_init;
   std::function<void()> on_write_done;
 };
 
@@ -107,16 +95,23 @@ class ClientConnPool {
   ClientConnPool(const ClientConnOptions& conn_options, int num_conns,
                  std::vector<struct sockaddr_in> dst_addrs);
 
-  void MarkConnReady();
-  bool AllConnsReady() const;
+  void MarkConnInitialized();
+  bool AllConnsInitialized() const;
 
   void WithConn(const std::function<void(ClientConn*)>& func);
 
  private:
   const std::vector<struct sockaddr_in> dst_addrs_;
   std::vector<std::unique_ptr<ClientConn>> all_;
-  int num_ready_;
+  int num_init_;
 };
+
+uint64_t HighResTimeSub(uint64_t end, uint64_t start) {
+  if (start > end) {
+    return 0;
+  }
+  return end - start;
+}
 
 class ClientConn {
  public:
@@ -152,7 +147,9 @@ class ClientConn {
     WriteU32LE(rpc_size_bytes - 28, buf_.data());
     WriteU64LE(rpc_id, buf_.data() + 4);
     WriteU64LE(hr_scheduled_time, buf_.data() + 12);
-    WriteU64LE(uv_hrtime(), buf_.data() + 20);
+    // We might issue slightly early to account for clock precision.
+    uint64_t hr_issue_time = std::max(hr_scheduled_time, uv_hrtime());
+    WriteU64LE(hr_issue_time, buf_.data() + 20);
     if (kDebugReadWrite || InLimitedDebugReadWrite()) {
       SHARD_LOG(INFO) << "write(c=" << conn_id_ << ") rpc id=" << rpc_id
                       << " header=" << ToHex(buf_.data(), 28) WITH_NEWLINE;
@@ -203,12 +200,12 @@ class ClientConn {
                     self->OnReadAck(nread, buf);
                   });
 
-    pool_->MarkConnReady();
-    if (pool_->AllConnsReady()) {
+    pool_->MarkConnInitialized();
+    if (pool_->AllConnsInitialized()) {
       if (kDebugPool) {
         SHARD_LOG(INFO) << "connection pool is fully initialized" WITH_NEWLINE;
       }
-      options_.on_pool_ready();
+      options_.on_pool_init();
     }
 
     delete req;
@@ -228,8 +225,8 @@ class ClientConn {
                                   uint64_t got_hr_client_write_time) {
       uint64_t hr_now = uv_hrtime();
       options_.stats_recorder->RecordRpc(
-          size, "full", absl::Nanoseconds(hr_now - got_hr_scheduled_time), "net",
-          absl::Nanoseconds(hr_now - got_hr_client_write_time));
+          size, "full", absl::Nanoseconds(HighResTimeSub(hr_now, got_hr_scheduled_time)),
+          "net", absl::Nanoseconds(HighResTimeSub(hr_now, got_hr_client_write_time)));
       if (options_.goodput_ts != nullptr) {
         IncrementGoodput(hr_now);
       }
@@ -286,6 +283,9 @@ class ClientConn {
 
     has_pending_write_ = false;
     delete req;
+    if (options_.on_write_done) {
+      options_.on_write_done();
+    }
   }
 
   ClientConnOptions options_;
@@ -310,7 +310,7 @@ class ClientConn {
 
 ClientConnPool::ClientConnPool(const ClientConnOptions& conn_options, int num_conns,
                                std::vector<struct sockaddr_in> dst_addrs)
-    : dst_addrs_(std::move(dst_addrs)), num_ready_(0) {
+    : dst_addrs_(std::move(dst_addrs)), num_init_(0) {
   // Start by creating connections.
   // Once all are created, the last will register a timer to start the run
   if (kDebugPool) {
@@ -322,8 +322,8 @@ ClientConnPool::ClientConnPool(const ClientConnOptions& conn_options, int num_co
   }
 }
 
-void ClientConnPool::MarkConnReady() { ++num_ready_; }
-bool ClientConnPool::AllConnsReady() const { return num_ready_ == all_.size(); }
+void ClientConnPool::MarkConnInitialized() { ++num_init_; }
+bool ClientConnPool::AllConnsInitialized() const { return num_init_ == all_.size(); }
 
 void ClientConnPool::WithConn(const std::function<void(ClientConn*)>& func) {
   int min_waiting = std::numeric_limits<int>::max();
@@ -447,6 +447,14 @@ int32_t GetMaxRpcSizeBytes(const std::vector<WorkloadStage>& workload_stages) {
     max_size = std::max(max_size, s.rpc_size_bytes);
   }
   return max_size;
+}
+
+int32_t GetMinRpcSizeBytes(const std::vector<WorkloadStage>& workload_stages) {
+  int32_t min_size = std::numeric_limits<int32_t>::max();
+  for (const WorkloadStage& s : workload_stages) {
+    min_size = std::min(min_size, s.rpc_size_bytes);
+  }
+  return min_size;
 }
 
 class InterarrivalRecorder {
@@ -579,12 +587,32 @@ class WorkloadController {
   uint64_t rpc_id_;
 };
 
+// DeadlineExpired checks if hr_now >= hr_deadline while accounting for precision of the
+// timer clock. This means that sometimes DeadlineExpired will return true if hr_now is
+// close to hr_deadline, even if hr_deadline hasn't quite arrived yet.
+bool DeadlineExpired(uint64_t hr_now, uint64_t hr_deadline) {
+  constexpr uint64_t kTimerPrecision = 10'000;  // 10 us
+  return hr_deadline <= (hr_now + kTimerPrecision / 2);
+}
+
 class LoadGenerator {
  public:
-  LoadGenerator(const proto::TestLopriClientConfig& c, uv_loop_t* l,
-                std::unique_ptr<StatsRecorder> srec, bool rec_interarrival,
-                std::vector<std::pair<uint64_t, uint64_t>>* goodput_ts,
-                std::vector<struct sockaddr_in> dst_addrs, uint64_t hr_start_time)
+  virtual ~LoadGenerator() = default;
+  virtual void RunLoop() = 0;
+  virtual proto::HdrHistogram GetInterarrivalProto() = 0;
+};
+
+// OpenLoadGenerator generates a schedule of requests (and issues them) independently of
+// how quickly the server is able to respond.
+//
+// Issuing requests is subject to delays on the machine (e.g. CPU starvation, blocked on
+// TCP acks), but these delays should be captured in the latency results.
+class OpenLoadGenerator : public LoadGenerator {
+ public:
+  OpenLoadGenerator(const proto::TestLopriClientConfig& c, uv_loop_t* l,
+                    std::unique_ptr<StatsRecorder> srec, bool rec_interarrival,
+                    std::vector<std::pair<uint64_t, uint64_t>>* goodput_ts,
+                    std::vector<struct sockaddr_in> dst_addrs, uint64_t hr_start_time)
       : stats_recorder_(std::move(srec)),
         loop_(l),
         issued_first_req_(false),
@@ -597,15 +625,16 @@ class LoadGenerator {
                 .goodput_ts = goodput_ts,
                 .max_rpc_size_bytes = GetMaxRpcSizeBytes(StagesFromConfig(c)),
                 .hr_connect_deadline = hr_start_time_,
-                .on_pool_ready = absl::bind_front(&LoadGenerator::StartRequestLoop, this),
+                .on_pool_init =
+                    absl::bind_front(&OpenLoadGenerator::StartRequestLoop, this),
             },
             c.num_conns(), std::move(dst_addrs)),
         workload_controller_(c, hr_start_time, rec_interarrival, stats_recorder_.get(),
                              &conn_pool_) {}
 
-  void RunLoop() { uv_run(loop_, UV_RUN_DEFAULT); }
+  void RunLoop() override { uv_run(loop_, UV_RUN_DEFAULT); }
 
-  proto::HdrHistogram GetInterarrivalProto() {
+  proto::HdrHistogram GetInterarrivalProto() override {
     return workload_controller_.GetInterarrivalProto();
   }
 
@@ -620,9 +649,8 @@ class LoadGenerator {
     return;
   }
 
-  bool TryIssueRequest(CachedTime* time) {
-    uint64_t hr_now = time->Get();
-    if (hr_now < hr_next_) {
+  bool TryIssueRequest(uint64_t hr_now) {
+    if (!DeadlineExpired(hr_now, hr_next_)) {
       return false;  // not yet
     }
 
@@ -636,7 +664,7 @@ class LoadGenerator {
         return false;
     }
 
-    SHARD_LOG(FATAL) << "unknown status from workload controller";
+    SHARD_LOG(FATAL) << "unknown status from workload controller" WITH_NEWLINE;
     return false;
   }
 
@@ -651,7 +679,7 @@ class LoadGenerator {
     uv_timer_start(
         timer_.get(),
         [](uv_timer_t* t) {
-          auto self = reinterpret_cast<LoadGenerator*>(t->data);
+          auto self = reinterpret_cast<OpenLoadGenerator*>(t->data);
           self->OnNextReq();
         },
         hr_timeout, 0);
@@ -659,8 +687,8 @@ class LoadGenerator {
 
   // Called on every iteration of the event loop
   void OnCheckNextReq() {
-    CachedTime time;
-    while (!tearing_down_ && TryIssueRequest(&time)) {
+    const uint64_t hr_now = uv_hrtime();
+    while (!tearing_down_ && TryIssueRequest(hr_now)) {
       /* issue all requests whose time has passed */
     }
     if (tearing_down_) {
@@ -670,23 +698,23 @@ class LoadGenerator {
   }
 
   void OnNextReq() {
-    CachedTime time;
+    const uint64_t hr_now = uv_hrtime();
     if (!issued_first_req_) {
       issued_first_req_ = true;
       SHARD_LOG(INFO) << "starting to issue requests" WITH_NEWLINE;
       stats_recorder_->StartRecording();
-      hr_next_ = time.Get();
+      hr_next_ = hr_now;
 
       check_ = absl::make_unique<uv_check_t>();
       uv_check_init(loop_, check_.get());
       check_->data = this;
       uv_check_start(check_.get(), [](uv_check_t* c) {
-        auto self = reinterpret_cast<LoadGenerator*>(c->data);
+        auto self = reinterpret_cast<OpenLoadGenerator*>(c->data);
         self->OnCheckNextReq();
       });
     }
 
-    while (!tearing_down_ && TryIssueRequest(&time)) {
+    while (!tearing_down_ && TryIssueRequest(hr_now)) {
       /* issue all requests whose time has passed */
     }
 
@@ -695,7 +723,7 @@ class LoadGenerator {
       uv_timer_start(
           timer_.get(),
           [](uv_timer_t* t) {
-            auto self = reinterpret_cast<LoadGenerator*>(t->data);
+            auto self = reinterpret_cast<OpenLoadGenerator*>(t->data);
             self->OnNextReq();
           },
           UvTimeoutUntil(loop_, hr_next_), 0);
@@ -717,6 +745,322 @@ class LoadGenerator {
   std::unique_ptr<uv_timer_t> timer_;
   std::unique_ptr<uv_check_t> check_;
 };
+
+// NumWritesIn computes how many rpcs can fit inside the specified queue size.
+int NumWritesIn(int64_t rpc_size, int64_t queue_size) {
+  int64_t num = queue_size / rpc_size;
+  num = std::max(num, int64_t{1});
+  return num;
+}
+
+// SemiOpenLoadGenerator generates a schedule of requests (and issues them) that is
+// somewhat independently of how quickly the server can respond. More precisely, the
+// generator will wait for requests to be enqueued locally onto the network socket and
+// only then, schedule the following request.
+//
+// The benefit of this, compared to an OpenLoadGenerator, is that it will respond to
+// backpressue and issue fewer requests (immitating a real client that sheds load) and
+// provides reasonable latency data for the requests that do make it through.
+//
+// The downside is that it provides less accurate latency data for systems that are
+// not overloaded.
+class SemiOpenLoadGenerator : public LoadGenerator {
+ public:
+  constexpr static int64_t kMaxQueueLenPerConnBytes = 102400;  // 100 KB
+
+  SemiOpenLoadGenerator(const proto::TestLopriClientConfig& c, uv_loop_t* l,
+                        std::unique_ptr<StatsRecorder> srec, bool rec_interarrival,
+                        std::vector<std::pair<uint64_t, uint64_t>>* goodput_ts,
+                        std::vector<struct sockaddr_in> dst_addrs, uint64_t hr_start_time)
+      : stats_recorder_(std::move(srec)),
+        loop_(l),
+        issued_first_req_(false),
+        issued_scheduled_req_(false),
+        timer_is_running_(false),
+        hr_start_time_(hr_start_time),
+        tearing_down_(false),
+        conn_pool_(
+            ClientConnOptions{
+                .loop = loop_,
+                .stats_recorder = stats_recorder_.get(),
+                .goodput_ts = goodput_ts,
+                .max_rpc_size_bytes = GetMaxRpcSizeBytes(StagesFromConfig(c)),
+                .hr_connect_deadline = hr_start_time_,
+                .on_pool_init =
+                    absl::bind_front(&SemiOpenLoadGenerator::StartRequestLoop, this),
+                .on_write_done =
+                    absl::bind_front(&SemiOpenLoadGenerator::OnWriteDone, this),
+            },
+            c.num_conns(), std::move(dst_addrs)),
+        max_queued_writes_(NumWritesIn(GetMinRpcSizeBytes(StagesFromConfig(c)),
+                                       kMaxQueueLenPerConnBytes) *
+                           c.num_conns()),
+        num_wip_write_(0),
+        workload_controller_(c, hr_start_time, rec_interarrival, stats_recorder_.get(),
+                             &conn_pool_) {}
+
+  void RunLoop() override { uv_run(loop_, UV_RUN_DEFAULT); }
+
+  proto::HdrHistogram GetInterarrivalProto() override {
+    return workload_controller_.GetInterarrivalProto();
+  }
+
+ private:
+  enum class IssueCaller {
+    Recheck,  // when MaybeIssueScheduleRequest returns true
+    OnWriteDone,
+    OnCheckNextReq,
+    OnTimerTick,
+  };
+
+  static absl::string_view ToString(IssueCaller c) {
+    switch (c) {
+      case IssueCaller::Recheck:
+        return "Recheck";
+      case IssueCaller::OnWriteDone:
+        return "OnWriteDone";
+      case IssueCaller::OnCheckNextReq:
+        return "OnCheckNextReq";
+      case IssueCaller::OnTimerTick:
+        return "OnTimerTick";
+      default:
+        return "UNKNOWN";
+    }
+  }
+
+  // Called to issue the first request, on every iteration of the event loop, when writes
+  // complete, and when the current timer expires.
+  //
+  // Returns true if more requests should be attempted
+  ABSL_MUST_USE_RESULT bool MaybeIssueScheduleRequest(uint64_t hr_now,
+                                                      IssueCaller caller_type) {
+    if (tearing_down_) {
+      return false;
+    }
+
+    bool waiting_on_wip_write = num_wip_write_ == max_queued_writes_;
+    if (caller_type == IssueCaller::OnWriteDone) {
+      waiting_on_wip_write = num_wip_write_ >= max_queued_writes_ - 1;
+    }
+    bool waiting_on_timer = timer_is_running_ || caller_type == IssueCaller::OnTimerTick;
+
+    if (!issued_first_req_) {
+      issued_first_req_ = true;
+      SHARD_LOG(INFO) << "starting to issue requests" WITH_NEWLINE;
+      stats_recorder_->StartRecording();
+      hr_scheduled_time_ = hr_now;
+
+      check_ = absl::make_unique<uv_check_t>();
+      uv_check_init(loop_, check_.get());
+      check_->data = this;
+      uv_check_start(check_.get(), [](uv_check_t* c) {
+        auto self = reinterpret_cast<SemiOpenLoadGenerator*>(c->data);
+        self->OnCheckNextReq();
+      });
+    } else {
+      CHECK(waiting_on_timer || waiting_on_wip_write ||
+            caller_type == IssueCaller::Recheck)
+          << absl::StrFormat(
+                 "caller_type = %s, timer_is_running_ = %d, %d/%d queued writes",
+                 ToString(caller_type), timer_is_running_, num_wip_write_,
+                 max_queued_writes_);
+    }
+
+    if (!DeadlineExpired(hr_now, hr_scheduled_time_)) {
+      CHECK(waiting_on_timer || waiting_on_wip_write ||
+            caller_type == IssueCaller::Recheck)
+          << absl::StrFormat(
+                 "caller_type = %s, timer_is_running_ = %d, %d/%d queued writes",
+                 ToString(caller_type), timer_is_running_, num_wip_write_,
+                 max_queued_writes_);
+      if (kDebugLoadGen) {
+        SHARD_LOG(INFO) << "still need to wait for "
+                        << (hr_scheduled_time_ - hr_now) / 1'000
+                        << " us num_wip_write_ = " << num_wip_write_;
+      }
+      if (!timer_is_running_ && num_wip_write_ < max_queued_writes_) {
+        // Restart timer
+        if (kDebugLoadGen) {
+          SHARD_LOG(INFO) << "start timer" WITH_NEWLINE;
+        }
+        timer_is_running_ = true;
+        uv_timer_start(
+            timer_.get(),
+            [](uv_timer_t* t) {
+              auto self = reinterpret_cast<SemiOpenLoadGenerator*>(t->data);
+              self->OnTimerTick();
+            },
+            UvTimeoutUntil(loop_, hr_scheduled_time_), 0);
+      }
+      return false;
+    }
+
+    if (!issued_scheduled_req_) {
+      // See if we can issue the request
+
+      // Skip if all conns have pending writes. Once the writes complete, we'll come back
+      // here.
+      if (num_wip_write_ == max_queued_writes_) {
+        if (kDebugLoadGen) {
+          SHARD_LOG(INFO) << absl::StrFormat("too busy: %d/%d queued writes",
+                                             num_wip_write_, max_queued_writes_)
+                  WITH_NEWLINE;
+        }
+        return false;
+      }
+
+      issued_scheduled_req_ = true;
+      switch (workload_controller_.TryIssueRequest(hr_scheduled_time_)) {
+        case WorkloadController::kOk:
+          // continue on to scheduling the next request
+          ++num_wip_write_;
+          break;
+        case WorkloadController::kTearingDown:
+          tearing_down_ = true;
+          uv_stop(loop_);
+          break;
+        default:
+          SHARD_LOG(FATAL) << "unknown status from workload controller" WITH_NEWLINE;
+          return false;
+      }
+    } else {
+      if (kDebugLoadGen) {
+        SHARD_LOG(INFO) << "request issued already" WITH_NEWLINE;
+      }
+    }
+
+    if (timer_is_running_) {
+      if (kDebugLoadGen) {
+        SHARD_LOG(INFO) << "stop timer" WITH_NEWLINE;
+      }
+      uv_timer_stop(timer_.get());
+      timer_is_running_ = false;
+    }
+
+    if (tearing_down_) {
+      if (kDebugLoadGen) {
+        SHARD_LOG(INFO) << "don't schedule: tearing down" WITH_NEWLINE;
+      }
+      return false;
+    }
+
+    {
+      uint64_t base_time = hr_scheduled_time_;
+      if (caller_type == IssueCaller::OnWriteDone) {
+        base_time = hr_now;
+      }
+
+      // Schedule next request
+      uint64_t delay = workload_controller_.NextDelay();
+      if (delay == std::numeric_limits<uint64_t>::max()) {
+        hr_scheduled_time_ = delay;
+      } else {
+        hr_scheduled_time_ = base_time + delay;
+      }
+      issued_scheduled_req_ = false;
+    }
+
+    return num_wip_write_ < max_queued_writes_;
+  }
+
+  void StartRequestLoop() {
+    auto hr_timeout = UvTimeoutUntil(loop_, hr_start_time_);
+    // Add callback to start the requests.
+    SHARD_LOG(INFO) << "will wait for " << static_cast<double>(hr_timeout) / 1e3
+                    << " seconds to issue requests" WITH_NEWLINE;
+    timer_ = absl::make_unique<uv_timer_t>();
+    uv_timer_init(loop_, timer_.get());
+    timer_->data = this;
+    uv_timer_start(
+        timer_.get(),
+        [](uv_timer_t* t) {
+          auto self = reinterpret_cast<SemiOpenLoadGenerator*>(t->data);
+          self->OnTimerTick();
+        },
+        hr_timeout, 0);
+  }
+
+  void OnWriteDone() {
+    if (kDebugLoadGen) {
+      SHARD_LOG(INFO) << "write is done" WITH_NEWLINE;
+    }
+    --num_wip_write_;
+    uint64_t hr_now = uv_hrtime();
+    if (MaybeIssueScheduleRequest(hr_now, IssueCaller::OnWriteDone)) {
+      while (MaybeIssueScheduleRequest(hr_now, IssueCaller::Recheck)) {
+        // Issue additional due requests
+      }
+    }
+  }
+
+  // Called on every iteration of the event loop
+  void OnCheckNextReq() {
+    if (kDebugLoadGen) {
+      SHARD_LOG(INFO) << "check" WITH_NEWLINE;
+    }
+    uint64_t hr_now = uv_hrtime();
+    if (MaybeIssueScheduleRequest(hr_now, IssueCaller::OnCheckNextReq)) {
+      while (MaybeIssueScheduleRequest(hr_now, IssueCaller::Recheck)) {
+        // Issue additional due requests
+      }
+    }
+    if (tearing_down_) {
+      uv_check_stop(check_.get());
+      check_ = nullptr;
+    }
+  }
+
+  void OnTimerTick() {
+    if (kDebugLoadGen) {
+      SHARD_LOG(INFO) << "timer tick" WITH_NEWLINE;
+    }
+    timer_is_running_ = false;
+    uint64_t hr_now = uv_hrtime();
+    if (MaybeIssueScheduleRequest(hr_now, IssueCaller::OnTimerTick)) {
+      while (MaybeIssueScheduleRequest(hr_now, IssueCaller::Recheck)) {
+        // Issue additional due requests
+      }
+    }
+  }
+
+  std::unique_ptr<StatsRecorder> stats_recorder_;
+  uv_loop_t* loop_;
+  uint64_t hr_scheduled_time_;
+  bool issued_first_req_;
+  bool issued_scheduled_req_;
+  bool timer_is_running_;
+
+  const uint64_t hr_start_time_;
+
+  bool tearing_down_;
+
+  ClientConnPool conn_pool_;
+  const int max_queued_writes_;
+  int num_wip_write_;
+  WorkloadController workload_controller_;
+
+  std::unique_ptr<uv_timer_t> timer_;
+  std::unique_ptr<uv_check_t> check_;
+};
+
+absl::StatusOr<std::unique_ptr<LoadGenerator>> MakeLoadGenerator(
+    const proto::TestLopriClientConfig& c, uv_loop_t* l,
+    std::unique_ptr<StatsRecorder> srec, bool rec_interarrival,
+    std::vector<std::pair<uint64_t, uint64_t>>* goodput_ts,
+    std::vector<struct sockaddr_in> dst_addrs, uint64_t hr_start_time) {
+  switch (c.load_gen()) {
+    case proto::LG_OPEN:
+      return absl::make_unique<OpenLoadGenerator>(c, l, std::move(srec), rec_interarrival,
+                                                  goodput_ts, std::move(dst_addrs),
+                                                  hr_start_time);
+    case proto::LG_SEMI_OPEN:
+      return absl::make_unique<SemiOpenLoadGenerator>(
+          c, l, std::move(srec), rec_interarrival, goodput_ts, std::move(dst_addrs),
+          hr_start_time);
+    default:
+      return absl::InvalidArgumentError("unset or unknown load generator");
+  }
+}
 
 void ParseDestAddrs(absl::string_view server_addrs,
                     std::vector<struct sockaddr_in>* dst_addrs) {
@@ -819,10 +1163,18 @@ int ShardMain(int argc, char** argv, int shard_index, int num_shards) {
 
   std::vector<struct sockaddr_in> dst_addrs;
   heyp::ParseDestAddrs(FLAGS_server, &dst_addrs);
-  heyp::LoadGenerator load_gen(config, uv_default_loop(), std::move(*srec),
-                               FLAGS_interarrival != "", goodput_ts.get(),
-                               std::move(dst_addrs), hr_start_time);
-  load_gen.RunLoop();
+  std::unique_ptr<heyp::LoadGenerator> load_gen;
+  {
+    auto load_gen_or = heyp::MakeLoadGenerator(
+        config, uv_default_loop(), std::move(*srec), FLAGS_interarrival != "",
+        goodput_ts.get(), std::move(dst_addrs), hr_start_time);
+    if (!load_gen_or.ok()) {
+      std::cerr << load_gen_or.status() << "\n";
+      return 5;
+    }
+    load_gen = std::move(*load_gen_or);
+  }
+  load_gen->RunLoop();
 
   absl::Time end_time = absl::Now();
   std::cout << absl::StrFormat(
@@ -832,7 +1184,7 @@ int ShardMain(int argc, char** argv, int shard_index, int num_shards) {
 
   if (FLAGS_interarrival != "") {
     CHECK(heyp::WriteTextProtoToFile(
-        load_gen.GetInterarrivalProto(),
+        load_gen->GetInterarrivalProto(),
         absl::StrCat(FLAGS_interarrival, ".shard.", shard_index)))
         << "failed to write latency hist";
   }
