@@ -73,10 +73,10 @@ std::string IP4Name(const struct sockaddr_in* src) {
 
 uint64_t UvTimeoutUntil(uv_loop_t* loop, uint64_t hr_time) {
   uint64_t now = uv_now(loop);
-  if (now * 1'000'000 >= hr_time) {
+  if (now >= hr_time / 1'000'000) {
     return 0;
   }
-  return ((hr_time + 999'999) / 1'000'000) - now;  // round up
+  return (hr_time / 1'000'000) - now;
 }
 
 class ClientConn;
