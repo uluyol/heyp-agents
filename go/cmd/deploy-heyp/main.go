@@ -38,6 +38,29 @@ func (c *mkBundleCmd) Execute(ctx context.Context, fs *flag.FlagSet,
 	return subcommands.ExitSuccess
 }
 
+type configureSysCmd struct {
+	configPath        string
+	congestionControl string
+}
+
+func (*configureSysCmd) Name() string     { return "config-sys" }
+func (*configureSysCmd) Synopsis() string { return "configure operating system on remote hosts" }
+func (*configureSysCmd) Usage() string    { return "" }
+
+func (c *configureSysCmd) SetFlags(fs *flag.FlagSet) {
+	configVar(&c.configPath, fs)
+	fs.StringVar(&c.congestionControl, "cc", "bbr", "congestion control to use (leave empty to for OS default)")
+}
+
+func (c *configureSysCmd) Execute(ctx context.Context, fs *flag.FlagSet,
+	args ...interface{}) subcommands.ExitStatus {
+	err := actions.ConfigureSys(parseConfig(c.configPath), c.congestionControl)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return subcommands.ExitSuccess
+}
+
 type installBundleCmd struct {
 	configPath string
 	bundlePath string
@@ -230,6 +253,7 @@ func main() {
 	subcommands.Register(subcommands.CommandsCommand(), "")
 	subcommands.Register(new(mkBundleCmd), "")
 	subcommands.Register(new(installBundleCmd), "")
+	subcommands.Register(new(configureSysCmd), "")
 	subcommands.Register(new(startHEYPAgentsCmd), "")
 	subcommands.Register(testLOPRIStartServersCmd, "")
 	subcommands.Register(new(testLOPRIRunClientsCmd), "")

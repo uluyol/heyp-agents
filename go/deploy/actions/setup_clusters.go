@@ -375,6 +375,29 @@ func TestLOPRIRunClients(c *pb.DeploymentConfig, remoteTopdir string, showOut bo
 	return eg.Wait()
 }
 
+func ConfigureSys(c *pb.DeploymentConfig, congestionControl string) error {
+	var eg multierrgroup.Group
+	for _, n := range c.Nodes {
+		n := n
+		eg.Go(func() error {
+			if congestionControl != "" {
+				cmd := TracingCommand(
+					LogWithPrefix("config-sys: "),
+					"ssh", n.GetExternalAddr(),
+					"sudo tee /etc/sysctl.conf && sudo sysctl -p",
+				)
+				sysctlLine := "net.ipv4.tcp_congestion_control=" + congestionControl + "\n"
+				cmd.SetStdin("congestionControlConfig ", strings.NewReader(sysctlLine))
+				if err := cmd.Run(); err != nil {
+					return fmt.Errorf("failed to setup congestion control: %w", err)
+				}
+			}
+			return nil
+		})
+	}
+	return eg.Wait()
+}
+
 func FetchData(c *pb.DeploymentConfig, remoteTopdir, outdirPath string) error {
 	os.MkdirAll(outdirPath, 0755)
 
