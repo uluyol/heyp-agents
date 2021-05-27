@@ -766,7 +766,7 @@ int NumWritesIn(int64_t rpc_size, int64_t queue_size) {
 // not overloaded.
 class SemiOpenLoadGenerator : public LoadGenerator {
  public:
-  constexpr static int64_t kMaxQueueLenPerConnBytes = 102400;  // 100 KB
+  constexpr static int64_t kMaxQueueLenPerConnBytes = 4 * 1024;  // 4KB
 
   SemiOpenLoadGenerator(const proto::TestLopriClientConfig& c, uv_loop_t* l,
                         std::unique_ptr<StatsRecorder> srec, bool rec_interarrival,
