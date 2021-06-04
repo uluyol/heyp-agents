@@ -10,12 +10,12 @@ import (
 )
 
 const usageText = `
-flowdistsim performs a monte carlo simulation for candidate flow selection policies.
+flowselsim performs a monte carlo simulation for candidate flow selection policies.
 It outputs a csv file with rows of the form NumFlows,SplitErrP05,SplitErrP50,SplitErrP95,AbsSplitErrP05,AbsSplitErrP50,AbsSplitErrP95
 `
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "usage: flowdistsim > output.csv\n\n")
+	fmt.Fprintf(os.Stderr, "usage: flowselsim > output.csv\n\n")
 	flag.PrintDefaults()
 	fmt.Fprint(os.Stderr, usageText)
 }
@@ -53,7 +53,7 @@ var _ flag.Value = new(intArray)
 
 func main() {
 	log.SetFlags(0)
-	log.SetPrefix("flowdistsim: ")
+	log.SetPrefix("flowselsim: ")
 
 	var (
 		config   SimConfig
