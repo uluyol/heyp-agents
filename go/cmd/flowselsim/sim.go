@@ -175,11 +175,16 @@ var debugMu sync.Mutex
 type hostInfo struct {
 	numFlows        int
 	numBottlenecked int
+	numLOPRI        int
+}
+
+func (hi hostInfo) numHIPRI() int {
+	return hi.numBottlenecked - hi.numLOPRI
 }
 
 func (hi hostInfo) MarshalText() ([]byte, error) {
 	var buf bytes.Buffer
-	fmt.Fprintf(&buf, "(n: %d, nbig: %d)", hi.numFlows, hi.numBottlenecked)
+	fmt.Fprintf(&buf, "(n: %d, nbig: %d, nLOPRI: %d)", hi.numFlows, hi.numBottlenecked, hi.numLOPRI)
 	return buf.Bytes(), nil
 }
 
@@ -233,8 +238,13 @@ func (t *trial) dump() string {
 }
 
 type distResults struct {
-	SplitErr    []float64
-	AbsSplitErr []float64
+	SplitErr                []float64 // len: numTrials
+	AbsSplitErr             []float64 // len: numTrials
+	AggUnadmittedBW         []float64 // len: numTrials
+	UnadmittedBW            []float64 // len: numTrials * c.NumHosts
+	UnadmittedFrac          []float64 // len: numTrials * c.NumHosts
+	DemandfulUnadmittedBW   []float64 // len: numTrials * c.NumHosts
+	DemandfulUnadmittedFrac []float64 // len: numTrials * c.NumHosts
 }
 
 func runSim(numFlows int, c SimConfig) simRunResult {
@@ -244,6 +254,11 @@ func runSim(numFlows int, c SimConfig) simRunResult {
 	for i := range results {
 		results[i].SplitErr = make([]float64, numTrials)
 		results[i].AbsSplitErr = make([]float64, numTrials)
+		results[i].AggUnadmittedBW = make([]float64, numTrials)
+		results[i].UnadmittedBW = make([]float64, numTrials*c.NumHosts)
+		results[i].UnadmittedFrac = make([]float64, numTrials*c.NumHosts)
+		results[i].DemandfulUnadmittedBW = make([]float64, numTrials*c.NumHosts)
+		results[i].DemandfulUnadmittedFrac = make([]float64, numTrials*c.NumHosts)
 	}
 
 	const batchSize = 500
@@ -347,6 +362,33 @@ func runSim(numFlows int, c SimConfig) simRunResult {
 						float64(c.NumBottleneckFlows)
 					results[resultIndex].SplitErr[ntrial] = wantLOPRIFrac - actualLOPRIFrac
 					results[resultIndex].AbsSplitErr[ntrial] = math.Abs(results[resultIndex].SplitErr[ntrial])
+
+					unadmittedBW := results[resultIndex].UnadmittedBW[ntrial*c.NumHosts : (ntrial+1)*c.NumHosts]
+					unadmittedFrac := results[resultIndex].UnadmittedFrac[ntrial*c.NumHosts : (ntrial+1)*c.NumHosts]
+					demandfulUnadmittedBW := results[resultIndex].DemandfulUnadmittedBW[ntrial*c.NumHosts : (ntrial+1)*c.NumHosts]
+					demandfulUnadmittedFrac := results[resultIndex].DemandfulUnadmittedFrac[ntrial*c.NumHosts : (ntrial+1)*c.NumHosts]
+
+					var aggUnadmitted float64
+
+					_ = unadmittedBW[len(trial.Hosts)-1]
+					for hi, h := range trial.Hosts {
+						nhipri := float64(h.numHIPRI())
+						nlopri := float64(h.numLOPRI)
+						unadmittedBW[hi] = float64(h.numBottlenecked) -
+							math.Min(trial.WaterlevelHIPRI, nhipri) -
+							math.Min(trial.WaterlevelLOPRI, nlopri)
+						aggUnadmitted += unadmittedBW[hi]
+						unadmittedFrac[hi] = unadmittedBW[hi] / math.Max(1, float64(h.numBottlenecked))
+						if h.numBottlenecked > 0 {
+							demandfulUnadmittedBW[hi] = unadmittedBW[hi]
+							demandfulUnadmittedFrac[hi] = unadmittedFrac[hi]
+						} else {
+							demandfulUnadmittedBW[hi] = -1
+							demandfulUnadmittedFrac[hi] = -1
+						}
+					}
+
+					results[resultIndex].AggUnadmittedBW[ntrial] = aggUnadmitted
 				}
 			}(ntrialStart, rand.NewSource(uint64(time.Now().UnixNano())^rand.Uint64()))
 		}
@@ -357,6 +399,14 @@ func runSim(numFlows int, c SimConfig) simRunResult {
 	for i := range results {
 		sort.Float64s(results[i].SplitErr)
 		sort.Float64s(results[i].AbsSplitErr)
+		sort.Float64s(results[i].AggUnadmittedBW)
+		sort.Float64s(results[i].UnadmittedBW)
+		sort.Float64s(results[i].UnadmittedFrac)
+		sort.Float64s(results[i].DemandfulUnadmittedBW)
+		sort.Float64s(results[i].DemandfulUnadmittedFrac)
+
+		trimEmpty(&results[i].DemandfulUnadmittedBW, -1)
+		trimEmpty(&results[i].DemandfulUnadmittedFrac, -1)
 
 		if i > 0 {
 			sb.WriteByte('\n')
@@ -369,12 +419,31 @@ func runSim(numFlows int, c SimConfig) simRunResult {
 	}
 }
 
+// trimEmpty removes unset elements from data. It assumes that data is sorted.
+func trimEmpty(data *[]float64, emptyVal float64) {
+	if emptyVal != -1 {
+		panic("emptyVal != 1 is not implemented")
+	}
+	if len(*data) > 0 && (*data)[0] < -1 {
+		panic("support for data < -1 not implemented")
+	}
+	for i, v := range *data {
+		if v > -1 {
+			*data = (*data)[i:]
+			return
+		}
+	}
+	*data = nil
+}
+
 func numBottleneckedLOPRIRandomProb(t *trial, wantLOPRIPct float64, randDist *rand.Rand) int {
 	numBottleneckedLOPRI := 0
-	for _, h := range t.Hosts {
+	for hi := range t.Hosts {
+		h := &t.Hosts[hi]
 		for i := 0; i < h.numBottlenecked; i++ {
 			if randDist.Float64() <= wantLOPRIPct {
 				numBottleneckedLOPRI++
+				h.numLOPRI++
 			}
 		}
 	}
@@ -406,24 +475,24 @@ func numBottleneckedLOPRIHostUseHIPRIFirst(t *trial, wantLOPRIFrac float64, c *S
 	lopriProb := lopriAggLimit / (residualHIPRI + lopriAggLimit)
 
 	numBottleneckedLOPRI := 0
-	for hi, h := range t.Hosts {
+	for hi := range t.Hosts {
+		h := &t.Hosts[hi]
 		if float64(h.numBottlenecked) < c.OverflowThresh*t.WaterlevelHIPRI {
 			continue // don't degrade any
 		}
 
-		c := 0
 		for i := 0; i < h.numBottlenecked; i++ {
 			if randDist.Float64() <= lopriProb {
 				numBottleneckedLOPRI++
-				c++
+				h.numLOPRI++
 			}
 		}
 		if debugOneCase {
-			log.Printf("host %d degrade %d", hi, c)
+			log.Printf("host %d downgrade %d", hi, h.numLOPRI)
 		}
 	}
 	if debugOneCase {
-		log.Printf("degrade %d (%f when want %f)", numBottleneckedLOPRI,
+		log.Printf("downgrade %d (%f when want %f)", numBottleneckedLOPRI,
 			float64(numBottleneckedLOPRI)/float64(c.NumBottleneckFlows),
 			wantLOPRIFrac)
 		os.Exit(99)
