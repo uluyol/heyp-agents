@@ -61,6 +61,12 @@ type SimConfig struct {
 	OverflowThresh float64
 }
 
+func AggLimits(wantLOPRIFrac float64, numBottleneckFlows int) (hipri float64, lopri float64) {
+	hipri = (1 - wantLOPRIFrac) * float64(numBottleneckFlows)
+	lopri = float64(numBottleneckFlows) - hipri
+	return hipri, lopri
+}
+
 func ValidateConfig(c SimConfig) error {
 	if int(c.Method) < len(buggyMethods) && buggyMethods[c.Method] {
 		log.Printf("warning: %s is still buggy", c.Method)
@@ -183,12 +189,18 @@ type trial struct {
 	BottleneckedIDs []int
 	HostCutpoints   []int
 	Hosts           []hostInfo
+
+	// Derived
+	WaterlevelHIPRI float64
+	WaterlevelLOPRI float64
 }
 
 func (t *trial) reset() {
 	t.BottleneckedIDs = t.BottleneckedIDs[:0]
 	t.HostCutpoints = t.HostCutpoints[:0]
 	t.Hosts = t.Hosts[:0]
+	t.WaterlevelHIPRI = 0
+	t.WaterlevelLOPRI = 0
 }
 
 func clearIntsToLen(slice *[]int, size int) {
@@ -308,6 +320,19 @@ func runSim(numFlows int, c SimConfig) simRunResult {
 						}
 					}
 
+					hipriAggLimit, lopriAggLimit := AggLimits(wantLOPRIFrac, c.NumBottleneckFlows)
+
+					demands := hostsDemandsIgnoreZero(trial.Hosts, c.NumBottleneckFlows)
+					trial.WaterlevelHIPRI = MaxMinFairWaterlevel(hipriAggLimit, demands)
+					for i := range demands {
+						if demands[i] < trial.WaterlevelHIPRI {
+							demands[i] = 0
+						} else {
+							demands[i] -= trial.WaterlevelHIPRI
+						}
+					}
+					trial.WaterlevelLOPRI = MaxMinFairWaterlevel(lopriAggLimit, demands)
+
 					var numBottleneckedLOPRI int
 					switch c.Method {
 					case SelRandomProb:
@@ -358,20 +383,8 @@ func numBottleneckedLOPRIRandomProb(t *trial, wantLOPRIPct float64, randDist *ra
 
 const debugOneCase = false
 
-func numBottleneckedLOPRIHostUseHIPRIFirst(t *trial, wantLOPRIPct float64, c *SimConfig, randDist *rand.Rand) int {
-	hipriAggLimit := (1 - wantLOPRIPct) * float64(c.NumBottleneckFlows)
-	lopriAggLimit := float64(c.NumBottleneckFlows) - hipriAggLimit
-
-	demands := hostsDemandsIgnoreZero(t.Hosts, c.NumBottleneckFlows)
-	hipriWaterlevel := MaxMinFairWaterlevel(hipriAggLimit, demands)
-	for i := range demands {
-		if demands[i] < hipriWaterlevel {
-			demands[i] = 0
-		} else {
-			demands[i] -= hipriWaterlevel
-		}
-	}
-	lopriWaterlevel := MaxMinFairWaterlevel(lopriAggLimit, demands)
+func numBottleneckedLOPRIHostUseHIPRIFirst(t *trial, wantLOPRIFrac float64, c *SimConfig, randDist *rand.Rand) int {
+	hipriAggLimit, lopriAggLimit := AggLimits(wantLOPRIFrac, c.NumBottleneckFlows)
 
 	if debugOneCase {
 		debugMu.Lock()
@@ -379,12 +392,12 @@ func numBottleneckedLOPRIHostUseHIPRIFirst(t *trial, wantLOPRIPct float64, c *Si
 		log.Print("--------- got -------")
 		log.Print(t.dump())
 		log.Printf("hipriAggLimit: %f lopriAggLimit: %f", hipriAggLimit, lopriAggLimit)
-		log.Printf("hipriWaterlevel: %f lopriWaterlevel: %f", hipriWaterlevel, lopriWaterlevel)
+		log.Printf("hipriWaterlevel: %f lopriWaterlevel: %f", t.WaterlevelHIPRI, t.WaterlevelLOPRI)
 	}
 
 	var demandAutoHIPRI float64
 	for _, h := range t.Hosts {
-		if float64(h.numBottlenecked) < c.OverflowThresh*hipriWaterlevel {
+		if float64(h.numBottlenecked) < c.OverflowThresh*t.WaterlevelHIPRI {
 			demandAutoHIPRI += float64(h.numBottlenecked)
 		}
 	}
@@ -394,7 +407,7 @@ func numBottleneckedLOPRIHostUseHIPRIFirst(t *trial, wantLOPRIPct float64, c *Si
 
 	numBottleneckedLOPRI := 0
 	for hi, h := range t.Hosts {
-		if float64(h.numBottlenecked) < c.OverflowThresh*hipriWaterlevel {
+		if float64(h.numBottlenecked) < c.OverflowThresh*t.WaterlevelHIPRI {
 			continue // don't degrade any
 		}
 
@@ -412,7 +425,7 @@ func numBottleneckedLOPRIHostUseHIPRIFirst(t *trial, wantLOPRIPct float64, c *Si
 	if debugOneCase {
 		log.Printf("degrade %d (%f when want %f)", numBottleneckedLOPRI,
 			float64(numBottleneckedLOPRI)/float64(c.NumBottleneckFlows),
-			wantLOPRIPct)
+			wantLOPRIFrac)
 		os.Exit(99)
 	}
 
