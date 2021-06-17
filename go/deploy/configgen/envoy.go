@@ -1,0 +1,99 @@
+package configgen
+
+import (
+	"fmt"
+	"html/template"
+	"strings"
+)
+
+type EnvoyReverseProxy struct {
+	Port      int
+	AdminPort int
+	Backends  []Backend
+}
+
+type Backend struct {
+	LBPolicy string // e.g. ROUND_ROBIN
+	Remotes  []AddrAndPort
+}
+
+type AddrAndPort struct {
+	Addr string
+	Port int
+}
+
+var proxyConfigTmpl = template.Must(template.New("proxycfg").Parse(`
+static_resources:
+  listeners:
+  - address:
+      socket_address:
+        address: 0.0.0.0
+        port_value: {{.Port}}
+    filter_chains:
+    - filters:
+      - name: envoy.filters.network.http_connection_manager
+        typed_config:
+          "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+          codec_type: AUTO
+          stat_prefix: ingress_http
+          route_config:
+            name: local_route
+            virtual_hosts:
+            - name: backend
+              domains:
+              - "*"
+              routes:
+{{- range $index, $elem := .Backends }}
+              - match:
+                  prefix: "/service/{{$index}}"
+                route:
+                  cluster: service{{$index}}
+                  prefix_rewrite: "/"
+{{- end }}
+          http_filters:
+          - name: envoy.filters.http.router
+            typed_config: {}
+
+  clusters:
+{{- range $index, $elem := .Backends }}
+  - name: service{{$index}}
+    type: STATIC
+    connect_timeout: 5s
+    lb_policy: {{$elem.LBPolicy}}
+    load_assignment:
+      cluster_name: service{{$index}}
+      endpoints:
+      - lb_endpoints:
+{{- range $elem.Remotes }}
+        - endpoint:
+            address:
+              socket_address:
+                address: {{.Addr}}
+                port_value: {{.Port}}
+{{- end -}}
+{{- end }}
+
+admin:
+  address:
+    socket_address:
+      address: 0.0.0.0
+      port_value: {{.AdminPort}}
+layered_runtime:
+  layers:
+  - name: static_layer_0
+    static_layer:
+      envoy:
+        resource_limits:
+          listener:
+            example_listener_name:
+              connection_limit: 10000
+`[1:]))
+
+func (c *EnvoyReverseProxy) ToYAML() string {
+	var buf strings.Builder
+	err := proxyConfigTmpl.Execute(&buf, c)
+	if err != nil {
+		panic(fmt.Errorf("impossible error: %w", err))
+	}
+	return buf.String()
+}
