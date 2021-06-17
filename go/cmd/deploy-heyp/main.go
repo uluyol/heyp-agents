@@ -15,6 +15,7 @@ import (
 
 type mkBundleCmd struct {
 	binDir      string
+	auxBinDir   string
 	tarballPath string
 }
 
@@ -25,13 +26,15 @@ func (c *mkBundleCmd) Usage() string    { return "" }
 func (c *mkBundleCmd) SetFlags(fs *flag.FlagSet) {
 	fs.StringVar(&c.binDir, "bin", "./bazel-bin",
 		"path to output binaries")
+	fs.StringVar(&c.auxBinDir, "auxbin", "./aux-bin",
+		"path to auxillary binaries")
 	bundleVar(&c.tarballPath, fs)
 }
 
 func (c *mkBundleCmd) Execute(ctx context.Context, fs *flag.FlagSet,
 	args ...interface{}) subcommands.ExitStatus {
 
-	err := actions.MakeCodeBundle(c.binDir, c.tarballPath)
+	err := actions.MakeCodeBundle(c.binDir, c.auxBinDir, c.tarballPath)
 	if err != nil {
 		log.Fatalf("failed to make bundle: %v", err)
 	}

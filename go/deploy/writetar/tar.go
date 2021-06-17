@@ -110,6 +110,12 @@ func (w *XZWriter) Add(input Input) {
 	}
 }
 
+func (w *XZWriter) AddAll(inputs []Input) {
+	for _, input := range inputs {
+		w.Add(input)
+	}
+}
+
 func (w *XZWriter) Close() error {
 	e := w.w.Close()
 	if e != nil && w.err == nil {

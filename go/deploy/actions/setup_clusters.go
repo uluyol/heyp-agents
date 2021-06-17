@@ -21,8 +21,13 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func MakeCodeBundle(binDir, tarballPath string) error {
-	files := []string{
+func MakeCodeBundle(binDir, auxBinDir, tarballPath string) error {
+	w, err := writetar.NewXZWriter(tarballPath)
+	if err != nil {
+		return err
+	}
+
+	regularBins := []string{
 		"heyp/app/testlopri/client",
 		"heyp/app/testlopri/merge-logs",
 		"heyp/app/testlopri/mk-expected-interarrival-dist",
@@ -33,17 +38,14 @@ func MakeCodeBundle(binDir, tarballPath string) error {
 		"heyp/stats/hdrhist2csv",
 	}
 
-	binDir, _ = filepath.Abs(binDir)
-	tarballPath, _ = filepath.Abs(tarballPath)
-
-	baseArgs := []string{
-		"cJf",
-		tarballPath,
+	for _, b := range regularBins {
+		w.Add(writetar.Input{
+			Dest:      b,
+			InputPath: filepath.Join(binDir, b),
+		})
 	}
 
-	cmd := TracingCommand(LogWithPrefix("mk-bundle: "), "tar", append(baseArgs, files...)...)
-	cmd.Dir = binDir
-	return cmd.Run()
+	return w.Close()
 }
 
 func InstallCodeBundle(c *pb.DeploymentConfig, localTarball, remoteTopdir string) error {
