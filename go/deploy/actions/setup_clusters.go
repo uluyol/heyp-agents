@@ -45,6 +45,15 @@ func MakeCodeBundle(binDir, auxBinDir, tarballPath string) error {
 		})
 	}
 
+	auxBins := []string{"envoy", "fortio"}
+
+	for _, b := range auxBins {
+		w.Add(writetar.Input{
+			Dest:      path.Join("aux", b),
+			InputPath: filepath.Join(auxBinDir, b),
+		})
+	}
+
 	return w.Close()
 }
 
