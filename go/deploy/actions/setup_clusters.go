@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/uluyol/heyp-agents/go/deploy/writetar"
 	"github.com/uluyol/heyp-agents/go/multierrgroup"
 	pb "github.com/uluyol/heyp-agents/go/proto"
 	"golang.org/x/sync/errgroup"
@@ -161,9 +162,9 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string, collectAllocLo
 					return fmt.Errorf("failed to marshal limits: %w", err)
 				}
 
-				configTar := ConcatTarInMem(
-					AddTar("cluster-agent-config-"+n.cluster.GetName()+".textproto", clusterAgentConfigBytes),
-					AddTar("cluster-limits-"+n.cluster.GetName()+".textproto", limitsBytes),
+				configTar := writetar.ConcatInMem(
+					writetar.Add("cluster-agent-config-"+n.cluster.GetName()+".textproto", clusterAgentConfigBytes),
+					writetar.Add("cluster-limits-"+n.cluster.GetName()+".textproto", limitsBytes),
 				)
 
 				allocLogsPath := ""
