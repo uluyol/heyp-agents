@@ -13,6 +13,7 @@ type EnvoyReverseProxy struct {
 }
 
 type Backend struct {
+	Name     string
 	LBPolicy string // e.g. ROUND_ROBIN
 	Remotes  []AddrAndPort
 }
@@ -43,11 +44,11 @@ static_resources:
               domains:
               - "*"
               routes:
-{{- range $index, $elem := .Backends }}
+{{- range .Backends }}
               - match:
-                  prefix: "/service/{{$index}}"
+                  prefix: "/service/{{.Name}}"
                 route:
-                  cluster: service{{$index}}
+                  cluster: "{{.Name}}"
                   prefix_rewrite: "/"
 {{- end }}
           http_filters:
@@ -75,16 +76,16 @@ static_resources:
             typed_config: {}
 
   clusters:
-{{- range $index, $elem := .Backends }}
-  - name: service{{$index}}
+{{- range .Backends }}
+  - name: "{{.Name}}"
     type: STATIC
     connect_timeout: 5s
-    lb_policy: {{$elem.LBPolicy}}
+    lb_policy: {{.LBPolicy}}
     load_assignment:
-      cluster_name: service{{$index}}
+      cluster_name: "{{.Name}}"
       endpoints:
       - lb_endpoints:
-{{- range $elem.Remotes }}
+{{- range .Remotes }}
         - endpoint:
             address:
               socket_address:

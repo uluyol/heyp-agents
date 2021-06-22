@@ -13,6 +13,7 @@ func TestEnvoyReverseProxy(t *testing.T) {
 		AdminPort: 112,
 		Backends: []Backend{
 			{
+				Name:     "AB",
 				LBPolicy: "ROUND_ROBIN",
 				Remotes: []AddrAndPort{
 					{"1.1.1.1", 7777},
@@ -20,6 +21,7 @@ func TestEnvoyReverseProxy(t *testing.T) {
 				},
 			},
 			{
+				Name:     "backend-2",
 				LBPolicy: "LEAST_REQUEST",
 				Remotes: []AddrAndPort{
 					{"127.0.0.1", 123},
@@ -50,14 +52,14 @@ func TestEnvoyReverseProxy(t *testing.T) {
               - "*"
               routes:
               - match:
-                  prefix: "/service/0"
+                  prefix: "/service/AB"
                 route:
-                  cluster: service0
+                  cluster: "AB"
                   prefix_rewrite: "/"
               - match:
-                  prefix: "/service/1"
+                  prefix: "/service/backend-2"
                 route:
-                  cluster: service1
+                  cluster: "backend-2"
                   prefix_rewrite: "/"
           http_filters:
           - name: "envoy.filters.http.lua"
@@ -84,12 +86,12 @@ func TestEnvoyReverseProxy(t *testing.T) {
             typed_config: {}
 
   clusters:
-  - name: service0
+  - name: "AB"
     type: STATIC
     connect_timeout: 5s
     lb_policy: ROUND_ROBIN
     load_assignment:
-      cluster_name: service0
+      cluster_name: "AB"
       endpoints:
       - lb_endpoints:
         - endpoint:
@@ -102,12 +104,12 @@ func TestEnvoyReverseProxy(t *testing.T) {
               socket_address:
                 address: 2.2.2.2
                 port_value: 12
-  - name: service1
+  - name: "backend-2"
     type: STATIC
     connect_timeout: 5s
     lb_policy: LEAST_REQUEST
     load_assignment:
-      cluster_name: service1
+      cluster_name: "backend-2"
       endpoints:
       - lb_endpoints:
         - endpoint:
@@ -142,6 +144,7 @@ layered_runtime:
 		AdminPort: 4,
 		Backends: []Backend{
 			{
+				Name:     "1",
 				LBPolicy: "ROUND_ROBIN",
 				Remotes: []AddrAndPort{
 					{"1.1.1.1", 7777},
@@ -149,6 +152,7 @@ layered_runtime:
 				},
 			},
 			{
+				Name:     "ZzZ",
 				LBPolicy: "LEAST_REQUEST",
 				Remotes: []AddrAndPort{
 					{"127.0.0.1", 123},
@@ -179,14 +183,14 @@ layered_runtime:
               - "*"
               routes:
               - match:
-                  prefix: "/service/0"
-                route:
-                  cluster: service0
-                  prefix_rewrite: "/"
-              - match:
                   prefix: "/service/1"
                 route:
-                  cluster: service1
+                  cluster: "1"
+                  prefix_rewrite: "/"
+              - match:
+                  prefix: "/service/ZzZ"
+                route:
+                  cluster: "ZzZ"
                   prefix_rewrite: "/"
           http_filters:
           - name: "envoy.filters.http.lua"
@@ -213,12 +217,12 @@ layered_runtime:
             typed_config: {}
 
   clusters:
-  - name: service0
+  - name: "1"
     type: STATIC
     connect_timeout: 5s
     lb_policy: ROUND_ROBIN
     load_assignment:
-      cluster_name: service0
+      cluster_name: "1"
       endpoints:
       - lb_endpoints:
         - endpoint:
@@ -231,12 +235,12 @@ layered_runtime:
               socket_address:
                 address: 2.2.2.2
                 port_value: 12
-  - name: service1
+  - name: "ZzZ"
     type: STATIC
     connect_timeout: 5s
     lb_policy: LEAST_REQUEST
     load_assignment:
-      cluster_name: service1
+      cluster_name: "ZzZ"
       endpoints:
       - lb_endpoints:
         - endpoint:
