@@ -1,3 +1,5 @@
+// Forked from fortio.org/fortio/fhttp
+//
 // Copyright 2020 Fortio Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,7 +16,7 @@
 
 // Tee off traffic
 
-package fhttp // import "fortio.org/fortio/fhttp"
+package wanhttp
 
 import (
 	"bufio"

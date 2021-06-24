@@ -1,3 +1,5 @@
+// Forked from fortio.org/fortio/fhttp
+//
 // Copyright 2017 Istio Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -20,7 +22,7 @@
 // is also ../histogram to use the stats from the command line and ../echosrv
 // as a very light http server that can be used to test proxies etc like
 // the Istio components.
-package periodic // import "fortio.org/fortio/periodic"
+package stagedperiodic
 
 import (
 	"fmt"
