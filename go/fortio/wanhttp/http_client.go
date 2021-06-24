@@ -45,7 +45,7 @@ import (
 type Fetcher interface {
 	// Fetch returns http code, data, offset of body (for client which returns
 	// headers)
-	Fetch() (int, []byte, int)
+	Fetch() (int, []byte, int, int)
 	// Close() cleans up connections and state - must be paired with NewClient calls.
 	// returns how many sockets have been used (Fastclient only)
 	Close() int
@@ -61,7 +61,9 @@ var (
 	// CheckConnectionClosedHeader indicates whether to check for server side connection closed headers.
 	CheckConnectionClosedHeader = false
 	// 'constants', case doesn't matter for those 3.
-	contentLengthHeader   = []byte("\r\ncontent-length:")
+	contentLengthHeader     = []byte("\r\ncontent-length:")
+	origContentLengthHeader = []byte("\r\nexp-orig-content-length:")
+
 	connectionCloseHeader = []byte("\r\nconnection: close")
 	chunkedHeader         = []byte("\r\nTransfer-Encoding: chunked")
 	rander                = NewSyncReader(rand.New(rand.NewSource(time.Now().UnixNano())))
@@ -170,7 +172,6 @@ type HTTPOptions struct {
 	NumConnections    int  // num connections (for std client)
 	Compression       bool // defaults to no compression, only used by std client
 	DisableFastClient bool // defaults to fast client
-	HTTP10            bool // defaults to http1.1
 	DisableKeepAlive  bool // so default is keep alive
 	AllowHalfClose    bool // if not keepalive, whether to half close after request
 	Insecure          bool // do not verify certs for https
@@ -342,7 +343,7 @@ func (c *Client) ChangeURL(urlStr string) (err error) {
 }
 
 // Fetch fetches the byte and code for pre created client.
-func (c *Client) Fetch() (int, []byte, int) {
+func (c *Client) Fetch() (int, []byte, int, int) {
 	// req can't be null (client itself would be null in that case)
 	if c.pathContainsUUID {
 		path := c.path
@@ -371,7 +372,7 @@ func (c *Client) Fetch() (int, []byte, int) {
 	resp, err := c.client.Do(c.req)
 	if err != nil {
 		log.Errf("Unable to send %s request for %s : %v", c.req.Method, c.url, err)
-		return http.StatusBadRequest, []byte(err.Error()), 0
+		return http.StatusBadRequest, []byte(err.Error()), 0, 0
 	}
 	var data []byte
 	if log.LogDebug() {
@@ -383,6 +384,13 @@ func (c *Client) Fetch() (int, []byte, int) {
 	}
 	data, err = ioutil.ReadAll(resp.Body)
 	resp.Body.Close()
+	contentLen := len(data)
+	if len := resp.Header.Get("exp-orig-content-length"); len != "" {
+		t, err := strconv.Atoi(len)
+		if err == nil {
+			contentLen = t
+		}
+	}
 	if err != nil {
 		log.Errf("Unable to read response for %s : %v", c.url, err)
 		code := resp.StatusCode
@@ -390,11 +398,11 @@ func (c *Client) Fetch() (int, []byte, int) {
 			code = http.StatusNoContent
 			log.Warnf("Ok code despite read error, switching code to %d", code)
 		}
-		return code, data, 0
+		return code, data, contentLen, 0
 	}
 	code := resp.StatusCode
 	log.Debugf("Got %d : %s for %s %s - response is %d bytes", code, resp.Status, c.req.Method, c.url, len(data))
-	return code, data, 0
+	return code, data, contentLen, 0
 }
 
 // NewClient creates either a standard or fast client (depending on
@@ -500,32 +508,31 @@ func FetchURL(url string) (int, []byte) {
 // To be used only for single fetches or when performance doesn't matter as the client is closed at the end.
 func Fetch(httpOptions *HTTPOptions) (int, []byte) {
 	cli, _ := NewClient(httpOptions)
-	code, data, _ := cli.Fetch()
+	code, data, _, _ := cli.Fetch()
 	cli.Close()
 	return code, data
 }
 
 // FastClient is a fast, lockfree single purpose http 1.0/1.1 client.
 type FastClient struct {
-	buffer       []byte
-	req          []byte
-	dest         net.Addr
-	socket       net.Conn
-	socketCount  int
-	size         int
-	code         int
-	errorCount   int
-	headerLen    int
-	url          string
-	host         string
-	hostname     string
-	port         string
-	http10       bool // http 1.0, simplest: no Host, forced no keepAlive, no parsing
-	keepAlive    bool
-	parseHeaders bool // don't bother in http/1.0
-	halfClose    bool // allow/do half close when keepAlive is false
-	reqTimeout   time.Duration
-	uuidMarkers  [][]byte
+	buffer      []byte
+	req         []byte
+	dest        net.Addr
+	socket      net.Conn
+	socketCount int
+	size        int
+	code        int
+	errorCount  int
+	headerLen   int
+	origSize    int
+	url         string
+	host        string
+	hostname    string
+	port        string
+	keepAlive   bool
+	halfClose   bool // allow/do half close when keepAlive is false
+	reqTimeout  time.Duration
+	uuidMarkers [][]byte
 }
 
 // Close cleans up any resources used by FastClient.
@@ -548,9 +555,6 @@ func NewFastClient(o *HTTPOptions) (Fetcher, error) {
 	payloadLen := len(o.Payload)
 	o.Init(o.URL)
 	proto := "1.1"
-	if o.HTTP10 {
-		proto = "1.0"
-	}
 
 	uuidStrings := []string{}
 	urlString := o.URL
@@ -580,7 +584,8 @@ func NewFastClient(o *HTTPOptions) (Fetcher, error) {
 	// note: Host includes the port
 	bc := FastClient{
 		url: o.URL, host: url.Host, hostname: url.Hostname(), port: url.Port(),
-		http10: o.HTTP10, halfClose: o.AllowHalfClose,
+		halfClose: o.AllowHalfClose,
+		keepAlive: !o.DisableKeepAlive,
 	}
 	bc.buffer = make([]byte, BufferSizeKb*1024)
 	if bc.port == "" {
@@ -615,18 +620,13 @@ func NewFastClient(o *HTTPOptions) (Fetcher, error) {
 	}
 	var buf bytes.Buffer
 	buf.WriteString(method + " " + url.RequestURI() + " HTTP/" + proto + "\r\n")
-	if !bc.http10 || customHostHeader {
-		buf.WriteString("Host: " + host + "\r\n")
+	buf.WriteString("Host: " + host + "\r\n")
+
+	// Rest of normal http 1.1 processing:
+	if o.DisableKeepAlive {
+		buf.WriteString("Connection: close\r\n")
 	}
-	if !bc.http10 {
-		// Rest of normal http 1.1 processing:
-		bc.parseHeaders = true
-		if !o.DisableKeepAlive {
-			bc.keepAlive = true
-		} else {
-			buf.WriteString("Connection: close\r\n")
-		}
-	}
+
 	bc.reqTimeout = o.HTTPReqTimeOut
 	w := bufio.NewWriter(&buf)
 	// This writes multiple valued headers properly (unlike calling Get() to do it ourselves)
@@ -649,8 +649,12 @@ func NewFastClient(o *HTTPOptions) (Fetcher, error) {
 }
 
 // return the result from the state.
-func (c *FastClient) returnRes() (int, []byte, int) {
-	return c.code, c.buffer[:c.size], c.headerLen
+func (c *FastClient) returnRes() (int, []byte, int, int) {
+	t := c.origSize
+	if c.size > t {
+		t = c.size
+	}
+	return c.code, c.buffer[:c.size], t, c.headerLen
 }
 
 // connect to destination.
@@ -674,9 +678,10 @@ const (
 )
 
 // Fetch fetches the url content. Returns http code, data, offset of body.
-func (c *FastClient) Fetch() (int, []byte, int) {
+func (c *FastClient) Fetch() (int, []byte, int, int) {
 	c.code = SocketError
 	c.size = 0
+	c.origSize = 0
 	c.headerLen = 0
 	// Connect or reuse existing socket:
 	conn := c.socket
@@ -787,7 +792,7 @@ func (c *FastClient) readResponse(conn net.Conn, reusedSocket bool) {
 		skipRead = false
 		// Have not yet parsed the headers, need to parse the headers, and have enough data to
 		// at least parse the http retcode:
-		if !parsedHeaders && c.parseHeaders && c.size >= retcodeOffset+3 {
+		if !parsedHeaders && c.size >= retcodeOffset+3 {
 			// even if the bytes are garbage we'll get a non 200 code (bytes are unsigned)
 			c.code = ParseDecimal(c.buffer[retcodeOffset : retcodeOffset+3]) // TODO do that only once...
 			// TODO handle 100 Continue, make the "ok" codes configurable
@@ -821,6 +826,14 @@ func (c *FastClient) readResponse(conn net.Conn, reusedSocket bool) {
 				}
 				// Find the content length or chunked mode
 				if keepAlive {
+					foundOrig, offsetOrig := FoldFind(c.buffer[:c.headerLen], origContentLengthHeader)
+					if foundOrig {
+						c.origSize = ParseDecimal(c.buffer[offsetOrig+len(origContentLengthHeader) : c.headerLen])
+						if c.origSize < 0 {
+							log.Warnf("Warning: %s unparsable %s", origContentLengthHeader, c.buffer[offsetOrig+2:offsetOrig+len(origContentLengthHeader)+4])
+						}
+					}
+
 					var contentLength int
 					found, offset := FoldFind(c.buffer[:c.headerLen], contentLengthHeader)
 					if found {
@@ -881,7 +894,7 @@ func (c *FastClient) readResponse(conn net.Conn, reusedSocket bool) {
 			if !keepAlive {
 				log.Errf("More data is available but stopping after %d, increase -httpbufferkb", max)
 			}
-			if !parsedHeaders && c.parseHeaders {
+			if !parsedHeaders {
 				log.Errf("Buffer too small (%d) to even finish reading headers, increase -httpbufferkb to get all the data", max)
 				keepAlive = false
 			}

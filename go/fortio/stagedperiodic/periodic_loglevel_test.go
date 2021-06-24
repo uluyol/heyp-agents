@@ -1,4 +1,4 @@
-// Forked from fortio.org/fortio/fhttp
+// Forked from fortio.org/fortio/periodic
 //
 // Copyright 2017 Istio Authors
 //

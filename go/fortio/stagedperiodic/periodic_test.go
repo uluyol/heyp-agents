@@ -1,4 +1,4 @@
-// Forked from fortio.org/fortio/fhttp
+// Forked from fortio.org/fortio/periodic
 //
 // Copyright 2017 Istio Authors
 //
@@ -51,18 +51,20 @@ func TestNewPeriodicRunner(t *testing.T) {
 		// Error cases negative qps same as -1 qps == max speed
 		{qps: -10, numThreads: 0, expectedQPS: -1, expectedNumThreads: 4},
 		// Need at least 1 thread
-		{qps: 0, numThreads: -6, expectedQPS: DefaultRunnerOptions.QPS, expectedNumThreads: 1},
+		{qps: 0, numThreads: -6, expectedQPS: DefaultRunnerOptions.Stages[0].QPS, expectedNumThreads: 1},
 	}
 	for _, tst := range tests {
 		o := RunnerOptions{
-			QPS:        tst.qps,
+			Stages: []WorkloadStage{
+				{QPS: tst.qps},
+			},
 			NumThreads: tst.numThreads,
 			Stop:       bogusTestChan, // TODO: use bogusTestChan so gOutstandingRuns does reach 0
 		}
 		r := newPeriodicRunner(&o)
 		r.MakeRunners(&Noop{})
-		if r.QPS != tst.expectedQPS {
-			t.Errorf("qps: got %f, not as expected %f", r.QPS, tst.expectedQPS)
+		if r.Stages[0].QPS != tst.expectedQPS {
+			t.Errorf("qps: got %f, not as expected %f", r.Stages[0].QPS, tst.expectedQPS)
 		}
 		if r.NumThreads != tst.expectedNumThreads {
 			t.Errorf("threads: with %d input got %d, not as expected %d",
@@ -89,9 +91,13 @@ func TestStart(t *testing.T) {
 	var lock sync.Mutex
 	c := TestCount{&count, &lock}
 	o := RunnerOptions{
-		QPS:        11.4,
+		Stages: []WorkloadStage{
+			{
+				QPS:      11.4,
+				Duration: 1 * time.Second,
+			},
+		},
 		NumThreads: 1,
-		Duration:   1 * time.Second,
 	}
 	r := NewPeriodicRunner(&o)
 	r.Options().MakeRunners(&c)
@@ -112,7 +118,7 @@ func TestStart(t *testing.T) {
 		t.Errorf("Lowering of thread count broken, got %d instead of 5", oo.NumThreads)
 	}
 	count = 0
-	oo.Duration = 1 * time.Nanosecond
+	oo.Stages[0].Duration = 1 * time.Nanosecond
 	r.Run()
 	if count != 2 {
 		t.Errorf("Test executed unexpected number of times %d instead minimum 2", count)
@@ -125,9 +131,13 @@ func TestStartMaxQps(t *testing.T) {
 	var lock sync.Mutex
 	c := TestCount{&count, &lock}
 	o := RunnerOptions{
-		QPS:        -1, // max speed (0 is default qps, not max)
+		Stages: []WorkloadStage{
+			{
+				QPS:      -1, // max speed (0 is default qps, not max)
+				Duration: 140 * time.Millisecond,
+			},
+		},
 		NumThreads: 4,
-		Duration:   140 * time.Millisecond,
 	}
 	r := NewPeriodicRunner(&o)
 	r.Options().MakeRunners(&c)
@@ -137,7 +147,7 @@ func TestStartMaxQps(t *testing.T) {
 	res1 = res.Result()
 	expected := int64(3 * 4) // can start 3 50ms in 140ms * 4 threads
 	// Check the count both from the histogram and from our own test counter:
-	actual := res1.Result().DurationHistogram.Count
+	actual := res1.Result().Stages[0].DurationHistogram.Count
 	if actual != expected {
 		t.Errorf("MaxQpsTest executed unexpected number of times %d instead %d", actual, expected)
 	}
@@ -152,18 +162,22 @@ func TestExactlyLargeDur(t *testing.T) {
 	var lock sync.Mutex
 	c := TestCount{&count, &lock}
 	o := RunnerOptions{
-		QPS:        3,
+		Stages: []WorkloadStage{
+			{
+				QPS:      3,
+				Duration: 100 * time.Hour, // will not be used, large to catch if it would
+				Exactly:  9,               // exactly 9 times, so 2 per thread + 1
+			},
+		},
 		NumThreads: 4,
-		Duration:   100 * time.Hour, // will not be used, large to catch if it would
-		Exactly:    9,               // exactly 9 times, so 2 per thread + 1
 	}
 	r := NewPeriodicRunner(&o)
 	r.Options().MakeRunners(&c)
 	count = 0
 	res := r.Run()
-	expected := o.Exactly
+	expected := o.Stages[0].Exactly
 	// Check the count both from the histogram and from our own test counter:
-	actual := res.DurationHistogram.Count
+	actual := res.Stages[0].DurationHistogram.Count
 	if actual != expected {
 		t.Errorf("Exact count executed unexpected number of times %d instead %d", actual, expected)
 	}
@@ -179,17 +193,21 @@ func TestExactlySmallDur(t *testing.T) {
 	c := TestCount{&count, &lock}
 	expected := int64(11)
 	o := RunnerOptions{
-		QPS:        3,
+		Stages: []WorkloadStage{
+			{
+				QPS:      3,
+				Duration: 1 * time.Second, // would do only 3 calls without Exactly
+				Exactly:  expected,        // exactly 11 times, so 2 per thread + 3
+			},
+		},
 		NumThreads: 4,
-		Duration:   1 * time.Second, // would do only 3 calls without Exactly
-		Exactly:    expected,        // exactly 11 times, so 2 per thread + 3
 	}
 	r := NewPeriodicRunner(&o)
 	r.Options().MakeRunners(&c)
 	count = 0
 	res := r.Run()
 	// Check the count both from the histogram and from our own test counter:
-	actual := res.DurationHistogram.Count
+	actual := res.Stages[0].DurationHistogram.Count
 	if actual != expected {
 		t.Errorf("Exact count executed unexpected number of times %d instead %d", actual, expected)
 	}
@@ -205,17 +223,21 @@ func TestExactlyMaxQps(t *testing.T) {
 	c := TestCount{&count, &lock}
 	expected := int64(503)
 	o := RunnerOptions{
-		QPS:        -1, // max qps
+		Stages: []WorkloadStage{
+			{
+				QPS:      -1,       // max qps
+				Duration: -1,       // infinite but should not be used
+				Exactly:  expected, // exactly 503 times, so 125 per thread + 3
+			},
+		},
 		NumThreads: 4,
-		Duration:   -1,       // infinite but should not be used
-		Exactly:    expected, // exactly 503 times, so 125 per thread + 3
 	}
 	r := NewPeriodicRunner(&o)
 	r.Options().MakeRunners(&c)
 	count = 0
 	res := r.Run()
 	// Check the count both from the histogram and from our own test counter:
-	actual := res.DurationHistogram.Count
+	actual := res.Stages[0].DurationHistogram.Count
 	if actual != expected {
 		t.Errorf("Exact count executed unexpected number of times %d instead %d", actual, expected)
 	}
@@ -246,8 +268,10 @@ func TestID(t *testing.T) {
 	prefix := "2001-01-02-030405"
 	for _, tst := range tests {
 		o := RunnerResults{
-			StartTime: startTime,
-			Labels:    tst.labels,
+			Stages: []StageResults{
+				{StartTime: startTime},
+			},
+			Labels: tst.labels,
 		}
 		id := o.ID()
 		expected := prefix + tst.id
@@ -262,9 +286,13 @@ func TestInfiniteDurationAndAbort(t *testing.T) {
 	var lock sync.Mutex
 	c := TestCount{&count, &lock}
 	o := RunnerOptions{
-		QPS:        10,
+		Stages: []WorkloadStage{
+			{
+				QPS:      10,
+				Duration: -1, // infinite but we'll abort after 1sec
+			},
+		},
 		NumThreads: 1,
-		Duration:   -1, // infinite but we'll abort after 1sec
 	}
 	r := NewPeriodicRunner(&o)
 	r.Options().MakeRunners(&c)
@@ -280,7 +308,7 @@ func TestInfiniteDurationAndAbort(t *testing.T) {
 	}
 	// Same with infinite qps
 	count = 0
-	o.QPS = -1 // infinite qps
+	o.Stages[0].QPS = -1 // infinite qps
 	r.Options().ReleaseRunners()
 	r = NewPeriodicRunner(&o)
 	r.Options().MakeRunners(&c)
@@ -303,9 +331,13 @@ func TestExactlyAndAbort(t *testing.T) {
 	var lock sync.Mutex
 	c := TestCount{&count, &lock}
 	o := RunnerOptions{
-		QPS:        10,
+		Stages: []WorkloadStage{
+			{
+				QPS:     10,
+				Exactly: 100, // would take 10s we'll abort after 1sec
+			},
+		},
 		NumThreads: 1,
-		Exactly:    100, // would take 10s we'll abort after 1sec
 	}
 	r := NewPeriodicRunner(&o)
 	r.Options().MakeRunners(&c)
@@ -320,8 +352,8 @@ func TestExactlyAndAbort(t *testing.T) {
 	if count < 9 || count > 13 {
 		t.Errorf("Test executed unexpected number of times %d instead of 9-13", count)
 	}
-	if !strings.Contains(res.RequestedDuration, "exactly 100 calls, interrupted after") {
-		t.Errorf("Got '%s' and didn't find expected aborted", res.RequestedDuration)
+	if !strings.Contains(res.Stages[0].RequestedDuration, "exactly 100 calls, interrupted after") {
+		t.Errorf("Got '%s' and didn't find expected aborted", res.Stages[0].RequestedDuration)
 	}
 }
 
@@ -330,9 +362,13 @@ func TestSleepFallingBehind(t *testing.T) {
 	var lock sync.Mutex
 	c := TestCount{&count, &lock}
 	o := RunnerOptions{
-		QPS:        1000000, // similar to max qps but with sleep falling behind
+		Stages: []WorkloadStage{
+			{
+				QPS:      1000000, // similar to max qps but with sleep falling behind
+				Duration: 140 * time.Millisecond,
+			},
+		},
 		NumThreads: 4,
-		Duration:   140 * time.Millisecond,
 	}
 	r := NewPeriodicRunner(&o)
 	r.Options().MakeRunners(&c)
@@ -341,7 +377,7 @@ func TestSleepFallingBehind(t *testing.T) {
 	r.Options().ReleaseRunners()
 	expected := int64(3 * 4) // can start 3 50ms in 140ms * 4 threads
 	// Check the count both from the histogram and from our own test counter:
-	actual := res.DurationHistogram.Count
+	actual := res.Stages[0].DurationHistogram.Count
 	if actual > expected+2 || actual < expected-2 {
 		t.Errorf("Extra high qps executed unexpected number of times %d instead %d", actual, expected)
 	}

@@ -447,7 +447,7 @@ func FetcherHandler(w http.ResponseWriter, r *http.Request) {
 	if client == nil {
 		return // error logged already
 	}
-	_, data, _ := client.Fetch()
+	_, data, _, _ := client.Fetch()
 	_, err = conn.Write(data)
 	if err != nil {
 		log.Errf("Error writing fetched data to %v: %v", r.RemoteAddr, err)

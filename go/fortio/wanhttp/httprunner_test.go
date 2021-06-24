@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"fortio.org/fortio/log"
+	"github.com/uluyol/heyp-agents/go/fortio/stagedperiodic"
 )
 
 func TestHTTPRunner(t *testing.T) {
@@ -34,7 +35,7 @@ func TestHTTPRunner(t *testing.T) {
 	baseURL := fmt.Sprintf("http://localhost:%d/", addr.Port)
 
 	opts := HTTPRunnerOptions{}
-	opts.QPS = 100
+	opts.Stages = []stagedperiodic.WorkloadStage{{QPS: 100}}
 	opts.URL = baseURL
 	opts.DisableFastClient = true
 	_, err := RunHTTPTest(&opts)
@@ -49,7 +50,7 @@ func TestHTTPRunner(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	totalReq := res.DurationHistogram.Count
+	totalReq := res.Stages[0].DurationHistogram.Count
 	httpOk := res.RetCodes[http.StatusOK]
 	if totalReq != httpOk {
 		t.Errorf("Mismatch between requests %d and ok %v", totalReq, res.RetCodes)
@@ -63,14 +64,14 @@ func TestHTTPRunner(t *testing.T) {
 	}
 	o1 := rawOpts
 	fc, _ := NewFastClient(&o1)
-	if r, _, _ := fc.Fetch(); r != http.StatusOK {
+	if r, _, _, _ := fc.Fetch(); r != http.StatusOK {
 		t.Errorf("Fast Client with raw option should still work with warning in logs")
 	}
 	o1 = rawOpts
 	o1.URL = "http://www.doesnotexist.badtld/"
 	c, _ := NewStdClient(&o1)
 	c.ChangeURL(rawOpts.URL)
-	if r, _, _ := c.Fetch(); r != http.StatusOK {
+	if r, _, _, _ := c.Fetch(); r != http.StatusOK {
 		t.Errorf("Std Client with raw option should still work with warning in logs")
 	}
 }
@@ -83,8 +84,12 @@ func testHTTPNotLeaking(t *testing.T, opts *HTTPRunnerOptions) {
 	url := fmt.Sprintf("http://localhost:%d/echo100", addr.Port)
 	numCalls := 100
 	opts.NumThreads = numCalls / 2 // make 2 calls per thread
-	opts.Exactly = int64(numCalls)
-	opts.QPS = float64(numCalls) / 2 // take 1 second
+	opts.Stages = []stagedperiodic.WorkloadStage{
+		{
+			Exactly: int64(numCalls),
+			QPS:     float64(numCalls) / 2, // take 1 second
+		},
+	}
 	opts.URL = url
 	// Warm up round 1
 	res, err := RunHTTPTest(opts)
@@ -93,7 +98,7 @@ func testHTTPNotLeaking(t *testing.T, opts *HTTPRunnerOptions) {
 		return
 	}
 	httpOk := res.RetCodes[http.StatusOK]
-	if opts.Exactly != httpOk {
+	if opts.Stages[0].Exactly != httpOk {
 		t.Errorf("Run1: Mismatch between requested calls %d and ok %v", numCalls, res.RetCodes)
 	}
 	ngBefore2 := runtime.NumGoroutine()
@@ -110,7 +115,7 @@ func testHTTPNotLeaking(t *testing.T, opts *HTTPRunnerOptions) {
 		return
 	}
 	httpOk = res.RetCodes[http.StatusOK]
-	if opts.Exactly != httpOk {
+	if opts.Stages[0].Exactly != httpOk {
 		t.Errorf("Run2: Mismatch between requested calls %d and ok %v", numCalls, res.RetCodes)
 	}
 	// allow for ~8 goroutine variance, as we use 50 if we leak it will show (was failing before #167)
@@ -140,7 +145,9 @@ func TestHTTPRunnerClientRace(t *testing.T) {
 
 	opts := HTTPRunnerOptions{}
 	opts.Init(URL)
-	opts.QPS = 100
+	opts.Stages = []stagedperiodic.WorkloadStage{
+		{QPS: 100},
+	}
 	opts2 := opts
 	go RunHTTPTest(&opts2)
 	res, err := RunHTTPTest(&opts)
@@ -148,7 +155,7 @@ func TestHTTPRunnerClientRace(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	totalReq := res.DurationHistogram.Count
+	totalReq := res.Stages[0].DurationHistogram.Count
 	httpOk := res.RetCodes[http.StatusOK]
 	if totalReq != httpOk {
 		t.Errorf("Mismatch between requests %d and ok %v", totalReq, res.RetCodes)
@@ -161,15 +168,19 @@ func TestClosingAndSocketCount(t *testing.T) {
 	URL := fmt.Sprintf("http://localhost:%d/echo42/?close=1", addr.Port)
 	opts := HTTPRunnerOptions{}
 	opts.Init(URL)
-	opts.QPS = 10
 	numReq := int64(50) // can't do too many without running out of fds on mac
-	opts.Exactly = numReq
+	opts.Stages = []stagedperiodic.WorkloadStage{
+		{
+			QPS:     10,
+			Exactly: numReq,
+		},
+	}
 	opts.NumThreads = 5
 	res, err := RunHTTPTest(&opts)
 	if err != nil {
 		t.Fatal(err)
 	}
-	totalReq := res.DurationHistogram.Count
+	totalReq := res.Stages[0].DurationHistogram.Count
 	if totalReq != numReq {
 		t.Errorf("Mismatch between requests %d and expected %d", totalReq, numReq)
 	}
@@ -189,7 +200,9 @@ func TestHTTPRunnerBadServer(t *testing.T) {
 	baseURL := fmt.Sprintf("http://localhost:%d/", addr.Port)
 
 	opts := HTTPRunnerOptions{}
-	opts.QPS = 10
+	opts.Stages = []stagedperiodic.WorkloadStage{
+		{QPS: 10},
+	}
 	opts.Init(baseURL)
 	_, err := RunHTTPTest(&opts)
 	if err == nil {
@@ -214,7 +227,7 @@ func TestServe(t *testing.T) {
 	o.AddAndValidateExtraHeader("X-Header: value1")
 	o.AddAndValidateExtraHeader("X-Header: value2")
 	c, _ := NewClient(o)
-	code, data, _ := c.Fetch()
+	code, data, _, _ := c.Fetch()
 	if code != http.StatusOK {
 		t.Errorf("Unexpected non 200 ret code for debug url %s : %d", url, code)
 	}
@@ -233,14 +246,15 @@ func TestAbortOn(t *testing.T) {
 	o := HTTPRunnerOptions{}
 	o.URL = baseURL
 	o.AbortOn = 404
-	o.Exactly = 40
 	o.NumThreads = 4
-	o.QPS = 10
+	o.Stages = []stagedperiodic.WorkloadStage{
+		{QPS: 10, Exactly: 40},
+	}
 	r, err := RunHTTPTest(&o)
 	if err != nil {
 		t.Errorf("Error while starting runner1: %v", err)
 	}
-	count := r.Result().DurationHistogram.Count
+	count := r.Result().Stages[0].DurationHistogram.Count
 	if count > int64(o.NumThreads) {
 		t.Errorf("Abort1 not working, did %d requests expecting ideally 1 and <= %d", count, o.NumThreads)
 	}
@@ -249,16 +263,16 @@ func TestAbortOn(t *testing.T) {
 	if err != nil {
 		t.Errorf("Error while starting runner2: %v", err)
 	}
-	count = r.Result().DurationHistogram.Count
-	if count != o.Exactly {
-		t.Errorf("Did %d requests when expecting all %d (non matching AbortOn)", count, o.Exactly)
+	count = r.Result().Stages[0].DurationHistogram.Count
+	if count != o.Stages[0].Exactly {
+		t.Errorf("Did %d requests when expecting all %d (non matching AbortOn)", count, o.Stages[0].Exactly)
 	}
 	o.AbortOn = 200
 	r, err = RunHTTPTest(&o)
 	if err != nil {
 		t.Errorf("Error while starting runner3: %v", err)
 	}
-	count = r.Result().DurationHistogram.Count
+	count = r.Result().Stages[0].DurationHistogram.Count
 	if count > int64(o.NumThreads) {
 		t.Errorf("Abort2 not working, did %d requests expecting ideally 1 and <= %d", count, o.NumThreads)
 	}

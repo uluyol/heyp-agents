@@ -25,7 +25,7 @@ import (
 
 	"fortio.org/fortio/log"
 	"fortio.org/fortio/stats"
-	periodic "github.com/uluyol/heyp-agents/go/fortio/stagedperiodic"
+	"github.com/uluyol/heyp-agents/go/fortio/stagedperiodic"
 )
 
 // Most of the code in this file is the library-fication of code originally
@@ -34,7 +34,7 @@ import (
 // HTTPRunnerResults is the aggregated result of an HTTPRunner.
 // Also is the internal type used per thread/goroutine.
 type HTTPRunnerResults struct {
-	periodic.RunnerResults
+	stagedperiodic.RunnerResults
 	client   Fetcher
 	RetCodes map[int]int64
 	// internal type/data
@@ -47,15 +47,14 @@ type HTTPRunnerResults struct {
 	SocketCount int
 	// http code to abort the run on (-1 for connection or other socket error)
 	AbortOn int
-	aborter *periodic.Aborter
+	aborter *stagedperiodic.Aborter
 }
 
 // Run tests http request fetching. Main call being run at the target QPS.
 // To be set as the Function in RunnerOptions.
 func (httpstate *HTTPRunnerResults) Run(t int) {
 	log.Debugf("Calling in %d", t)
-	code, body, headerSize := httpstate.client.Fetch()
-	size := len(body)
+	code, body, size, headerSize := httpstate.client.Fetch()
 	log.Debugf("Got in %3d hsz %d sz %d - will abort on %d", code, headerSize, size, httpstate.AbortOn)
 	httpstate.RetCodes[code]++
 	httpstate.sizes.Record(float64(size))
@@ -69,19 +68,29 @@ func (httpstate *HTTPRunnerResults) Run(t int) {
 // HTTPRunnerOptions includes the base RunnerOptions plus http specific
 // options.
 type HTTPRunnerOptions struct {
-	periodic.RunnerOptions
-	HTTPOptions               // Need to call Init() to initialize
+	stagedperiodic.RunnerOptions
+	HTTPOptions
+
 	Profiler           string // file to save profiles to. defaults to no profiling
 	AllowInitialErrors bool   // whether initial errors don't cause an abort
 	// Which status code cause an abort of the run (default 0 = don't abort; reminder -1 is returned for socket errors)
 	AbortOn int
 }
 
+func allStagesExactly(o *HTTPRunnerOptions) bool {
+	for _, s := range o.Stages {
+		if s.Exactly <= 0 {
+			return false
+		}
+	}
+	return true
+}
+
 // RunHTTPTest runs an http test and returns the aggregated stats.
 func RunHTTPTest(o *HTTPRunnerOptions) (*HTTPRunnerResults, error) {
 	o.RunType = "HTTP"
-	log.Infof("Starting http test for %s with %d threads at %.1f qps", o.URL, o.NumThreads, o.QPS)
-	r := periodic.NewPeriodicRunner(&o.RunnerOptions)
+	log.Infof("Starting http test for %s with %d threads", o.URL, o.NumThreads)
+	r := stagedperiodic.NewPeriodicRunner(&o.RunnerOptions)
 	defer r.Options().Abort()
 	numThreads := r.Options().NumThreads
 	o.HTTPOptions.Init(o.URL)
@@ -104,13 +113,13 @@ func RunHTTPTest(o *HTTPRunnerOptions) (*HTTPRunnerResults, error) {
 		if err != nil {
 			return nil, err
 		}
-		if o.Exactly <= 0 {
-			code, data, headerSize := httpstate[i].client.Fetch()
+		if !allStagesExactly(o) {
+			code, data, contentLen, headerSize := httpstate[i].client.Fetch()
 			if !o.AllowInitialErrors && !codeIsOK(code) {
 				return nil, fmt.Errorf("error %d for %s: %q", code, o.URL, string(data))
 			}
 			if i == 0 && log.LogVerbose() {
-				log.LogVf("first hit of url %s: status %03d, headers %d, total %d\n%s\n", o.URL, code, headerSize, len(data), data)
+				log.LogVf("first hit of url %s: status %03d, headers %d, total %d\n%s\n", o.URL, code, headerSize, contentLen, data)
 			}
 		}
 		// Setup the stats for each 'thread'
@@ -164,9 +173,11 @@ func RunHTTPTest(o *HTTPRunnerOptions) (*HTTPRunnerResults, error) {
 	// Cleanup state:
 	r.Options().ReleaseRunners()
 	sort.Ints(keys)
-	totalCount := float64(total.DurationHistogram.Count)
+	var totalCount float64
+	for _, s := range total.Stages {
+		totalCount += float64(s.DurationHistogram.Count)
+	}
 	_, _ = fmt.Fprintf(out, "Sockets used: %d (for perfect keepalive, would be %d)\n", total.SocketCount, r.Options().NumThreads)
-	_, _ = fmt.Fprintf(out, "Jitter: %t\n", total.Jitter)
 	for _, k := range keys {
 		_, _ = fmt.Fprintf(out, "Code %3d : %d (%.1f %%)\n", k, total.RetCodes[k], 100.*float64(total.RetCodes[k])/totalCount)
 	}
