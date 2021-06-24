@@ -33,3 +33,42 @@ message TestLopriClientConfig {
   optional int32 num_conns = 2 [default = 20];
   repeated WorkloadStage workload_stages = 3;
 }
+
+message FortioClientConfig {
+  message SizeAndWeight {
+    optional int32 resp_size_bytes = 1;
+    optional int32 weight = 2;  // should add up to 100
+  }
+
+  message DelayAndWeight {
+    optional string delay_dur = 1;  // durations
+    optional int32 weight = 2;      // should app up to 100
+  }
+
+  message WorkloadStage {
+    optional double target_average_bps = 1;
+    optional string run_dur = 2 [default = "30s"];
+  }
+
+  message HttpOptions {
+    optional bool use_fast_client = 1 [default = true];
+    optional bool use_keep_alive = 2 [default = true];
+    optional bool allow_half_close = 3 [default = false];
+    optional bool compression_on = 4 [default = false];
+    optional string req_timeout_dur = 5 [default = "3s"];
+    optional bool allow_insecure_tls = 6 [default = false];
+    optional string content_type = 7 [default = ""];
+    optional string payload = 8;
+    optional bool follow_redirects = 9
+        [default = false];  // incompatible with use_fast_client
+  }
+
+  optional int32 num_conns = 1 [default = 20];
+  repeated WorkloadStage workload_stages = 2;
+  repeated SizeAndWeight size_dist = 3;
+  repeated DelayAndWeight delay_dist = 4;
+
+  optional bool jitter_on = 10 [default = true];
+  optional double dur_resolution_sec = 11 [default = 0.001];  // default ms resolution
+  optional HttpOptions http_options = 12;
+}

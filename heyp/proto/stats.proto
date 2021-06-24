@@ -11,8 +11,8 @@ message HdrHistogram {
     int32 significant_figures = 3;
   }
   message Bucket {
-    int64 v = 1; // value
-    int64 c = 2; // count
+    int64 v = 1;  // value
+    int64 c = 2;  // count
   }
   Config config = 1;
   repeated Bucket buckets = 2;
@@ -31,7 +31,7 @@ message StatsRecord {
   }
 
   string label = 1;
-  string timestamp = 2; // ISO 8601
+  string timestamp = 2;  // ISO 8601
   double dur_sec = 3;
 
   // cumulative stats

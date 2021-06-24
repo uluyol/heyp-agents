@@ -44,6 +44,23 @@ message DeployedTestLopriInstance {
   optional int32 num_server_shards = 5 [default = 1];
 }
 
+message DeployedFortioInstance {
+  // Node roles:
+  // fortio-[group]-[name]-server
+  // fortio-[group]-[name]-client
+  // fortio-[group]-envoy-proxy
+  optional string group = 1;
+  optional string name = 2;
+  optional int32 serve_port = 3;
+  optional FortioClientConfig client = 4;
+}
+
+message DeployedFortioGroup {
+  optional string name = 1;
+  optional int32 envoy_port = 2;
+  optional int32 envoy_admin_port = 3;
+}
+
 message DeploymentConfig {
   repeated DeployedNode nodes = 1;
   repeated DeployedCluster clusters = 2;
@@ -58,5 +75,8 @@ message DeploymentConfig {
   // - host_agent_template.dc_mapper
   optional HostAgentConfig host_agent_template = 11;
 
+  // Workloads to run (all are run in parallel).
   repeated DeployedTestLopriInstance testlopri_instances = 12;
+  repeated DeployedFortioGroup fortio_groups = 13;
+  repeated DeployedFortioInstance fortio_instances = 14;
 }

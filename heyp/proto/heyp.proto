@@ -6,7 +6,11 @@ option go_package = "github.com/uluyol/heyp-agents/go/proto";
 
 import "google/protobuf/timestamp.proto";
 
-enum Protocol { UNSET = 0; TCP = 1; UDP = 2; }
+enum Protocol {
+  UNSET = 0;
+  TCP = 1;
+  UDP = 2;
+}
 
 message FlowMarker {
   string src_dc = 1;
@@ -52,7 +56,9 @@ message FlowAlloc {
   int64 lopri_rate_limit_bps = 3;
 }
 
-message AllocBundle { repeated FlowAlloc flow_allocs = 1; }
+message AllocBundle {
+  repeated FlowAlloc flow_allocs = 1;
+}
 
 message DebugAllocRecord {
   string timestamp = 1;
@@ -61,5 +67,5 @@ message DebugAllocRecord {
 }
 
 service ClusterAgent {
-  rpc RegisterHost(stream InfoBundle) returns(stream AllocBundle) {}
+  rpc RegisterHost(stream InfoBundle) returns (stream AllocBundle) {}
 }
