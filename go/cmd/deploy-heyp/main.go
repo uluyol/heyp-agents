@@ -44,6 +44,8 @@ func (c *mkBundleCmd) Execute(ctx context.Context, fs *flag.FlagSet,
 type configureSysCmd struct {
 	configPath        string
 	congestionControl string
+	minPort           int
+	maxPort           int
 }
 
 func (*configureSysCmd) Name() string     { return "config-sys" }
@@ -53,11 +55,13 @@ func (*configureSysCmd) Usage() string    { return "" }
 func (c *configureSysCmd) SetFlags(fs *flag.FlagSet) {
 	configVar(&c.configPath, fs)
 	fs.StringVar(&c.congestionControl, "cc", "bbr", "congestion control to use (leave empty to for OS default)")
+	fs.IntVar(&c.minPort, "portmin", 1050, "minimum port number available for ephemeral use")
+	fs.IntVar(&c.maxPort, "portmax", 65535, "maximum port number available for ephemeral use")
 }
 
 func (c *configureSysCmd) Execute(ctx context.Context, fs *flag.FlagSet,
 	args ...interface{}) subcommands.ExitStatus {
-	err := actions.ConfigureSys(parseConfig(c.configPath), c.congestionControl)
+	err := actions.ConfigureSys(parseConfig(c.configPath), c.congestionControl, c.minPort, c.maxPort)
 	if err != nil {
 		log.Fatal(err)
 	}

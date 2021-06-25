@@ -513,7 +513,7 @@ func FortioStartServers(c *pb.DeploymentConfig, remoteTopdir string) error {
 					fmt.Sprintf(
 						"tar xf - -C %[1]s/configs;"+
 							"tmux kill-session -t fortio-%[2]s-proxy;"+
-							"tmux new-session -d -s fortio-%[2]s-proxy '%[1]s/aux/envoy --config-path %[1]s/configs/fortio-envoy-config-%[2]s.yaml 2>&1 | tee %[1]s/logs/fortio-%[2]s-proxy.log; sleep 100000'", remoteTopdir, group.config.GetName()))
+							"tmux new-session -d -s fortio-%[2]s-proxy 'ulimit -Sn unlimited; %[1]s/aux/envoy --config-path %[1]s/configs/fortio-envoy-config-%[2]s.yaml 2>&1 | tee %[1]s/logs/fortio-%[2]s-proxy.log; sleep 100000'", remoteTopdir, group.config.GetName()))
 				cmd.SetStdin("config.tar", bytes.NewReader(configTar))
 				err := cmd.Run()
 				if err != nil {
@@ -639,22 +639,27 @@ func FortioRunClients(c *pb.DeploymentConfig, remoteTopdir string, showOut bool)
 	return eg.Wait()
 }
 
-func ConfigureSys(c *pb.DeploymentConfig, congestionControl string) error {
+func ConfigureSys(c *pb.DeploymentConfig, congestionControl string, minPort, maxPort int) error {
 	var eg multierrgroup.Group
 	for _, n := range c.Nodes {
 		n := n
 		eg.Go(func() error {
+			sysctlLines := []string{
+				fmt.Sprintf("net.ipv4.ip_local_port_range=%d %d",
+					minPort, maxPort),
+			}
 			if congestionControl != "" {
-				cmd := TracingCommand(
-					LogWithPrefix("config-sys: "),
-					"ssh", n.GetExternalAddr(),
-					"sudo tee /etc/sysctl.conf && sudo sysctl -p",
-				)
-				sysctlLine := "net.ipv4.tcp_congestion_control=" + congestionControl + "\n"
-				cmd.SetStdin("congestionControlConfig ", strings.NewReader(sysctlLine))
-				if err := cmd.Run(); err != nil {
-					return fmt.Errorf("failed to setup congestion control: %w", err)
-				}
+				sysctlLines = append(sysctlLines, "net.ipv4.tcp_congestion_control="+congestionControl)
+			}
+			cmd := TracingCommand(
+				LogWithPrefix("config-sys: "),
+				"ssh", n.GetExternalAddr(),
+				"sudo tee -a /etc/sysctl.conf && sudo sysctl -p",
+			)
+			sysctlBuf := strings.Join(sysctlLines, "\n") + "\n"
+			cmd.SetStdin("sysctl-tail.conf", strings.NewReader(sysctlBuf))
+			if err := cmd.Run(); err != nil {
+				return fmt.Errorf("failed to update sysctls: %w", err)
 			}
 			return nil
 		})
