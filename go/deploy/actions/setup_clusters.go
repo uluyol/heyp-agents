@@ -452,20 +452,37 @@ func getAndValidateFortioGroups(c *pb.DeploymentConfig) (map[string]*fortioGroup
 			switch {
 			case strings.HasSuffix(role, "-envoy-proxy"):
 				g := strings.TrimSuffix(role, "-envoy-proxy")
+				if groups[g] == nil {
+					return nil, fmt.Errorf("role %q matches non-existent fortio group %q", origRole, g)
+				}
 				groups[g].proxies = append(groups[g].proxies, n)
 			case strings.HasSuffix(role, "-server"):
 				fields := strings.Split(strings.TrimSuffix(role, "-server"), "-")
 				if len(fields) != 2 {
 					return nil, fmt.Errorf("invalid fortio server %q, did not find group/instance fields", origRole)
 				}
-				inst := groups[fields[0]].instances[fields[1]]
+				g := groups[fields[0]]
+				if g == nil {
+					return nil, fmt.Errorf("role %q matches non-existent fortio group %q", origRole, fields[0])
+				}
+				inst := g.instances[fields[1]]
+				if inst == nil {
+					return nil, fmt.Errorf("role %q matches a non-existent fortio instance %q", origRole, fields[1])
+				}
 				inst.servers = append(inst.servers, n)
 			case strings.HasSuffix(role, "-client"):
 				fields := strings.Split(strings.TrimSuffix(role, "-client"), "-")
 				if len(fields) != 2 {
 					return nil, fmt.Errorf("invalid fortio client %q, did not find group/instance fields", origRole)
 				}
-				inst := groups[fields[0]].instances[fields[1]]
+				g := groups[fields[0]]
+				if g == nil {
+					return nil, fmt.Errorf("role %q matches non-existent fortio group %q", origRole, fields[0])
+				}
+				inst := g.instances[fields[1]]
+				if inst == nil {
+					return nil, fmt.Errorf("role %q matches a non-existent fortio instance %q", origRole, fields[1])
+				}
 				inst.clients = append(inst.clients, n)
 			default:
 				return nil, fmt.Errorf("invalid fortio role %q", origRole)
