@@ -99,7 +99,7 @@ func (w *XZWriter) Add(input Input) {
 
 	w.w.WriteHeader(&tar.Header{
 		Name: input.Dest,
-		Mode: 0644,
+		Mode: int64(fi.Mode()),
 		Size: fi.Size(),
 	})
 
