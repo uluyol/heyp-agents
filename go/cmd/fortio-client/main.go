@@ -31,8 +31,9 @@ var (
 	configFlag = flag.String("c", "", "path to config file")
 	labelsFlag = flag.String("labels", "",
 		"Additional config data/labels to add to the resulting JSON, defaults to target URL and hostname")
-	outFlag     = flag.String("out", "data.log", "file to output stats to")
-	summaryFlag = flag.String("summary", "summary.json", "file to write results summary to")
+	outFlag       = flag.String("out", "data.log", "file to output stats to")
+	summaryFlag   = flag.String("summary", "summary.json", "file to write results summary to")
+	startTimeFlag = flag.String("start_time", time.Now().Add(3*time.Second).Format(time.RFC3339Nano), "time to start run")
 )
 
 func meanBitsPerReq(sizeDist []*proto.FortioClientConfig_SizeAndWeight) float64 {
@@ -130,7 +131,7 @@ func toHTTPOptions(addr string, c *proto.FortioClientConfig) (wanhttp.HTTPOption
 	return opts, nil
 }
 
-func workerMain(shardIndex, numShards int, config *proto.FortioClientConfig) {
+func workerMain(shardIndex, numShards int, config *proto.FortioClientConfig, startTime time.Time) {
 	*log.LogPrefix = fmt.Sprintf("> [shard %d] ", shardIndex)
 
 	for _, s := range config.GetWorkloadStages() {
@@ -140,7 +141,7 @@ func workerMain(shardIndex, numShards int, config *proto.FortioClientConfig) {
 
 	stages, err := convertStages(config.GetWorkloadStages(), meanBitsPerReq(config.GetSizeDist()))
 	if err != nil {
-		log.Fatalf("failed to conver stages: %v", err)
+		log.Fatalf("failed to convert stages: %v", err)
 	}
 
 	f, err := os.Create(*outFlag + "." + strconv.Itoa(shardIndex))
@@ -156,6 +157,7 @@ func workerMain(shardIndex, numShards int, config *proto.FortioClientConfig) {
 		Labels:     "",
 		Jitter:     config.GetJitterOn(),
 		Stages:     stages,
+		StartTime:  &startTime,
 	}
 
 	addrs := strings.Split(*addrsFlag, ",")
@@ -204,6 +206,11 @@ func main() {
 		log.Fatalf("must populate -addrs flag")
 	}
 
+	startTime, err := time.Parse(time.RFC3339Nano, *startTimeFlag)
+	if err != nil {
+		log.Fatalf("failed to parse start time; must be ISO 8601: %v", err)
+	}
+
 	configData, err := ioutil.ReadFile(*configFlag)
 	if err != nil {
 		log.Fatalf("failed to read in config: %v", err)
@@ -214,14 +221,14 @@ func main() {
 	}
 
 	if config.GetNumShards() < 2 {
-		workerMain(0, 1, config)
+		workerMain(0, 1, config, startTime)
 	} else {
 		if wiStr := os.Getenv("FORTIO_CLIENT_WORKER_INDEX"); wiStr != "" {
 			index, err := strconv.Atoi(wiStr)
 			if err != nil {
 				log.Fatalf("internal error: bad index %d", index)
 			}
-			workerMain(index, int(config.GetNumShards()), config)
+			workerMain(index, int(config.GetNumShards()), config, startTime)
 			return
 		}
 

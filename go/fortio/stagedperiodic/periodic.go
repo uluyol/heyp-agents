@@ -145,7 +145,8 @@ type RunnerOptions struct {
 	// requests very close to one another, causing a thundering herd problem
 	// Enabling jitter (+/-10%) allows these requests to be de-synchronized
 	// When enabled, it is only effective in the '-qps' mode
-	Jitter bool
+	Jitter    bool
+	StartTime *time.Time // optional, will until until start time before starting run
 
 	Stages []WorkloadStage
 }
@@ -488,6 +489,14 @@ func (r *periodicRunner) Run() RunnerResults {
 	if r.NumThreads > runnersLen {
 		r.MakeRunners(r.Runners[0])
 		log.Warnf("Context array was of %d len, replacing with %d clone of first one", runnersLen, len(r.Runners))
+	}
+	if r.StartTime != nil {
+		if time.Now().After(*r.StartTime) {
+			log.Fatalf("took too long to set up, passed scheduled start time %s", *r.StartTime)
+		}
+		timeout := time.Until(*r.StartTime)
+		log.Infof("will wait for %s to issue requests", timeout.String())
+		time.Sleep(timeout)
 	}
 	r.Recorder.StartRecording()
 	c := &stepCounter{dur: time.Second, next: time.Now().Add(time.Second)}
