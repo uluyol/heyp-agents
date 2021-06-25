@@ -13,8 +13,11 @@ func TestEnvoyReverseProxy(t *testing.T) {
 		AdminPort: 112,
 		Backends: []Backend{
 			{
-				Name:     "AB",
-				LBPolicy: "ROUND_ROBIN",
+				Name:               "AB",
+				LBPolicy:           "ROUND_ROBIN",
+				MaxConnections:     2,
+				MaxPendingRequests: 1234,
+				MaxRequests:        421,
 				Remotes: []AddrAndPort{
 					{"1.1.1.1", 7777},
 					{"2.2.2.2", 12},
@@ -104,6 +107,16 @@ func TestEnvoyReverseProxy(t *testing.T) {
               socket_address:
                 address: 2.2.2.2
                 port_value: 12
+    circuit_breakers:
+      thresholds:
+      - priority: DEFAULT
+        max_connections: 2
+        max_pending_requests: 1234
+        max_requests: 421
+      - priority: HIGH
+        max_connections: 2
+        max_pending_requests: 1234
+        max_requests: 421
   - name: "backend-2"
     type: STATIC
     connect_timeout: 5s
@@ -122,6 +135,16 @@ func TestEnvoyReverseProxy(t *testing.T) {
               socket_address:
                 address: 10.0.0.2
                 port_value: 88
+    circuit_breakers:
+      thresholds:
+      - priority: DEFAULT
+        max_connections: 0
+        max_pending_requests: 0
+        max_requests: 0
+      - priority: HIGH
+        max_connections: 0
+        max_pending_requests: 0
+        max_requests: 0
 
 admin:
   address:
@@ -152,8 +175,11 @@ layered_runtime:
 				},
 			},
 			{
-				Name:     "ZzZ",
-				LBPolicy: "LEAST_REQUEST",
+				Name:               "ZzZ",
+				LBPolicy:           "LEAST_REQUEST",
+				MaxConnections:     2000,
+				MaxPendingRequests: 134,
+				MaxRequests:        42,
 				Remotes: []AddrAndPort{
 					{"127.0.0.1", 123},
 					{"10.0.0.2", 88},
@@ -235,6 +261,16 @@ layered_runtime:
               socket_address:
                 address: 2.2.2.2
                 port_value: 12
+    circuit_breakers:
+      thresholds:
+      - priority: DEFAULT
+        max_connections: 0
+        max_pending_requests: 0
+        max_requests: 0
+      - priority: HIGH
+        max_connections: 0
+        max_pending_requests: 0
+        max_requests: 0
   - name: "ZzZ"
     type: STATIC
     connect_timeout: 5s
@@ -253,6 +289,16 @@ layered_runtime:
               socket_address:
                 address: 10.0.0.2
                 port_value: 88
+    circuit_breakers:
+      thresholds:
+      - priority: DEFAULT
+        max_connections: 2000
+        max_pending_requests: 134
+        max_requests: 42
+      - priority: HIGH
+        max_connections: 2000
+        max_pending_requests: 134
+        max_requests: 42
 
 admin:
   address:

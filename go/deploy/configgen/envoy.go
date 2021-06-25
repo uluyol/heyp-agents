@@ -13,9 +13,12 @@ type EnvoyReverseProxy struct {
 }
 
 type Backend struct {
-	Name     string
-	LBPolicy string // e.g. ROUND_ROBIN
-	Remotes  []AddrAndPort
+	Name               string
+	LBPolicy           string // e.g. ROUND_ROBIN
+	MaxConnections     int
+	MaxPendingRequests int
+	MaxRequests        int
+	Remotes            []AddrAndPort
 }
 
 type AddrAndPort struct {
@@ -91,7 +94,17 @@ static_resources:
               socket_address:
                 address: {{.Addr}}
                 port_value: {{.Port}}
-{{- end -}}
+{{- end}}
+    circuit_breakers:
+      thresholds:
+      - priority: DEFAULT
+        max_connections: {{.MaxConnections}}
+        max_pending_requests: {{.MaxPendingRequests}}
+        max_requests: {{.MaxRequests}}
+      - priority: HIGH
+        max_connections: {{.MaxConnections}}
+        max_pending_requests: {{.MaxPendingRequests}}
+        max_requests: {{.MaxRequests}}
 {{- end }}
 
 admin:

@@ -408,9 +408,12 @@ func (g *fortioGroup) GetEnvoyYAML() string {
 	}
 	for _, inst := range g.instances {
 		be := configgen.Backend{
-			Name:     inst.config.GetName(),
-			LBPolicy: inst.config.GetLbPolicy(),
-			Remotes:  make([]configgen.AddrAndPort, len(inst.servers)),
+			Name:               inst.config.GetName(),
+			LBPolicy:           inst.config.GetLbPolicy(),
+			MaxConnections:     int(inst.config.GetMaxConnections()),
+			MaxPendingRequests: int(inst.config.GetMaxPendingRequests()),
+			MaxRequests:        int(inst.config.GetMaxRequests()),
+			Remotes:            make([]configgen.AddrAndPort, len(inst.servers)),
 		}
 		for i, s := range inst.servers {
 			be.Remotes[i].Addr = s.GetExperimentAddr()
@@ -546,7 +549,7 @@ func FortioStartServers(c *pb.DeploymentConfig, remoteTopdir string) error {
 			inst := inst
 			maxPayload := 102400
 			for _, sd := range inst.config.GetClient().GetSizeDist() {
-				if int(sd.GetRespSizeBytes())/1024 > maxPayload {
+				if int(sd.GetRespSizeBytes()) > maxPayload {
 					maxPayload = int(sd.GetRespSizeBytes())
 				}
 			}
@@ -564,7 +567,7 @@ func FortioStartServers(c *pb.DeploymentConfig, remoteTopdir string) error {
 						"ssh", server.GetExternalAddr(),
 						fmt.Sprintf(
 							"tmux kill-session -t fortio-%[2]s-%[3]s-server;"+
-								"tmux new-session -d -s fortio-%[2]s-%[3]s-server '%[1]s/aux/fortio server -http-port %[4]d -maxpayloadsizekb %[5]d 2>&1 | tee %[1]s/logs/fortio-%[2]s-%[3]s-server.log; sleep 100000'",
+								"tmux new-session -d -s fortio-%[2]s-%[3]s-server 'ulimit -Sn unlimited; %[1]s/aux/fortio server -http-port %[4]d -maxpayloadsizekb %[5]d 2>&1 | tee %[1]s/logs/fortio-%[2]s-%[3]s-server.log; sleep 100000'",
 							remoteTopdir, inst.config.GetGroup(), inst.config.GetName(), inst.config.GetServePort(), maxPayload))
 					err := cmd.Run()
 					if err != nil {

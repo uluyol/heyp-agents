@@ -56,7 +56,10 @@ message DeployedFortioInstance {
   optional string name = 2;
   optional int32 serve_port = 3 [default = 9911];
   optional string lb_policy = 4 [default = "ROUND_ROBIN"];
-  optional FortioClientConfig client = 5;
+  optional int32 max_connections = 5 [default = 100000];
+  optional int32 max_pending_requests = 6 [default = 1000000];
+  optional int32 max_requests = 7 [default = 5000000];
+  optional FortioClientConfig client = 8;
 }
 
 message DeployedFortioGroup {
