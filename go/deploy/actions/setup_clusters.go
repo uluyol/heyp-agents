@@ -719,6 +719,7 @@ func FetchData(c *pb.DeploymentConfig, remoteTopdir, outdirPath string) error {
 			if err != nil {
 				return fmt.Errorf("failed to create stdout pipe: %w", err)
 			}
+			cmd.Stderr = os.Stderr
 			unTarCmd := TracingCommand(
 				LogWithPrefix("fetch-data: "),
 				"tar", "xJf", "-")
