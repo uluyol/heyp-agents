@@ -29,7 +29,8 @@ import (
 
 type Noop struct{}
 
-func (n *Noop) Run(t int) {
+func (n *Noop) Run(t int) RunRet {
+	return RunRet{}
 }
 
 // used for when we don't actually run periodic test/want to initialize
@@ -79,11 +80,12 @@ type TestCount struct {
 	lock  *sync.Mutex
 }
 
-func (c *TestCount) Run(i int) {
+func (c *TestCount) Run(i int) RunRet {
 	c.lock.Lock()
 	(*c.count)++
 	c.lock.Unlock()
 	time.Sleep(50 * time.Millisecond)
+	return RunRet{}
 }
 
 func TestStart(t *testing.T) {

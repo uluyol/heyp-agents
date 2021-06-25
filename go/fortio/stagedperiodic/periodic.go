@@ -31,12 +31,14 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"strconv"
 	"sync"
 	"time"
 
 	"fortio.org/fortio/log"
 	"fortio.org/fortio/stats"
 	"fortio.org/fortio/version"
+	heypstats "github.com/uluyol/heyp-agents/go/stats"
 )
 
 // DefaultRunnerOptions are the default values for options (do not mutate!).
@@ -54,9 +56,13 @@ var DefaultRunnerOptions = RunnerOptions{
 	Resolution: 0.001, // milliseconds
 }
 
+type RunRet struct {
+	ByteSize int
+}
+
 // Runnable are the function to run periodically.
 type Runnable interface {
-	Run(tid int)
+	Run(tid int) RunRet
 }
 
 // MakeRunners creates an array of NumThreads identical Runnable instances
@@ -126,7 +132,8 @@ type RunnerOptions struct {
 	NumThreads int
 	Resolution float64
 	// Where to write the textual version of the results, defaults to stdout
-	Out io.Writer
+	Out      io.Writer
+	Recorder *heypstats.Recorder
 	// Extra data to be copied back to the results (to be saved/JSON serialized)
 	Labels string
 	// Aborter to interrupt a run. Will be created if not set/left nil. Or you
@@ -149,7 +156,6 @@ type StageResults struct {
 	RequestedDuration string // String version of the requested duration or exact count
 	ActualQPS         float64
 	ActualDuration    time.Duration
-	DurationHistogram *stats.HistogramData
 	Exactly           int64 // Echo back the requested count
 	Jitter            bool
 }
@@ -413,6 +419,29 @@ func (r *periodicRunner) runNoQPSSetup(stage int) (requestedDuration string, num
 	return
 }
 
+type stepCounter struct {
+	dur time.Duration
+
+	mu   sync.Mutex
+	next time.Time
+	step int
+}
+
+func (c *stepCounter) maybeAdvance(now time.Time, r *heypstats.Recorder) time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if now.After(c.next) {
+		log.Infof("gathering stats for step %d", c.step)
+		r.DoneStep("step=" + strconv.Itoa(c.step))
+		c.step++
+		c.next = c.next.Add(c.dur)
+	} else {
+		log.Infof("waiting until %s, at %s", c.next, now)
+	}
+	return c.next
+}
+
 // Run starts the runner.
 func (r *periodicRunner) Run() RunnerResults {
 	r.Stop.Lock()
@@ -429,13 +458,11 @@ func (r *periodicRunner) Run() RunnerResults {
 		useQPS            bool
 
 		// results
-		start            time.Time
-		elapsed          time.Duration
-		functionDuration *stats.Histogram
-		sleepTime        *stats.Histogram
-
-		fDs []*stats.Histogram
-		sDs []*stats.Histogram
+		start     time.Time
+		elapsed   time.Duration
+		sleepTime *stats.Histogram
+		numRPCs   int64
+		sDs       []*stats.Histogram
 	}
 
 	stages := make([]stageState, len(r.Stages))
@@ -462,22 +489,21 @@ func (r *periodicRunner) Run() RunnerResults {
 		r.MakeRunners(r.Runners[0])
 		log.Warnf("Context array was of %d len, replacing with %d clone of first one", runnersLen, len(r.Runners))
 	}
+	r.Recorder.StartRecording()
+	c := &stepCounter{dur: time.Second, next: time.Now().Add(time.Second)}
+	var lastCumNumRPCs int64
 	for stageIdx := range stages {
 		s := &stages[stageIdx]
 		s.start = time.Now()
-		// Histogram  and stats for Function duration - millisecond precision
-		s.functionDuration = stats.NewHistogram(0, r.Resolution)
 		// Histogram and stats for Sleep time (negative offset to capture <0 sleep in their own bucket):
 		s.sleepTime = stats.NewHistogram(-0.001, 0.001)
 		if r.NumThreads <= 1 {
 			log.LogVf("Running single threaded")
-			runOne(0, runnerChan, s.functionDuration, s.sleepTime, s.numCalls+s.leftOver, s.start, r, stageIdx)
+			runOne(0, runnerChan, s.sleepTime, s.numCalls+s.leftOver, s.start, r, c, stageIdx)
 		} else {
 			var wg sync.WaitGroup
 			for t := 0; t < r.NumThreads; t++ {
-				durP := s.functionDuration.Clone()
 				sleepP := s.sleepTime.Clone()
-				s.fDs = append(s.fDs, durP)
 				s.sDs = append(s.sDs, sleepP)
 				wg.Add(1)
 				thisNumCalls := s.numCalls
@@ -485,14 +511,18 @@ func (r *periodicRunner) Run() RunnerResults {
 					// The first thread gets to do the additional work
 					thisNumCalls += s.leftOver
 				}
-				go func(t int, durP *stats.Histogram, sleepP *stats.Histogram) {
-					runOne(t, runnerChan, durP, sleepP, thisNumCalls, s.start, r, stageIdx)
+				go func(t int, sleepP *stats.Histogram) {
+					runOne(t, runnerChan, sleepP, thisNumCalls, s.start, r, c, stageIdx)
 					wg.Done()
-				}(t, durP, sleepP)
+				}(t, sleepP)
 			}
 			wg.Wait()
 		}
 		s.elapsed = time.Since(s.start)
+		t := r.Recorder.GetCumNumRPCs()
+		s.numRPCs = t - lastCumNumRPCs
+		lastCumNumRPCs = t
+		log.Infof("finished workload stage = %d", stageIdx)
 	}
 
 	results := RunnerResults{
@@ -506,13 +536,12 @@ func (r *periodicRunner) Run() RunnerResults {
 
 		if r.NumThreads > 1 {
 			for t := 0; t < r.NumThreads; t++ {
-				s.functionDuration.Transfer(s.fDs[t])
 				s.sleepTime.Transfer(s.sDs[t])
 			}
 		}
-		actualQPS := float64(s.functionDuration.Count) / s.elapsed.Seconds()
+		actualQPS := float64(s.numRPCs) / s.elapsed.Seconds()
 		if log.Log(log.Warning) {
-			_, _ = fmt.Fprintf(r.Out, "Ended after %v : %d calls. qps=%.5g\n", s.elapsed, s.functionDuration.Count, actualQPS)
+			_, _ = fmt.Fprintf(r.Out, "Ended after %v : %d calls. qps=%.5g\n", s.elapsed, s.numRPCs, actualQPS)
 		}
 		if s.useQPS { // nolint: nestif
 			percentNegative := 100. * float64(s.sleepTime.Hdata[0]) / float64(s.sleepTime.Count)
@@ -530,7 +559,7 @@ func (r *periodicRunner) Run() RunnerResults {
 				}
 			}
 		}
-		actualCount := s.functionDuration.Count
+		actualCount := s.numRPCs
 		if s.useExactly && actualCount != r.Stages[stage].Exactly {
 			s.requestedDuration += fmt.Sprintf(", interrupted after %d", actualCount)
 		}
@@ -540,19 +569,14 @@ func (r *periodicRunner) Run() RunnerResults {
 			RequestedDuration: s.requestedDuration,
 			ActualQPS:         actualQPS,
 			ActualDuration:    s.elapsed,
-			DurationHistogram: s.functionDuration.Export(),
 			Exactly:           r.Stages[stage].Exactly,
 			Jitter:            r.Jitter,
 		}
-		if log.Log(log.Warning) {
-			result.DurationHistogram.Print(r.Out, "Aggregated Function Time")
-		} else {
-			s.functionDuration.Counter.Print(r.Out, "Aggregated Function Time")
-			for _, p := range result.DurationHistogram.Percentiles {
-				_, _ = fmt.Fprintf(r.Out, "# target %g%% %.6g\n", p.Percentile, p.Value)
-			}
-		}
 		results.Stages = append(results.Stages, result)
+	}
+
+	if err := r.Recorder.Close(); err != nil {
+		log.Warnf("error when recording stats: %v", err)
 	}
 
 	select {
@@ -569,7 +593,7 @@ func (r *periodicRunner) Run() RunnerResults {
 // runOne runs in 1 go routine (or main one when -c 1 == single threaded mode).
 // nolint: gocognit // we should try to simplify it though.
 func runOne(id int, runnerChan chan struct{},
-	funcTimes *stats.Histogram, sleepTimes *stats.Histogram, numCalls int64, start time.Time, r *periodicRunner, stage int) {
+	sleepTimes *stats.Histogram, numCalls int64, start time.Time, r *periodicRunner, sc *stepCounter, stage int) {
 	s := &r.Stages[stage]
 	var i int64
 	endTime := start.Add(s.Duration)
@@ -580,9 +604,17 @@ func runOne(id int, runnerChan chan struct{},
 	useExactly := (s.Exactly > 0)
 	f := r.Runners[id]
 
+	possibleAdvance := start
+
 MainLoop:
 	for {
 		fStart := time.Now()
+		if fStart.After(possibleAdvance) {
+			old := possibleAdvance
+			possibleAdvance = sc.maybeAdvance(fStart, r.Recorder)
+			log.Infof("advance point %s -> %s", old, possibleAdvance)
+		}
+
 		if !useExactly && (hasDuration && fStart.After(endTime)) {
 			if !useQPS {
 				// max speed test reached end:
@@ -595,8 +627,8 @@ MainLoop:
 				break
 			}
 		}
-		f.Run(id)
-		funcTimes.Record(time.Since(fStart).Seconds())
+		got := f.Run(id)
+		r.Recorder.RecordRPC1(got.ByteSize, "net", time.Since(fStart))
 		i++
 		// if using QPS / pre calc expected call # mode:
 		if useQPS { // nolint: nestif
@@ -642,7 +674,6 @@ MainLoop:
 	actualQPS := float64(i) / elapsed.Seconds()
 	log.Infof("%s ended after %v : %d calls. qps=%g", tIDStr, elapsed, i, actualQPS)
 	if (numCalls > 0) && log.Log(log.Verbose) {
-		funcTimes.Log(tIDStr+" Function duration", []float64{99})
 		if log.Log(log.Debug) {
 			sleepTimes.Log(tIDStr+" Sleep time", []float64{50})
 		} else {

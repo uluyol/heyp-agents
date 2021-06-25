@@ -52,7 +52,7 @@ type HTTPRunnerResults struct {
 
 // Run tests http request fetching. Main call being run at the target QPS.
 // To be set as the Function in RunnerOptions.
-func (httpstate *HTTPRunnerResults) Run(t int) {
+func (httpstate *HTTPRunnerResults) Run(t int) stagedperiodic.RunRet {
 	log.Debugf("Calling in %d", t)
 	code, body, size, headerSize := httpstate.client.Fetch()
 	log.Debugf("Got in %3d hsz %d sz %d - will abort on %d", code, headerSize, size, httpstate.AbortOn)
@@ -62,6 +62,9 @@ func (httpstate *HTTPRunnerResults) Run(t int) {
 	if httpstate.AbortOn == code {
 		httpstate.aborter.Abort()
 		log.Infof("Aborted run because of code %d - data %s", code, DebugSummary(body, 1024))
+	}
+	return stagedperiodic.RunRet{
+		ByteSize: size,
 	}
 }
 
@@ -173,10 +176,7 @@ func RunHTTPTest(o *HTTPRunnerOptions) (*HTTPRunnerResults, error) {
 	// Cleanup state:
 	r.Options().ReleaseRunners()
 	sort.Ints(keys)
-	var totalCount float64
-	for _, s := range total.Stages {
-		totalCount += float64(s.DurationHistogram.Count)
-	}
+	totalCount := float64(total.sizes.Count)
 	_, _ = fmt.Fprintf(out, "Sockets used: %d (for perfect keepalive, would be %d)\n", total.SocketCount, r.Options().NumThreads)
 	for _, k := range keys {
 		_, _ = fmt.Fprintf(out, "Code %3d : %d (%.1f %%)\n", k, total.RetCodes[k], 100.*float64(total.RetCodes[k])/totalCount)

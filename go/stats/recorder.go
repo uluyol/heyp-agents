@@ -1,7 +1,6 @@
 package stats
 
 import (
-	"fmt"
 	"io"
 	"sort"
 	"sync"
@@ -35,6 +34,13 @@ type Recorder struct {
 
 func NewRecorder(out io.WriteCloser) *Recorder {
 	return &Recorder{out: out, hists: make(map[string]*hdrhistogram.Histogram)}
+}
+
+func (r *Recorder) GetCumNumRPCs() int64 {
+	r.mu.Lock()
+	n := r.cur.cumNumRPCs
+	r.mu.Unlock()
+	return n
 }
 
 // StartRecording must be called before any other methods
@@ -177,7 +183,6 @@ func HistToProto(h *hdrhistogram.Histogram) *proto.HdrHistogram {
 	ret.Buckets = make([]*proto.HdrHistogram_Bucket, 0, h.TotalCount()/10)
 	for _, bar := range dist {
 		if bar.Count > 0 {
-			fmt.Println(bar, h.TotalCount())
 			ret.Buckets = append(ret.Buckets, &proto.HdrHistogram_Bucket{
 				C: bar.Count,
 				V: bar.From,
