@@ -441,6 +441,10 @@ func (c *stepCounter) maybeAdvance(now time.Time, r *heypstats.Recorder) time.Ti
 	return c.next
 }
 
+func unixMillis(t time.Time) int64 {
+	return t.Unix()*1000 + int64(t.Nanosecond()/1e6)
+}
+
 // Run starts the runner.
 func (r *periodicRunner) Run() RunnerResults {
 	r.Stop.Lock()
@@ -495,6 +499,8 @@ func (r *periodicRunner) Run() RunnerResults {
 		timeout := time.Until(*r.StartTime)
 		log.Infof("will wait for %s to issue requests", timeout.String())
 		time.Sleep(timeout)
+
+		log.Infof("start-time: %s start-time-unix-ms: %s", r.StartTime.In(time.UTC).Format(time.RFC3339Nano), unixMillis(r.StartTime.In(time.UTC)))
 	}
 	r.Recorder.StartRecording()
 	c := &stepCounter{dur: time.Second, next: time.Now().Add(time.Second)}
@@ -531,6 +537,9 @@ func (r *periodicRunner) Run() RunnerResults {
 		lastCumNumRPCs = t
 		log.Infof("finished workload stage = %d", stageIdx)
 	}
+
+	endTime := time.Now()
+	log.Infof("end-time: %s end-time-unix-ms: %s", endTime.In(time.UTC).Format(time.RFC3339Nano), unixMillis(endTime.In(time.UTC)))
 
 	results := RunnerResults{
 		RunType:    r.RunType,
