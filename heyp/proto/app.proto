@@ -63,10 +63,11 @@ message FortioClientConfig {
         [default = false];  // incompatible with use_fast_client
   }
 
-  optional int32 num_conns = 1 [default = 20];
-  repeated WorkloadStage workload_stages = 2;
-  repeated SizeAndWeight size_dist = 3;
-  repeated DelayAndWeight delay_dist = 4;
+  optional int32 num_shards = 1 [default = 4];
+  optional int32 num_conns = 2 [default = 20];
+  repeated WorkloadStage workload_stages = 3;
+  repeated SizeAndWeight size_dist = 4;
+  repeated DelayAndWeight delay_dist = 5;
 
   optional bool jitter_on = 10 [default = true];
   optional double dur_resolution_sec = 11 [default = 0.001];  // default ms resolution
