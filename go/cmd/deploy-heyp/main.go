@@ -115,6 +115,33 @@ func (c *configAndRemDirCmd) Execute(ctx context.Context, fs *flag.FlagSet,
 	return subcommands.ExitSuccess
 }
 
+type runClientsCmd struct {
+	name     string
+	synopsis string
+	exec     func(*runClientsCmd, *flag.FlagSet)
+
+	configPath string
+	remDir     string
+	showOut    bool
+	config     *pb.DeploymentConfig
+}
+
+func (c *runClientsCmd) Name() string     { return c.name }
+func (c *runClientsCmd) Synopsis() string { return c.synopsis }
+func (*runClientsCmd) Usage() string      { return "" }
+
+func (c *runClientsCmd) SetFlags(fs *flag.FlagSet) {
+	configVar(&c.configPath, fs)
+	remdirVar(&c.remDir, fs)
+	fs.BoolVar(&c.showOut, "verbose", true, "show command output")
+}
+
+func (c *runClientsCmd) Execute(ctx context.Context, fs *flag.FlagSet, args ...interface{}) subcommands.ExitStatus {
+	c.config = parseConfig(c.configPath)
+	c.exec(c, fs)
+	return subcommands.ExitSuccess
+}
+
 type startHEYPAgentsCmd struct {
 	configPath       string
 	remDir           string
@@ -151,29 +178,37 @@ var testLOPRIStartServersCmd = &configAndRemDirCmd{
 	},
 }
 
-type testLOPRIRunClientsCmd struct {
-	configPath string
-	remDir     string
-	showOut    bool
+var testLOPRIRunClientsCmd = &runClientsCmd{
+	name:     "testlopri-run-clients",
+	synopsis: "run clients for testlopri experiments",
+	exec: func(c *runClientsCmd, fs *flag.FlagSet) {
+		err := actions.TestLOPRIRunClients(c.config, c.remDir, c.showOut)
+		if err != nil {
+			log.Fatal(err)
+		}
+	},
 }
 
-func (*testLOPRIRunClientsCmd) Name() string     { return "testlopri-run-clients" }
-func (*testLOPRIRunClientsCmd) Synopsis() string { return "run clients for testlopri experiments" }
-func (*testLOPRIRunClientsCmd) Usage() string    { return "" }
-
-func (c *testLOPRIRunClientsCmd) SetFlags(fs *flag.FlagSet) {
-	configVar(&c.configPath, fs)
-	remdirVar(&c.remDir, fs)
-	fs.BoolVar(&c.showOut, "verbose", true, "show command output")
+var fortioStartServersCmd = &configAndRemDirCmd{
+	name:     "fortio-start-servers",
+	synopsis: "start servers and proxies for fortio experiments",
+	exec: func(cmd *configAndRemDirCmd, fs *flag.FlagSet) {
+		err := actions.FortioStartServers(cmd.config, cmd.remDir)
+		if err != nil {
+			log.Fatal(err)
+		}
+	},
 }
 
-func (c *testLOPRIRunClientsCmd) Execute(ctx context.Context, fs *flag.FlagSet,
-	args ...interface{}) subcommands.ExitStatus {
-	err := actions.TestLOPRIRunClients(parseConfig(c.configPath), c.remDir, c.showOut)
-	if err != nil {
-		log.Fatal(err)
-	}
-	return subcommands.ExitSuccess
+var fortioRunClientsCmd = &runClientsCmd{
+	name:     "fortio-run-clients",
+	synopsis: "run clients for fortio experiments",
+	exec: func(c *runClientsCmd, fs *flag.FlagSet) {
+		err := actions.FortioRunClients(c.config, c.remDir, c.showOut)
+		if err != nil {
+			log.Fatal(err)
+		}
+	},
 }
 
 type fetchDataCmd struct {
@@ -259,7 +294,9 @@ func main() {
 	subcommands.Register(new(configureSysCmd), "")
 	subcommands.Register(new(startHEYPAgentsCmd), "")
 	subcommands.Register(testLOPRIStartServersCmd, "")
-	subcommands.Register(new(testLOPRIRunClientsCmd), "")
+	subcommands.Register(testLOPRIRunClientsCmd, "")
+	subcommands.Register(fortioStartServersCmd, "")
+	subcommands.Register(fortioRunClientsCmd, "")
 	subcommands.Register(new(fetchDataCmd), "")
 	subcommands.Register(new(checkNodesCmd), "")
 

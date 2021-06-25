@@ -22,6 +22,9 @@ message DeployedNode {
   // - cluster-agent
   // - testlopri-[name]-server
   // - testlopri-[name]-client
+  // - fortio-[group]-envoy-proxy
+  // - fortio-[group]-[name]-server
+  // - fortio-[group]-[name]-client
   repeated string roles = 10;
 }
 
@@ -51,8 +54,9 @@ message DeployedFortioInstance {
   // fortio-[group]-envoy-proxy
   optional string group = 1;
   optional string name = 2;
-  optional int32 serve_port = 3;
-  optional FortioClientConfig client = 4;
+  optional int32 serve_port = 3 [default = 9911];
+  optional string lb_policy = 4 [default = "ROUND_ROBIN"];
+  optional FortioClientConfig client = 5;
 }
 
 message DeployedFortioGroup {
