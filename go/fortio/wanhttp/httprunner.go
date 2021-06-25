@@ -18,14 +18,17 @@ package wanhttp
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
 	"runtime"
 	"runtime/pprof"
 	"sort"
+	"time"
 
 	"fortio.org/fortio/log"
 	"fortio.org/fortio/stats"
 	"github.com/uluyol/heyp-agents/go/fortio/stagedperiodic"
+	"golang.org/x/sync/errgroup"
 )
 
 // Most of the code in this file is the library-fication of code originally
@@ -107,30 +110,55 @@ func RunHTTPTest(o *HTTPRunnerOptions) (*HTTPRunnerResults, error) {
 		aborter:     r.Options().Stop,
 	}
 	httpstate := make([]HTTPRunnerResults, numThreads)
+	var eg errgroup.Group
 	for i := 0; i < numThreads; i++ {
-		r.Options().Runners[i] = &httpstate[i]
-		// Create a client (and transport) and connect once for each 'thread'
-		var err error
-		httpstate[i].client, err = NewClient(&o.HTTPOptions)
-		// nil check on interface doesn't work
-		if err != nil {
-			return nil, err
-		}
-		if !allStagesExactly(o) {
-			code, data, contentLen, headerSize := httpstate[i].client.Fetch()
-			if !o.AllowInitialErrors && !codeIsOK(code) {
-				return nil, fmt.Errorf("error %d for %s: %q", code, o.URL, string(data))
+		i := i
+		eg.Go(func() error {
+			r.Options().Runners[i] = &httpstate[i]
+			// Create a client (and transport) and connect once for each 'thread'
+			var err error
+			httpstate[i].client, err = NewClient(&o.HTTPOptions)
+			// nil check on interface doesn't work
+			if err != nil {
+				return err
 			}
-			if i == 0 && log.LogVerbose() {
-				log.LogVf("first hit of url %s: status %03d, headers %d, total %d\n%s\n", o.URL, code, headerSize, contentLen, data)
+			if !allStagesExactly(o) {
+				var (
+					code                   int
+					data                   []byte
+					contentLen, headerSize int
+					bad                    bool
+				)
+				var try int
+				for try = 0; try < 5; try++ {
+					code, data, contentLen, headerSize = httpstate[i].client.Fetch()
+					if !o.AllowInitialErrors && !codeIsOK(code) {
+						bad = true
+						time.Sleep(time.Duration(rand.Intn(100)) * time.Millisecond)
+					} else {
+						bad = false
+						break
+					}
+				}
+				if bad {
+					return fmt.Errorf("after %d tries, error %d for %s: %q", try, code, o.URL, string(data))
+				}
+				if i == 0 && log.LogVerbose() {
+					log.LogVf("first hit of url %s: status %03d, headers %d, total %d\n%s\n", o.URL, code, headerSize, contentLen, data)
+				}
 			}
-		}
-		// Setup the stats for each 'thread'
-		httpstate[i].sizes = total.sizes.Clone()
-		httpstate[i].headerSizes = total.headerSizes.Clone()
-		httpstate[i].RetCodes = make(map[int]int64)
-		httpstate[i].AbortOn = total.AbortOn
-		httpstate[i].aborter = total.aborter
+			// Setup the stats for each 'thread'
+			httpstate[i].sizes = total.sizes.Clone()
+			httpstate[i].headerSizes = total.headerSizes.Clone()
+			httpstate[i].RetCodes = make(map[int]int64)
+			httpstate[i].AbortOn = total.AbortOn
+			httpstate[i].aborter = total.aborter
+			return nil
+		})
+	}
+	err := eg.Wait()
+	if err != nil {
+		return nil, err
 	}
 	// TODO avoid copy pasta with grpcrunner
 	if o.Profiler != "" {
