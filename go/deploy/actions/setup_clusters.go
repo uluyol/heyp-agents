@@ -45,7 +45,11 @@ func MakeCodeBundle(binDir, auxBinDir, tarballPath string) error {
 		})
 	}
 
-	auxBins := []string{"envoy", "fortio"}
+	auxBins := []string{
+		"envoy",
+		"fortio-client",
+		"fortio",
+	}
 
 	for _, b := range auxBins {
 		w.Add(writetar.Input{

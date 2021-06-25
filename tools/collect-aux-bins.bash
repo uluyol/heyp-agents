@@ -18,6 +18,7 @@ for cmd in $TOINSTALL; do
     ;;
   fortio)
     GOOS=linux GOARCH=amd64 GOBIN=$PWD/aux-bin go install fortio.org/fortio@v1.16.0
+    GOOS=linux GOARCH=amd64 go build -o $PWD/aux-bin ./go/cmd/fortio-client
     ;;
   *)
     echo "unknown cmd $cmd"
