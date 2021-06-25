@@ -51,6 +51,7 @@ type XZWriter struct {
 type Input struct {
 	Dest      string
 	InputPath string
+	Mode      int64
 }
 
 func NewXZWriter(destPath string) (*XZWriter, error) {
@@ -99,7 +100,7 @@ func (w *XZWriter) Add(input Input) {
 
 	w.w.WriteHeader(&tar.Header{
 		Name: input.Dest,
-		Mode: int64(fi.Mode()),
+		Mode: input.Mode,
 		Size: fi.Size(),
 	})
 

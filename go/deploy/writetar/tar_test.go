@@ -25,16 +25,19 @@ func TestXZWriter(t *testing.T) {
 	w.Add(Input{
 		Dest:      "data/a",
 		InputPath: "testdata/a",
+		Mode:      0o644,
 	})
 
 	w.Add(Input{
 		Dest:      "data/b",
 		InputPath: "testdata/b",
+		Mode:      0o644,
 	})
 
 	w.Add(Input{
 		Dest:      "code",
 		InputPath: "testdata/c/data",
+		Mode:      0o644,
 	})
 
 	err = w.Close()

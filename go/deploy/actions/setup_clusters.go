@@ -44,6 +44,7 @@ func MakeCodeBundle(binDir, auxBinDir, tarballPath string) error {
 		w.Add(writetar.Input{
 			Dest:      b,
 			InputPath: filepath.Join(binDir, b),
+			Mode:      0o755,
 		})
 	}
 
@@ -57,6 +58,7 @@ func MakeCodeBundle(binDir, auxBinDir, tarballPath string) error {
 		w.Add(writetar.Input{
 			Dest:      path.Join("aux", b),
 			InputPath: filepath.Join(auxBinDir, b),
+			Mode:      0o755,
 		})
 	}
 
@@ -562,7 +564,7 @@ func FortioStartServers(c *pb.DeploymentConfig, remoteTopdir string) error {
 						"ssh", server.GetExternalAddr(),
 						fmt.Sprintf(
 							"tmux kill-session -t fortio-%[2]s-%[3]s-server;"+
-								"tmux new-session -d -s fortio-%[2]s-%[3]s-server '%[1]s/aux/fortio -http-port %[4]d -maxpayloadsizekb %[5]d 2>&1 | tee %[1]s/logs/fortio-%[2]s-%[3]s-server.log; sleep 100000'",
+								"tmux new-session -d -s fortio-%[2]s-%[3]s-server '%[1]s/aux/fortio server -http-port %[4]d -maxpayloadsizekb %[5]d 2>&1 | tee %[1]s/logs/fortio-%[2]s-%[3]s-server.log; sleep 100000'",
 							remoteTopdir, inst.config.GetGroup(), inst.config.GetName(), inst.config.GetServePort(), maxPayload))
 					err := cmd.Run()
 					if err != nil {
@@ -625,7 +627,7 @@ func FortioRunClients(c *pb.DeploymentConfig, remoteTopdir string, showOut bool)
 			allAddrs := make([]string, len(group.proxies))
 			for i, s := range group.proxies {
 				allAddrs[i] = fmt.Sprintf("http://%s:%d/service/%s",
-					s.GetExperimentAddr(), inst.config.GetServePort(), inst.config.GetName())
+					s.GetExperimentAddr(), group.config.GetEnvoyPort(), inst.config.GetName())
 			}
 
 			allAddrsCSV := strings.Join(allAddrs, ",")
@@ -639,7 +641,7 @@ func FortioRunClients(c *pb.DeploymentConfig, remoteTopdir string, showOut bool)
 						LogWithPrefix("fortio-run-clients: "),
 						"ssh", client.GetExternalAddr(),
 						fmt.Sprintf("cat > %[1]s/configs/fortio-client-config-%[2]s-%[3]s-%[5]d.textproto && "+
-							"%[1]s/heyp/app/fortio/client -logtostderr -c %[1]s/configs/fortio-client-config-%[2]s-%[3]s-%[5]d.textproto -addrs %[4]s -out %[1]s/logs/fortio-%[2]s-%[3]s-client-%[5]d.out -summary %[1]s/logs/fortio-%[2]s-%[3]s-client-%[5]d.summary.json -start_time %[6]s 2>&1 | tee %[1]s/logs/fortio-%[2]s-%[3]s-client-%[5]d.log; exit ${PIPESTATUS[0]}", remoteTopdir, inst.config.GetGroup(), inst.config.GetName(), allAddrsCSV, i, startTimestamp))
+							"%[1]s/aux/fortio-client -c %[1]s/configs/fortio-client-config-%[2]s-%[3]s-%[5]d.textproto -addrs %[4]s -out %[1]s/logs/fortio-%[2]s-%[3]s-client-%[5]d.out -summary %[1]s/logs/fortio-%[2]s-%[3]s-client-%[5]d.summary.json -start_time %[6]s 2>&1 | tee %[1]s/logs/fortio-%[2]s-%[3]s-client-%[5]d.log; exit ${PIPESTATUS[0]}", remoteTopdir, inst.config.GetGroup(), inst.config.GetName(), allAddrsCSV, i, startTimestamp))
 					cmd.SetStdin(fmt.Sprintf("fortio-client-config-%s-%s-%d.textproto", inst.config.GetGroup(), inst.config.GetName(), i), bytes.NewReader(clientConfBytes))
 					if showOut {
 						cmd.Stdout = os.Stdout
