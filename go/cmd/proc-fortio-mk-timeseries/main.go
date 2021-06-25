@@ -19,18 +19,18 @@ func main() {
 	flag.Parse()
 
 	log.SetFlags(0)
-	log.SetPrefix("proc-mk-timeseries: ")
+	log.SetPrefix("proc-fortio-mk-timeseries: ")
 
 	if flag.NArg() != 1 {
 		log.Fatalf("usage: %s path/to/logs", os.Args[0])
 	}
 
-	instances, err := proc.GlobAndCollectTestLopri(os.DirFS(flag.Arg(0)))
+	instances, err := proc.GlobAndCollectFortio(os.DirFS(flag.Arg(0)))
 	if err != nil {
 		log.Fatalf("failed to group logs: %v", err)
 	}
 
-	startTime, endTime, err := proc.GetStartEndTestLopri(os.DirFS(flag.Arg(0)))
+	startTime, endTime, err := proc.GetStartEndFortio(os.DirFS(flag.Arg(0)))
 	if err != nil {
 		log.Fatalf("failed to get start/end time: %v", err)
 	}
@@ -39,7 +39,7 @@ func main() {
 
 	bw := bufio.NewWriter(os.Stdout)
 	defer bw.Flush()
-	fmt.Fprintln(bw, "Instance,Client,Shard,Timestamp,MeanBps,MeanRpcsPerSec,FullLatencyNanosP50,FullLatencyNanosP90,FullLatencyNanosP95,FullLatencyNanosP99,NetLatencyNanosP50,NetLatencyNanosP90,NetLatencyNanosP95,NetLatencyNanosP99")
+	fmt.Fprintln(bw, "Group,Instance,Client,Shard,Timestamp,MeanBps,MeanRpcsPerSec,NetLatencyNanosP50,NetLatencyNanosP90,NetLatencyNanosP95,NetLatencyNanosP99")
 	for _, inst := range instances {
 		for _, client := range inst.Clients {
 			for _, shard := range client.Shards {
@@ -53,11 +53,9 @@ func main() {
 							return nil
 						}
 						tunix := t.UTC().Sub(time.Unix(0, 0)).Seconds()
-						full := findLat(rec, "full")
 						net := findLat(rec, "net")
-						_, err = fmt.Fprintf(bw, "%s,%s,%d,%f,%f,%f,%d,%d,%d,%d,%d,%d,%d,%d\n",
-							inst.Instance, client.Client, shard.Shard, tunix, rec.MeanBitsPerSec, rec.MeanRpcsPerSec, full.P50,
-							full.P90, full.P95, full.P99, net.P50, net.P90, net.P95, net.P99)
+						_, err = fmt.Fprintf(bw, "%s,%s,%s,%d,%f,%f,%f,%d,%d,%d,%d\n",
+							inst.Group, inst.Instance, client.Client, shard.Shard, tunix, rec.MeanBitsPerSec, rec.MeanRpcsPerSec, net.P50, net.P90, net.P95, net.P99)
 						return err
 					})
 			}

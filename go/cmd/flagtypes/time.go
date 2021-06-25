@@ -20,3 +20,14 @@ func (t *RFC3339NanoTime) Set(s string) error {
 }
 
 var _ flag.Value = new(RFC3339NanoTime)
+
+type Duration struct{ D time.Duration }
+
+func (f *Duration) String() string { return f.D.String() }
+func (f *Duration) Set(s string) error {
+	var err error
+	f.D, err = time.ParseDuration(s)
+	return err
+}
+
+var _ flag.Value = new(Duration)
