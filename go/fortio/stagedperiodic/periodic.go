@@ -118,7 +118,13 @@ type WorkloadStage struct {
 	// Mode where an exact number of iterations is requested. Default (0) is
 	// to not use that mode. If specified Duration is not used.
 	Exactly int64
+
+	perThreadQPS float64
 }
+
+func (s *WorkloadStage) hasDuration() bool { return s.Duration > 0 }
+func (s *WorkloadStage) useExactly() bool  { return s.Exactly > 0 }
+func (s *WorkloadStage) useQPS() bool      { return s.QPS > 0 }
 
 // RunnerOptions are the parameters to the PeriodicRunner.
 type RunnerOptions struct {
@@ -445,43 +451,54 @@ func unixMillis(t time.Time) int64 {
 	return t.Unix()*1000 + int64(t.Nanosecond()/1e6)
 }
 
+type stageState struct {
+	// set by Run
+	stageIdx          int
+	requestedQPS      string
+	numCalls          int64
+	leftOver          int64 // left over from r.Exactly / numThreads
+	requestedDuration string
+	useExactly        bool
+	useQPS            bool
+
+	// results
+	sleepTime *stats.Histogram   // managed by Run
+	sDs       []*stats.Histogram // created by Run, entries populated by workers
+	mu        sync.Mutex         // mu protects the following when written by parallel workers
+	start     time.Time
+	elapsed   time.Duration
+	numRPCs   int64
+}
+
 // Run starts the runner.
 func (r *periodicRunner) Run() RunnerResults {
 	r.Stop.Lock()
 	runnerChan := r.Stop.StopChan // need a copy to not race with assignement to nil
 	r.Stop.Unlock()
 
-	type stageState struct {
-		stageIdx          int
-		requestedQPS      string
-		numCalls          int64
-		leftOver          int64 // left over from r.Exactly / numThreads
-		requestedDuration string
-		useExactly        bool
-		useQPS            bool
-
-		// results
-		start     time.Time
-		elapsed   time.Duration
-		sleepTime *stats.Histogram
-		numRPCs   int64
-		sDs       []*stats.Histogram
-	}
-
-	stages := make([]stageState, len(r.Stages))
+	stages := make([]*stageState, len(r.Stages))
 	for i := range stages {
-		s := &stages[i]
-		*s = stageState{
+		r.Stages[i].perThreadQPS = r.Stages[i].QPS / float64(r.NumThreads)
+		s := &stageState{
 			stageIdx:     i,
 			requestedQPS: "max",
 			useQPS:       (r.Stages[i].QPS > 0),
 			// r.Stages[i].Exactly is > 0 if we use Exactly iterations instead of the duration.
 			useExactly: (r.Stages[i].Exactly > 0),
+			sleepTime:  stats.NewHistogram(-0.001, 0.001),
 		}
+		stages[i] = s
 		if s.useQPS {
 			s.requestedDuration, s.requestedQPS, s.numCalls, s.leftOver = r.runQPSSetup(i)
 		} else {
 			s.requestedDuration, s.numCalls, s.leftOver = r.runNoQPSSetup(i)
+		}
+
+		if r.NumThreads > 1 {
+			s.sDs = make([]*stats.Histogram, r.NumThreads)
+			for t := 0; t < r.NumThreads; t++ {
+				s.sDs[t] = s.sleepTime.Clone()
+			}
 		}
 	}
 	runnersLen := len(r.Runners)
@@ -504,38 +521,20 @@ func (r *periodicRunner) Run() RunnerResults {
 	}
 	r.Recorder.StartRecording()
 	c := &stepCounter{dur: time.Second, next: time.Now().Add(time.Second)}
-	var lastCumNumRPCs int64
-	for stageIdx := range stages {
-		s := &stages[stageIdx]
-		s.start = time.Now()
-		// Histogram and stats for Sleep time (negative offset to capture <0 sleep in their own bucket):
-		s.sleepTime = stats.NewHistogram(-0.001, 0.001)
-		if r.NumThreads <= 1 {
-			log.LogVf("Running single threaded")
-			runOne(0, runnerChan, s.sleepTime, s.numCalls+s.leftOver, s.start, r, c, stageIdx)
-		} else {
-			var wg sync.WaitGroup
-			for t := 0; t < r.NumThreads; t++ {
-				sleepP := s.sleepTime.Clone()
-				s.sDs = append(s.sDs, sleepP)
-				wg.Add(1)
-				thisNumCalls := s.numCalls
-				if (s.leftOver > 0) && (t == 0) {
-					// The first thread gets to do the additional work
-					thisNumCalls += s.leftOver
-				}
-				go func(t int, sleepP *stats.Histogram) {
-					runOne(t, runnerChan, sleepP, thisNumCalls, s.start, r, c, stageIdx)
-					wg.Done()
-				}(t, sleepP)
-			}
-			wg.Wait()
+
+	if r.NumThreads <= 1 {
+		log.LogVf("Running single threaded")
+		runOne(0, runnerChan, r, c, stages)
+	} else {
+		var wg sync.WaitGroup
+		for t := 0; t < r.NumThreads; t++ {
+			wg.Add(1)
+			go func(t int) {
+				runOne(t, runnerChan, r, c, stages)
+				wg.Done()
+			}(t)
 		}
-		s.elapsed = time.Since(s.start)
-		t := r.Recorder.GetCumNumRPCs()
-		s.numRPCs = t - lastCumNumRPCs
-		lastCumNumRPCs = t
-		log.Infof("finished workload stage = %d", stageIdx)
+		wg.Wait()
 	}
 
 	endTime := time.Now()
@@ -548,7 +547,7 @@ func (r *periodicRunner) Run() RunnerResults {
 		NumThreads: r.NumThreads,
 	}
 	for stage := range stages {
-		s := &stages[stage]
+		s := stages[stage]
 
 		if r.NumThreads > 1 {
 			for t := 0; t < r.NumThreads; t++ {
@@ -609,90 +608,129 @@ func (r *periodicRunner) Run() RunnerResults {
 // runOne runs in 1 go routine (or main one when -c 1 == single threaded mode).
 // nolint: gocognit // we should try to simplify it though.
 func runOne(id int, runnerChan chan struct{},
-	sleepTimes *stats.Histogram, numCalls int64, start time.Time, r *periodicRunner, sc *stepCounter, stage int) {
-	s := &r.Stages[stage]
-	var i int64
-	endTime := start.Add(s.Duration)
-	tIDStr := fmt.Sprintf("T%03d", id)
-	perThreadQPS := s.QPS / float64(r.NumThreads)
-	useQPS := (perThreadQPS > 0)
-	hasDuration := (s.Duration > 0)
-	useExactly := (s.Exactly > 0)
+	r *periodicRunner, sc *stepCounter, stageStates []*stageState) {
+
 	f := r.Runners[id]
+	possibleAdvance := time.Now()
 
-	possibleAdvance := start
-
-MainLoop:
-	for {
-		fStart := time.Now()
-		if fStart.After(possibleAdvance) {
-			possibleAdvance = sc.maybeAdvance(fStart, r.Recorder)
-		}
-
-		if !useExactly && (hasDuration && fStart.After(endTime)) {
-			if !useQPS {
-				// max speed test reached end:
-				break
-			}
-			// QPS mode:
-			// Do least 2 iterations, and the last one before bailing because of time
-			if (i >= 2) && (i != numCalls-1) {
-				log.Warnf("%s warning only did %d out of %d calls before reaching %v", tIDStr, i, numCalls, s.Duration)
-				break
-			}
-		}
-		got := f.Run(id)
-		r.Recorder.RecordRPC1(got.ByteSize, "net", time.Since(fStart))
-		i++
-		// if using QPS / pre calc expected call # mode:
-		if useQPS { // nolint: nestif
-			if (useExactly || hasDuration) && i >= numCalls {
-				break // expected exit for that mode
-			}
-			elapsed := time.Since(start)
-			var targetElapsedInSec float64
-			if hasDuration {
-				// This next line is tricky - such as for 2s duration and 1qps there is 1
-				// sleep of 2s between the 2 calls and for 3qps in 1sec 2 sleep of 1/2s etc
-				targetElapsedInSec = (float64(i) + float64(i)/float64(numCalls-1)) / perThreadQPS
-			} else {
-				// Calculate the target elapsed when in endless execution
-				targetElapsedInSec = float64(i) / perThreadQPS
-			}
-			targetElapsedDuration := time.Duration(int64(targetElapsedInSec * 1e9))
-			sleepDuration := targetElapsedDuration - elapsed
-			if r.Jitter {
-				sleepDuration += getJitter(sleepDuration)
-			}
-			log.Debugf("%s target next dur %v - sleep %v", tIDStr, targetElapsedDuration, sleepDuration)
-			sleepTimes.Record(sleepDuration.Seconds())
-			select {
-			case <-runnerChan:
-				break MainLoop
-			case <-time.After(sleepDuration):
-				// continue normal execution
-			}
-		} else { // Not using QPS
-			if useExactly && i >= numCalls {
-				break
-			}
-			select {
-			case <-runnerChan:
-				break MainLoop
-			default:
-				// continue to the next iteration
-			}
+	if len(stageStates) > 0 {
+		qps := r.Stages[0].perThreadQPS
+		if r.Stages[0].useQPS() {
+			sleep := int64(time.Duration(1e9/qps) * time.Nanosecond)
+			sleep = rand.Int63n(sleep)
+			time.Sleep(time.Duration(sleep)) // de-sync start times of workers
 		}
 	}
-	elapsed := time.Since(start)
-	actualQPS := float64(i) / elapsed.Seconds()
-	log.Infof("%s ended after %v : %d calls. qps=%g", tIDStr, elapsed, i, actualQPS)
-	if (numCalls > 0) && log.Log(log.Verbose) {
-		if log.Log(log.Debug) {
-			sleepTimes.Log(tIDStr+" Sleep time", []float64{50})
-		} else {
-			sleepTimes.Counter.Log(tIDStr + " Sleep time")
+
+	for stage := range stageStates {
+		s := &r.Stages[stage]
+		state := stageStates[stage]
+
+		state.mu.Lock()
+		if state.start.IsZero() {
+			state.start = time.Now()
+			log.Infof("starting workload stage = %d, perThreadQPS: %f", stage, s.perThreadQPS)
 		}
+		start := state.start
+		state.mu.Unlock()
+
+		numCalls := state.numCalls
+		if state.leftOver > 0 && id == 0 {
+			numCalls += state.leftOver
+		}
+
+		var i int64
+		sleepTimes := state.sDs[id]
+		if r.NumThreads <= 1 {
+			sleepTimes = state.sleepTime
+		}
+
+		endTime := start.Add(s.Duration)
+		tIDStr := fmt.Sprintf("T%03d", id)
+		perThreadQPS := s.perThreadQPS
+		useQPS := s.useQPS()
+		hasDuration := s.hasDuration()
+		useExactly := s.useExactly()
+
+	MainLoop:
+		for {
+			fStart := time.Now()
+			if fStart.After(possibleAdvance) {
+				possibleAdvance = sc.maybeAdvance(fStart, r.Recorder)
+			}
+
+			if !useExactly && (hasDuration && fStart.After(endTime)) {
+				if !useQPS {
+					// max speed test reached end:
+					break
+				}
+				// QPS mode:
+				// Do least 2 iterations, and the last one before bailing because of time
+				if (i >= 2) && (i != numCalls-1) {
+					log.Warnf("%s warning only did %d out of %d calls before reaching %v", tIDStr, i, numCalls, s.Duration)
+					break
+				}
+			}
+			got := f.Run(id)
+			r.Recorder.RecordRPC1(got.ByteSize, "net", time.Since(fStart))
+			i++
+			// if using QPS / pre calc expected call # mode:
+			if useQPS { // nolint: nestif
+				if (useExactly || hasDuration) && i >= numCalls {
+					break // expected exit for that mode
+				}
+				elapsed := time.Since(start)
+				var targetElapsedInSec float64
+				if hasDuration {
+					// This next line is tricky - such as for 2s duration and 1qps there is 1
+					// sleep of 2s between the 2 calls and for 3qps in 1sec 2 sleep of 1/2s etc
+					targetElapsedInSec = (float64(i) + float64(i)/float64(numCalls-1)) / perThreadQPS
+				} else {
+					// Calculate the target elapsed when in endless execution
+					targetElapsedInSec = float64(i) / perThreadQPS
+				}
+				targetElapsedDuration := time.Duration(int64(targetElapsedInSec * 1e9))
+				sleepDuration := targetElapsedDuration - elapsed
+				if r.Jitter {
+					sleepDuration += getJitter(sleepDuration)
+				}
+				log.Debugf("%s target next dur %v - sleep %v", tIDStr, targetElapsedDuration, sleepDuration)
+				sleepTimes.Record(sleepDuration.Seconds())
+				select {
+				case <-runnerChan:
+					break MainLoop
+				case <-time.After(sleepDuration):
+					// continue normal execution
+				}
+			} else { // Not using QPS
+				if useExactly && i >= numCalls {
+					break
+				}
+				select {
+				case <-runnerChan:
+					break MainLoop
+				default:
+					// continue to the next iteration
+				}
+			}
+		}
+		elapsed := time.Since(start)
+		actualQPS := float64(i) / elapsed.Seconds()
+		log.Infof("%s ended after %v : %d calls. qps=%g", tIDStr, elapsed, i, actualQPS)
+		if (numCalls > 0) && log.Log(log.Verbose) {
+			if log.Log(log.Debug) {
+				sleepTimes.Log(tIDStr+" Sleep time", []float64{50})
+			} else {
+				sleepTimes.Counter.Log(tIDStr + " Sleep time")
+			}
+		}
+
+		state.mu.Lock()
+		if elapsed > state.elapsed {
+			state.elapsed = elapsed
+		}
+		state.numRPCs += i
+		state.mu.Unlock()
 	}
 }
 
