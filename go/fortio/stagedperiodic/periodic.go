@@ -437,8 +437,6 @@ func (c *stepCounter) maybeAdvance(now time.Time, r *heypstats.Recorder) time.Ti
 		r.DoneStep("step=" + strconv.Itoa(c.step))
 		c.step++
 		c.next = c.next.Add(c.dur)
-	} else {
-		log.Infof("waiting until %s, at %s", c.next, now)
 	}
 	return c.next
 }
@@ -619,9 +617,7 @@ MainLoop:
 	for {
 		fStart := time.Now()
 		if fStart.After(possibleAdvance) {
-			old := possibleAdvance
 			possibleAdvance = sc.maybeAdvance(fStart, r.Recorder)
-			log.Infof("advance point %s -> %s", old, possibleAdvance)
 		}
 
 		if !useExactly && (hasDuration && fStart.After(endTime)) {
