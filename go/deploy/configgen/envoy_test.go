@@ -70,20 +70,22 @@ func TestEnvoyReverseProxy(t *testing.T) {
               "@type": "type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua"
               inline_code: |
                 function envoy_on_response(response_handle)
-                  -- Sets the content-length.
-                  response_handle:headers():add("exp-orig-content-length", response_handle:headers():get("content-length"))
-                  response_handle:headers():replace("content-length", 0)
-                  response_handle:headers():replace("content-type", "text/plain")
+                  if response_handle:headers():get(":status") == "200" then
+                    -- Sets the content-length.
+                    response_handle:headers():add("exp-orig-content-length", response_handle:headers():get("content-length"))
+                    response_handle:headers():replace("content-length", 0)
+                    response_handle:headers():replace("content-type", "text/plain")
 
-                  -- Truncate data
-                  local last
-                  for chunk in response_handle:bodyChunks() do
-                    -- Clears each received chunk.
-                    chunk:setBytes("")
-                    last = chunk
+                    -- Truncate data
+                    local last
+                    for chunk in response_handle:bodyChunks() do
+                      -- Clears each received chunk.
+                      chunk:setBytes("")
+                      last = chunk
+                    end
+
+                    last:setBytes("")
                   end
-
-                  last:setBytes("")
                 end
           - name: envoy.filters.http.router
             typed_config: {}
@@ -224,20 +226,22 @@ layered_runtime:
               "@type": "type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua"
               inline_code: |
                 function envoy_on_response(response_handle)
-                  -- Sets the content-length.
-                  response_handle:headers():add("exp-orig-content-length", response_handle:headers():get("content-length"))
-                  response_handle:headers():replace("content-length", 0)
-                  response_handle:headers():replace("content-type", "text/plain")
+                  if response_handle:headers():get(":status") == "200" then
+                    -- Sets the content-length.
+                    response_handle:headers():add("exp-orig-content-length", response_handle:headers():get("content-length"))
+                    response_handle:headers():replace("content-length", 0)
+                    response_handle:headers():replace("content-type", "text/plain")
 
-                  -- Truncate data
-                  local last
-                  for chunk in response_handle:bodyChunks() do
-                    -- Clears each received chunk.
-                    chunk:setBytes("")
-                    last = chunk
+                    -- Truncate data
+                    local last
+                    for chunk in response_handle:bodyChunks() do
+                      -- Clears each received chunk.
+                      chunk:setBytes("")
+                      last = chunk
+                    end
+
+                    last:setBytes("")
                   end
-
-                  last:setBytes("")
                 end
           - name: envoy.filters.http.router
             typed_config: {}
