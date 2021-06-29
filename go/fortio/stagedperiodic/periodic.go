@@ -517,7 +517,7 @@ func (r *periodicRunner) Run() RunnerResults {
 		log.Infof("will wait for %s to issue requests", timeout.String())
 		time.Sleep(timeout)
 
-		log.Infof("start-time: %s start-time-unix-ms: %s", r.StartTime.In(time.UTC).Format(time.RFC3339Nano), unixMillis(r.StartTime.In(time.UTC)))
+		log.Infof("start-time: %s start-time-unix-ms: %d", r.StartTime.In(time.UTC).Format(time.RFC3339Nano), unixMillis(r.StartTime.In(time.UTC)))
 	}
 	r.Recorder.StartRecording()
 	c := &stepCounter{dur: time.Second, next: time.Now().Add(time.Second)}
@@ -538,7 +538,7 @@ func (r *periodicRunner) Run() RunnerResults {
 	}
 
 	endTime := time.Now()
-	log.Infof("end-time: %s end-time-unix-ms: %s", endTime.In(time.UTC).Format(time.RFC3339Nano), unixMillis(endTime.In(time.UTC)))
+	log.Infof("end-time: %s end-time-unix-ms: %d", endTime.In(time.UTC).Format(time.RFC3339Nano), unixMillis(endTime.In(time.UTC)))
 
 	results := RunnerResults{
 		RunType:    r.RunType,
