@@ -110,9 +110,22 @@ func printCDF(w io.Writer, hists map[string]*hdrhistogram.Histogram, group, inst
 	sort.Strings(kinds)
 	for _, k := range kinds {
 		h := hists[k]
-		for _, b := range h.CumulativeDistribution() {
+		var cumCount int64
+
+		out := func(pct float64, v, c int64) {
 			fmt.Fprintf(w, "%s,%s,%s,%d,%s,%f,%d,%d\n",
-				group, inst, client, shard, k, b.Quantile, b.ValueAt, b.Count)
+				group, inst, client, shard, k, pct, v, c)
+		}
+		total := float64(h.TotalCount())
+		for _, bar := range h.Distribution() {
+			if bar.Count == 0 {
+				continue
+			}
+			if cumCount == 0 {
+				out(0, bar.From, 0)
+			}
+			cumCount += bar.Count
+			out(100*float64(cumCount)/total, bar.From, bar.Count)
 		}
 	}
 }
