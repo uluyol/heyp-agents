@@ -413,11 +413,16 @@ func (g *fortioGroup) GetEnvoyYAML() string {
 			MaxConnections:     int(inst.config.GetMaxConnections()),
 			MaxPendingRequests: int(inst.config.GetMaxPendingRequests()),
 			MaxRequests:        int(inst.config.GetMaxRequests()),
-			Remotes:            make([]configgen.AddrAndPort, len(inst.servers)),
+			Remotes:            make([]configgen.AddrAndPort, 0, len(inst.servers)*len(inst.config.GetServePorts())),
 		}
-		for i, s := range inst.servers {
-			be.Remotes[i].Addr = s.GetExperimentAddr()
-			be.Remotes[i].Port = int(inst.config.GetServePort())
+		for _, port := range inst.config.GetServePorts() {
+			for _, s := range inst.servers {
+				be.Remotes = append(be.Remotes,
+					configgen.AddrAndPort{
+						Addr: s.GetExperimentAddr(),
+						Port: int(port),
+					})
+			}
 		}
 		c.Backends = append(c.Backends, be)
 	}
@@ -512,7 +517,29 @@ func getAndValidateFortioGroups(c *pb.DeploymentConfig) (map[string]*fortioGroup
 	return groups, nil
 }
 
-func FortioStartServers(c *pb.DeploymentConfig, remoteTopdir string) error {
+func KillSessions(c *pb.DeploymentConfig, sessionRegexp string) error {
+	var eg multierrgroup.Group
+	for _, n := range c.GetNodes() {
+		n := n
+		eg.Go(func() error {
+			cmd := TracingCommand(
+				LogWithPrefix("kill-sessions: "),
+				"ssh", n.GetExternalAddr(),
+				fmt.Sprintf("tmux ls -F '#{session_name}' | egrep '%s' | xargs tmux kill-session -t", sessionRegexp))
+			if out, err := cmd.CombinedOutput(); err != nil {
+				return fmt.Errorf("failed to query+kill session on %s: %w; out:\n%s", n.GetName(), err, out)
+			}
+			return nil
+		})
+	}
+	return eg.Wait()
+}
+
+func KillFortio(c *pb.DeploymentConfig) error {
+	return KillSessions(c, "^fortio")
+}
+
+func FortioStartServers(c *pb.DeploymentConfig, remoteTopdir, envoyLogLevel string) error {
 	groups, err := getAndValidateFortioGroups(c)
 	if err != nil {
 		return err
@@ -535,7 +562,7 @@ func FortioStartServers(c *pb.DeploymentConfig, remoteTopdir string) error {
 					fmt.Sprintf(
 						"tar xf - -C %[1]s/configs;"+
 							"tmux kill-session -t fortio-%[2]s-proxy;"+
-							"tmux new-session -d -s fortio-%[2]s-proxy 'ulimit -Sn unlimited; %[1]s/aux/envoy --config-path %[1]s/configs/fortio-envoy-config-%[2]s.yaml 2>&1 | tee %[1]s/logs/fortio-%[2]s-proxy.log; sleep 100000'", remoteTopdir, group.config.GetName()))
+							"tmux new-session -d -s fortio-%[2]s-proxy 'ulimit -Sn unlimited; %[1]s/aux/envoy --log-level %[3]s --config-path %[1]s/configs/fortio-envoy-config-%[2]s.yaml 2>&1 | tee %[1]s/logs/fortio-%[2]s-proxy.log; sleep 100000'", remoteTopdir, group.config.GetName(), envoyLogLevel))
 				cmd.SetStdin("config.tar", bytes.NewReader(configTar))
 				err := cmd.Run()
 				if err != nil {
@@ -561,27 +588,30 @@ func FortioStartServers(c *pb.DeploymentConfig, remoteTopdir string) error {
 
 			for _, server := range inst.servers {
 				server := server
-				eg.Go(func() error {
-					cmd := TracingCommand(
-						LogWithPrefix("fortio-start-servers: "),
-						"ssh", server.GetExternalAddr(),
-						fmt.Sprintf(
-							"tmux kill-session -t fortio-%[2]s-%[3]s-server;"+
-								"tmux new-session -d -s fortio-%[2]s-%[3]s-server 'ulimit -Sn unlimited; %[1]s/aux/fortio server -http-port %[4]d -maxpayloadsizekb %[5]d 2>&1 | tee %[1]s/logs/fortio-%[2]s-%[3]s-server.log; sleep 100000'",
-							remoteTopdir, inst.config.GetGroup(), inst.config.GetName(), inst.config.GetServePort(), maxPayload))
-					err := cmd.Run()
-					if err != nil {
-						return fmt.Errorf("failed to start server for %q/%q on Node %q: %w", inst.config.GetGroup(), inst.config.GetName(), server.GetName(), err)
-					}
-					return nil
-				})
+				for _, port := range inst.config.GetServePorts() {
+					port := port
+					eg.Go(func() error {
+						cmd := TracingCommand(
+							LogWithPrefix("fortio-start-servers: "),
+							"ssh", server.GetExternalAddr(),
+							fmt.Sprintf(
+								"tmux kill-session -t fortio-%[2]s-%[3]s-server-port-%[4]d;"+
+									"tmux new-session -d -s fortio-%[2]s-%[3]s-server-port-%[4]d 'ulimit -Sn unlimited; env GOMAXPROCS=4 %[1]s/aux/fortio server -http-port %[4]d -maxpayloadsizekb %[5]d 2>&1 | tee %[1]s/logs/fortio-%[2]s-%[3]s-server-port-%[4]d.log; sleep 100000'",
+								remoteTopdir, inst.config.GetGroup(), inst.config.GetName(), port, maxPayload))
+						err := cmd.Run()
+						if err != nil {
+							return fmt.Errorf("failed to start server for %q/%q on Node %q: %w", inst.config.GetGroup(), inst.config.GetName(), server.GetName(), err)
+						}
+						return nil
+					})
+				}
 			}
 		}
 	}
 	return eg.Wait()
 }
 
-func FortioRunClients(c *pb.DeploymentConfig, remoteTopdir string, showOut bool) error {
+func FortioRunClients(c *pb.DeploymentConfig, remoteTopdir string, showOut bool, directDebug bool) error {
 	groups, err := getAndValidateFortioGroups(c)
 	if err != nil {
 		return err
@@ -627,10 +657,22 @@ func FortioRunClients(c *pb.DeploymentConfig, remoteTopdir string, showOut bool)
 				return fmt.Errorf("failed to marshal client config: %w", err)
 			}
 
-			allAddrs := make([]string, len(group.proxies))
-			for i, s := range group.proxies {
-				allAddrs[i] = fmt.Sprintf("http://%s:%d/service/%s",
-					s.GetExperimentAddr(), group.config.GetEnvoyPort(), inst.config.GetName())
+			var allAddrs []string
+			if directDebug {
+				// DEBUG MODE: contact servers directly
+				allAddrs = make([]string, 0, len(inst.servers)*len(inst.config.GetServePorts()))
+				for _, port := range inst.config.GetServePorts() {
+					for _, s := range inst.servers {
+						allAddrs = append(allAddrs, fmt.Sprintf("http://%s:%d/", s.GetExperimentAddr(), port))
+					}
+				}
+			} else {
+				// NORMAL MODE: contact envoy proxies
+				allAddrs = make([]string, len(group.proxies))
+				for i, s := range group.proxies {
+					allAddrs[i] = fmt.Sprintf("http://%s:%d/service/%s",
+						s.GetExperimentAddr(), group.config.GetEnvoyPort(), inst.config.GetName())
+				}
 			}
 
 			allAddrsCSV := strings.Join(allAddrs, ",")
@@ -644,7 +686,7 @@ func FortioRunClients(c *pb.DeploymentConfig, remoteTopdir string, showOut bool)
 						LogWithPrefix("fortio-run-clients: "),
 						"ssh", client.GetExternalAddr(),
 						fmt.Sprintf("cat > %[1]s/configs/fortio-client-config-%[2]s-%[3]s-%[5]d.textproto && "+
-							"%[1]s/aux/fortio-client -c %[1]s/configs/fortio-client-config-%[2]s-%[3]s-%[5]d.textproto -addrs %[4]s -out %[1]s/logs/fortio-%[2]s-%[3]s-client-%[5]d.out -summary %[1]s/logs/fortio-%[2]s-%[3]s-client-%[5]d.summary.json -start_time %[6]s 2>&1 | tee %[1]s/logs/fortio-%[2]s-%[3]s-client-%[5]d.log; exit ${PIPESTATUS[0]}", remoteTopdir, inst.config.GetGroup(), inst.config.GetName(), allAddrsCSV, i, startTimestamp))
+							"env GOGC=500 %[1]s/aux/fortio-client -c %[1]s/configs/fortio-client-config-%[2]s-%[3]s-%[5]d.textproto -addrs %[4]s -out %[1]s/logs/fortio-%[2]s-%[3]s-client-%[5]d.out -summary %[1]s/logs/fortio-%[2]s-%[3]s-client-%[5]d.summary.json -start_time %[6]s 2>&1 | tee %[1]s/logs/fortio-%[2]s-%[3]s-client-%[5]d.log; exit ${PIPESTATUS[0]}", remoteTopdir, inst.config.GetGroup(), inst.config.GetName(), allAddrsCSV, i, startTimestamp))
 					cmd.SetStdin(fmt.Sprintf("fortio-client-config-%s-%s-%d.textproto", inst.config.GetGroup(), inst.config.GetName(), i), bytes.NewReader(clientConfBytes))
 					if showOut {
 						cmd.Stdout = os.Stdout
@@ -661,17 +703,32 @@ func FortioRunClients(c *pb.DeploymentConfig, remoteTopdir string, showOut bool)
 	return eg.Wait()
 }
 
-func ConfigureSys(c *pb.DeploymentConfig, congestionControl string, minPort, maxPort int) error {
+type SysConfig struct {
+	CongestionControl string
+	MinPort, MaxPort  int
+	DebugMonitoring   bool
+}
+
+func DefaultSysConfig() SysConfig {
+	return SysConfig{
+		CongestionControl: "bbr",
+		MinPort:           1050,
+		MaxPort:           65535,
+		DebugMonitoring:   false,
+	}
+}
+
+func ConfigureSys(c *pb.DeploymentConfig, sysConfig *SysConfig) error {
 	var eg multierrgroup.Group
 	for _, n := range c.Nodes {
 		n := n
 		eg.Go(func() error {
 			sysctlLines := []string{
 				fmt.Sprintf("net.ipv4.ip_local_port_range=%d %d",
-					minPort, maxPort),
+					sysConfig.MinPort, sysConfig.MaxPort),
 			}
-			if congestionControl != "" {
-				sysctlLines = append(sysctlLines, "net.ipv4.tcp_congestion_control="+congestionControl)
+			if sysConfig.CongestionControl != "" {
+				sysctlLines = append(sysctlLines, "net.ipv4.tcp_congestion_control="+sysConfig.CongestionControl)
 			}
 			cmd := TracingCommand(
 				LogWithPrefix("config-sys: "),
@@ -682,6 +739,16 @@ func ConfigureSys(c *pb.DeploymentConfig, congestionControl string, minPort, max
 			cmd.SetStdin("sysctl-tail.conf", strings.NewReader(sysctlBuf))
 			if err := cmd.Run(); err != nil {
 				return fmt.Errorf("failed to update sysctls: %w", err)
+			}
+
+			if sysConfig.DebugMonitoring {
+				cmd = TracingCommand(
+					LogWithPrefix("config-sys: "),
+					"ssh", n.GetExternalAddr(),
+					"sudo apt-get update && sudo apt-get install -y nload htop")
+				if err := cmd.Run(); err != nil {
+					return fmt.Errorf("failed to install debugging toools: %w", err)
+				}
 			}
 			return nil
 		})

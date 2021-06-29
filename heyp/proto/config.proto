@@ -52,10 +52,11 @@ message StaticDCMapperConfig {
 }
 
 enum NetemDelayDist {
-  NETEM_NORMAL = 0;
-  NETEM_UNIFORM = 1;
-  NETEM_PARETO = 2;
-  NETEM_PARETONORMAL = 3;
+  NETEM_NO_DIST = 0;
+  NETEM_NORMAL = 1;
+  NETEM_UNIFORM = 2;
+  NETEM_PARETO = 3;
+  NETEM_PARETONORMAL = 4;
 }
 
 message NetemConfig {

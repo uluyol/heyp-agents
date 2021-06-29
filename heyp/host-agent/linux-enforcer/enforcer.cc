@@ -362,13 +362,16 @@ void LinuxHostEnforcerImpl::StageTrafficControlForFlow(
     if (args.netem_config != nullptr) {
       std::string netem_handle =
           absl::StrCat(absl::StripPrefix(args.sys->class_id, "1:"), ":0");
+      std::string dist_str = "";
+      if (args.netem_config->delay_dist() != proto::NETEM_NO_DIST) {
+        dist_str = absl::StrFormat(" %dms %f%% distribution %s",
+                                   args.netem_config->delay_jitter_ms(),
+                                   args.netem_config->delay_correlation_pct(),
+                                   NetemDistToString(args.netem_config->delay_dist()));
+      }
       tc_batch_input_.Append(absl::StrFormat(
-          "qdisc add dev %s parent %s handle %s netem delay %dms %dms %f%% distribution "
-          "%s\n",
-          device_, args.sys->class_id, netem_handle, args.netem_config->delay_ms(),
-          args.netem_config->delay_jitter_ms(),
-          args.netem_config->delay_correlation_pct(),
-          NetemDistToString(args.netem_config->delay_dist())));
+          "qdisc add dev %s parent %s handle %s netem delay %dms%s\n", device_,
+          args.sys->class_id, netem_handle, args.netem_config->delay_ms(), dist_str));
     }
     if (args.classes_to_create != nullptr) {
       args.classes_to_create->push_back(args.sys);

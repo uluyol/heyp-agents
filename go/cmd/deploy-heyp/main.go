@@ -42,10 +42,8 @@ func (c *mkBundleCmd) Execute(ctx context.Context, fs *flag.FlagSet,
 }
 
 type configureSysCmd struct {
-	configPath        string
-	congestionControl string
-	minPort           int
-	maxPort           int
+	configPath string
+	sys        actions.SysConfig
 }
 
 func (*configureSysCmd) Name() string     { return "config-sys" }
@@ -53,15 +51,17 @@ func (*configureSysCmd) Synopsis() string { return "configure operating system o
 func (*configureSysCmd) Usage() string    { return "" }
 
 func (c *configureSysCmd) SetFlags(fs *flag.FlagSet) {
+	c.sys = actions.DefaultSysConfig()
 	configVar(&c.configPath, fs)
-	fs.StringVar(&c.congestionControl, "cc", "bbr", "congestion control to use (leave empty to for OS default)")
-	fs.IntVar(&c.minPort, "portmin", 1050, "minimum port number available for ephemeral use")
-	fs.IntVar(&c.maxPort, "portmax", 65535, "maximum port number available for ephemeral use")
+	fs.StringVar(&c.sys.CongestionControl, "cc", c.sys.CongestionControl, "congestion control to use (leave empty to for OS default)")
+	fs.IntVar(&c.sys.MinPort, "portmin", c.sys.MinPort, "minimum port number available for ephemeral use")
+	fs.IntVar(&c.sys.MaxPort, "portmax", c.sys.MaxPort, "maximum port number available for ephemeral use")
+	fs.BoolVar(&c.sys.DebugMonitoring, "debugmon", c.sys.DebugMonitoring, "setup for debugging")
 }
 
 func (c *configureSysCmd) Execute(ctx context.Context, fs *flag.FlagSet,
 	args ...interface{}) subcommands.ExitStatus {
-	err := actions.ConfigureSys(parseConfig(c.configPath), c.congestionControl, c.minPort, c.maxPort)
+	err := actions.ConfigureSys(parseConfig(c.configPath), &c.sys)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -91,6 +91,38 @@ func (c *installBundleCmd) Execute(ctx context.Context, fs *flag.FlagSet,
 		log.Fatal(err)
 	}
 	return subcommands.ExitSuccess
+}
+
+type configCmd struct {
+	name     string
+	synopsis string
+	exec     func(*pb.DeploymentConfig) error
+
+	configPath string
+	config     *pb.DeploymentConfig
+}
+
+func (c *configCmd) Name() string     { return c.name }
+func (c *configCmd) Synopsis() string { return c.synopsis }
+func (c *configCmd) Usage() string    { return "" }
+
+func (c *configCmd) SetFlags(fs *flag.FlagSet) {
+	configVar(&c.configPath, fs)
+}
+
+func (c *configCmd) Execute(ctx context.Context, fs *flag.FlagSet,
+	args ...interface{}) subcommands.ExitStatus {
+	c.config = parseConfig(c.configPath)
+	if err := c.exec(c.config); err != nil {
+		log.Fatal(err)
+	}
+	return subcommands.ExitSuccess
+}
+
+var killFortioCmd = &configCmd{
+	name:     "kill-fortio",
+	synopsis: "kill all fortio experiments",
+	exec:     actions.KillFortio,
 }
 
 type configAndRemDirCmd struct {
@@ -193,26 +225,60 @@ var testLOPRIRunClientsCmd = &runClientsCmd{
 	},
 }
 
-var fortioStartServersCmd = &configAndRemDirCmd{
-	name:     "fortio-start-servers",
-	synopsis: "start servers and proxies for fortio experiments",
-	exec: func(cmd *configAndRemDirCmd, fs *flag.FlagSet) {
-		err := actions.FortioStartServers(cmd.config, cmd.remDir)
-		if err != nil {
-			log.Fatal(err)
-		}
-	},
+type fortioStartServersCmd struct {
+	configPath    string
+	remDir        string
+	envoyLogLevel string
 }
 
-var fortioRunClientsCmd = &runClientsCmd{
-	name:     "fortio-run-clients",
-	synopsis: "run clients for fortio experiments",
-	exec: func(c *runClientsCmd, fs *flag.FlagSet) {
-		err := actions.FortioRunClients(c.config, c.remDir, c.showOut)
-		if err != nil {
-			log.Fatal(err)
-		}
-	},
+func (c *fortioStartServersCmd) Name() string { return "fortio-start-servers" }
+func (c *fortioStartServersCmd) Synopsis() string {
+	return "start servers and proxies for fortio experiments"
+}
+func (c *fortioStartServersCmd) Usage() string { return "" }
+
+func (c *fortioStartServersCmd) SetFlags(fs *flag.FlagSet) {
+	configVar(&c.configPath, fs)
+	remdirVar(&c.remDir, fs)
+	fs.StringVar(&c.envoyLogLevel, "envoy-log-level", "info",
+		"level level to be used by envoy (trace/debug/info/warn/error/critical/off)")
+}
+
+func (c *fortioStartServersCmd) Execute(ctx context.Context, fs *flag.FlagSet,
+	args ...interface{}) subcommands.ExitStatus {
+	err := actions.FortioStartServers(
+		parseConfig(c.configPath), c.remDir, c.envoyLogLevel)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return subcommands.ExitSuccess
+}
+
+type fortioRunClientsCmd struct {
+	configPath  string
+	remDir      string
+	showOut     bool
+	directDebug bool
+}
+
+func (c *fortioRunClientsCmd) Name() string     { return "fortio-run-clients" }
+func (c *fortioRunClientsCmd) Synopsis() string { return "run clients for fortio experiments" }
+func (*fortioRunClientsCmd) Usage() string      { return "" }
+
+func (c *fortioRunClientsCmd) SetFlags(fs *flag.FlagSet) {
+	configVar(&c.configPath, fs)
+	remdirVar(&c.remDir, fs)
+	fs.BoolVar(&c.showOut, "verbose", true, "show command output")
+	fs.BoolVar(&c.directDebug, "direct-dbg", false, "directly contact fortio servers (debug mode)")
+}
+
+func (c *fortioRunClientsCmd) Execute(ctx context.Context, fs *flag.FlagSet,
+	args ...interface{}) subcommands.ExitStatus {
+	err := actions.FortioRunClients(parseConfig(c.configPath), c.remDir, c.showOut, c.directDebug)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return subcommands.ExitSuccess
 }
 
 type fetchDataCmd struct {
@@ -299,10 +365,11 @@ func main() {
 	subcommands.Register(new(startHEYPAgentsCmd), "")
 	subcommands.Register(testLOPRIStartServersCmd, "")
 	subcommands.Register(testLOPRIRunClientsCmd, "")
-	subcommands.Register(fortioStartServersCmd, "")
-	subcommands.Register(fortioRunClientsCmd, "")
+	subcommands.Register(new(fortioStartServersCmd), "")
+	subcommands.Register(new(fortioRunClientsCmd), "")
 	subcommands.Register(new(fetchDataCmd), "")
 	subcommands.Register(new(checkNodesCmd), "")
+	subcommands.Register(killFortioCmd, "")
 
 	flag.Parse()
 
