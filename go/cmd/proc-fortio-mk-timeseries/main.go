@@ -40,7 +40,9 @@ func main() {
 	bw := bufio.NewWriter(os.Stdout)
 	defer bw.Flush()
 	fmt.Fprintln(bw, "Group,Instance,Client,Shard,Timestamp,MeanBps,MeanRpcsPerSec,NetLatencyNanosP50,NetLatencyNanosP90,NetLatencyNanosP95,NetLatencyNanosP99")
+
 	for _, inst := range instances {
+		histCombiner := proc.NewHistCombiner(3 * time.Second)
 		for _, client := range inst.Clients {
 			for _, shard := range client.Shards {
 				proc.ForEachStatsRec(&err, os.DirFS(flag.Arg(0)), shard.Path,
@@ -54,28 +56,31 @@ func main() {
 						}
 						tunix := t.UTC().Sub(time.Unix(0, 0)).Seconds()
 						net := findLat(rec, "net")
+						histCombiner.Add(t, proc.HistFromProto(net.GetHistNs()))
 						_, err = fmt.Fprintf(bw, "%s,%s,%s,%d,%f,%f,%f,%d,%d,%d,%d\n",
-							inst.Group, inst.Instance, client.Client, shard.Shard, tunix, rec.MeanBitsPerSec, rec.MeanRpcsPerSec, net.P50, net.P90, net.P95, net.P99)
+							inst.Group, inst.Instance, client.Client, shard.Shard, tunix, rec.MeanBitsPerSec, rec.MeanRpcsPerSec, net.P50Ns, net.P90Ns, net.P95Ns, net.P99Ns)
 						return err
 					})
 			}
+		}
+
+		merged := histCombiner.Percentiles([]float64{50, 90, 95, 99})
+		for _, timePerc := range merged {
+			fmt.Fprintf(bw, "%s,%s,%s,%d,%f,%d,%d,%d,%d,%d,%d\n",
+				inst.Group, inst.Instance, "Merged", 0,
+				timePerc.T.UTC().Sub(time.Unix(0, 0)).Seconds(), 0, 0, timePerc.V[0], timePerc.V[1], timePerc.V[2], timePerc.V[3])
 		}
 	}
 	if err != nil {
 		log.Fatalf("failed to read logs: %v", err)
 	}
+
 }
 
-type Latencies struct {
-	P50, P90, P95, P99 int64
-}
-
-func findLat(rec *pb.StatsRecord, kind string) Latencies {
+func findLat(rec *pb.StatsRecord, kind string) *pb.StatsRecord_LatencyStats {
 	for _, l := range rec.Latency {
-		if l.GetKind() == kind {
-			return Latencies{l.P50Ns, l.P90Ns, l.P95Ns, l.P99Ns}
-		}
+		return l
 	}
 
-	return Latencies{}
+	return nil
 }
