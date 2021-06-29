@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/subcommands"
 	"github.com/uluyol/heyp-agents/go/deploy/actions"
+	"github.com/uluyol/heyp-agents/go/deploy/configgen"
 	pb "github.com/uluyol/heyp-agents/go/proto"
 	"google.golang.org/protobuf/encoding/prototext"
 )
@@ -307,21 +308,55 @@ func (c *fetchDataCmd) Execute(ctx context.Context, fs *flag.FlagSet,
 	return subcommands.ExitSuccess
 }
 
-type checkNodesCmd struct {
+var checkNodesCmd = &configCmd{
+	name:     "check-nodes",
+	synopsis: "check node config (currently just ip addresses)",
+	exec:     actions.CheckNodeIPs,
+}
+
+type updateConfigCmd struct {
 	configPath string
+	rspecPath  string
+	sshUser    string
 }
 
-func (*checkNodesCmd) Name() string     { return "check-nodes" }
-func (*checkNodesCmd) Synopsis() string { return "check node config (currently just ip addresses)" }
-func (*checkNodesCmd) Usage() string    { return "" }
+func (*updateConfigCmd) Name() string     { return "update-config" }
+func (*updateConfigCmd) Synopsis() string { return "updates the config using the cloudlab manifest" }
+func (*updateConfigCmd) Usage() string    { return "" }
 
-func (c *checkNodesCmd) SetFlags(fs *flag.FlagSet) {
+func (c *updateConfigCmd) SetFlags(fs *flag.FlagSet) {
 	configVar(&c.configPath, fs)
+	fs.StringVar(&c.rspecPath, "rspec", "/dev/stdin", "cloudlab manifest")
+	fs.StringVar(&c.sshUser, "ssh-user", "uluyol", "ssh username to connect with")
 }
 
-func (c *checkNodesCmd) Execute(ctx context.Context, fs *flag.FlagSet,
+func (c *updateConfigCmd) Execute(ctx context.Context, fs *flag.FlagSet,
 	args ...interface{}) subcommands.ExitStatus {
-	err := actions.CheckNodeIPs(parseConfig(c.configPath))
+	f, err := os.Open(c.rspecPath)
+	if err != nil {
+		log.Fatalf("failed to open cloudlab rspec: %v", err)
+	}
+	defer f.Close()
+
+	cfgF, err := os.Open(c.configPath)
+	if err != nil {
+		log.Fatalf("failed to open config: %s", err)
+	}
+	data, err := ioutil.ReadAll(cfgF)
+	if err != nil {
+		log.Fatalf("failed to read config: %s", err)
+	}
+	fi, err := cfgF.Stat()
+	if err != nil {
+		log.Fatalf("failed to stat config: %s", err)
+	}
+
+	cfg := new(pb.DeploymentConfig)
+	if err := prototext.Unmarshal(data, cfg); err != nil {
+		log.Fatalf("failed to parse config: %s", err)
+	}
+
+	err = configgen.UpdateDeploymentConfig(cfg, data, f, c.sshUser, c.configPath, fi.Mode())
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -368,8 +403,9 @@ func main() {
 	subcommands.Register(new(fortioStartServersCmd), "")
 	subcommands.Register(new(fortioRunClientsCmd), "")
 	subcommands.Register(new(fetchDataCmd), "")
-	subcommands.Register(new(checkNodesCmd), "")
+	subcommands.Register(checkNodesCmd, "")
 	subcommands.Register(killFortioCmd, "")
+	subcommands.Register(new(updateConfigCmd), "")
 
 	flag.Parse()
 
