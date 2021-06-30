@@ -66,6 +66,7 @@ message DeployedFortioGroup {
   optional string name = 1;
   optional int32 envoy_port = 2;
   optional int32 envoy_admin_port = 3;
+  optional int32 envoy_num_threads = 4 [default = 8];
 }
 
 message DeploymentConfig {
