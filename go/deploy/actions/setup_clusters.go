@@ -562,7 +562,7 @@ func FortioStartServers(c *pb.DeploymentConfig, remoteTopdir, envoyLogLevel stri
 					fmt.Sprintf(
 						"tar xf - -C %[1]s/configs;"+
 							"tmux kill-session -t fortio-%[2]s-proxy;"+
-							"tmux new-session -d -s fortio-%[2]s-proxy 'ulimit -Sn unlimited; %[1]s/aux/envoy --log-level %[3]s --config-path %[1]s/configs/fortio-envoy-config-%[2]s.yaml 2>&1 | tee %[1]s/logs/fortio-%[2]s-proxy.log; sleep 100000'", remoteTopdir, group.config.GetName(), envoyLogLevel))
+							"tmux new-session -d -s fortio-%[2]s-proxy 'ulimit -Sn unlimited; %[1]s/aux/envoy --log-level %[3]s --concurrency %[4]d --config-path %[1]s/configs/fortio-envoy-config-%[2]s.yaml 2>&1 | tee %[1]s/logs/fortio-%[2]s-proxy.log; sleep 100000'", remoteTopdir, group.config.GetName(), envoyLogLevel, group.config.GetEnvoyNumThreads()))
 				cmd.SetStdin("config.tar", bytes.NewReader(configTar))
 				err := cmd.Run()
 				if err != nil {
