@@ -95,6 +95,8 @@ func TestEnvoyReverseProxy(t *testing.T) {
     type: STATIC
     connect_timeout: 5s
     lb_policy: ROUND_ROBIN
+    http2_protocol_options:
+      max_concurrent_streams: 20
     load_assignment:
       cluster_name: "AB"
       endpoints:
@@ -123,6 +125,8 @@ func TestEnvoyReverseProxy(t *testing.T) {
     type: STATIC
     connect_timeout: 5s
     lb_policy: LEAST_REQUEST
+    http2_protocol_options:
+      max_concurrent_streams: 20
     load_assignment:
       cluster_name: "backend-2"
       endpoints:
@@ -153,15 +157,6 @@ admin:
     socket_address:
       address: 0.0.0.0
       port_value: 112
-layered_runtime:
-  layers:
-  - name: static_layer_0
-    static_layer:
-      envoy:
-        resource_limits:
-          listener:
-            example_listener_name:
-              connection_limit: 10000
 `
 
 	cfg2 := EnvoyReverseProxy{
@@ -251,6 +246,8 @@ layered_runtime:
     type: STATIC
     connect_timeout: 5s
     lb_policy: ROUND_ROBIN
+    http2_protocol_options:
+      max_concurrent_streams: 20
     load_assignment:
       cluster_name: "1"
       endpoints:
@@ -279,6 +276,8 @@ layered_runtime:
     type: STATIC
     connect_timeout: 5s
     lb_policy: LEAST_REQUEST
+    http2_protocol_options:
+      max_concurrent_streams: 20
     load_assignment:
       cluster_name: "ZzZ"
       endpoints:
@@ -309,15 +308,6 @@ admin:
     socket_address:
       address: 0.0.0.0
       port_value: 4
-layered_runtime:
-  layers:
-  - name: static_layer_0
-    static_layer:
-      envoy:
-        resource_limits:
-          listener:
-            example_listener_name:
-              connection_limit: 10000
 `
 
 	fatalMismatch := func(name, have, want string) {

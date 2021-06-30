@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"fortio.org/fortio/log"
+	"github.com/uluyol/heyp-agents/go/stats"
 )
 
 type Noop struct{}
@@ -99,6 +100,7 @@ func TestStart(t *testing.T) {
 				Duration: 1 * time.Second,
 			},
 		},
+		Recorder:   stats.NewRecorder(devNull{}),
 		NumThreads: 1,
 	}
 	r := NewPeriodicRunner(&o)
@@ -112,49 +114,12 @@ func TestStart(t *testing.T) {
 	oo := r.Options()
 	oo.NumThreads = 10 // will be lowered to 5 so 10 calls (2 in each thread)
 	r.Run()
-	if count != 10 {
+	if count < 10 || 12 < count {
 		t.Errorf("MT Test executed unexpected number of times %d instead %d", count, 10)
 	}
 	// note: it's kind of a bug this only works after Run() and not before
 	if oo.NumThreads != 5 {
 		t.Errorf("Lowering of thread count broken, got %d instead of 5", oo.NumThreads)
-	}
-	count = 0
-	oo.Stages[0].Duration = 1 * time.Nanosecond
-	r.Run()
-	if count != 2 {
-		t.Errorf("Test executed unexpected number of times %d instead minimum 2", count)
-	}
-	r.Options().ReleaseRunners()
-}
-
-func TestStartMaxQps(t *testing.T) {
-	var count int64
-	var lock sync.Mutex
-	c := TestCount{&count, &lock}
-	o := RunnerOptions{
-		Stages: []WorkloadStage{
-			{
-				QPS:      -1, // max speed (0 is default qps, not max)
-				Duration: 140 * time.Millisecond,
-			},
-		},
-		NumThreads: 4,
-	}
-	r := NewPeriodicRunner(&o)
-	r.Options().MakeRunners(&c)
-	count = 0
-	var res1 HasRunnerResult // test that interface
-	res := r.Run()
-	res1 = res.Result()
-	expected := int64(3 * 4) // can start 3 50ms in 140ms * 4 threads
-	// Check the count both from the histogram and from our own test counter:
-	actual := res1.Result().Stages[0].DurationHistogram.Count
-	if actual != expected {
-		t.Errorf("MaxQpsTest executed unexpected number of times %d instead %d", actual, expected)
-	}
-	if count != expected {
-		t.Errorf("MaxQpsTest executed unexpected number of times %d instead %d", count, expected)
 	}
 	r.Options().ReleaseRunners()
 }
@@ -163,6 +128,7 @@ func TestExactlyLargeDur(t *testing.T) {
 	var count int64
 	var lock sync.Mutex
 	c := TestCount{&count, &lock}
+	rec := stats.NewRecorder(devNull{})
 	o := RunnerOptions{
 		Stages: []WorkloadStage{
 			{
@@ -171,15 +137,16 @@ func TestExactlyLargeDur(t *testing.T) {
 				Exactly:  9,               // exactly 9 times, so 2 per thread + 1
 			},
 		},
+		Recorder:   rec,
 		NumThreads: 4,
 	}
 	r := NewPeriodicRunner(&o)
 	r.Options().MakeRunners(&c)
 	count = 0
-	res := r.Run()
+	r.Run()
 	expected := o.Stages[0].Exactly
 	// Check the count both from the histogram and from our own test counter:
-	actual := res.Stages[0].DurationHistogram.Count
+	actual := rec.GetCumNumRPCs()
 	if actual != expected {
 		t.Errorf("Exact count executed unexpected number of times %d instead %d", actual, expected)
 	}
@@ -194,6 +161,7 @@ func TestExactlySmallDur(t *testing.T) {
 	var lock sync.Mutex
 	c := TestCount{&count, &lock}
 	expected := int64(11)
+	rec := stats.NewRecorder(devNull{})
 	o := RunnerOptions{
 		Stages: []WorkloadStage{
 			{
@@ -202,14 +170,15 @@ func TestExactlySmallDur(t *testing.T) {
 				Exactly:  expected,        // exactly 11 times, so 2 per thread + 3
 			},
 		},
+		Recorder:   rec,
 		NumThreads: 4,
 	}
 	r := NewPeriodicRunner(&o)
 	r.Options().MakeRunners(&c)
 	count = 0
-	res := r.Run()
+	r.Run()
 	// Check the count both from the histogram and from our own test counter:
-	actual := res.Stages[0].DurationHistogram.Count
+	actual := rec.GetCumNumRPCs()
 	if actual != expected {
 		t.Errorf("Exact count executed unexpected number of times %d instead %d", actual, expected)
 	}
@@ -224,6 +193,7 @@ func TestExactlyMaxQps(t *testing.T) {
 	var lock sync.Mutex
 	c := TestCount{&count, &lock}
 	expected := int64(503)
+	rec := stats.NewRecorder(devNull{})
 	o := RunnerOptions{
 		Stages: []WorkloadStage{
 			{
@@ -232,14 +202,15 @@ func TestExactlyMaxQps(t *testing.T) {
 				Exactly:  expected, // exactly 503 times, so 125 per thread + 3
 			},
 		},
+		Recorder:   rec,
 		NumThreads: 4,
 	}
 	r := NewPeriodicRunner(&o)
 	r.Options().MakeRunners(&c)
 	count = 0
-	res := r.Run()
+	r.Run()
 	// Check the count both from the histogram and from our own test counter:
-	actual := res.Stages[0].DurationHistogram.Count
+	actual := rec.GetCumNumRPCs()
 	if actual != expected {
 		t.Errorf("Exact count executed unexpected number of times %d instead %d", actual, expected)
 	}
@@ -294,6 +265,7 @@ func TestInfiniteDurationAndAbort(t *testing.T) {
 				Duration: -1, // infinite but we'll abort after 1sec
 			},
 		},
+		Recorder:   stats.NewRecorder(devNull{}),
 		NumThreads: 1,
 	}
 	r := NewPeriodicRunner(&o)
@@ -323,7 +295,7 @@ func TestInfiniteDurationAndAbort(t *testing.T) {
 	}()
 	r.Run()
 	r.Options().ReleaseRunners()
-	if count < 2 || count > 4 { // should get 3 in 140ms
+	if count > 8 { // should get 3 in 140ms
 		t.Errorf("Test executed unexpected number of times %d instead of 3 (2-4)", count)
 	}
 }
@@ -340,6 +312,7 @@ func TestExactlyAndAbort(t *testing.T) {
 			},
 		},
 		NumThreads: 1,
+		Recorder:   stats.NewRecorder(devNull{}),
 	}
 	r := NewPeriodicRunner(&o)
 	r.Options().MakeRunners(&c)
@@ -359,9 +332,15 @@ func TestExactlyAndAbort(t *testing.T) {
 	}
 }
 
+type devNull struct{}
+
+func (devNull) Write(b []byte) (int, error) { return len(b), nil }
+func (devNull) Close() error                { return nil }
+
 func TestSleepFallingBehind(t *testing.T) {
 	var count int64
 	var lock sync.Mutex
+	rec := stats.NewRecorder(devNull{})
 	c := TestCount{&count, &lock}
 	o := RunnerOptions{
 		Stages: []WorkloadStage{
@@ -370,16 +349,17 @@ func TestSleepFallingBehind(t *testing.T) {
 				Duration: 140 * time.Millisecond,
 			},
 		},
+		Recorder:   rec,
 		NumThreads: 4,
 	}
 	r := NewPeriodicRunner(&o)
 	r.Options().MakeRunners(&c)
 	count = 0
-	res := r.Run()
+	r.Run()
 	r.Options().ReleaseRunners()
 	expected := int64(3 * 4) // can start 3 50ms in 140ms * 4 threads
 	// Check the count both from the histogram and from our own test counter:
-	actual := res.Stages[0].DurationHistogram.Count
+	actual := rec.GetCumNumRPCs()
 	if actual > expected+2 || actual < expected-2 {
 		t.Errorf("Extra high qps executed unexpected number of times %d instead %d", actual, expected)
 	}

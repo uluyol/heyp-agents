@@ -27,7 +27,13 @@ import (
 
 	"fortio.org/fortio/log"
 	"github.com/uluyol/heyp-agents/go/fortio/stagedperiodic"
+	"github.com/uluyol/heyp-agents/go/stats"
 )
+
+type devNull struct{}
+
+func (devNull) Write(b []byte) (int, error) { return len(b), nil }
+func (devNull) Close() error                { return nil }
 
 func TestHTTPRunner(t *testing.T) {
 	mux, addr := DynamicHTTPServer(false)
@@ -38,6 +44,7 @@ func TestHTTPRunner(t *testing.T) {
 	opts.Stages = []stagedperiodic.WorkloadStage{{QPS: 100}}
 	opts.URL = baseURL
 	opts.DisableFastClient = true
+	opts.Recorder = stats.NewRecorder(devNull{})
 	_, err := RunHTTPTest(&opts)
 	if err == nil {
 		t.Error("Expecting an error but didn't get it when not using full url")
@@ -50,7 +57,7 @@ func TestHTTPRunner(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	totalReq := res.Stages[0].DurationHistogram.Count
+	totalReq := opts.Recorder.GetCumNumRPCs()
 	httpOk := res.RetCodes[http.StatusOK]
 	if totalReq != httpOk {
 		t.Errorf("Mismatch between requests %d and ok %v", totalReq, res.RetCodes)
@@ -90,6 +97,7 @@ func testHTTPNotLeaking(t *testing.T, opts *HTTPRunnerOptions) {
 			QPS:     float64(numCalls) / 2, // take 1 second
 		},
 	}
+	opts.Recorder = stats.NewRecorder(devNull{})
 	opts.URL = url
 	// Warm up round 1
 	res, err := RunHTTPTest(opts)
@@ -148,6 +156,7 @@ func TestHTTPRunnerClientRace(t *testing.T) {
 	opts.Stages = []stagedperiodic.WorkloadStage{
 		{QPS: 100},
 	}
+	opts.Recorder = stats.NewRecorder(devNull{})
 	opts2 := opts
 	go RunHTTPTest(&opts2)
 	res, err := RunHTTPTest(&opts)
@@ -155,7 +164,7 @@ func TestHTTPRunnerClientRace(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	totalReq := res.Stages[0].DurationHistogram.Count
+	totalReq := opts.Recorder.GetCumNumRPCs() / 2
 	httpOk := res.RetCodes[http.StatusOK]
 	if totalReq != httpOk {
 		t.Errorf("Mismatch between requests %d and ok %v", totalReq, res.RetCodes)
@@ -175,12 +184,13 @@ func TestClosingAndSocketCount(t *testing.T) {
 			Exactly: numReq,
 		},
 	}
+	opts.Recorder = stats.NewRecorder(devNull{})
 	opts.NumThreads = 5
 	res, err := RunHTTPTest(&opts)
 	if err != nil {
 		t.Fatal(err)
 	}
-	totalReq := res.Stages[0].DurationHistogram.Count
+	totalReq := opts.Recorder.GetCumNumRPCs()
 	if totalReq != numReq {
 		t.Errorf("Mismatch between requests %d and expected %d", totalReq, numReq)
 	}
@@ -203,6 +213,7 @@ func TestHTTPRunnerBadServer(t *testing.T) {
 	opts.Stages = []stagedperiodic.WorkloadStage{
 		{QPS: 10},
 	}
+	opts.Recorder = stats.NewRecorder(devNull{})
 	opts.Init(baseURL)
 	_, err := RunHTTPTest(&opts)
 	if err == nil {
@@ -250,29 +261,32 @@ func TestAbortOn(t *testing.T) {
 	o.Stages = []stagedperiodic.WorkloadStage{
 		{QPS: 10, Exactly: 40},
 	}
-	r, err := RunHTTPTest(&o)
+	o.Recorder = stats.NewRecorder(devNull{})
+	_, err := RunHTTPTest(&o)
 	if err != nil {
 		t.Errorf("Error while starting runner1: %v", err)
 	}
-	count := r.Result().Stages[0].DurationHistogram.Count
+	count := o.Recorder.GetCumNumRPCs()
 	if count > int64(o.NumThreads) {
 		t.Errorf("Abort1 not working, did %d requests expecting ideally 1 and <= %d", count, o.NumThreads)
 	}
 	o.URL += "foo/"
-	r, err = RunHTTPTest(&o)
+	o.Recorder = stats.NewRecorder(devNull{})
+	_, err = RunHTTPTest(&o)
 	if err != nil {
 		t.Errorf("Error while starting runner2: %v", err)
 	}
-	count = r.Result().Stages[0].DurationHistogram.Count
+	count = o.Recorder.GetCumNumRPCs()
 	if count != o.Stages[0].Exactly {
 		t.Errorf("Did %d requests when expecting all %d (non matching AbortOn)", count, o.Stages[0].Exactly)
 	}
 	o.AbortOn = 200
-	r, err = RunHTTPTest(&o)
+	o.Recorder = stats.NewRecorder(devNull{})
+	_, err = RunHTTPTest(&o)
 	if err != nil {
 		t.Errorf("Error while starting runner3: %v", err)
 	}
-	count = r.Result().Stages[0].DurationHistogram.Count
+	count = o.Recorder.GetCumNumRPCs()
 	if count > int64(o.NumThreads) {
 		t.Errorf("Abort2 not working, did %d requests expecting ideally 1 and <= %d", count, o.NumThreads)
 	}
