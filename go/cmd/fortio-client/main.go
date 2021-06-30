@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"net/url"
 	"os"
 	"os/exec"
@@ -131,6 +132,16 @@ func toHTTPOptions(addr string, c *proto.FortioClientConfig) (wanhttp.HTTPOption
 	return opts, nil
 }
 
+func maxSize(sds []*proto.FortioClientConfig_SizeAndWeight) int32 {
+	maxSize := int32(1024)
+	for _, sd := range sds {
+		if sd.GetRespSizeBytes() > maxSize {
+			maxSize = sd.GetRespSizeBytes()
+		}
+	}
+	return maxSize
+}
+
 func workerMain(shardIndex, numShards int, config *proto.FortioClientConfig, startTime time.Time) {
 	*log.LogPrefix = fmt.Sprintf("> [shard %d] ", shardIndex)
 
@@ -160,8 +171,14 @@ func workerMain(shardIndex, numShards int, config *proto.FortioClientConfig, sta
 		StartTime:  &startTime,
 	}
 
+	if shardIndex == 0 {
+		log.Infof("going to run stages: %+v", stages)
+	}
+
 	addrs := strings.Split(*addrsFlag, ",")
 	addr := addrs[shardIndex%len(addrs)]
+
+	wanhttp.BufferSizeKb = int(math.Ceil(float64(maxSize(config.GetSizeDist()))/1024) + 2)
 
 	httpOpts, err := toHTTPOptions(addr, config)
 	if err != nil {
@@ -189,7 +206,7 @@ func workerMain(shardIndex, numShards int, config *proto.FortioClientConfig, sta
 
 	enc := json.NewEncoder(f)
 	if err := enc.Encode(res); err != nil {
-		log.Fatalf("failed to marshal summary: %v", err)
+		log.Fatalf("failed to marshal summary: %v; data:\n%+v", err, res)
 	}
 
 	f.Close()
