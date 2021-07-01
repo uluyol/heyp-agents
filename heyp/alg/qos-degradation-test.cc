@@ -122,6 +122,90 @@ TEST(HeypSigcomm20PickLOPRIChildrenTest, FlipCompletely) {
   EXPECT_THAT(PickLOPRIChildren(info, 0, selector), testing::ElementsAre(f, f, f, f));
 }
 
+TEST(LargestFirstPickLOPRIChildrenTest, Directionality) {
+  const proto::AggInfo info = ChildrenWithDemandsAndPri({
+      {200, true},
+      {100, false},
+      {300, false},
+      {100, true},
+  });
+
+  constexpr bool t = true;
+  constexpr bool f = false;
+
+  proto::DowngradeSelector selector;
+  selector.set_type(proto::DS_LARGEST_FIRST);
+
+  EXPECT_THAT(PickLOPRIChildren(info, 0.28, selector), testing::ElementsAre(f, f, t, f));
+  EXPECT_THAT(PickLOPRIChildren(info, 0.58, selector), testing::ElementsAre(t, f, t, f));
+  EXPECT_THAT(PickLOPRIChildren(info, 0.71, selector), testing::ElementsAre(t, f, t, f));
+  EXPECT_THAT(PickLOPRIChildren(info, 0.14, selector), testing::ElementsAre(f, f, f, f));
+}
+
+TEST(LargestFirstPickLOPRIChildrenTest, FlipCompletely) {
+  const proto::AggInfo info = ChildrenWithDemandsAndPri({
+      {200, true},
+      {100, false},
+      {300, false},
+      {100, true},
+  });
+
+  constexpr bool t = true;
+  constexpr bool f = false;
+
+  proto::DowngradeSelector selector;
+  selector.set_type(proto::DS_LARGEST_FIRST);
+
+  EXPECT_THAT(PickLOPRIChildren(info, 1, selector), testing::ElementsAre(t, t, t, t));
+  EXPECT_THAT(PickLOPRIChildren(info, 0, selector), testing::ElementsAre(f, f, f, f));
+}
+
+TEST(KnapsackSolverPickLOPRIChildrenTest, Directionality) {
+  const proto::AggInfo info = ChildrenWithDemandsAndPri({
+      {200, true},
+      {100, false},
+      {300, false},
+      {100, true},
+  });
+
+  constexpr bool t = true;
+  constexpr bool f = false;
+
+  proto::DowngradeSelector selector;
+  selector.set_type(proto::DS_KNAPSACK_SOLVER);
+
+  EXPECT_THAT(
+      PickLOPRIChildren(info, 0.28, selector),
+      testing::AnyOf(testing::ElementsAre(f, t, f, f), testing::ElementsAre(f, f, f, t)));
+  EXPECT_THAT(
+      PickLOPRIChildren(info, 0.58, selector),
+      testing::AnyOf(testing::ElementsAre(t, t, f, t), testing::ElementsAre(f, t, t, f),
+                     testing::ElementsAre(f, f, t, t)));
+  EXPECT_THAT(
+      PickLOPRIChildren(info, 0.71, selector),
+      testing::AnyOf(testing::ElementsAre(t, t, f, t), testing::ElementsAre(f, t, t, f),
+                     testing::ElementsAre(f, f, t, t)));
+  EXPECT_THAT(PickLOPRIChildren(info, 0.14, selector), testing::ElementsAre(f, f, f, f));
+}
+
+TEST(KnapsackSolverPickLOPRIChildrenTest, FlipCompletely) {
+  const proto::AggInfo info = ChildrenWithDemandsAndPri({
+      {200, true},
+      {100, false},
+      {300, false},
+      {100, true},
+  });
+
+  constexpr bool t = true;
+  constexpr bool f = false;
+
+  proto::DowngradeSelector selector;
+  selector.set_type(proto::DS_KNAPSACK_SOLVER);
+
+  EXPECT_THAT(PickLOPRIChildren(info, 1, selector), testing::ElementsAre(t, t, t, t));
+  EXPECT_THAT(PickLOPRIChildren(info, 0, selector), testing::ElementsAre(f, f, f, f));
+}
+
 TEST(FracAdmittedAtLOPRITest, Basic) {
   EXPECT_EQ(FracAdmittedAtLOPRI(
                 ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 1000"), 600, 200),

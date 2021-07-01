@@ -12,6 +12,7 @@
 #include "heyp/flows/dc-mapper.h"
 #include "heyp/host-agent/enforcer.h"
 #include "heyp/host-agent/simulated-wan-db.h"
+#include "heyp/proto/config.pb.h"
 #include "heyp/proto/heyp.pb.h"
 
 namespace heyp {
@@ -53,7 +54,7 @@ class LinuxHostEnforcer : public HostEnforcer {
  public:
   static std::unique_ptr<LinuxHostEnforcer> Create(
       absl::string_view device, const MatchHostFlowsFunc& match_host_flows_fn,
-      absl::string_view debug_log_outdir = "");
+      const proto::HostEnforcerConfig& config);
 
   virtual ~LinuxHostEnforcer() = default;
 

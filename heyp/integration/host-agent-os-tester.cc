@@ -16,6 +16,7 @@
 #include "heyp/integration/step-worker.h"
 #include "heyp/log/logging.h"
 #include "heyp/posix/os.h"
+#include "heyp/proto/config.pb.h"
 
 namespace heyp {
 namespace testing {
@@ -87,8 +88,11 @@ class EasyEnforcer {
                         absl::string_view log_dir)
       : demand_provider_(all_flows) {
     if (kHostIsLinux) {
+      proto::HostEnforcerConfig enforcer_config;
+      enforcer_config.set_debug_log_dir(std::string(log_dir));
+      enforcer_config.set_enforce_hipri(true);
       auto e = LinuxHostEnforcer::Create(
-          device, absl::bind_front(WithFlowPriority, use_hipri), log_dir);
+          device, absl::bind_front(WithFlowPriority, use_hipri), enforcer_config);
       auto st = e->ResetDeviceConfig();
       if (!st.ok()) {
         LOG(ERROR) << "failed to reset config of device '" << device << "': " << st;

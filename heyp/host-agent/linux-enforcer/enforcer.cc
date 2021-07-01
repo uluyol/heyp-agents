@@ -128,7 +128,7 @@ class LinuxHostEnforcerImpl : public LinuxHostEnforcer {
  public:
   LinuxHostEnforcerImpl(absl::string_view device,
                         const MatchHostFlowsFunc& match_host_flows_fn,
-                        absl::string_view debug_log_outdir);
+                        const proto::HostEnforcerConfig& config);
 
   absl::Status ResetDeviceConfig() override;
 
@@ -184,13 +184,18 @@ class LinuxHostEnforcerImpl : public LinuxHostEnforcer {
       sys_info_;  // entries are never deleted, values are pointer for stability
 };
 
+constexpr int64_t kMaxBandwidthBps = 100 * (static_cast<int64_t>(1) << 30);  // 100 Gbps
+
+constexpr char kDscpHipri[] = "AF21";
+constexpr char kDscpLopri[] = "BE";
+
 LinuxHostEnforcerImpl::LinuxHostEnforcerImpl(
     absl::string_view device, const MatchHostFlowsFunc& match_host_flows_fn,
-    absl::string_view debug_log_outdir)
+    const proto::HostEnforcerConfig& config)
     : device_(device),
       match_host_flows_fn_(match_host_flows_fn),
-      ipt_controller_(device),
-      debug_logger_(debug_log_outdir),
+      ipt_controller_(device, config.enforce_hipri() ? "" : kDscpHipri),
+      debug_logger_(config.debug_log_dir()),
       next_class_id_(2),
       report_error_on_dyn_qdisc_(false) {}
 
@@ -207,11 +212,6 @@ absl::Status LinuxHostEnforcerImpl::ResetDeviceConfig() {
   }
   return absl::OkStatus();
 }
-
-constexpr int64_t kMaxBandwidthBps = 100 * (static_cast<int64_t>(1) << 30);  // 100 Gbps
-
-constexpr char kDscpHipri[] = "AF21";
-constexpr char kDscpLopri[] = "BE";
 
 absl::Status LinuxHostEnforcerImpl::InitSimulatedWan(std::vector<FlowNetemConfig> configs,
                                                      bool contains_all_flows) {
@@ -583,9 +583,8 @@ bool LinuxHostEnforcerImpl::IsLopri(const proto::FlowMarker& flow) {
 
 std::unique_ptr<LinuxHostEnforcer> LinuxHostEnforcer::Create(
     absl::string_view device, const MatchHostFlowsFunc& match_host_flows_fn,
-    absl::string_view debug_log_outdir) {
-  return absl::make_unique<LinuxHostEnforcerImpl>(device, match_host_flows_fn,
-                                                  debug_log_outdir);
+    const proto::HostEnforcerConfig& config) {
+  return absl::make_unique<LinuxHostEnforcerImpl>(device, match_host_flows_fn, config);
 }
 
 }  // namespace heyp

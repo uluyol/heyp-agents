@@ -7,6 +7,7 @@
 #include "heyp/alg/rate-limits.h"
 #include "heyp/proto/alg.h"
 #include "heyp/proto/config.pb.h"
+#include "heyp/proto/heyp.pb.h"
 #include "routing-algos/alg/max-min-fairness.h"
 
 namespace heyp {
@@ -266,6 +267,116 @@ class HeypSigcomm20Allocator : public PerAggAllocator {
   }
 };
 
+class DowngradeAllocator : public PerAggAllocator {
+ private:
+  const proto::ClusterAllocatorConfig config_;
+  const FlowMap<proto::FlowAlloc> agg_admissions_;
+
+ public:
+  DowngradeAllocator(const proto::ClusterAllocatorConfig& config,
+                     FlowMap<proto::FlowAlloc> agg_admissions, double demand_multiplier)
+      : config_(config), agg_admissions_(agg_admissions) {}
+
+  std::vector<proto::FlowAlloc> AllocAgg(absl::Time time,
+                                         const proto::AggInfo& agg_info) override {
+    const bool should_debug = DebugQosAndRateLimitSelection();
+
+    const proto::FlowAlloc& admissions = agg_admissions_.at(agg_info.parent().flow());
+
+    int64_t hipri_admission = admissions.hipri_rate_limit_bps();
+    int64_t lopri_admission = admissions.lopri_rate_limit_bps();
+
+    if (should_debug) {
+      LOG(INFO) << "allocating for time = " << time;
+      LOG(INFO) << "hipri admission = " << hipri_admission
+                << " lopri admission = " << lopri_admission;
+    }
+
+    const double frac_lopri =
+        FracAdmittedAtLOPRI(agg_info.parent(), hipri_admission, lopri_admission);
+
+    if (should_debug) {
+      LOG(INFO) << "lopri_frac = " << frac_lopri;
+    }
+
+    ABSL_ASSERT(frac_lopri >= 0);
+    ABSL_ASSERT(frac_lopri <= 1);
+
+    // Burstiness matters for selecting children and assigning them rate limits.
+    if (config_.enable_burstiness()) {
+      double burstiness = BweBurstinessFactor(agg_info);
+      if (should_debug) {
+        LOG(INFO) << "burstiness factor = " << burstiness;
+      }
+      hipri_admission = hipri_admission * burstiness;
+      lopri_admission = lopri_admission * burstiness;
+    }
+
+    std::vector<bool> lopri_children =
+        PickLOPRIChildren(agg_info, frac_lopri, config_.downgrade_selector());
+
+    std::vector<int64_t> hipri_demands;
+    std::vector<int64_t> lopri_demands;
+    hipri_demands.reserve(agg_info.children_size());
+    lopri_demands.reserve(agg_info.children_size());
+    for (size_t i = 0; i < agg_info.children_size(); ++i) {
+      if (lopri_children[i]) {
+        lopri_demands.push_back(agg_info.children(i).predicted_demand_bps());
+      } else {
+        hipri_demands.push_back(agg_info.children(i).predicted_demand_bps());
+      }
+    }
+
+    routing_algos::SingleLinkMaxMinFairnessProblem problem;
+    int64_t hipri_waterlevel =
+        problem.ComputeWaterlevel(hipri_admission, {hipri_demands});
+    int64_t lopri_waterlevel =
+        problem.ComputeWaterlevel(lopri_admission, {lopri_demands});
+
+    if (should_debug) {
+      LOG(INFO) << "hipri waterlevel = " << hipri_waterlevel
+                << " lopri waterlevel = " << lopri_waterlevel;
+    }
+    int64_t hipri_bonus = 0;
+    int64_t lopri_bonus = 0;
+    if (config_.enable_bonus()) {
+      hipri_bonus =
+          EvenlyDistributeExtra(hipri_admission, hipri_demands, hipri_waterlevel);
+      lopri_bonus =
+          EvenlyDistributeExtra(lopri_admission, lopri_demands, lopri_waterlevel);
+      if (should_debug) {
+        LOG(INFO) << "lopri admission = " << lopri_admission << " demands = ["
+                  << absl::StrJoin(lopri_demands, " ")
+                  << "] lopri waterlevel = " << lopri_waterlevel;
+        LOG(INFO) << "hipri bonus = " << hipri_bonus << " lopri bonus = " << lopri_bonus;
+      }
+    }
+
+    const int64_t hipri_limit =
+        config_.oversub_factor() * (hipri_waterlevel + hipri_bonus);
+    const int64_t lopri_limit =
+        config_.oversub_factor() * (lopri_waterlevel + lopri_bonus);
+
+    if (should_debug) {
+      LOG(INFO) << "hipri limit = " << hipri_limit << " lopri limit = " << lopri_limit;
+    }
+
+    std::vector<proto::FlowAlloc> allocs;
+    allocs.reserve(agg_info.children_size());
+    for (size_t i = 0; i < agg_info.children_size(); ++i) {
+      proto::FlowAlloc alloc;
+      *alloc.mutable_flow() = agg_info.children(i).flow();
+      if (lopri_children[i]) {
+        alloc.set_lopri_rate_limit_bps(lopri_limit);
+      } else {
+        alloc.set_hipri_rate_limit_bps(hipri_limit);
+      }
+      allocs.push_back(std::move(alloc));
+    }
+    return allocs;
+  }
+};
+
 }  // namespace
 
 absl::StatusOr<std::unique_ptr<ClusterAllocator>> ClusterAllocator::Create(
@@ -283,10 +394,11 @@ absl::StatusOr<std::unique_ptr<ClusterAllocator>> ClusterAllocator::Create(
           absl::make_unique<HeypSigcomm20Allocator>(config, std::move(cluster_admissions),
                                                     demand_multiplier),
           recorder));
-    case proto::CA_DOWNGRADE_ONLY:
-      return absl::InternalError("CA_DOWNGRADE_ONLY not implemented");
-    case proto::CA_DOWNGRADE_AND_LIMIT:
-      return absl::InternalError("CA_DOWNGRADE_AND_LIMIT not implemented");
+    case proto::CA_SIMPLE_DOWNGRADE:
+      return absl::WrapUnique(new ClusterAllocator(
+          absl::make_unique<DowngradeAllocator>(config, std::move(cluster_admissions),
+                                                demand_multiplier),
+          recorder));
   }
   LOG(FATAL) << "unreachable: got cluster allocator type: " << config.type();
   return nullptr;

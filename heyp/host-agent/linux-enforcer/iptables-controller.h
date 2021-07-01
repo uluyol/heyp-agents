@@ -39,7 +39,7 @@ void ComputeDiff(SettingBatch& old_batch, SettingBatch& new_batch, SettingBatch*
 
 class Controller {
  public:
-  explicit Controller(absl::string_view dev);
+  explicit Controller(absl::string_view dev, absl::string_view dscp_to_ignore_class_id);
 
   Runner& GetRunner();
 
@@ -52,6 +52,7 @@ class Controller {
 
  private:
   const std::string dev_;
+  const std::string dscp_to_ignore_class_id_;
   std::unique_ptr<Runner> runner_;
 
   SettingBatch staged_;
@@ -65,8 +66,8 @@ class Controller {
 
 void AddRuleLinesToDelete(absl::string_view dev, const SettingBatch& batch,
                           absl::Cord& lines);
-void AddRuleLinesToAdd(absl::string_view dev, const SettingBatch& batch,
-                       absl::Cord& lines);
+void AddRuleLinesToAdd(absl::string_view dscp_to_ignore_class_id, absl::string_view dev,
+                       const SettingBatch& batch, absl::Cord& lines);
 
 absl::string_view SettingsFindDscp(const SettingBatch& batch, uint16_t src_port,
                                    uint16_t dst_port, absl::string_view dst_addr,

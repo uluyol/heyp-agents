@@ -30,6 +30,7 @@ message HostFlowStateReporterConfig {
 message HostEnforcerConfig {
   // If specified, will periodically dump iptables and tc state here.
   optional string debug_log_dir = 1;
+  optional bool enforce_hipri = 2 [default = true];
 }
 
 message HostDaemonConfig {
@@ -89,8 +90,7 @@ message HostAgentConfig {
 enum ClusterAllocatorType {
   CA_BWE = 0;
   CA_HEYP_SIGCOMM20 = 1;
-  CA_DOWNGRADE_ONLY = 2;
-  CA_DOWNGRADE_AND_LIMIT = 3;
+  CA_SIMPLE_DOWNGRADE = 2;
 }
 
 enum DowngradeSelectorType {

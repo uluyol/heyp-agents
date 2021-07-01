@@ -74,8 +74,10 @@ void ComputeDiff(SettingBatch& old_batch, SettingBatch& new_batch, SettingBatch*
   }
 }
 
-Controller::Controller(absl::string_view dev)
-    : dev_(dev), runner_(Runner::Create(IpFamily::kIpV4)) {}
+Controller::Controller(absl::string_view dev, absl::string_view dscp_to_ignore_class_id)
+    : dev_(dev),
+      dscp_to_ignore_class_id_(dscp_to_ignore_class_id),
+      runner_(Runner::Create(IpFamily::kIpV4)) {}
 
 Runner& Controller::GetRunner() { return *runner_; }
 
@@ -116,7 +118,7 @@ absl::Status Controller::CommitChanges() {
 
   mangle_table.Append("*mangle\n");
   AddRuleLinesToDelete(dev_, to_del_, mangle_table);
-  AddRuleLinesToAdd(dev_, to_add_, mangle_table);
+  AddRuleLinesToAdd(dscp_to_ignore_class_id_, dev_, to_add_, mangle_table);
   mangle_table.Append("COMMIT\n");
 
   LOG(INFO) << "updating rules for iptables 'mangle' table";
@@ -178,8 +180,8 @@ void AddRuleLinesToDelete(absl::string_view dev, const SettingBatch& batch,
   }
 }
 
-void AddRuleLinesToAdd(absl::string_view dev, const SettingBatch& batch,
-                       absl::Cord& lines) {
+void AddRuleLinesToAdd(absl::string_view dscp_to_ignore_class_id, absl::string_view dev,
+                       const SettingBatch& batch, absl::Cord& lines) {
   std::string src_port_match;
   std::string dst_port_match;
   for (const Setting& s : batch.settings) {
@@ -202,13 +204,17 @@ void AddRuleLinesToAdd(absl::string_view dev, const SettingBatch& batch,
       lines.Append(absl::StrFormat(
           "-I OUTPUT -o %s -p tcp -m tcp -d %s%s%s -j DSCP --set-dscp-class %s\n", dev,
           s.dst_addr, src_port_match, dst_port_match, s.dscp));
-      lines.Append(absl::StrFormat(
-          "-I OUTPUT -o %s -p tcp -m tcp -d %s%s%s -j CLASSIFY --set-class %s\n", dev,
-          s.dst_addr, src_port_match, dst_port_match, s.class_id));
+      if (s.dscp != dscp_to_ignore_class_id) {
+        lines.Append(absl::StrFormat(
+            "-I OUTPUT -o %s -p tcp -m tcp -d %s%s%s -j CLASSIFY --set-class %s\n", dev,
+            s.dst_addr, src_port_match, dst_port_match, s.class_id));
+      }
     } else {
-      lines.Append(absl::StrFormat(
-          "-A OUTPUT -o %s -p tcp -m tcp -d %s%s%s -j CLASSIFY --set-class %s\n", dev,
-          s.dst_addr, src_port_match, dst_port_match, s.class_id));
+      if (s.dscp != dscp_to_ignore_class_id) {
+        lines.Append(absl::StrFormat(
+            "-A OUTPUT -o %s -p tcp -m tcp -d %s%s%s -j CLASSIFY --set-class %s\n", dev,
+            s.dst_addr, src_port_match, dst_port_match, s.class_id));
+      }
       lines.Append(absl::StrFormat(
           "-A OUTPUT -o %s -p tcp -m tcp -d %s%s%s -j DSCP --set-dscp-class %s\n", dev,
           s.dst_addr, src_port_match, dst_port_match, s.dscp));

@@ -169,7 +169,7 @@ TEST(AddRuleLinesToDeleteTest, Basic) {
 TEST(AddRuleLinesToAddTest, Basic) {
   absl::Cord lines;
   AddRuleLinesToAdd(
-      "eth5",
+      "AF31", "eth5",
       SettingBatch{{
           {.dst_addr = "10.0.0.2", .class_id = "2:99", .dscp = "AF41"},
           {.dst_port = 555, .dst_addr = "10.0.0.1", .class_id = "2:100", .dscp = "AF31"},
@@ -193,7 +193,6 @@ TEST(AddRuleLinesToAddTest, Basic) {
     -A OUTPUT -o eth5 -p tcp -m tcp -d 10.0.0.2 -j RETURN
     -I OUTPUT -o eth5 -p tcp -m tcp -d 10.0.0.1 --dport 555 -j RETURN
     -I OUTPUT -o eth5 -p tcp -m tcp -d 10.0.0.1 --dport 555 -j DSCP --set-dscp-class AF31
-    -I OUTPUT -o eth5 -p tcp -m tcp -d 10.0.0.1 --dport 555 -j CLASSIFY --set-class 2:100
     -I OUTPUT -o eth5 -p tcp -m tcp -d 10.0.0.1 --dport 20 -j RETURN
     -I OUTPUT -o eth5 -p tcp -m tcp -d 10.0.0.1 --dport 20 -j DSCP --set-dscp-class AF41
     -I OUTPUT -o eth5 -p tcp -m tcp -d 10.0.0.1 --dport 20 -j CLASSIFY --set-class 2:101
@@ -202,7 +201,6 @@ TEST(AddRuleLinesToAddTest, Basic) {
     -I OUTPUT -o eth5 -p tcp -m tcp -d 127.0.0.1 --sport 12 --dport 20 -j CLASSIFY --set-class 2:102
     -I OUTPUT -o eth5 -p tcp -m tcp -d 127.0.0.1 --sport 13 --dport 20 -j RETURN
     -I OUTPUT -o eth5 -p tcp -m tcp -d 127.0.0.1 --sport 13 --dport 20 -j DSCP --set-dscp-class AF31
-    -I OUTPUT -o eth5 -p tcp -m tcp -d 127.0.0.1 --sport 13 --dport 20 -j CLASSIFY --set-class 2:103
   )";
 
   EXPECT_EQ(lines, CleanExpectedLines(expected_lines));

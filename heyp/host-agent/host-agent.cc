@@ -120,7 +120,7 @@ absl::Status Run(const proto::HostAgentConfig& c) {
 
     auto e = LinuxHostEnforcer::Create(
         device_or.value(), absl::bind_front(&ExpandDestIntoHostsSinglePri, &dc_mapper),
-        c.enforcer().debug_log_dir());
+        c.enforcer());
     absl::Status st = e->ResetDeviceConfig();
     if (!st.ok()) {
       LOG(ERROR) << "failed to reset config of device '" << device_or.value()
