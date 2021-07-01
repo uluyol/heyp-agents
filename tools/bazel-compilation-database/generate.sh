@@ -101,6 +101,7 @@ fi
 
 # shellcheck disable=SC2046
 "$BAZEL" build \
+	--config=clang-opt \
   "--override_repository=bazel_compdb=${ASPECTS_DIR}" \
   "--aspects=@bazel_compdb//:aspects.bzl%compilation_database_aspect" \
   "--noshow_progress" \
