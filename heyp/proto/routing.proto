@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package heyp.proto;
+
+option go_package = "github.com/uluyol/heyp-agents/go/proto";
+
+message RoutingConfig {
+  string virt_net_name = 1; // in case we need multiple
+  repeated string relay_ips = 2;
+  string real_ip_prefix = 3; // e.g. 192.168.1.
+  string virt_ip_prefix = 4; // only contains first two bytes: e.g. 10.0.
+  int32 num_ips = 5;
+}
