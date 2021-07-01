@@ -54,7 +54,7 @@ message DeployedFortioInstance {
   // fortio-[group]-envoy-proxy
   optional string group = 1;
   optional string name = 2;
-  repeated int32 serve_ports = 3; // one server instance will be opened per port
+  repeated int32 serve_ports = 3;  // one server instance will be opened per port
   optional string lb_policy = 4 [default = "ROUND_ROBIN"];
   optional int32 max_connections = 5 [default = 100000];
   optional int32 max_pending_requests = 6 [default = 1000000];
