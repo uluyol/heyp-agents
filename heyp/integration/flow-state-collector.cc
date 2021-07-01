@@ -1,6 +1,6 @@
 #include "heyp/integration/flow-state-collector.h"
 
-#include "glog/logging.h"
+#include "heyp/log/logging.h"
 
 namespace heyp {
 namespace testing {

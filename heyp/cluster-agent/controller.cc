@@ -1,10 +1,10 @@
 #include "heyp/cluster-agent/controller.h"
 
 #include "absl/base/macros.h"
-#include "glog/logging.h"
 #include "heyp/alg/debug.h"
 #include "heyp/cluster-agent/allocator.h"
 #include "heyp/cluster-agent/allocs.h"
+#include "heyp/log/logging.h"
 
 namespace heyp {
 

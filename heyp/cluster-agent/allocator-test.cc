@@ -27,7 +27,7 @@ proto::AllocBundle Bundle(const AllocSet& alloc_set) {
 
 TEST(BweClusterAllocatorTest, Basic) {
   auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
-                                          type: BWE
+                                          type: CA_BWE
                                           enable_burstiness: false
                                           enable_bonus: true
                                           oversub_factor: 1.0
@@ -38,7 +38,8 @@ TEST(BweClusterAllocatorTest, Basic) {
                                             hipri_rate_limit_bps: 666666
                                           }
                                         )"),
-                                        1);
+                                        1)
+                   .value();
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
@@ -90,7 +91,7 @@ TEST(BweClusterAllocatorTest, Basic) {
 
 TEST(BweClusterAllocatorTest, WithOversub) {
   auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
-                                          type: BWE
+                                          type: CA_BWE
                                           enable_burstiness: false
                                           enable_bonus: true
                                           oversub_factor: 1.5
@@ -101,7 +102,8 @@ TEST(BweClusterAllocatorTest, WithOversub) {
                                             hipri_rate_limit_bps: 600
                                           }
                                         )"),
-                                        1);
+                                        1)
+                   .value();
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
@@ -137,7 +139,7 @@ TEST(BweClusterAllocatorTest, WithOversub) {
 
 TEST(BweClusterAllocatorTest, WithBonus) {
   auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
-                                          type: BWE
+                                          type: CA_BWE
                                           enable_burstiness: false
                                           enable_bonus: true
                                           oversub_factor: 1.0
@@ -148,7 +150,8 @@ TEST(BweClusterAllocatorTest, WithBonus) {
                                             hipri_rate_limit_bps: 600
                                           }
                                         )"),
-                                        1);
+                                        1)
+                   .value();
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
@@ -184,7 +187,7 @@ TEST(BweClusterAllocatorTest, WithBonus) {
 
 TEST(BweClusterAllocatorTest, WithBurstiness) {
   auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
-                                          type: BWE
+                                          type: CA_BWE
                                           enable_burstiness: true
                                           enable_bonus: true
                                           oversub_factor: 1.0
@@ -195,7 +198,8 @@ TEST(BweClusterAllocatorTest, WithBurstiness) {
                                             hipri_rate_limit_bps: 600
                                           }
                                         )"),
-                                        1);
+                                        1)
+                   .value();
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
@@ -234,7 +238,7 @@ TEST(BweClusterAllocatorTest, WithBurstiness) {
 
 TEST(BweClusterAllocatorTest, WithBurstinessAndCongestion) {
   auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
-                                          type: BWE
+                                          type: CA_BWE
                                           enable_burstiness: true
                                           enable_bonus: true
                                           oversub_factor: 1.0
@@ -245,7 +249,8 @@ TEST(BweClusterAllocatorTest, WithBurstinessAndCongestion) {
                                             hipri_rate_limit_bps: 600
                                           }
                                         )"),
-                                        1);
+                                        1)
+                   .value();
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
@@ -284,7 +289,7 @@ TEST(BweClusterAllocatorTest, WithBurstinessAndCongestion) {
 
 TEST(BweClusterAllocatorTest, ZeroDemand) {
   auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
-                                          type: BWE
+                                          type: CA_BWE
                                           enable_burstiness: true
                                           enable_bonus: true
                                           oversub_factor: 1.1
@@ -295,7 +300,8 @@ TEST(BweClusterAllocatorTest, ZeroDemand) {
                                             hipri_rate_limit_bps: 600
                                           }
                                         )"),
-                                        1);
+                                        1)
+                   .value();
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
@@ -326,7 +332,7 @@ TEST(BweClusterAllocatorTest, ZeroDemand) {
 
 TEST(BweClusterAllocatorTest, ZeroLimit) {
   auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
-                                          type: BWE
+                                          type: CA_BWE
                                           enable_burstiness: true
                                           enable_bonus: true
                                           oversub_factor: 1.1
@@ -337,7 +343,8 @@ TEST(BweClusterAllocatorTest, ZeroLimit) {
                                             hipri_rate_limit_bps: 0
                                           }
                                         )"),
-                                        1);
+                                        1)
+                   .value();
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
@@ -369,7 +376,7 @@ TEST(BweClusterAllocatorTest, ZeroLimit) {
 TEST(HeypSigcomm20ClusterAllocatorTest, Basic) {
   auto alloc =
       ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
-                                 type: HEYP_SIGCOMM20
+                                 type: CA_HEYP_SIGCOMM20
                                  enable_burstiness: false
                                  enable_bonus: true
                                  oversub_factor: 1.0
@@ -383,7 +390,8 @@ TEST(HeypSigcomm20ClusterAllocatorTest, Basic) {
                                    lopri_rate_limit_bps: 333333
                                  }
                                )"),
-                               1);
+                               1)
+          .value();
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
@@ -439,7 +447,7 @@ TEST(HeypSigcomm20ClusterAllocatorTest, Basic) {
 TEST(HeypSigcomm20ClusterAllocatorTest, WithOversub) {
   auto alloc =
       ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
-                                 type: HEYP_SIGCOMM20
+                                 type: CA_HEYP_SIGCOMM20
                                  enable_burstiness: false
                                  enable_bonus: true
                                  oversub_factor: 1.5
@@ -452,7 +460,8 @@ TEST(HeypSigcomm20ClusterAllocatorTest, WithOversub) {
                                    hipri_rate_limit_bps: 600
                                  }
                                )"),
-                               1);
+                               1)
+          .value();
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
@@ -492,7 +501,7 @@ TEST(HeypSigcomm20ClusterAllocatorTest, WithOversub) {
 TEST(HeypSigcomm20ClusterAllocatorTest, WithBonus) {
   auto alloc =
       ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
-                                 type: HEYP_SIGCOMM20
+                                 type: CA_HEYP_SIGCOMM20
                                  enable_burstiness: false
                                  enable_bonus: true
                                  oversub_factor: 1.0
@@ -505,7 +514,8 @@ TEST(HeypSigcomm20ClusterAllocatorTest, WithBonus) {
                                    hipri_rate_limit_bps: 600
                                  }
                                )"),
-                               1);
+                               1)
+          .value();
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
@@ -545,7 +555,7 @@ TEST(HeypSigcomm20ClusterAllocatorTest, WithBonus) {
 TEST(HeypSigcomm20ClusterAllocatorTest, WithBurstiness) {
   auto alloc =
       ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
-                                 type: HEYP_SIGCOMM20
+                                 type: CA_HEYP_SIGCOMM20
                                  enable_burstiness: true
                                  enable_bonus: true
                                  oversub_factor: 1.0
@@ -558,7 +568,8 @@ TEST(HeypSigcomm20ClusterAllocatorTest, WithBurstiness) {
                                    hipri_rate_limit_bps: 600
                                  }
                                )"),
-                               1);
+                               1)
+          .value();
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
@@ -598,7 +609,7 @@ TEST(HeypSigcomm20ClusterAllocatorTest, WithBurstiness) {
 TEST(HeypSigcomm20ClusterAllocatorTest, WithBurstinessAndCongestion) {
   auto alloc =
       ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
-                                 type: HEYP_SIGCOMM20
+                                 type: CA_HEYP_SIGCOMM20
                                  enable_burstiness: true
                                  enable_bonus: true
                                  oversub_factor: 1.0
@@ -611,7 +622,8 @@ TEST(HeypSigcomm20ClusterAllocatorTest, WithBurstinessAndCongestion) {
                                    hipri_rate_limit_bps: 600
                                  }
                                )"),
-                               1);
+                               1)
+          .value();
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
@@ -651,7 +663,7 @@ TEST(HeypSigcomm20ClusterAllocatorTest, WithBurstinessAndCongestion) {
 TEST(HeypSigcomm20ClusterAllocatorTest, ZeroDemand) {
   auto alloc =
       ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
-                                 type: HEYP_SIGCOMM20
+                                 type: CA_HEYP_SIGCOMM20
                                  enable_burstiness: true
                                  enable_bonus: true
                                  oversub_factor: 1.1
@@ -664,7 +676,8 @@ TEST(HeypSigcomm20ClusterAllocatorTest, ZeroDemand) {
                                    hipri_rate_limit_bps: 600
                                  }
                                )"),
-                               1);
+                               1)
+          .value();
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
@@ -696,7 +709,7 @@ TEST(HeypSigcomm20ClusterAllocatorTest, ZeroDemand) {
 TEST(HeypSigcomm20ClusterAllocatorTest, ZeroLimit) {
   auto alloc =
       ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
-                                 type: HEYP_SIGCOMM20
+                                 type: CA_HEYP_SIGCOMM20
                                  enable_burstiness: true
                                  enable_bonus: true
                                  oversub_factor: 1.1
@@ -709,7 +722,8 @@ TEST(HeypSigcomm20ClusterAllocatorTest, ZeroLimit) {
                                    hipri_rate_limit_bps: 0
                                  }
                                )"),
-                               1);
+                               1)
+          .value();
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
@@ -741,7 +755,7 @@ TEST(HeypSigcomm20ClusterAllocatorTest, ZeroLimit) {
 TEST(HeypSigcomm20ClusterAllocatorTest, AllLOPRI) {
   auto alloc =
       ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
-                                 type: HEYP_SIGCOMM20
+                                 type: CA_HEYP_SIGCOMM20
                                  enable_burstiness: true
                                  enable_bonus: true
                                  oversub_factor: 1.1
@@ -754,7 +768,8 @@ TEST(HeypSigcomm20ClusterAllocatorTest, AllLOPRI) {
                                    lopri_rate_limit_bps: 50
                                  }
                                )"),
-                               1);
+                               1)
+          .value();
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
@@ -862,7 +877,7 @@ class LOPRICongestionInfoGenerator {
 TEST(HeypSigcomm20ClusterAllocatorTest, BoundedLOPRICongestion) {
   auto alloc =
       ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
-                                 type: HEYP_SIGCOMM20
+                                 type: CA_HEYP_SIGCOMM20
                                  enable_burstiness: true
                                  enable_bonus: true
                                  oversub_factor: 1.1
@@ -876,7 +891,8 @@ TEST(HeypSigcomm20ClusterAllocatorTest, BoundedLOPRICongestion) {
                                    lopri_rate_limit_bps: 50000
                                  }
                                )"),
-                               1.1);
+                               1.1)
+          .value();
 
   int64_t expected_max_lopri_usage = 0;
   proto::AllocBundle result;
@@ -932,7 +948,7 @@ TEST(HeypSigcomm20ClusterAllocatorTest, BoundedLOPRICongestion) {
 TEST(HeypSigcomm20ClusterAllocatorTest, UnboundedLOPRICongestion) {
   auto alloc =
       ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
-                                 type: HEYP_SIGCOMM20
+                                 type: CA_HEYP_SIGCOMM20
                                  enable_burstiness: true
                                  enable_bonus: true
                                  oversub_factor: 1.1
@@ -945,7 +961,8 @@ TEST(HeypSigcomm20ClusterAllocatorTest, UnboundedLOPRICongestion) {
                                    lopri_rate_limit_bps: 50000
                                  }
                                )"),
-                               1);
+                               1)
+          .value();
 
   int64_t expected_max_lopri_usage = 0;
   proto::AllocBundle result;

@@ -3,8 +3,8 @@
 
 #include <string>
 
-#include "glog/logging.h"
 #include "google/protobuf/text_format.h"
+#include "heyp/log/logging.h"
 
 namespace heyp {
 

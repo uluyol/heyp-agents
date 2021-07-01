@@ -3,7 +3,7 @@
 #include "absl/debugging/failure_signal_handler.h"
 #include "absl/debugging/symbolize.h"
 #include "gflags/gflags.h"
-#include "glog/logging.h"
+#include "heyp/log/logging.h"
 
 namespace heyp {
 

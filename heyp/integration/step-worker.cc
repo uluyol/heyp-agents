@@ -11,7 +11,7 @@
 
 #include "absl/cleanup/cleanup.h"
 #include "absl/strings/str_cat.h"
-#include "glog/logging.h"
+#include "heyp/log/logging.h"
 #include "heyp/posix/strerror.h"
 
 namespace heyp {

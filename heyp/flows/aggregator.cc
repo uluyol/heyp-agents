@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-#include "glog/logging.h"
+#include "heyp/log/logging.h"
 #include "heyp/proto/alg.h"
 #include "heyp/proto/constructors.h"
 

@@ -3,7 +3,7 @@
 #include <algorithm>
 
 #include "absl/strings/substitute.h"
-#include "glog/logging.h"
+#include "heyp/log/logging.h"
 
 namespace heyp {
 

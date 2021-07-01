@@ -1,11 +1,11 @@
 #include <unistd.h>
 
 #include "gflags/gflags.h"
-#include "glog/logging.h"
 #include "google/protobuf/io/zero_copy_stream_impl.h"
 #include "google/protobuf/text_format.h"
 #include "heyp/init/init.h"
 #include "heyp/integration/host-agent-os-tester.h"
+#include "heyp/log/logging.h"
 
 DEFINE_string(logdir, "", "directory to write debug log files to, if present");
 DEFINE_string(run_dur, "60s", "how much time the test should measure for");
@@ -17,7 +17,7 @@ DEFINE_bool(ignore_instantaneous_usage, false,
 
 int main(int argc, char** argv) {
   heyp::MainInit(&argc, &argv);
-  FLAGS_logtostderr = true;
+  absl::SetFlag(&FLAGS_logtostderr, 1);
 
   absl::Duration run_dur;
   absl::Duration step_dur;

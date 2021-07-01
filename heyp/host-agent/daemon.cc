@@ -3,7 +3,7 @@
 #include "absl/functional/bind_front.h"
 #include "absl/time/clock.h"
 #include "enforcer.h"
-#include "glog/logging.h"
+#include "heyp/log/logging.h"
 #include "heyp/proto/constructors.h"
 
 namespace heyp {

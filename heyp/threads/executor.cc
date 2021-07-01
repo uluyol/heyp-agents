@@ -1,7 +1,7 @@
 #include "heyp/threads/executor.h"
 
 #include "absl/memory/memory.h"
-#include "glog/logging.h"
+#include "heyp/log/logging.h"
 
 namespace heyp {
 

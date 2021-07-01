@@ -26,10 +26,12 @@ cc_library(
     hdrs = ["qos-degradation.h"],
     deps = [
         ":debug",
+        "//heyp/proto:config_cc_proto",
         "//heyp/proto:heyp_cc_proto",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/time",
-        "@glog",
+        "@com_google_ortools//ortools/algorithms:knapsack_solver_lib",
+        "//heyp/log",
     ],
 )
 

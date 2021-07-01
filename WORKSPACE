@@ -35,13 +35,6 @@ http_archive(
 )
 
 http_archive(
-    name = "glog",
-    sha256 = "83f3099c9c5fd81f0a4ee76a24b08134d83e8da4101771334e1fa52d41d27385",
-    strip_prefix = "glog-8d40d7564d4a06d77d707d7c4a50c8b5dc45dd80",
-    urls = ["https://github.com/google/glog/archive/8d40d7564d4a06d77d707d7c4a50c8b5dc45dd80.zip"],
-)
-
-http_archive(
     name = "com_google_benchmark",
     strip_prefix = "benchmark-bf585a2789e30585b4e3ce6baf11ef2750b54677",
     urls = ["https://github.com/google/benchmark/archive/bf585a2789e30585b4e3ce6baf11ef2750b54677.zip"],
@@ -123,4 +116,28 @@ http_archive(
     sha256 = "1b806acb7abef750d1cbf50aa2cbd7600b51565fbffd5431d7bd4b0ff2285b83",
     strip_prefix = "tcmalloc-c1938e80cb0d3610d6b4469c6a032076ceeafb7a",
     url = "https://github.com/google/tcmalloc/archive/c1938e80cb0d3610d6b4469c6a032076ceeafb7a.zip",
+)
+
+http_archive(
+    name = "com_google_ortools",
+    sha256 = "d81fbaf9597fcc90ba26ec64e68a0ef4cf5212327c836bfd5ac647e5d35617b9",
+    strip_prefix = "or-tools-9.0",
+    url = "https://github.com/google/or-tools/archive/refs/tags/v9.0.zip",
+)
+
+http_archive(
+    name = "bliss",
+    build_file = "bliss.BUILD",
+    strip_prefix = "Bliss-faeb2d27854ab04efa8a512f9fc92ef546d1a12e",
+    # use fork on github that has SCIP patch applied already. Github has higher availability
+    # than original http://www.tcs.hut.fi/software/bliss/
+    url = "https://github.com/ds4dm/Bliss/archive/faeb2d27854ab04efa8a512f9fc92ef546d1a12e.zip",
+)
+
+http_archive(
+    name = "scip",
+    build_file = "@com_google_ortools//bazel:scip.BUILD",
+    patches = ["scip.patch"],
+    sha256 = "033bf240298d3a1c92e8ddb7b452190e0af15df2dad7d24d0572f10ae8eec5aa",
+    url = "https://github.com/google/or-tools/releases/download/v7.7/scip-7.0.1.tgz",
 )

@@ -16,7 +16,7 @@ heyp_cc_binary(
         "@com_google_absl//absl/functional:bind_front",
         "@com_google_absl//absl/random",
         "@com_google_absl//absl/strings:str_format",
-        "@glog",
+        "//heyp/log",
     ],
 )
 

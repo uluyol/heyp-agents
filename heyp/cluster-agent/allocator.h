@@ -4,6 +4,7 @@
 #include <memory>
 #include <vector>
 
+#include "absl/status/statusor.h"
 #include "absl/time/time.h"
 #include "heyp/cluster-agent/alloc-recorder.h"
 #include "heyp/cluster-agent/allocs.h"
@@ -17,7 +18,7 @@ class PerAggAllocator;
 
 class ClusterAllocator {
  public:
-  static std::unique_ptr<ClusterAllocator> Create(
+  static absl::StatusOr<std::unique_ptr<ClusterAllocator>> Create(
       const proto::ClusterAllocatorConfig& config,
       const proto::AllocBundle& cluster_wide_allocs, double demand_multiplier,
       AllocRecorder* recorder = nullptr /* optional */);

@@ -8,8 +8,8 @@
 #include "boost/process/io.hpp"
 #include "boost/process/pipe.hpp"
 #include "boost/process/search_path.hpp"
-#include "glog/logging.h"
 #include "heyp/host-agent/urls.h"
+#include "heyp/log/logging.h"
 
 namespace bp = boost::process;
 

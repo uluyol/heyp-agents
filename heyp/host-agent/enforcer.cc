@@ -1,6 +1,6 @@
 #include "heyp/host-agent/enforcer.h"
 
-#include "glog/logging.h"
+#include "heyp/log/logging.h"
 
 namespace heyp {
 

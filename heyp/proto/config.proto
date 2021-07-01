@@ -87,17 +87,32 @@ message HostAgentConfig {
 }
 
 enum ClusterAllocatorType {
-  BWE = 0;
-  HEYP_SIGCOMM20 = 1;
+  CA_BWE = 0;
+  CA_HEYP_SIGCOMM20 = 1;
+  CA_DOWNGRADE_ONLY = 2;
+  CA_DOWNGRADE_AND_LIMIT = 3;
+}
+
+enum DowngradeSelectorType {
+  DS_HEYP_SIGCOMM20 = 0;
+  DS_KNAPSACK_SOLVER = 1;
+  DS_LARGEST_FIRST = 2;
+};
+
+message DowngradeSelector {
+  optional DowngradeSelectorType type = 1 [default = DS_HEYP_SIGCOMM20];
 }
 
 message ClusterAllocatorConfig {
-  optional ClusterAllocatorType type = 1 [default = BWE];
+  optional ClusterAllocatorType type = 1 [default = CA_BWE];
   optional bool enable_burstiness = 2 [default = true];
   optional bool enable_bonus = 3 [default = true];
   optional double oversub_factor = 4 [default = 1.15];
-  optional double heyp_acceptable_measured_ratio_over_intended_ratio = 5 [default = 0.9];
-  optional bool heyp_probe_lopri_when_ambiguous = 6 [default = true];
+
+  optional DowngradeSelector downgrade_selector = 5;
+
+  optional double heyp_acceptable_measured_ratio_over_intended_ratio = 6 [default = 0.9];
+  optional bool heyp_probe_lopri_when_ambiguous = 7 [default = true];
 }
 
 message ClusterServerConfig {

@@ -9,12 +9,12 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
-#include "glog/logging.h"
 #include "heyp/host-agent/enforcer.h"
 #include "heyp/host-agent/flow-tracker.h"
 #include "heyp/host-agent/linux-enforcer/enforcer.h"
 #include "heyp/integration/flow-state-collector.h"
 #include "heyp/integration/step-worker.h"
+#include "heyp/log/logging.h"
 #include "heyp/posix/os.h"
 
 namespace heyp {

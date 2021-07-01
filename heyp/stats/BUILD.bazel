@@ -30,7 +30,7 @@ cc_library(
         "//heyp/posix:strerror",
         "//heyp/proto:stats_cc_proto",
         "@com_google_absl//absl/status",
-        "@glog",
+        "//heyp/log",
         "@hdrhistogram_c",
     ],
 )
@@ -50,7 +50,7 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/time",
         "@com_google_protobuf//:protobuf",
-        "@glog",
+        "//heyp/log",
     ],
 )
 

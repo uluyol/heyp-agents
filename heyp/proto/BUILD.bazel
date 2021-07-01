@@ -100,7 +100,7 @@ cc_library(
     hdrs = ["parse-text.h"],
     deps = [
         "@com_google_protobuf//:protobuf",
-        "@glog",
+        "//heyp/log",
     ],
 )
 

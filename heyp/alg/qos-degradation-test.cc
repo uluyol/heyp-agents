@@ -3,6 +3,7 @@
 #include "absl/functional/bind_front.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "heyp/proto/config.pb.h"
 #include "heyp/proto/parse-text.h"
 
 namespace heyp {
@@ -41,7 +42,7 @@ std::vector<bool> GreedyAssignToMinimizeGapWrapper(proto::AggInfo demands,
           .children_sorted_by_dec_demand = sorted_by_demand,
           .agg_info = demands,
       },
-      lopri_children);
+      lopri_children, false);
   return lopri_children;
 }
 
@@ -94,14 +95,13 @@ TEST(HeypSigcomm20PickLOPRIChildrenTest, Directionality) {
   constexpr bool t = true;
   constexpr bool f = false;
 
-  EXPECT_THAT(HeypSigcomm20PickLOPRIChildren(info, 0.28),
-              testing::ElementsAre(t, f, f, f));
-  EXPECT_THAT(HeypSigcomm20PickLOPRIChildren(info, 0.58),
-              testing::ElementsAre(t, t, f, t));
-  EXPECT_THAT(HeypSigcomm20PickLOPRIChildren(info, 0.71),
-              testing::ElementsAre(t, t, f, t));
-  EXPECT_THAT(HeypSigcomm20PickLOPRIChildren(info, 0.14),
-              testing::ElementsAre(f, f, f, t));
+  proto::DowngradeSelector selector;
+  selector.set_type(proto::DS_HEYP_SIGCOMM20);
+
+  EXPECT_THAT(PickLOPRIChildren(info, 0.28, selector), testing::ElementsAre(t, f, f, f));
+  EXPECT_THAT(PickLOPRIChildren(info, 0.58, selector), testing::ElementsAre(t, t, f, t));
+  EXPECT_THAT(PickLOPRIChildren(info, 0.71, selector), testing::ElementsAre(t, t, f, t));
+  EXPECT_THAT(PickLOPRIChildren(info, 0.14, selector), testing::ElementsAre(f, f, f, t));
 }
 
 TEST(HeypSigcomm20PickLOPRIChildrenTest, FlipCompletely) {
@@ -115,8 +115,11 @@ TEST(HeypSigcomm20PickLOPRIChildrenTest, FlipCompletely) {
   constexpr bool t = true;
   constexpr bool f = false;
 
-  EXPECT_THAT(HeypSigcomm20PickLOPRIChildren(info, 1), testing::ElementsAre(t, t, t, t));
-  EXPECT_THAT(HeypSigcomm20PickLOPRIChildren(info, 0), testing::ElementsAre(f, f, f, f));
+  proto::DowngradeSelector selector;
+  selector.set_type(proto::DS_HEYP_SIGCOMM20);
+
+  EXPECT_THAT(PickLOPRIChildren(info, 1, selector), testing::ElementsAre(t, t, t, t));
+  EXPECT_THAT(PickLOPRIChildren(info, 0, selector), testing::ElementsAre(f, f, f, f));
 }
 
 TEST(FracAdmittedAtLOPRITest, Basic) {

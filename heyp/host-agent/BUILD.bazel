@@ -46,7 +46,7 @@ cc_library(
         "@com_github_grpc_grpc//:grpc++",
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:span",
-        "@glog",
+        "//heyp/log",
     ],
 )
 
@@ -58,7 +58,7 @@ cc_library(
         ":flow-tracker",
         "//heyp/proto:heyp_cc_proto",
         "@com_google_absl//absl/types:span",
-        "@glog",
+        "//heyp/log",
     ],
 )
 
@@ -76,7 +76,7 @@ cc_library(
         "@com_google_absl//absl/functional:function_ref",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/synchronization",
-        "@glog",
+        "//heyp/log",
     ],
 )
 

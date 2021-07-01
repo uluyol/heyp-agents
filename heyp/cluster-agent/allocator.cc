@@ -6,6 +6,7 @@
 #include "heyp/alg/qos-degradation.h"
 #include "heyp/alg/rate-limits.h"
 #include "heyp/proto/alg.h"
+#include "heyp/proto/config.pb.h"
 #include "routing-algos/alg/max-min-fairness.h"
 
 namespace heyp {
@@ -185,8 +186,8 @@ class HeypSigcomm20Allocator : public PerAggAllocator {
       lopri_admission = lopri_admission * burstiness;
     }
 
-    std::vector<bool> lopri_children =
-        HeypSigcomm20PickLOPRIChildren(agg_info, cur_state.frac_lopri_with_probing);
+    std::vector<bool> lopri_children = PickLOPRIChildren(
+        agg_info, cur_state.frac_lopri_with_probing, config_.downgrade_selector());
 
     std::vector<int64_t> hipri_demands;
     std::vector<int64_t> lopri_demands;
@@ -267,21 +268,25 @@ class HeypSigcomm20Allocator : public PerAggAllocator {
 
 }  // namespace
 
-std::unique_ptr<ClusterAllocator> ClusterAllocator::Create(
+absl::StatusOr<std::unique_ptr<ClusterAllocator>> ClusterAllocator::Create(
     const proto::ClusterAllocatorConfig& config,
     const proto::AllocBundle& cluster_wide_allocs, double demand_multiplier,
     AllocRecorder* recorder) {
   FlowMap<proto::FlowAlloc> cluster_admissions = ToAdmissionsMap(cluster_wide_allocs);
   switch (config.type()) {
-    case proto::ClusterAllocatorType::BWE:
+    case proto::CA_BWE:
       return absl::WrapUnique(new ClusterAllocator(
           absl::make_unique<BweAggAllocator>(config, std::move(cluster_admissions)),
           recorder));
-    case proto::ClusterAllocatorType::HEYP_SIGCOMM20:
+    case proto::CA_HEYP_SIGCOMM20:
       return absl::WrapUnique(new ClusterAllocator(
           absl::make_unique<HeypSigcomm20Allocator>(config, std::move(cluster_admissions),
                                                     demand_multiplier),
           recorder));
+    case proto::CA_DOWNGRADE_ONLY:
+      return absl::InternalError("CA_DOWNGRADE_ONLY not implemented");
+    case proto::CA_DOWNGRADE_AND_LIMIT:
+      return absl::InternalError("CA_DOWNGRADE_AND_LIMIT not implemented");
   }
   LOG(FATAL) << "unreachable: got cluster allocator type: " << config.type();
   return nullptr;

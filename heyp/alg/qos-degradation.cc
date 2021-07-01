@@ -4,12 +4,16 @@
 
 #include "absl/strings/str_join.h"
 #include "heyp/alg/debug.h"
+#include "heyp/proto/config.pb.h"
+#include "heyp/proto/heyp.pb.h"
+#include "ortools/algorithms/knapsack_solver.h"
 
 namespace heyp {
 
 template <bool StateToIncrease>
 void GreedyAssignToMinimizeGap(GreedyAssignToMinimizeGapArgs args,
-                               std::vector<bool>& lopri_children) {
+                               std::vector<bool>& lopri_children,
+                               bool punish_only_largest) {
   for (size_t i = 0; i < args.children_sorted_by_dec_demand.size(); ++i) {
     const size_t child_i = args.children_sorted_by_dec_demand[i];
     if (lopri_children[child_i] == StateToIncrease) {
@@ -20,13 +24,22 @@ void GreedyAssignToMinimizeGap(GreedyAssignToMinimizeGapArgs args,
         args.cur_demand + args.agg_info.children(child_i).predicted_demand_bps();
 
     if (next_demand > args.want_demand) {
+      bool exceeds_twice_gap = next_demand > 2 * args.want_demand - args.cur_demand;
+
+      if (punish_only_largest) {
+        if (!exceeds_twice_gap) {
+          // safe to flip
+          lopri_children[child_i] = StateToIncrease;
+          args.cur_demand = next_demand;
+        }
+        return;
+      }
+
       // Don't flip child_i if there are more children with smaller demands to flip.
-      bool skip = i < args.children_sorted_by_dec_demand.size() - 1;
+      bool have_children_with_less_demand =
+          i < args.children_sorted_by_dec_demand.size() - 1;
 
-      // Don't flip even the last child if its demand is > 2 * the gap.
-      skip = skip || (next_demand > 2 * args.want_demand - args.cur_demand);
-
-      if (skip) {
+      if (have_children_with_less_demand || exceeds_twice_gap) {
         continue;  // flipping child_i overshoots the goal
       }
     }
@@ -38,9 +51,11 @@ void GreedyAssignToMinimizeGap(GreedyAssignToMinimizeGapArgs args,
 
 // Instantiate both (true/false) variants
 template void GreedyAssignToMinimizeGap<false>(GreedyAssignToMinimizeGapArgs args,
-                                               std::vector<bool>& lopri_children);
+                                               std::vector<bool>& lopri_children,
+                                               bool punish_only_largest);
 template void GreedyAssignToMinimizeGap<true>(GreedyAssignToMinimizeGapArgs args,
-                                              std::vector<bool>& lopri_children);
+                                              std::vector<bool>& lopri_children,
+                                              bool punish_only_largest);
 
 struct BitmapFormatter {
   void operator()(std::string* out, bool b) {
@@ -52,8 +67,8 @@ struct BitmapFormatter {
   }
 };
 
-std::vector<bool> HeypSigcomm20PickLOPRIChildren(const proto::AggInfo& agg_info,
-                                                 const double want_frac_lopri) {
+static std::vector<bool> HeypSigcomm20PickLOPRIChildren(const proto::AggInfo& agg_info,
+                                                        const double want_frac_lopri) {
   const bool should_debug = DebugQosAndRateLimitSelection();
 
   if (should_debug) {
@@ -106,7 +121,7 @@ std::vector<bool> HeypSigcomm20PickLOPRIChildren(const proto::AggInfo& agg_info,
             .children_sorted_by_dec_demand = children_sorted_by_dec_demand,
             .agg_info = agg_info,
         },
-        lopri_children);
+        lopri_children, false);
   } else {
     if (should_debug) {
       LOG(INFO) << "move from HIPRI to LOPRI";
@@ -119,7 +134,7 @@ std::vector<bool> HeypSigcomm20PickLOPRIChildren(const proto::AggInfo& agg_info,
             .children_sorted_by_dec_demand = children_sorted_by_dec_demand,
             .agg_info = agg_info,
         },
-        lopri_children);
+        lopri_children, false);
   }
 
   if (should_debug) {
@@ -128,6 +143,83 @@ std::vector<bool> HeypSigcomm20PickLOPRIChildren(const proto::AggInfo& agg_info,
   }
 
   return lopri_children;
+}
+
+static std::vector<bool> LargestFirstPickLOPRIChildren(const proto::AggInfo& agg_info,
+                                                       const double want_frac_lopri) {
+  const bool should_debug = DebugQosAndRateLimitSelection();
+
+  if (should_debug) {
+    LOG(INFO) << "agg_info: " << agg_info.DebugString();
+  }
+
+  int64_t total_demand = 0;
+  std::vector<size_t> children_sorted_by_dec_demand(agg_info.children_size(), 0);
+  for (size_t i = 0; i < agg_info.children_size(); ++i) {
+    children_sorted_by_dec_demand[i] = i;
+    const auto& c = agg_info.children(i);
+    total_demand += c.predicted_demand_bps();
+  }
+
+  if (total_demand == 0) {
+    if (should_debug) {
+      LOG(INFO) << "no demand";
+    }
+    // Don't use LOPRI if all demand is zero.
+    return std::vector<bool>(agg_info.children_size(), false);
+  }
+
+  std::sort(children_sorted_by_dec_demand.begin(), children_sorted_by_dec_demand.end(),
+            [&agg_info](size_t lhs, size_t rhs) -> bool {
+              int64_t lhs_demand = agg_info.children(lhs).predicted_demand_bps();
+              int64_t rhs_demand = agg_info.children(rhs).predicted_demand_bps();
+              if (lhs_demand == rhs_demand) {
+                return lhs > rhs;
+              }
+              return lhs_demand > rhs_demand;
+            });
+
+  std::vector<bool> lopri_children(agg_info.children_size(), false);
+  int64_t lopri_demand = 0;
+  if (should_debug) {
+    LOG(INFO) << "move from HIPRI to LOPRI";
+  }
+  int64_t want_demand = want_frac_lopri * total_demand;
+  GreedyAssignToMinimizeGap<true>(
+      {
+          .cur_demand = lopri_demand,
+          .want_demand = want_demand,
+          .children_sorted_by_dec_demand = children_sorted_by_dec_demand,
+          .agg_info = agg_info,
+      },
+      lopri_children, true);
+
+  if (should_debug) {
+    LOG(INFO) << "picked LOPRI assignment: "
+              << absl::StrJoin(lopri_children, "", BitmapFormatter());
+  }
+
+  return lopri_children;
+}
+
+std::vector<bool> KnapsackSolverPickLOPRIChildren(const proto::AggInfo& agg_info,
+                                                  const double want_frac_lopri) {
+  LOG(FATAL) << "not implemented";
+  return {};
+}
+
+std::vector<bool> PickLOPRIChildren(const proto::AggInfo& agg_info,
+                                    const double want_frac_lopri,
+                                    const proto::DowngradeSelector& selector) {
+  switch (selector.type()) {
+    case proto::DS_HEYP_SIGCOMM20:
+      return HeypSigcomm20PickLOPRIChildren(agg_info, want_frac_lopri);
+    case proto::DS_KNAPSACK_SOLVER:
+      return KnapsackSolverPickLOPRIChildren(agg_info, want_frac_lopri);
+    case proto::DS_LARGEST_FIRST:
+      return LargestFirstPickLOPRIChildren(agg_info, want_frac_lopri);
+  }
+  LOG(FATAL) << "unsupported DowngradeSelectorType: " << selector.type();
 }
 
 double FracAdmittedAtLOPRI(const proto::FlowInfo& parent,

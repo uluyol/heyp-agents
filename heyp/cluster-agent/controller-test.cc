@@ -32,7 +32,7 @@ ClusterController MakeClusterController() {
           absl::make_unique<BweDemandPredictor>(absl::Seconds(5), 1.0, 500),
           absl::Seconds(5)),
       ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
-                                 type: HEYP_SIGCOMM20
+                                 type: CA_HEYP_SIGCOMM20
                                  enable_burstiness: true
                                  enable_bonus: true
                                  oversub_factor: 1.0
@@ -49,7 +49,8 @@ ClusterController MakeClusterController() {
                                    lopri_rate_limit_bps: 1000
                                  }
                                )"),
-                               1));
+                               1)
+          .value());
 }
 
 TEST(ClusterControllerTest, EmptyListenerDestroysCorrectly) {
@@ -415,7 +416,7 @@ TEST(ClusterControllerTest, HeypSigcomm20ConvergesNoCongestion) {
                                      absl::Seconds(30), kUsageMultiplier, 5'000'000),
                                  absl::Seconds(30)),
       ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
-                                 type: HEYP_SIGCOMM20
+                                 type: CA_HEYP_SIGCOMM20
                                  enable_burstiness: true
                                  enable_bonus: true
                                  oversub_factor: 1.15
@@ -429,7 +430,8 @@ TEST(ClusterControllerTest, HeypSigcomm20ConvergesNoCongestion) {
                                    lopri_rate_limit_bps: 5368709120   #  5 Gbps
                                  }
                                )"),
-                               kUsageMultiplier));
+                               kUsageMultiplier)
+          .value());
   FixedDemandHostSimulator demand_sim(
       {Gbps(3), Gbps(3), Gbps(3), Gbps(3), Gbps(3), Gbps(3)}, &controller);
 

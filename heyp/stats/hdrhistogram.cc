@@ -3,7 +3,7 @@
 #include <hdr_histogram.h>
 #include <hdr_histogram_log.h>
 
-#include "glog/logging.h"
+#include "heyp/log/logging.h"
 #include "heyp/posix/strerror.h"
 
 extern "C" {

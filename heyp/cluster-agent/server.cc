@@ -1,9 +1,9 @@
 #include "heyp/cluster-agent/server.h"
 
 #include "absl/strings/str_format.h"
-#include "glog/logging.h"
 #include "grpcpp/grpcpp.h"
 #include "heyp/cluster-agent/controller.h"
+#include "heyp/log/logging.h"
 
 namespace heyp {
 

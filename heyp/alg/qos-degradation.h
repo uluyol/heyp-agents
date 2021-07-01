@@ -6,16 +6,18 @@
 
 #include "absl/strings/str_format.h"
 #include "absl/time/time.h"
-#include "glog/logging.h"
+#include "heyp/log/logging.h"
+#include "heyp/proto/config.pb.h"
 #include "heyp/proto/heyp.pb.h"
 
 namespace heyp {
 
-// HeypSigcomm20PickLOPRIChildren returns a bitmap of children that should use LOPRI.
+// PickLOPRIChildren returns a bitmap of children that should use LOPRI.
 //
 // The total demand marked is aimed to be close to want_frac_lopri.
-std::vector<bool> HeypSigcomm20PickLOPRIChildren(const proto::AggInfo& agg_info,
-                                                 const double want_frac_lopri);
+std::vector<bool> PickLOPRIChildren(const proto::AggInfo& agg_info,
+                                    const double want_frac_lopri,
+                                    const proto::DowngradeSelector& selector);
 
 // FracAdmittedAtLOPRI returns the fraction of traffic that should ideally be sent at
 // LOPRI.
@@ -58,7 +60,8 @@ struct GreedyAssignToMinimizeGapArgs {
 // - args.want_demand is the desired sum of demands for the bin.
 template <bool StateToIncrease>
 void GreedyAssignToMinimizeGap(GreedyAssignToMinimizeGapArgs args,
-                               std::vector<bool>& lopri_children);
+                               std::vector<bool>& lopri_children,
+                               bool punish_only_largest);
 
 // Expect the following fields for SingleAggState:
 //

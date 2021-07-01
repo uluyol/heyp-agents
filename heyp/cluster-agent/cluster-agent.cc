@@ -6,7 +6,6 @@
 #include "absl/status/statusor.h"
 #include "absl/time/time.h"
 #include "gflags/gflags.h"
-#include "glog/logging.h"
 #include "grpcpp/grpcpp.h"
 #include "heyp/cli/parse.h"
 #include "heyp/cluster-agent/alloc-recorder.h"
@@ -14,6 +13,7 @@
 #include "heyp/cluster-agent/server.h"
 #include "heyp/flows/aggregator.h"
 #include "heyp/init/init.h"
+#include "heyp/log/logging.h"
 #include "heyp/proto/fileio.h"
 
 static std::atomic<bool> should_exit_flag{false};
@@ -53,12 +53,17 @@ absl::Status Run(const proto::ClusterAgentConfig& c, const proto::AllocBundle& a
     alloc_recorder = std::move(*alloc_recorder_or);
   }
 
+  auto cluster_alloc_or = ClusterAllocator::Create(
+      c.allocator(), allocs, c.flow_aggregator().demand_predictor().usage_multiplier(),
+      alloc_recorder.get());
+
+  if (!cluster_alloc_or.ok()) {
+    return cluster_alloc_or.status();
+  }
+
   ClusterAgentService service(
       NewHostToClusterAggregator(std::move(agg_demand_predictor), demand_time_window),
-      ClusterAllocator::Create(c.allocator(), allocs,
-                               c.flow_aggregator().demand_predictor().usage_multiplier(),
-                               alloc_recorder.get()),
-      *control_period_or);
+      std::move(*cluster_alloc_or), *control_period_or);
 
   std::unique_ptr<grpc::Server> server(
       grpc::ServerBuilder()

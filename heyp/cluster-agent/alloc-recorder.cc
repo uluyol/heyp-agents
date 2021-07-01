@@ -1,7 +1,7 @@
 #include "heyp/cluster-agent/alloc-recorder.h"
 
 #include "absl/time/clock.h"
-#include "glog/logging.h"
+#include "heyp/log/logging.h"
 #include "heyp/posix/strerror.h"
 #include "heyp/proto/fileio.h"
 

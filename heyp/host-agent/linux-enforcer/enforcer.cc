@@ -8,12 +8,12 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/str_split.h"
-#include "glog/logging.h"
 #include "google/protobuf/util/message_differencer.h"
 #include "heyp/host-agent/linux-enforcer/iptables-controller.h"
 #include "heyp/host-agent/linux-enforcer/iptables.h"
 #include "heyp/host-agent/linux-enforcer/tc-caller.h"
 #include "heyp/io/debug-output-logger.h"
+#include "heyp/log/logging.h"
 #include "heyp/proto/alg.h"
 #include "heyp/proto/config.pb.h"
 #include "heyp/proto/heyp.pb.h"
@@ -334,6 +334,8 @@ void LinuxHostEnforcerImpl::StageIptablesForFlow(
 
 absl::string_view NetemDistToString(proto::NetemDelayDist dist) {
   switch (dist) {
+    case proto::NETEM_NO_DIST:
+      break;
     case proto::NETEM_NORMAL:
       return "normal";
     case proto::NETEM_UNIFORM:

@@ -14,7 +14,7 @@ cc_library(
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
-        "@glog",
+        "//heyp/log",
     ],
 )
 
@@ -36,7 +36,7 @@ cc_library(
         "@com_google_absl//absl/cleanup",
         "@com_google_absl//absl/functional:function_ref",
         "@com_google_absl//absl/strings",
-        "@glog",
+        "//heyp/log",
     ],
 )
 
@@ -50,7 +50,7 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/synchronization",
-        "@glog",
+        "//heyp/log",
     ],
 )
 
@@ -62,7 +62,7 @@ cc_library(
         ":iptables",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:str_format",
-        "@glog",
+        "//heyp/log",
     ],
 )
 
@@ -74,7 +74,7 @@ cc_library(
         "//third_party/simdjson",
         "@boost//:process",
         "@com_google_absl//absl/status",
-        "@glog",
+        "//heyp/log",
     ],
 )
 
