@@ -282,6 +282,37 @@ func (c *fortioRunClientsCmd) Execute(ctx context.Context, fs *flag.FlagSet,
 	return subcommands.ExitSuccess
 }
 
+type collectHostStatsCmd struct {
+	configPath string
+	remDir     string
+	stop       bool
+}
+
+func (*collectHostStatsCmd) Name() string     { return "collect-host-stats" }
+func (*collectHostStatsCmd) Synopsis() string { return "collect stats at each host" }
+func (*collectHostStatsCmd) Usage() string    { return "" }
+
+func (c *collectHostStatsCmd) SetFlags(fs *flag.FlagSet) {
+	configVar(&c.configPath, fs)
+	remdirVar(&c.remDir, fs)
+	fs.BoolVar(&c.stop, "stop", false, "if set, stop any active stats collection")
+}
+
+func (c *collectHostStatsCmd) Execute(ctx context.Context, fs *flag.FlagSet,
+	args ...interface{}) subcommands.ExitStatus {
+	cfg := parseConfig(c.configPath)
+	var err error
+	if c.stop {
+		err = actions.StopCollectingHostStats(cfg, c.remDir)
+	} else {
+		err = actions.StartCollectingHostStats(cfg, c.remDir)
+	}
+	if err != nil {
+		log.Fatal(err)
+	}
+	return subcommands.ExitSuccess
+}
+
 type fetchDataCmd struct {
 	configPath string
 	remDir     string

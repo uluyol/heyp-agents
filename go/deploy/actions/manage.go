@@ -263,6 +263,40 @@ func KillSessions(c *pb.DeploymentConfig, sessionRegexp string) error {
 	return eg.Wait()
 }
 
+func StartCollectingHostStats(c *pb.DeploymentConfig, remoteTopdir string) error {
+	var eg multierrgroup.Group
+	for _, n := range c.GetNodes() {
+		n := n
+		eg.Go(func() error {
+			err := TracingCommand(LogWithPrefix("collect-host-stats: "),
+				"ssh", n.GetExternalAddr(),
+				fmt.Sprintf("tmux new-session -d -s collect-host-stats '%[1]s/aux/collect-host-stats -me %[2]s -out %[1]s/logs/host-stats.log -pid %[1]s/logs/host-stats.pid'", remoteTopdir, n.GetExperimentAddr())).Run()
+			if err != nil {
+				return fmt.Errorf("failed to start collecting stats on Node %q: %w", n.GetName(), err)
+			}
+			return nil
+		})
+	}
+	return eg.Wait()
+}
+
+func StopCollectingHostStats(c *pb.DeploymentConfig, remoteTopdir string) error {
+	var eg multierrgroup.Group
+	for _, n := range c.GetNodes() {
+		n := n
+		eg.Go(func() error {
+			err := TracingCommand(LogWithPrefix("collect-host-stats: "),
+				"ssh", n.GetExternalAddr(),
+				fmt.Sprintf("%[1]s/aux/collect-host-stats -stop -pid %[1]s/logs/host-stats.pid", remoteTopdir)).Run()
+			if err != nil {
+				return fmt.Errorf("failed to stop stats collection on Node %q: %w", n.GetName(), err)
+			}
+			return nil
+		})
+	}
+	return eg.Wait()
+}
+
 type SysConfig struct {
 	CongestionControl string
 	MinPort, MaxPort  int
