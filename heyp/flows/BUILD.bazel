@@ -9,12 +9,12 @@ cc_library(
     deps = [
         ":state",
         "//heyp/alg:demand-predictor",
+        "//heyp/log",
         "//heyp/proto:alg",
         "//heyp/proto:constructors",
         "//heyp/proto:heyp_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/time",
-        "//heyp/log",
     ],
 )
 
@@ -23,10 +23,10 @@ cc_library(
     srcs = ["dc-mapper.cc"],
     hdrs = ["dc-mapper.h"],
     deps = [
+        "//heyp/log",
         "//heyp/proto:config_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/strings",
-        "//heyp/log",
     ],
 )
 
@@ -36,10 +36,10 @@ cc_library(
     hdrs = ["state.h"],
     deps = [
         "//heyp/alg:demand-predictor",
+        "//heyp/log",
         "//heyp/proto:heyp_cc_proto",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/time",
-        "//heyp/log",
     ],
 )
 

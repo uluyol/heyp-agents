@@ -8,6 +8,7 @@ heyp_cc_binary(
         "//heyp/encoding:binary",
         "//heyp/host-agent:urls",
         "//heyp/init",
+        "//heyp/log",
         "//heyp/proto:app_cc_proto",
         "//heyp/proto:fileio",
         "//heyp/stats:recorder",
@@ -16,7 +17,6 @@ heyp_cc_binary(
         "@com_google_absl//absl/functional:bind_front",
         "@com_google_absl//absl/random",
         "@com_google_absl//absl/strings:str_format",
-        "//heyp/log",
     ],
 )
 

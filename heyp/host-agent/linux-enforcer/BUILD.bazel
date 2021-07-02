@@ -9,12 +9,12 @@ cc_library(
         "//heyp/host-agent:__subpackages__",
     ],
     deps = [
+        "//heyp/log",
         "//third_party/simdjson",
         "@boost//:process",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
-        "//heyp/log",
     ],
 )
 
@@ -33,10 +33,10 @@ cc_library(
         "//heyp/host-agent:enforcer",
         "//heyp/host-agent:simulated-wan-db",
         "//heyp/io:debug-output-logger",
+        "//heyp/log",
         "@com_google_absl//absl/cleanup",
         "@com_google_absl//absl/functional:function_ref",
         "@com_google_absl//absl/strings",
-        "//heyp/log",
     ],
 )
 
@@ -45,12 +45,12 @@ cc_library(
     srcs = ["iptables.cc"],
     hdrs = ["iptables.h"],
     deps = [
+        "//heyp/log",
         "@boost//:process",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/synchronization",
-        "//heyp/log",
     ],
 )
 
@@ -60,9 +60,9 @@ cc_library(
     hdrs = ["iptables-controller.h"],
     deps = [
         ":iptables",
+        "//heyp/log",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:str_format",
-        "//heyp/log",
     ],
 )
 
@@ -71,10 +71,10 @@ cc_library(
     srcs = ["tc-caller.cc"],
     hdrs = ["tc-caller.h"],
     deps = [
+        "//heyp/log",
         "//third_party/simdjson",
         "@boost//:process",
         "@com_google_absl//absl/status",
-        "//heyp/log",
     ],
 )
 

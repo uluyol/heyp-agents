@@ -27,10 +27,10 @@ cc_library(
     hdrs = ["hdrhistogram.h"],
     deps = [
         ":cdf",
+        "//heyp/log",
         "//heyp/posix:strerror",
         "//heyp/proto:stats_cc_proto",
         "@com_google_absl//absl/status",
-        "//heyp/log",
         "@hdrhistogram_c",
     ],
 )
@@ -41,6 +41,7 @@ cc_library(
     hdrs = ["recorder.h"],
     deps = [
         ":hdrhistogram",
+        "//heyp/log",
         "//heyp/posix:strerror",
         "//heyp/proto:fileio",
         "//heyp/proto:stats_cc_proto",
@@ -50,7 +51,6 @@ cc_library(
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/time",
         "@com_google_protobuf//:protobuf",
-        "//heyp/log",
     ],
 )
 

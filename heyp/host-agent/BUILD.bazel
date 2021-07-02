@@ -40,13 +40,13 @@ cc_library(
         ":flow-tracker",
         "//heyp/flows:aggregator",
         "//heyp/flows:dc-mapper",
+        "//heyp/log",
         "//heyp/proto:constructors",
         "//heyp/proto:heyp_cc_grpc",
         "//heyp/proto:heyp_cc_proto",
         "@com_github_grpc_grpc//:grpc++",
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:span",
-        "//heyp/log",
     ],
 )
 
@@ -56,9 +56,9 @@ cc_library(
     hdrs = ["enforcer.h"],
     deps = [
         ":flow-tracker",
+        "//heyp/log",
         "//heyp/proto:heyp_cc_proto",
         "@com_google_absl//absl/types:span",
-        "//heyp/log",
     ],
 )
 
@@ -70,13 +70,13 @@ cc_library(
         ":urls",
         "//heyp/alg:demand-predictor",
         "//heyp/flows:state",
+        "//heyp/log",
         "//heyp/proto:alg",
         "@boost//:process",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/functional:function_ref",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/synchronization",
-        "//heyp/log",
     ],
 )
 

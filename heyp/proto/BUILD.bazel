@@ -99,8 +99,8 @@ cc_library(
     name = "parse-text",
     hdrs = ["parse-text.h"],
     deps = [
-        "@com_google_protobuf//:protobuf",
         "//heyp/log",
+        "@com_google_protobuf//:protobuf",
     ],
 )
 
