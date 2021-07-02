@@ -49,6 +49,7 @@ func MakeCodeBundle(binDir, auxBinDir, tarballPath string) error {
 	}
 
 	auxBins := []string{
+		"collect-host-stats",
 		"envoy",
 		"fortio-client",
 		"fortio",

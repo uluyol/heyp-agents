@@ -2,7 +2,7 @@
 
 set -e
 
-TOINSTALL=${@:-envoy fortio}
+TOINSTALL=${@:-envoy fortio collect-host-stats}
 
 ENVOY_URL="https://dl.getenvoy.io/public/raw/files/getenvoy-envoy-1.18.3.p0.g98c1c9e-1p77.gb76c773-linux-glibc-release-x86_64.tar.xz"
 
@@ -19,6 +19,9 @@ for cmd in $TOINSTALL; do
   fortio)
     GOOS=linux GOARCH=amd64 GOBIN=$PWD/aux-bin go install fortio.org/fortio@v1.16.0
     GOOS=linux GOARCH=amd64 go build -o $PWD/aux-bin ./go/cmd/fortio-client
+    ;;
+  collect-host-stats)
+    GOOS=linux GOARCH=amd64 go build -o $PWD/aux-bin ./go/cmd/collect-host-stats
     ;;
   *)
     echo "unknown cmd $cmd"
