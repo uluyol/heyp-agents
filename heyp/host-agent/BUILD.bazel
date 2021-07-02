@@ -44,6 +44,7 @@ cc_library(
         "//heyp/proto:constructors",
         "//heyp/proto:heyp_cc_grpc",
         "//heyp/proto:heyp_cc_proto",
+        "//heyp/proto:ndjson-logger",
         "@com_github_grpc_grpc//:grpc++",
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:span",

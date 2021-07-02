@@ -3,28 +3,20 @@
 #include "absl/memory/memory.h"
 #include "absl/time/clock.h"
 #include "heyp/log/logging.h"
-#include "heyp/posix/strerror.h"
-#include "heyp/proto/fileio.h"
 
 namespace heyp {
 
 absl::StatusOr<std::unique_ptr<StatsRecorder>> StatsRecorder::Create(
     const std::string& file_path) {
-  FILE* f = fopen(file_path.c_str(), "w");
-  if (f == nullptr) {
-    return absl::InternalError(StrError(errno));
+  auto rec = absl::make_unique<StatsRecorder>(nullptr);
+  absl::Status st = rec->logger_.Init(file_path);
+  if (!st.ok()) {
+    return st;
   }
-
-  return absl::make_unique<StatsRecorder>(f);
+  return rec;
 }
 
-StatsRecorder::StatsRecorder(FILE* out) : out_(out), executor_(1), started_(false) {}
-
-StatsRecorder::~StatsRecorder() {
-  if (out_ != nullptr) {
-    LOG(FATAL) << "StatsRecorder: must call Close";
-  }
-}
+StatsRecorder::StatsRecorder(FILE* out) : logger_(out), executor_(1), started_(false) {}
 
 absl::Status StatsRecorder::Close() {
   if (prev_tg_ != nullptr) {
@@ -32,15 +24,11 @@ absl::Status StatsRecorder::Close() {
     prev_tg_ = nullptr;
   }
 
-  int ret = 0;
-  if (out_ != nullptr) {
-    ret = fclose(out_);
-    out_ = nullptr;
-  }
+  absl::Status close_status = logger_.Close();
 
   absl::Status st = write_status_;
-  if (ret != 0) {
-    st.Update(absl::InternalError("failed to close output file"));
+  if (!close_status.ok()) {
+    st.Update(close_status);
   }
   return st;
 }
@@ -79,7 +67,7 @@ void StatsRecorder::DoneStep(absl::string_view label) {
   int64_t cum_num_rpcs = cum_num_rpcs_;
 
   auto latency_data = ToProtoLatencyStats(latency_hists_);
-  FILE* fout = out_;
+  NdjsonLogger* logger = &logger_;
 
   // wait for any previous work
   if (prev_tg_ != nullptr) {
@@ -88,7 +76,7 @@ void StatsRecorder::DoneStep(absl::string_view label) {
 
   prev_tg_ = executor_.NewTaskGroup();
   prev_tg_->AddTask([label_str, now, elapsed_sec, cum_num_bits, cum_num_rpcs, mean_bps,
-                     mean_rpcps, latency_data, fout]() -> absl::Status {
+                     mean_rpcps, latency_data, logger]() -> absl::Status {
     proto::StatsRecord rec;
 
     rec.set_label(label_str);
@@ -102,7 +90,7 @@ void StatsRecorder::DoneStep(absl::string_view label) {
     rec.set_mean_rpcs_per_sec(mean_rpcps);
     *rec.mutable_latency() = latency_data;
 
-    return WriteJsonLine(rec, fout);
+    return logger->Write(rec);
   });
   prev_time_ = now;
   prev_cum_num_bits_ = cum_num_bits_;

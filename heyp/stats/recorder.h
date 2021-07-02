@@ -8,6 +8,7 @@
 #include "absl/strings/string_view.h"
 #include "absl/time/time.h"
 #include "absl/types/span.h"
+#include "heyp/proto/ndjson-logger.h"
 #include "heyp/stats/hdrhistogram.h"
 #include "heyp/threads/executor.h"
 
@@ -21,8 +22,6 @@ class StatsRecorder {
       const std::string& file_path);
 
   explicit StatsRecorder(FILE* out);
-
-  ~StatsRecorder();
 
   StatsRecorder(const StatsRecorder&) = delete;
   StatsRecorder& operator=(const StatsRecorder&) = delete;
@@ -52,7 +51,7 @@ class StatsRecorder {
   template <typename... Args>
   void RecordLatency(absl::string_view kind, absl::Duration dur, Args... args);
 
-  FILE* out_;
+  NdjsonLogger logger_;
   Executor executor_;
   absl::Status write_status_;
   bool started_;

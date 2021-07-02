@@ -13,6 +13,7 @@
 #include "heyp/host-agent/flow-tracker.h"
 #include "heyp/proto/heyp.grpc.pb.h"
 #include "heyp/proto/heyp.pb.h"
+#include "heyp/proto/ndjson-logger.h"
 
 namespace heyp {
 
@@ -22,6 +23,7 @@ class HostDaemon {
     uint64_t host_id;
     absl::Duration inform_period = absl::Seconds(2);
     absl::Duration collect_stats_period = absl::Milliseconds(500);
+    std::string stats_log_file;
   };
 
   HostDaemon(const std::shared_ptr<grpc::Channel>& channel, Config config,
@@ -39,6 +41,7 @@ class HostDaemon {
   FlowStateProvider* flow_state_provider_;
   std::unique_ptr<FlowAggregator> socket_to_host_aggregator_;
   FlowStateReporter* flow_state_reporter_;
+  NdjsonLogger flow_state_logger_;
   HostEnforcer* enforcer_;
   std::unique_ptr<proto::ClusterAgent::Stub> stub_;
 

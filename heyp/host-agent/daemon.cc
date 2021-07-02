@@ -17,8 +17,16 @@ HostDaemon::HostDaemon(const std::shared_ptr<grpc::Channel>& channel, Config con
       flow_state_provider_(flow_state_provider),
       socket_to_host_aggregator_(std::move(socket_to_host_aggregator)),
       flow_state_reporter_(flow_state_reporter),
+      flow_state_logger_(nullptr),
       enforcer_(enforcer),
-      stub_(proto::ClusterAgent::NewStub(channel)) {}
+      stub_(proto::ClusterAgent::NewStub(channel)) {
+  if (!config.stats_log_file.empty()) {
+    absl::Status st = flow_state_logger_.Init(config.stats_log_file);
+    if (!st.ok()) {
+      LOG(ERROR) << "HostDaemon: failed to init flow_state_logger_: " << st;
+    }
+  }
+}
 
 namespace {
 
@@ -44,7 +52,9 @@ bool FlaggedOrWaitFor(absl::Duration dur, std::atomic<bool>* exit_flag) {
 }
 
 void CollectStats(absl::Duration period, bool force_run,
-                  FlowStateReporter* flow_state_reporter, HostEnforcer* enforcer,
+                  FlowStateReporter* flow_state_reporter, const DCMapper* dc_mapper,
+                  uint64_t host_id, FlowStateProvider* flow_state_provider,
+                  NdjsonLogger* flow_state_logger, HostEnforcer* enforcer,
                   std::atomic<bool>* should_exit) {
   // Wait the first time since Run() refreshes once
   while (force_run || !FlaggedOrWaitFor(period, should_exit)) {
@@ -55,6 +65,22 @@ void CollectStats(absl::Duration period, bool force_run,
     if (!report_status.ok()) {
       LOG(ERROR) << "failed to report flow state: " << report_status;
       continue;
+    }
+
+    if (flow_state_logger->should_log()) {
+      proto::InfoBundle bundle;
+      bundle.mutable_bundler()->set_host_id(host_id);
+      *bundle.mutable_timestamp() = ToProtoTimestamp(absl::Now());
+      flow_state_provider->ForEachActiveFlow(
+          [&bundle, dc_mapper](absl::Time time, const proto::FlowInfo& info) {
+            auto send_info = bundle.add_flow_infos();
+            *send_info = info;
+            *send_info->mutable_flow() = WithDCs(info.flow(), *dc_mapper);
+          });
+      absl::Status log_status = flow_state_logger->Write(bundle);
+      if (!log_status.ok()) {
+        LOG(WARNING) << "failed to log flow states: " << log_status;
+      }
     }
   }
 }
@@ -122,14 +148,16 @@ void HostDaemon::Run(std::atomic<bool>* should_exit) {
   // the cluster agent or start enforcement.
   {
     std::atomic<bool> once_should_exit = true;
-    CollectStats(absl::ZeroDuration(), true, flow_state_reporter_, enforcer_,
+    CollectStats(absl::ZeroDuration(), true, flow_state_reporter_, dc_mapper_,
+                 config_.host_id, flow_state_provider_, &flow_state_logger_, enforcer_,
                  &once_should_exit);
   }
 
   io_stream_ = stub_->RegisterHost(&context_);
 
-  collect_stats_thread_ = std::thread(CollectStats, config_.collect_stats_period, false,
-                                      flow_state_reporter_, enforcer_, should_exit);
+  collect_stats_thread_ = std::thread(
+      CollectStats, config_.collect_stats_period, false, flow_state_reporter_, dc_mapper_,
+      config_.host_id, flow_state_provider_, &flow_state_logger_, enforcer_, should_exit);
 
   info_thread_ = std::thread(SendInfo, config_.inform_period, config_.host_id, dc_mapper_,
                              flow_state_provider_, socket_to_host_aggregator_.get(),

@@ -38,6 +38,7 @@ message HostDaemonConfig {
   optional string inform_period_dur = 2 [default = "2s"];
   optional string cluster_agent_addr = 3;
   optional string cluster_agent_connection_timeout_dur = 4 [default = "10s"];
+  optional string stats_log_file = 5; // if non-empty, will log here once per collect_stats_period
 }
 
 message DCMapping {

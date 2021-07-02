@@ -43,7 +43,7 @@ cc_library(
         ":hdrhistogram",
         "//heyp/log",
         "//heyp/posix:strerror",
-        "//heyp/proto:fileio",
+        "//heyp/proto:ndjson-logger",
         "//heyp/proto:stats_cc_proto",
         "//heyp/threads:executor",
         "@com_google_absl//absl/container:btree",
