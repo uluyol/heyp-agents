@@ -3,7 +3,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/strings/str_join.h"
 #include "heyp/alg/debug.h"
-#include "heyp/alg/qos-degradation.h"
+#include "heyp/alg/qos-downgrade.h"
 #include "heyp/alg/rate-limits.h"
 #include "heyp/proto/alg.h"
 #include "heyp/proto/config.pb.h"
@@ -73,7 +73,7 @@ class BweAggAllocator : public PerAggAllocator {
     const proto::FlowAlloc& admission = agg_admissions_.at(agg_info.parent().flow());
 
     CHECK_EQ(admission.lopri_rate_limit_bps(), 0)
-        << "Bwe allocation incompatible with QoS degradation";
+        << "Bwe allocation incompatible with QoS downgrade";
     int64_t cluster_admission = admission.hipri_rate_limit_bps();
     if (config_.enable_burstiness()) {
       double burstiness = BweBurstinessFactor(agg_info);

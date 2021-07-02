@@ -1,5 +1,5 @@
-#ifndef HEYP_ALG_QOS_DEGRADATION_H_
-#define HEYP_ALG_QOS_DEGRADATION_H_
+#ifndef HEYP_ALG_QOS_DOWNGRADE_H_
+#define HEYP_ALG_QOS_DOWNGRADE_H_
 
 #include <cstdint>
 #include <vector>
@@ -139,4 +139,4 @@ int64_t HeypSigcomm20MaybeReviseLOPRIAdmission(
 
 }  // namespace heyp
 
-#endif  // HEYP_ALG_QOS_DEGRADATION_H_
+#endif  // HEYP_ALG_QOS_DOWNGRADE_H_

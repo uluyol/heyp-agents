@@ -21,17 +21,17 @@ cc_library(
 )
 
 cc_library(
-    name = "qos-degradation",
-    srcs = ["qos-degradation.cc"],
-    hdrs = ["qos-degradation.h"],
+    name = "qos-downgrade",
+    srcs = ["qos-downgrade.cc"],
+    hdrs = ["qos-downgrade.h"],
     deps = [
         ":debug",
+        "//heyp/log",
         "//heyp/proto:config_cc_proto",
         "//heyp/proto:heyp_cc_proto",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/time",
         "@com_google_ortools//ortools/algorithms:knapsack_solver_lib",
-        "//heyp/log",
     ],
 )
 
@@ -55,10 +55,10 @@ cc_test(
 )
 
 cc_test(
-    name = "qos-degradation-test",
-    srcs = ["qos-degradation-test.cc"],
+    name = "qos-downgrade-test",
+    srcs = ["qos-downgrade-test.cc"],
     deps = [
-        ":qos-degradation",
+        ":qos-downgrade",
         "//heyp/init:test-main",
         "//heyp/proto:parse-text",
         "@com_google_absl//absl/functional:bind_front",

@@ -1,4 +1,4 @@
-#include "heyp/alg/qos-degradation.h"
+#include "heyp/alg/qos-downgrade.h"
 
 #include "absl/functional/bind_front.h"
 #include "gmock/gmock.h"
