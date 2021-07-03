@@ -50,6 +50,7 @@ func TestTSMerger(t *testing.T) {
 				[]simpleTSEntry{
 					{time.Unix(15, 123_456_789), 1, 2},
 					{time.Unix(17, 234_567_891), 2, 3},
+					{time.Unix(18, 345_611_111), 1, 1}, // to skip
 					{time.Unix(18, 345_678_912), 3, 3},
 					{time.Unix(18, 745_678_912), 3, 3},
 				},

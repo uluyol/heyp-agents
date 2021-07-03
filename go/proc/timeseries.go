@@ -86,12 +86,15 @@ func (m *TSMerger) Next(gotTime *time.Time, data []interface{}) bool {
 		*gotTime = minTime
 		for i := range m.cur {
 			b := &m.cur[i]
-			if b.curTime().Equal(minTime) {
+			foundExact := false
+			for b.curTime().Equal(minTime) {
 				data[i] = b.data[b.i]
 				b.last = data[i]
 				b.hasLast = true
 				b.i++
-			} else {
+				foundExact = true
+			}
+			if !foundExact {
 				if b.hasLast {
 					data[i] = b.last
 				} else {
