@@ -3,6 +3,8 @@ package proc
 import (
 	"io"
 	"time"
+
+	pb "github.com/uluyol/heyp-agents/go/proto"
 )
 
 type tsBatch struct {
@@ -112,3 +114,27 @@ func (m *TSMerger) Next(gotTime *time.Time, data []interface{}) bool {
 }
 
 func (m *TSMerger) Err() error { return m.err }
+
+type InfoBundleReader struct {
+	r *ProtoJSONRecReader
+}
+
+func NewInfoBundleReader(r io.Reader) *InfoBundleReader {
+	return &InfoBundleReader{r: NewProtoJSONRecReader(r)}
+}
+
+func (r *InfoBundleReader) Read(times []time.Time, data []interface{}) (int, error) {
+	for i := range times {
+		b := new(pb.InfoBundle)
+		if !r.r.ScanInto(b) {
+			return i, r.r.Err()
+		}
+
+		times[i] = b.Timestamp.AsTime()
+		data[i] = b
+	}
+
+	return len(times), nil
+}
+
+var _ TSBatchReader = &InfoBundleReader{}
