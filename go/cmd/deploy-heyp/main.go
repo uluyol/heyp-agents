@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/google/subcommands"
 	"github.com/uluyol/heyp-agents/go/deploy/actions"
@@ -347,10 +350,55 @@ var checkNodesCmd = &configCmd{
 	exec:     actions.CheckNodeIPs,
 }
 
+type subst struct {
+	key, val []byte
+}
+
+type substList []subst
+
+func (l *substList) Set(s string) error {
+	pieces := bytes.Split([]byte(s), []byte(","))
+	*l = make([]subst, 0, len(pieces))
+	for _, p := range pieces {
+		kv := bytes.Split(p, []byte("="))
+		if len(kv) != 2 {
+			return fmt.Errorf("wanted K=V pair, got %s", p)
+		}
+		*l = append(*l, subst{kv[0], kv[1]})
+	}
+	return nil
+}
+
+func (l *substList) String() string {
+	var sb strings.Builder
+	for i, st := range *l {
+		if i > 0 {
+			sb.WriteByte(',')
+		}
+		sb.Write(st.key)
+		sb.WriteByte('=')
+		sb.Write(st.val)
+	}
+	return sb.String()
+}
+
+func (l substList) Apply(data []byte) []byte {
+	var realKey []byte
+	for _, st := range l {
+		realKey = realKey[:0]
+		realKey = append(realKey, '%')
+		realKey = append(realKey, st.key...)
+		realKey = append(realKey, '%')
+		data = bytes.ReplaceAll(data, realKey, st.val)
+	}
+	return data
+}
+
 type updateConfigCmd struct {
 	configPath string
 	rspecPath  string
 	sshUser    string
+	subst      substList
 }
 
 func (*updateConfigCmd) Name() string     { return "update-config" }
@@ -361,6 +409,7 @@ func (c *updateConfigCmd) SetFlags(fs *flag.FlagSet) {
 	configVar(&c.configPath, fs)
 	fs.StringVar(&c.rspecPath, "rspec", "/dev/stdin", "cloudlab manifest")
 	fs.StringVar(&c.sshUser, "ssh-user", "uluyol", "ssh username to connect with")
+	fs.Var(&c.subst, "subst", "substitutions to make before looking for patterns to replace (csv of K=V where %K% will be replaced by V")
 }
 
 func (c *updateConfigCmd) Execute(ctx context.Context, fs *flag.FlagSet,
@@ -384,8 +433,10 @@ func (c *updateConfigCmd) Execute(ctx context.Context, fs *flag.FlagSet,
 		log.Fatalf("failed to stat config: %s", err)
 	}
 
+	substData := c.subst.Apply(data)
+
 	cfg := new(pb.DeploymentConfig)
-	if err := prototext.Unmarshal(data, cfg); err != nil {
+	if err := prototext.Unmarshal(substData, cfg); err != nil {
 		log.Fatalf("failed to parse config: %s", err)
 	}
 
@@ -431,14 +482,15 @@ func main() {
 	subcommands.Register(new(installBundleCmd), "")
 	subcommands.Register(new(configureSysCmd), "")
 	subcommands.Register(new(startHEYPAgentsCmd), "")
-	subcommands.Register(testLOPRIStartServersCmd, "")
-	subcommands.Register(testLOPRIRunClientsCmd, "")
-	subcommands.Register(new(fortioStartServersCmd), "")
-	subcommands.Register(new(fortioRunClientsCmd), "")
+	subcommands.Register(testLOPRIStartServersCmd, "testlopri")
+	subcommands.Register(testLOPRIRunClientsCmd, "testlopri")
+	subcommands.Register(new(fortioStartServersCmd), "fortio")
+	subcommands.Register(new(fortioRunClientsCmd), "fortio")
+	subcommands.Register(killFortioCmd, "fortio")
 	subcommands.Register(new(fetchDataCmd), "")
 	subcommands.Register(checkNodesCmd, "")
-	subcommands.Register(killFortioCmd, "")
 	subcommands.Register(new(updateConfigCmd), "")
+	subcommands.Register(new(collectHostStatsCmd), "")
 
 	flag.Parse()
 
