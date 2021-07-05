@@ -42,6 +42,7 @@ func main() {
 	subcommands.Register(new(testlopriMakeTimeseries), "testlopri")
 	subcommands.Register(new(fortioMakeLatencyCDFs), "fortio")
 	subcommands.Register(new(fortioMakeTimeseries), "fortio")
+	subcommands.Register(new(alignInfosCmd), "")
 
 	log.SetFlags(0)
 	log.SetPrefix("proc-heyp: ")

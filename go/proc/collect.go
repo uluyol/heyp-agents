@@ -245,3 +245,29 @@ func GlobAndCollectFortio(fsys fs.FS) ([]FortioInstanceLogs, error) {
 	})
 	return ret, nil
 }
+
+var hostStatsRegex = regexp.MustCompile(
+	`(^|.*/)/([^/]+)/logs/host-agent-stats.log$`)
+
+func GlobAndCollectHostStats(fsys fs.FS) ([]ToAlign, error) {
+	all, err := regGlobFiles(fsys, testLopriRegex)
+	if err != nil {
+		return nil, fmt.Errorf("failed to walk: %w", err)
+	}
+	var ret []ToAlign
+	for _, p := range all {
+		matches := testLopriRegex.FindStringSubmatch(p)
+		if matches == nil {
+			continue
+		}
+		node := matches[2]
+		ret = append(ret, ToAlign{
+			Name: node,
+			Path: p,
+		})
+	}
+	sort.Slice(ret, func(i, j int) bool {
+		return ret[i].Name < ret[j].Name
+	})
+	return ret, nil
+}
