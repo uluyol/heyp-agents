@@ -1,10 +1,13 @@
 package proc
 
 import (
+	"bufio"
+	"encoding/json"
 	"io"
 	"time"
 
 	pb "github.com/uluyol/heyp-agents/go/proto"
+	"github.com/uluyol/heyp-agents/go/stats"
 )
 
 type tsBatch struct {
@@ -138,3 +141,32 @@ func (r *InfoBundleReader) Read(times []time.Time, data []interface{}) (int, err
 }
 
 var _ TSBatchReader = &InfoBundleReader{}
+
+type HostStatsReader struct {
+	s *bufio.Scanner
+}
+
+func NewHostStatsReader(r io.Reader) *HostStatsReader {
+	ret := &HostStatsReader{}
+	ret.s = bufio.NewScanner(r)
+	return ret
+}
+
+func (r *HostStatsReader) Read(times []time.Time, data []interface{}) (int, error) {
+	for i := range times {
+		hs := new(stats.HostStats)
+		if !r.s.Scan() {
+			return i, r.s.Err()
+		}
+
+		if err := json.Unmarshal(r.s.Bytes(), hs); err != nil {
+			return i, err
+		}
+		times[i] = hs.Time
+		data[i] = hs
+	}
+
+	return len(times), nil
+}
+
+var _ TSBatchReader = &HostStatsReader{}
