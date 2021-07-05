@@ -99,7 +99,19 @@ func hasRole(n *pb.DeployedNode, want string) bool {
 	return false
 }
 
-func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string, collectAllocLogs bool) error {
+type HEYPAgentsConfig struct {
+	CollectAllocLogs bool
+	CollectHostStats bool
+}
+
+func DefaultHEYPAgentsConfig() HEYPAgentsConfig {
+	return HEYPAgentsConfig{
+		CollectAllocLogs: true,
+		CollectHostStats: true,
+	}
+}
+
+func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string, startConfig HEYPAgentsConfig) error {
 	type hostAgentNode struct {
 		host             *pb.DeployedNode
 		clusterAgentAddr string
@@ -183,7 +195,7 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string, collectAllocLo
 				)
 
 				allocLogsPath := ""
-				if collectAllocLogs {
+				if startConfig.CollectAllocLogs {
 					allocLogsPath = path.Join(remoteTopdir, "logs", "cluster-agent-"+n.cluster.GetName()+"-alloc-log.json")
 				}
 
@@ -215,6 +227,9 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string, collectAllocLo
 				hostConfig := proto.Clone(c.HostAgentTemplate).(*pb.HostAgentConfig)
 				hostConfig.ThisHostAddrs = []string{n.host.GetExperimentAddr()}
 				hostConfig.Daemon.ClusterAgentAddr = &n.clusterAgentAddr
+				if startConfig.CollectHostStats {
+					hostConfig.Daemon.StatsLogFile = proto.String(path.Join(remoteTopdir, "logs/host-agent-stats.log"))
+				}
 				hostConfig.DcMapper = dcMapperConfig
 
 				hostConfigBytes, err := prototext.Marshal(hostConfig)

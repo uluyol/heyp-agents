@@ -180,9 +180,9 @@ func (c *runClientsCmd) Execute(ctx context.Context, fs *flag.FlagSet, args ...i
 }
 
 type startHEYPAgentsCmd struct {
-	configPath       string
-	remDir           string
-	collectAllocLogs bool
+	configPath  string
+	remDir      string
+	startConfig actions.HEYPAgentsConfig
 }
 
 func (*startHEYPAgentsCmd) Name() string     { return "start-heyp-agents" }
@@ -192,12 +192,14 @@ func (*startHEYPAgentsCmd) Usage() string    { return "" }
 func (c *startHEYPAgentsCmd) SetFlags(fs *flag.FlagSet) {
 	configVar(&c.configPath, fs)
 	remdirVar(&c.remDir, fs)
-	fs.BoolVar(&c.collectAllocLogs, "collect-alloc-logs", true, "collect detailed logs with input/allocation info at cluster agents")
+	c.startConfig = actions.DefaultHEYPAgentsConfig()
+	fs.BoolVar(&c.startConfig.CollectAllocLogs, "collect-alloc-logs", c.startConfig.CollectAllocLogs, "collect detailed logs with input/allocation info at cluster agents")
+	fs.BoolVar(&c.startConfig.CollectHostStats, "collect-host-stats", c.startConfig.CollectHostStats, "collect host statistics at host agents")
 }
 
 func (c *startHEYPAgentsCmd) Execute(ctx context.Context, fs *flag.FlagSet,
 	args ...interface{}) subcommands.ExitStatus {
-	err := actions.StartHEYPAgents(parseConfig(c.configPath), c.remDir, c.collectAllocLogs)
+	err := actions.StartHEYPAgents(parseConfig(c.configPath), c.remDir, c.startConfig)
 	if err != nil {
 		log.Fatal(err)
 	}
