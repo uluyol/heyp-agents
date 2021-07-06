@@ -3,6 +3,7 @@ package proc
 import (
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"time"
 
@@ -41,10 +42,10 @@ func (r *alignedRec) Reset() {
 	}
 }
 
-func AlignInfos(inputs []ToAlign, output string,
+func AlignInfos(fsys fs.FS, inputs []ToAlign, output string,
 	start, end time.Time, prec time.Duration) error {
 
-	files := make([]*os.File, len(inputs))
+	files := make([]fs.File, len(inputs))
 	readers := make([]TSBatchReader, len(inputs))
 	defer func() {
 		for _, f := range files {
@@ -55,7 +56,7 @@ func AlignInfos(inputs []ToAlign, output string,
 	}()
 	for i, arg := range inputs {
 		var err error
-		files[i], err = os.Open(arg.Path)
+		files[i], err = fsys.Open(arg.Path)
 		if err != nil {
 			return fmt.Errorf("failed to open input %s: %w", arg.Name, err)
 		}
@@ -102,5 +103,8 @@ func AlignInfos(inputs []ToAlign, output string,
 		}
 	}
 
-	return merger.Err()
+	if err := merger.Err(); err != nil {
+		return fmt.Errorf("failed to merge: %w", err)
+	}
+	return nil
 }

@@ -55,7 +55,7 @@ func (c *alignInfosCmd) Execute(ctx context.Context, fs *flag.FlagSet, args ...i
 		log.Fatalf("failed to find host stats: %v", err)
 	}
 
-	err = proc.AlignInfos(toAlign, c.output, start, end, c.prec.D)
+	err = proc.AlignInfos(os.DirFS(logsDir), toAlign, c.output, start, end, c.prec.D)
 	if err != nil {
 		log.Fatal(err)
 	}
