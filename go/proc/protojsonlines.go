@@ -3,7 +3,10 @@ package proc
 import (
 	"bufio"
 	"bytes"
+	"errors"
+	"fmt"
 	"io"
+	"strings"
 
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
@@ -33,7 +36,7 @@ func (r *ProtoJSONRecReader) ScanInto(rec proto.Message) bool {
 		var cur []byte
 		cur, isPrefix, r.err = r.r.ReadLine()
 		line = append(line, cur...)
-		if r.err == io.EOF {
+		if r.err == io.EOF || errors.Is(r.err, io.ErrUnexpectedEOF) {
 			r.err = nil
 			gotEOF = true
 			break
@@ -48,7 +51,16 @@ func (r *ProtoJSONRecReader) ScanInto(rec proto.Message) bool {
 		}
 		return r.ScanInto(rec) // skip this empty line
 	}
-	r.err = protojson.Unmarshal(line, rec)
+	err := protojson.Unmarshal(line, rec)
+	if err != nil {
+		if errors.Is(err, io.ErrUnexpectedEOF) || strings.Contains(err.Error(), "EOF") /* sigh */ {
+			gotEOF = true
+			return false
+		} else {
+			r.err = fmt.Errorf("failed to unmarshal: %v", err)
+		}
+	}
+
 	return r.err == nil
 }
 
