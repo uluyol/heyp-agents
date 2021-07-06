@@ -178,13 +178,13 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string, startConfig HE
 
 			t := c.ClusterAgentConfig
 			t.Server.Address = &n.address
-			clusterAgentConfigBytes, err := prototext.Marshal(t)
+			clusterAgentConfigBytes, err := prototext.MarshalOptions{Indent: "  "}.Marshal(t)
 			if err != nil {
 				return fmt.Errorf("failed to marshal cluster_agent_config: %w", err)
 			}
 
 			eg.Go(func() error {
-				limitsBytes, err := prototext.Marshal(n.cluster.GetLimits())
+				limitsBytes, err := prototext.MarshalOptions{Indent: "  "}.Marshal(n.cluster.GetLimits())
 				if err != nil {
 					return fmt.Errorf("failed to marshal limits: %w", err)
 				}
@@ -232,7 +232,7 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string, startConfig HE
 				}
 				hostConfig.DcMapper = dcMapperConfig
 
-				hostConfigBytes, err := prototext.Marshal(hostConfig)
+				hostConfigBytes, err := prototext.MarshalOptions{Indent: "  "}.Marshal(hostConfig)
 				if err != nil {
 					return fmt.Errorf("failed to marshal host_agent config: %w", err)
 				}
@@ -392,7 +392,7 @@ func FetchData(c *pb.DeploymentConfig, remoteTopdir, outdirPath string) error {
 				"ssh", n.GetExternalAddr(),
 				fmt.Sprintf(
 					"cd '%[1]s';"+
-						"tar cJf - configs logs",
+						"tar --warning=no-file-changed -cJf - configs logs; [[ $? -le 1 ]]",
 					remoteTopdir))
 			rc, err := cmd.StdoutPipe("data.tar.xz")
 			if err != nil {

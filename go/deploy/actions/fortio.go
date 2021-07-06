@@ -256,7 +256,7 @@ func FortioRunClients(c *pb.DeploymentConfig, remoteTopdir string, showOut bool,
 		for _, inst := range group.instances {
 			inst := inst
 
-			clientConfBytes, err := prototext.Marshal(inst.config.GetClient())
+			clientConfBytes, err := prototext.MarshalOptions{Indent: "  "}.Marshal(inst.config.GetClient())
 			if err != nil {
 				return fmt.Errorf("failed to marshal client config: %w", err)
 			}

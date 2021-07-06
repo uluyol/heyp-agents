@@ -127,7 +127,7 @@ func TestLOPRIRunClients(c *pb.DeploymentConfig, remoteTopdir string, showOut bo
 	for _, config := range configs {
 		config := config
 
-		clientConfBytes, err := prototext.Marshal(config.config.GetClient())
+		clientConfBytes, err := prototext.MarshalOptions{Indent: "  "}.Marshal(config.config.GetClient())
 		if err != nil {
 			return fmt.Errorf("failed to marshal client config: %w", err)
 		}
