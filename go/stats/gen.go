@@ -4,6 +4,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"go/format"
 	"log"
 	"os"
@@ -39,6 +40,14 @@ func makeStruct(buf *bytes.Buffer, counters []string, structName string) {
 		buf.WriteString((" = v\n"))
 	}
 	buf.WriteString("\t}\n")
+	buf.WriteString("}\n")
+
+	fmt.Fprintf(buf, "func (st *%[1]s) Sub(o *%[1]s) %[1]s {\n", structName)
+	fmt.Fprintf(buf, "\tvar diff %s\n", structName)
+	for _, c := range counters {
+		fmt.Fprintf(buf, "\tdiff.%[1]s = st.%[1]s - o.%[1]s\n", c)
+	}
+	buf.WriteString("\treturn diff\n")
 	buf.WriteString("}\n")
 }
 

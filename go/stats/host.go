@@ -23,3 +23,26 @@ type HostDeviceStats struct {
 	Name   string
 	RX, TX HostLinkStats
 }
+
+func (st HostLinkStats) Sub(o HostLinkStats) HostLinkStats {
+	return HostLinkStats{
+		Bytes:   st.Bytes - o.Bytes,
+		Packets: st.Packets - o.Packets,
+	}
+}
+
+func (st *HostStats) Sub(o *HostStats) *HostStats {
+	diff := &HostStats{Time: st.Time}
+	if st.Global != nil && o.Global != nil {
+		diff.Global = new(HostGlobalStats)
+		diff.Global.TCP = st.Global.TCP.Sub(&o.Global.TCP)
+	}
+	if st.MainDev != nil && o.MainDev != nil && st.MainDev.Name == o.MainDev.Name {
+		diff.MainDev = &HostDeviceStats{
+			Name: st.MainDev.Name,
+			RX:   st.MainDev.RX.Sub(o.MainDev.RX),
+			TX:   st.MainDev.TX.Sub(o.MainDev.TX),
+		}
+	}
+	return diff
+}

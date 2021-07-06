@@ -54,3 +54,22 @@ func (st *HostGlobalTCPStats) Update(s string, v int64) {
 		st.RtoMin = v
 	}
 }
+func (st *HostGlobalTCPStats) Sub(o *HostGlobalTCPStats) HostGlobalTCPStats {
+	var diff HostGlobalTCPStats
+	diff.ActiveOpens = st.ActiveOpens - o.ActiveOpens
+	diff.AttemptFails = st.AttemptFails - o.AttemptFails
+	diff.CurrEstab = st.CurrEstab - o.CurrEstab
+	diff.EstabResets = st.EstabResets - o.EstabResets
+	diff.InCsumErrors = st.InCsumErrors - o.InCsumErrors
+	diff.InErrs = st.InErrs - o.InErrs
+	diff.InSegs = st.InSegs - o.InSegs
+	diff.MaxConn = st.MaxConn - o.MaxConn
+	diff.OutRsts = st.OutRsts - o.OutRsts
+	diff.OutSegs = st.OutSegs - o.OutSegs
+	diff.PassiveOpens = st.PassiveOpens - o.PassiveOpens
+	diff.RetransSegs = st.RetransSegs - o.RetransSegs
+	diff.RtoAlgorithm = st.RtoAlgorithm - o.RtoAlgorithm
+	diff.RtoMax = st.RtoMax - o.RtoMax
+	diff.RtoMin = st.RtoMin - o.RtoMin
+	return diff
+}
