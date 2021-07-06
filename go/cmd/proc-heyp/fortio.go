@@ -25,7 +25,7 @@ type fortioMakeLatencyCDFs struct {
 	trimDur flagtypes.Duration
 }
 
-func (*fortioMakeLatencyCDFs) Name() string { return "forito-mk-latency-cdfs" }
+func (*fortioMakeLatencyCDFs) Name() string { return "fortio-mk-latency-cdfs" }
 
 func (*fortioMakeLatencyCDFs) Synopsis() string { return "" }
 func (*fortioMakeLatencyCDFs) Usage() string    { return "" }
