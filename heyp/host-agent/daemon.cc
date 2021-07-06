@@ -54,6 +54,7 @@ bool FlaggedOrWaitFor(absl::Duration dur, std::atomic<bool>* exit_flag) {
 void CollectStats(absl::Duration period, bool force_run,
                   FlowStateReporter* flow_state_reporter, const DCMapper* dc_mapper,
                   uint64_t host_id, FlowStateProvider* flow_state_provider,
+                  FlowAggregator* socket_to_host_aggregator,
                   NdjsonLogger* flow_state_logger, HostEnforcer* enforcer,
                   std::atomic<bool>* should_exit) {
   // Wait the first time since Run() refreshes once
@@ -67,30 +68,6 @@ void CollectStats(absl::Duration period, bool force_run,
       continue;
     }
 
-    if (flow_state_logger->should_log()) {
-      proto::InfoBundle bundle;
-      bundle.mutable_bundler()->set_host_id(host_id);
-      *bundle.mutable_timestamp() = ToProtoTimestamp(absl::Now());
-      flow_state_provider->ForEachActiveFlow(
-          [&bundle, dc_mapper](absl::Time time, const proto::FlowInfo& info) {
-            auto send_info = bundle.add_flow_infos();
-            *send_info = info;
-            *send_info->mutable_flow() = WithDCs(info.flow(), *dc_mapper);
-          });
-      absl::Status log_status = flow_state_logger->Write(bundle);
-      if (!log_status.ok()) {
-        LOG(WARNING) << "failed to log flow states: " << log_status;
-      }
-    }
-  }
-}
-
-void SendInfo(
-    absl::Duration inform_period, uint64_t host_id, const DCMapper* dc_mapper,
-    FlowStateProvider* flow_state_provider, FlowAggregator* socket_to_host_aggregator,
-    std::atomic<bool>* should_exit,
-    grpc::ClientReaderWriter<proto::InfoBundle, proto::AllocBundle>* io_stream) {
-  do {
     // Step 2: collect a bundle of all socket-level flows while annotating them
     //         with src / dst DC.
     proto::InfoBundle bundle;
@@ -106,8 +83,32 @@ void SendInfo(
     // Step 3: aggregate socket-level flows to host-level.
     socket_to_host_aggregator->Update(bundle);
 
+    // Step 3.5: log all src/dst DC-level flows on the flows, if requested.
+    if (flow_state_logger->should_log()) {
+      bundle.clear_flow_infos();
+      socket_to_host_aggregator->ForEachAgg(
+          [&bundle](absl::Time time, const proto::AggInfo& info) {
+            *bundle.add_flow_infos() = info.parent();
+          });
+
+      absl::Status log_status = flow_state_logger->Write(bundle);
+      if (!log_status.ok()) {
+        LOG(WARNING) << "failed to log flow states: " << log_status;
+      }
+    }
+  }
+}
+
+void SendInfo(
+    absl::Duration inform_period, uint64_t host_id,
+    FlowAggregator* socket_to_host_aggregator, std::atomic<bool>* should_exit,
+    grpc::ClientReaderWriter<proto::InfoBundle, proto::AllocBundle>* io_stream) {
+  do {
     // Step 4: collect a bundle of all src/dst DC-level flows on the host.
-    bundle.clear_flow_infos();
+    proto::InfoBundle bundle;
+    bundle.mutable_bundler()->set_host_id(host_id);
+    *bundle.mutable_timestamp() = ToProtoTimestamp(absl::Now());
+
     socket_to_host_aggregator->ForEachAgg(
         [&bundle](absl::Time time, const proto::AggInfo& info) {
           *bundle.add_flow_infos() = info.parent();
@@ -149,19 +150,20 @@ void HostDaemon::Run(std::atomic<bool>* should_exit) {
   {
     std::atomic<bool> once_should_exit = true;
     CollectStats(absl::ZeroDuration(), true, flow_state_reporter_, dc_mapper_,
-                 config_.host_id, flow_state_provider_, &flow_state_logger_, enforcer_,
-                 &once_should_exit);
+                 config_.host_id, flow_state_provider_, socket_to_host_aggregator_.get(),
+                 &flow_state_logger_, enforcer_, &once_should_exit);
   }
 
   io_stream_ = stub_->RegisterHost(&context_);
 
   collect_stats_thread_ = std::thread(
       CollectStats, config_.collect_stats_period, false, flow_state_reporter_, dc_mapper_,
-      config_.host_id, flow_state_provider_, &flow_state_logger_, enforcer_, should_exit);
+      config_.host_id, flow_state_provider_, socket_to_host_aggregator_.get(),
+      &flow_state_logger_, enforcer_, should_exit);
 
-  info_thread_ = std::thread(SendInfo, config_.inform_period, config_.host_id, dc_mapper_,
-                             flow_state_provider_, socket_to_host_aggregator_.get(),
-                             should_exit, io_stream_.get());
+  info_thread_ =
+      std::thread(SendInfo, config_.inform_period, config_.host_id,
+                  socket_to_host_aggregator_.get(), should_exit, io_stream_.get());
 
   enforcer_thread_ =
       std::thread(EnforceAlloc, flow_state_provider_, enforcer_, io_stream_.get());
