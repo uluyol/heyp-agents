@@ -247,16 +247,16 @@ func GlobAndCollectFortio(fsys fs.FS) ([]FortioInstanceLogs, error) {
 }
 
 var hostStatsRegex = regexp.MustCompile(
-	`(^|.*/)/([^/]+)/logs/host-agent-stats.log$`)
+	`(^|.*/)([^/]+)/logs/host-agent-stats.log$`)
 
 func GlobAndCollectHostStats(fsys fs.FS) ([]ToAlign, error) {
-	all, err := regGlobFiles(fsys, testLopriRegex)
+	all, err := regGlobFiles(fsys, hostStatsRegex)
 	if err != nil {
 		return nil, fmt.Errorf("failed to walk: %w", err)
 	}
 	var ret []ToAlign
 	for _, p := range all {
-		matches := testLopriRegex.FindStringSubmatch(p)
+		matches := hostStatsRegex.FindStringSubmatch(p)
 		if matches == nil {
 			continue
 		}
