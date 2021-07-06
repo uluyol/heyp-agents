@@ -132,11 +132,22 @@ TEST(SSFlowStateReporterTest, CollectsExpectedOutput) {
         .dst_port = 21364,
     });
 
-    if (active_usage_bps_cum_bytes.size() == 1) {
-      ASSERT_THAT(active_usage_bps_cum_bytes,
-                  testing::UnorderedElementsAre(testing::Pair(
-                      EqFlowNoId(marker2),
-                      testing::Pair(testing::Eq(999'999'999), testing::Eq(9999)))));
+    const proto::FlowMarker marker3 = ProtoFlowMarker({
+        .src_addr = "140.197.113.99",
+        .dst_addr = "192.168.1.7",
+        .protocol = proto::TCP,
+        .src_port = 4580,
+        .dst_port = 38290,
+    });
+
+    if (active_usage_bps_cum_bytes.size() == 2) {
+      ASSERT_THAT(
+          active_usage_bps_cum_bytes,
+          testing::UnorderedElementsAre(
+              testing::Pair(EqFlowNoId(marker2),
+                            testing::Pair(testing::Eq(999'999'999), testing::Eq(9999))),
+              testing::Pair(EqFlowNoId(marker3), testing::Pair(testing::Eq(3'891'500'000),
+                                                               testing::Eq(1431)))));
       ASSERT_THAT(dead_usage_bps_cum_bytes,
                   testing::UnorderedElementsAre(testing::Pair(
                       EqFlowNoId(marker1),
@@ -148,7 +159,9 @@ TEST(SSFlowStateReporterTest, CollectsExpectedOutput) {
               testing::Pair(EqFlowNoId(marker1),
                             testing::Pair(testing::Eq(458'943), testing::Eq(240))),
               testing::Pair(EqFlowNoId(marker2),
-                            testing::Pair(testing::Eq(999'999'999), testing::Eq(9999)))));
+                            testing::Pair(testing::Eq(999'999'999), testing::Eq(9999))),
+              testing::Pair(EqFlowNoId(marker3), testing::Pair(testing::Eq(3'891'500'000),
+                                                               testing::Eq(1431)))));
       ASSERT_THAT(dead_usage_bps_cum_bytes, testing::IsEmpty());
     }
   }

@@ -1,5 +1,6 @@
 #include "heyp/host-agent/urls.h"
 
+#include "absl/strings/match.h"
 #include "absl/strings/numbers.h"
 #include "absl/strings/str_cat.h"
 
@@ -24,7 +25,11 @@ absl::Status ParseHostPort(absl::string_view s, absl::string_view* host, int32_t
     if (port_separator < 3) {
       return absl::InvalidArgumentError("invalid address");
     }
-    *host = s.substr(1, port_separator - 2);
+    s = s.substr(1, port_separator - 2);
+    if (absl::StartsWith(s, "::ffff:") && !absl::StrContains(s.substr(7), ':')) {
+      s = s.substr(7);
+    }
+    *host = s;
   } else {
     *host = s.substr(0, port_separator);
   }
