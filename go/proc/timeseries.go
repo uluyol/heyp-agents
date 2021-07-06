@@ -3,6 +3,7 @@ package proc
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -63,7 +64,7 @@ func (m *TSMerger) read(ri int) {
 	for ti := range b.times[0:b.num] {
 		b.times[ti] = b.times[ti].Round(m.precision)
 	}
-	if m.err == io.EOF {
+	if errors.Is(m.err, io.EOF) {
 		m.err = nil
 		b.done = true
 	}
@@ -137,7 +138,11 @@ func runReader(r *ProtoJSONRecReader, c chan<- bundleOrError) {
 	for {
 		b := new(pb.InfoBundle)
 		if !r.ScanInto(b) {
-			c <- bundleOrError{e: r.Err()}
+			err := io.EOF
+			if r.Err() != nil {
+				err = r.Err()
+			}
+			c <- bundleOrError{e: err}
 			return
 		}
 		c <- bundleOrError{b: b}
@@ -161,7 +166,7 @@ func (r *InfoBundleReader) Read(times []time.Time, data []interface{}) (int, err
 			return i, r.err
 		}
 
-		times[i] = be.b.Timestamp.AsTime()
+		times[i] = be.b.GetTimestamp().AsTime()
 		data[i] = be.b
 	}
 
