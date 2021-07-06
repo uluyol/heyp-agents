@@ -3,6 +3,7 @@ package proc
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
 	"io"
 	"time"
 
@@ -54,7 +55,11 @@ func (m *TSMerger) read(ri int) {
 		return
 	}
 	b.i = 0
-	b.num, m.err = m.readers[ri].Read(b.times[:], b.data[:])
+	var e error
+	b.num, e = m.readers[ri].Read(b.times[:], b.data[:])
+	if e != nil {
+		m.err = fmt.Errorf("failure in reader %d: %w", ri, e)
+	}
 	for ti := range b.times[0:b.num] {
 		b.times[ti] = b.times[ti].Round(m.precision)
 	}
@@ -92,7 +97,7 @@ func (m *TSMerger) Next(gotTime *time.Time, data []interface{}) bool {
 		for i := range m.cur {
 			b := &m.cur[i]
 			foundExact := false
-			for b.curTime().Equal(minTime) {
+			for b.i < b.num && b.curTime().Equal(minTime) {
 				data[i] = b.data[b.i]
 				b.last = data[i]
 				b.hasLast = true
@@ -118,23 +123,46 @@ func (m *TSMerger) Next(gotTime *time.Time, data []interface{}) bool {
 
 func (m *TSMerger) Err() error { return m.err }
 
+type bundleOrError struct {
+	b *pb.InfoBundle
+	e error
+}
+
 type InfoBundleReader struct {
-	r *ProtoJSONRecReader
+	c   <-chan bundleOrError
+	err error
+}
+
+func runReader(r *ProtoJSONRecReader, c chan<- bundleOrError) {
+	for {
+		b := new(pb.InfoBundle)
+		if !r.ScanInto(b) {
+			c <- bundleOrError{e: r.Err()}
+			return
+		}
+		c <- bundleOrError{b: b}
+	}
 }
 
 func NewInfoBundleReader(r io.Reader) *InfoBundleReader {
-	return &InfoBundleReader{r: NewProtoJSONRecReader(r)}
+	c := make(chan bundleOrError, 64)
+	go runReader(NewProtoJSONRecReader(r), c)
+	return &InfoBundleReader{c: c}
 }
 
 func (r *InfoBundleReader) Read(times []time.Time, data []interface{}) (int, error) {
 	for i := range times {
-		b := new(pb.InfoBundle)
-		if !r.r.ScanInto(b) {
-			return i, r.r.Err()
+		if r.err != nil {
+			return i, r.err
+		}
+		be := <-r.c
+		if be.e != nil {
+			r.err = be.e
+			return i, r.err
 		}
 
-		times[i] = b.Timestamp.AsTime()
-		data[i] = b
+		times[i] = be.b.Timestamp.AsTime()
+		data[i] = be.b
 	}
 
 	return len(times), nil
