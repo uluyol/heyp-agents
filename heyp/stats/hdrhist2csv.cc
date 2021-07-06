@@ -3,13 +3,13 @@
 #include <string>
 #include <vector>
 
+#include "absl/flags/flag.h"
 #include "absl/strings/str_format.h"
-#include "gflags/gflags.h"
 #include "heyp/init/init.h"
 #include "heyp/proto/fileio.h"
 #include "heyp/stats/hdrhistogram.h"
 
-DEFINE_bool(header, true, "if set (default), output a header for the CSV");
+ABSL_FLAG(bool, header, true, "if set (default), output a header for the CSV");
 
 int main(int argc, char** argv) {
   heyp::MainInit(&argc, &argv);
@@ -54,7 +54,7 @@ int main(int argc, char** argv) {
     }
   }
 
-  if (FLAGS_header) {
+  if (absl::GetFlag(FLAGS_header)) {
     absl::FPrintF(stdout, "Percentile,Value,NumSamples\n");
   }
   for (heyp::PctValue pv : hist.ToCdf()) {

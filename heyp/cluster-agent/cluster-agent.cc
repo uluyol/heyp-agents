@@ -2,10 +2,10 @@
 #include <iostream>
 #include <string>
 
+#include "absl/flags/flag.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/time/time.h"
-#include "gflags/gflags.h"
 #include "grpcpp/grpcpp.h"
 #include "heyp/cli/parse.h"
 #include "heyp/cluster-agent/alloc-recorder.h"
@@ -84,7 +84,7 @@ absl::Status Run(const proto::ClusterAgentConfig& c, const proto::AllocBundle& a
 }  // namespace
 }  // namespace heyp
 
-DEFINE_string(alloc_logs, "", "path to write allocation debug logs");
+ABSL_FLAG(std::string, alloc_logs, "", "path to write allocation debug logs");
 
 int main(int argc, char** argv) {
   heyp::MainInit(&argc, &argv);
@@ -107,7 +107,7 @@ int main(int argc, char** argv) {
     return 2;
   }
 
-  absl::Status s = heyp::Run(config, limits, FLAGS_alloc_logs);
+  absl::Status s = heyp::Run(config, limits, absl::GetFlag(FLAGS_alloc_logs));
   if (!s.ok()) {
     std::cerr << "failed to run: " << s << "\n";
     return 3;

@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "absl/base/attributes.h"
+#include "absl/flags/flag.h"
 #include "absl/functional/bind_front.h"
 #include "absl/random/distributions.h"
 #include "absl/random/random.h"
@@ -22,7 +23,6 @@
 #include "absl/strings/str_split.h"
 #include "absl/strings/string_view.h"
 #include "absl/strings/strip.h"
-#include "gflags/gflags.h"
 #include "heyp/encoding/binary.h"
 #include "heyp/host-agent/urls.h"
 #include "heyp/init/init.h"
@@ -1102,29 +1102,30 @@ absl::Status WriteGoodputTS(
 }  // namespace
 }  // namespace heyp
 
-DEFINE_string(c, "config.textproto", "path to input config");
-DEFINE_string(server, "127.0.0.1:7777", "comma-separated addresses of servers");
-DEFINE_string(out, "testlopri-client.log", "path to log output");
-DEFINE_string(start_time, "", "wait until this time to start the run");
-DEFINE_string(interarrival, "",
-              "path to write out interarrival distribution (optional, for validation)");
-DEFINE_string(msgput, "",
-              "path to write out per-ms goodput distribution (optional, for validation)");
+ABSL_FLAG(std::string, c, "config.textproto", "path to input config");
+ABSL_FLAG(std::string, server, "127.0.0.1:7777", "comma-separated addresses of servers");
+ABSL_FLAG(std::string, out, "testlopri-client.log", "path to log output");
+ABSL_FLAG(std::string, start_time, "", "wait until this time to start the run");
+ABSL_FLAG(std::string, interarrival, "",
+          "path to write out interarrival distribution (optional, for validation)");
+ABSL_FLAG(std::string, msgput, "",
+          "path to write out per-ms goodput distribution (optional, for validation)");
 
 int ShardMain(int argc, char** argv, int shard_index, int num_shards) {
   heyp::ThisShardIndex = shard_index;
   heyp::MainInit(&argc, &argv);
-  auto srec =
-      heyp::StatsRecorder::Create(absl::StrCat(FLAGS_out, ".shard.", shard_index));
+  auto srec = heyp::StatsRecorder::Create(
+      absl::StrCat(absl::GetFlag(FLAGS_out), ".shard.", shard_index));
   if (!srec.ok()) {
     std::cerr << "failed to create stats recorder: " << srec.status();
     return 2;
   }
 
   absl::Time start_time = absl::Now() + absl::Seconds(3);
-  if (!FLAGS_start_time.empty()) {
+  if (!absl::GetFlag(FLAGS_start_time).empty()) {
     std::string err;
-    if (!absl::ParseTime(absl::RFC3339_full, FLAGS_start_time, &start_time, &err)) {
+    if (!absl::ParseTime(absl::RFC3339_full, absl::GetFlag(FLAGS_start_time), &start_time,
+                         &err)) {
       std::cerr << "invalid start time: " << err << "\n";
       return 3;
     }
@@ -1138,7 +1139,7 @@ int ShardMain(int argc, char** argv, int shard_index, int num_shards) {
   }
 
   heyp::proto::TestLopriClientConfig config;
-  if (!heyp::ReadTextProtoFromFile(FLAGS_c, &config)) {
+  if (!heyp::ReadTextProtoFromFile(absl::GetFlag(FLAGS_c), &config)) {
     std::cerr << "failed to parse config file\n";
     return 4;
   }
@@ -1157,17 +1158,18 @@ int ShardMain(int argc, char** argv, int shard_index, int num_shards) {
   }
 
   std::unique_ptr<std::vector<std::pair<uint64_t, uint64_t>>> goodput_ts;
-  if (FLAGS_msgput != "") {
+  if (absl::GetFlag(FLAGS_msgput) != "") {
     goodput_ts = absl::make_unique<std::vector<std::pair<uint64_t, uint64_t>>>();
   }
 
   std::vector<struct sockaddr_in> dst_addrs;
-  heyp::ParseDestAddrs(FLAGS_server, &dst_addrs);
+  heyp::ParseDestAddrs(absl::GetFlag(FLAGS_server), &dst_addrs);
   std::unique_ptr<heyp::LoadGenerator> load_gen;
   {
-    auto load_gen_or = heyp::MakeLoadGenerator(
-        config, uv_default_loop(), std::move(*srec), FLAGS_interarrival != "",
-        goodput_ts.get(), std::move(dst_addrs), hr_start_time);
+    auto load_gen_or =
+        heyp::MakeLoadGenerator(config, uv_default_loop(), std::move(*srec),
+                                absl::GetFlag(FLAGS_interarrival) != "", goodput_ts.get(),
+                                std::move(dst_addrs), hr_start_time);
     if (!load_gen_or.ok()) {
       std::cerr << load_gen_or.status() << "\n";
       return 5;
@@ -1182,15 +1184,15 @@ int ShardMain(int argc, char** argv, int shard_index, int num_shards) {
       absl::FormatTime(absl::RFC3339_full, end_time, absl::UTCTimeZone()),
       absl::ToUnixMillis(end_time));
 
-  if (FLAGS_interarrival != "") {
+  if (absl::GetFlag(FLAGS_interarrival) != "") {
     CHECK(heyp::WriteTextProtoToFile(
         load_gen->GetInterarrivalProto(),
-        absl::StrCat(FLAGS_interarrival, ".shard.", shard_index)))
+        absl::StrCat(absl::GetFlag(FLAGS_interarrival), ".shard.", shard_index)))
         << "failed to write latency hist";
   }
-  if (FLAGS_msgput != "") {
+  if (absl::GetFlag(FLAGS_msgput) != "") {
     absl::Status st = heyp::WriteGoodputTS(
-        *goodput_ts, absl::StrCat(FLAGS_msgput, ".shard.", shard_index));
+        *goodput_ts, absl::StrCat(absl::GetFlag(FLAGS_msgput), ".shard.", shard_index));
     if (!st.ok()) {
       LOG(FATAL) << "failed to write goodput timeseries: " << st;
     }

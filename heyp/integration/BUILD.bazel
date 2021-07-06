@@ -7,7 +7,7 @@ heyp_cc_binary(
     deps = [
         ":host-agent-os-tester",
         "//heyp/init",
-        "@com_github_gflags_gflags//:gflags",
+        "@com_google_absl//absl/flags:flag",
     ],
 )
 
@@ -18,7 +18,7 @@ heyp_cc_binary(
         "//heyp/init",
         "//heyp/proto:fileio",
         "//heyp/proto:integration_cc_proto",
-        "@com_github_gflags_gflags//:gflags",
+        "@com_google_absl//absl/flags:flag",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/strings:str_format",

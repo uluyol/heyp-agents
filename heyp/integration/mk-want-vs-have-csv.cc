@@ -2,6 +2,7 @@
 #include <cmath>
 #include <iostream>
 
+#include "absl/flags/flag.h"
 #include "absl/status/status.h"
 #include "absl/strings/match.h"
 #include "absl/strings/str_cat.h"
@@ -9,7 +10,6 @@
 #include "absl/strings/str_split.h"
 #include "absl/strings/strip.h"
 #include "absl/types/optional.h"
-#include "gflags/gflags.h"
 #include "heyp/init/init.h"
 #include "heyp/proto/fileio.h"
 #include "heyp/proto/integration.pb.h"
@@ -147,8 +147,8 @@ absl::Status ToCsv(absl::string_view input_path, bool print_header, bool ignore_
 }  // namespace
 }  // namespace heyp
 
-DEFINE_bool(header, false, "add header to csv output");
-DEFINE_bool(ignore_bad, false, "ignore records with missing data");
+ABSL_FLAG(bool, header, false, "add header to csv output");
+ABSL_FLAG(bool, ignore_bad, false, "ignore records with missing data");
 
 int main(int argc, char** argv) {
   heyp::MainInit(&argc, &argv);
@@ -163,7 +163,8 @@ int main(int argc, char** argv) {
     return 2;
   }
 
-  auto st = heyp::ToCsv(argv[1], FLAGS_header, FLAGS_ignore_bad);
+  auto st =
+      heyp::ToCsv(argv[1], absl::GetFlag(FLAGS_header), absl::GetFlag(FLAGS_ignore_bad));
   if (!st.ok()) {
     std::cerr << absl::StrFormat("failed to convert: %s\n", st.message());
     return 1;

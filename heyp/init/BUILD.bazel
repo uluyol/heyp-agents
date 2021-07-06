@@ -1,4 +1,4 @@
-load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
 
 package(default_visibility = ["//heyp:__subpackages__"])
 
@@ -8,9 +8,9 @@ cc_library(
     hdrs = ["init.h"],
     deps = [
         "//heyp/log",
-        "@com_github_gflags_gflags//:gflags",
         "@com_google_absl//absl/debugging:failure_signal_handler",
         "@com_google_absl//absl/debugging:symbolize",
+        "@com_google_absl//absl/flags:parse",
     ],
 )
 
@@ -21,6 +21,17 @@ cc_library(
     deps = [
         ":init",
         "//heyp/log",
+        "@com_google_absl//absl/flags:parse",
         "@gtest",
+    ],
+)
+
+cc_test(
+    name = "parse-cmdline-test",
+    srcs = ["parse-cmdline-test.cc"],
+    deps = [
+        ":init",
+        "@com_google_absl//absl/flags:flag",
+        "@com_google_absl//absl/strings:str_format",
     ],
 )

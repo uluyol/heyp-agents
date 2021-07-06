@@ -2,11 +2,11 @@
 #include <array>
 #include <cstdint>
 
+#include "absl/flags/flag.h"
 #include "absl/random/distributions.h"
 #include "absl/random/random.h"
 #include "absl/strings/str_format.h"
 #include "absl/time/time.h"
-#include "gflags/gflags.h"
 #include "heyp/init/init.h"
 #include "heyp/proto/app.pb.h"
 #include "heyp/proto/fileio.h"
@@ -84,14 +84,14 @@ int Run(const proto::TestLopriClientConfig& config) {
 }  // namespace
 }  // namespace heyp
 
-DEFINE_string(c, "testlopri.textproto", "path to config file");
+ABSL_FLAG(std::string, c, "testlopri.textproto", "path to config file");
 
 int main(int argc, char** argv) {
   heyp::MainInit(&argc, &argv);
 
   heyp::proto::TestLopriClientConfig c;
-  if (!heyp::ReadTextProtoFromFile(FLAGS_c, &c)) {
-    absl::FPrintF(stderr, "failed to read config file '%s'\n", FLAGS_c);
+  if (!heyp::ReadTextProtoFromFile(absl::GetFlag(FLAGS_c), &c)) {
+    absl::FPrintF(stderr, "failed to read config file '%s'\n", absl::GetFlag(FLAGS_c));
     return 3;
   }
 

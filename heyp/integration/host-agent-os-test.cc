@@ -1,19 +1,19 @@
 #include <unistd.h>
 
-#include "gflags/gflags.h"
+#include "absl/flags/flag.h"
 #include "google/protobuf/io/zero_copy_stream_impl.h"
 #include "google/protobuf/text_format.h"
 #include "heyp/init/init.h"
 #include "heyp/integration/host-agent-os-tester.h"
 #include "heyp/log/logging.h"
 
-DEFINE_string(logdir, "", "directory to write debug log files to, if present");
-DEFINE_string(run_dur, "60s", "how much time the test should measure for");
-DEFINE_string(step_dur, "2s", "how long a single step in the test should last");
-DEFINE_int32(num_hosts, 4, "number of hosts to emulate");
-DEFINE_int64(max_rate_limit_mbps, 100, "maximum rate limit (in Mbps)");
-DEFINE_bool(ignore_instantaneous_usage, false,
-            "ignore instantaneous usage reports when estimating usage bps");
+ABSL_FLAG(std::string, logdir, "", "directory to write debug log files to, if present");
+ABSL_FLAG(std::string, run_dur, "60s", "how much time the test should measure for");
+ABSL_FLAG(std::string, step_dur, "2s", "how long a single step in the test should last");
+ABSL_FLAG(int32_t, num_hosts, 4, "number of hosts to emulate");
+ABSL_FLAG(int64_t, max_rate_limit_mbps, 100, "maximum rate limit (in Mbps)");
+ABSL_FLAG(bool, ignore_instantaneous_usage, false,
+          "ignore instantaneous usage reports when estimating usage bps");
 
 int main(int argc, char** argv) {
   heyp::MainInit(&argc, &argv);
@@ -22,24 +22,25 @@ int main(int argc, char** argv) {
   absl::Duration run_dur;
   absl::Duration step_dur;
 
-  if (!absl::ParseDuration(FLAGS_run_dur, &run_dur)) {
-    std::cerr << "invalid duration for -run_dur:" << FLAGS_run_dur << "\n";
+  if (!absl::ParseDuration(absl::GetFlag(FLAGS_run_dur), &run_dur)) {
+    std::cerr << "invalid duration for -run_dur:" << absl::GetFlag(FLAGS_run_dur) << "\n";
     return 2;
   }
-  if (!absl::ParseDuration(FLAGS_step_dur, &step_dur)) {
-    std::cerr << "invalid duration for -step_dur:" << FLAGS_step_dur << "\n";
+  if (!absl::ParseDuration(absl::GetFlag(FLAGS_step_dur), &step_dur)) {
+    std::cerr << "invalid duration for -step_dur:" << absl::GetFlag(FLAGS_step_dur)
+              << "\n";
     return 2;
   }
 
   heyp::testing::HostAgentOSTester tester({
       .device = "lo",
-      .log_dir = FLAGS_logdir,
+      .log_dir = absl::GetFlag(FLAGS_logdir),
       .use_hipri = true,
       .run_dur = run_dur,
       .step_dur = step_dur,
-      .num_hosts = FLAGS_num_hosts,
-      .max_rate_limit_bps = FLAGS_max_rate_limit_mbps * 1024 * 1024,
-      .ignore_instantaneous_usage = FLAGS_ignore_instantaneous_usage,
+      .num_hosts = absl::GetFlag(FLAGS_num_hosts),
+      .max_rate_limit_bps = absl::GetFlag(FLAGS_max_rate_limit_mbps) * 1024 * 1024,
+      .ignore_instantaneous_usage = absl::GetFlag(FLAGS_ignore_instantaneous_usage),
   });
 
   auto metrics_or = tester.Run();
