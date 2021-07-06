@@ -165,6 +165,7 @@ absl::Status Run(const proto::HostAgentConfig& c) {
                         .host_id = host_id,
                         .inform_period = *inform_period_or,
                         .collect_stats_period = *collect_stats_period_or,
+                        .stats_log_file = c.daemon().stats_log_file(),
                     },
                     &dc_mapper, &flow_tracker, std::move(flow_aggregator),
                     flow_state_reporter.get(), enforcer.get());
