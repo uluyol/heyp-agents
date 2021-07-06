@@ -29,8 +29,8 @@ func (m protoMesg) MarshalJSON() ([]byte, error) {
 var _ json.Marshaler = protoMesg{}
 
 type alignedRec struct {
-	Time time.Time            `json:"time"`
-	Data map[string]protoMesg `json:"data"`
+	UnixSec float64              `json:"unixSec"`
+	Data    map[string]protoMesg `json:"data"`
 }
 
 func (r *alignedRec) Reset() {
@@ -83,7 +83,7 @@ func AlignInfos(fsys fs.FS, inputs []ToAlign, output string,
 		}
 
 		rec.Reset()
-		rec.Time = tstamp
+		rec.UnixSec = unixSec(tstamp)
 
 		_ = data[len(inputs)-1]
 		for i := range data {
@@ -107,4 +107,10 @@ func AlignInfos(fsys fs.FS, inputs []ToAlign, output string,
 		return fmt.Errorf("failed to merge: %w", err)
 	}
 	return nil
+}
+
+func unixSec(t time.Time) float64 {
+	sec := float64(t.Unix())
+	ns := float64(t.Nanosecond())
+	return sec + (ns / 1e9)
 }
