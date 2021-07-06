@@ -56,7 +56,7 @@ type Input struct {
 
 func NewXZWriter(destPath string) (*XZWriter, error) {
 	w := new(XZWriter)
-	w.xzCmd = exec.Command("xz", "-z", "-k")
+	w.xzCmd = exec.Command("xz", "-3", "-z", "-k")
 	var err error
 	w.xzPipe, err = w.xzCmd.StdinPipe()
 	if err != nil {
