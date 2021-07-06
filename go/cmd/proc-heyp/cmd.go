@@ -43,6 +43,7 @@ func main() {
 	subcommands.Register(new(fortioMakeLatencyCDFs), "fortio")
 	subcommands.Register(new(fortioMakeTimeseries), "fortio")
 	subcommands.Register(new(alignInfosCmd), "")
+	subcommands.Register(new(alignHostStatsCmd), "")
 
 	flag.Parse()
 

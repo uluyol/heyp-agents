@@ -246,17 +246,14 @@ func GlobAndCollectFortio(fsys fs.FS) ([]FortioInstanceLogs, error) {
 	return ret, nil
 }
 
-var hostStatsRegex = regexp.MustCompile(
-	`(^|.*/)([^/]+)/logs/host-agent-stats.log$`)
-
-func GlobAndCollectHostStats(fsys fs.FS) ([]ToAlign, error) {
-	all, err := regGlobFiles(fsys, hostStatsRegex)
+func globToAlignPerHost(fsys fs.FS, r *regexp.Regexp) ([]ToAlign, error) {
+	all, err := regGlobFiles(fsys, r)
 	if err != nil {
 		return nil, fmt.Errorf("failed to walk: %w", err)
 	}
 	var ret []ToAlign
 	for _, p := range all {
-		matches := hostStatsRegex.FindStringSubmatch(p)
+		matches := r.FindStringSubmatch(p)
 		if matches == nil {
 			continue
 		}
@@ -270,4 +267,18 @@ func GlobAndCollectHostStats(fsys fs.FS) ([]ToAlign, error) {
 		return ret[i].Name < ret[j].Name
 	})
 	return ret, nil
+}
+
+var hostAgentStatsRegex = regexp.MustCompile(
+	`(^|.*/)([^/]+)/logs/host-agent-stats.log$`)
+
+func GlobAndCollectHostAgentStats(fsys fs.FS) ([]ToAlign, error) {
+	return globToAlignPerHost(fsys, hostAgentStatsRegex)
+}
+
+var hostStatsRegex = regexp.MustCompile(
+	`(^|.*/)([^/]+)/logs/host-stats.log$`)
+
+func GlobAndCollectHostStats(fsys fs.FS) ([]ToAlign, error) {
+	return globToAlignPerHost(fsys, hostStatsRegex)
 }

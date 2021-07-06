@@ -149,7 +149,7 @@ func runReader(r *ProtoJSONRecReader, c chan<- bundleOrError) {
 	}
 }
 
-func NewInfoBundleReader(r io.Reader) *InfoBundleReader {
+func NewInfoBundleReader(r io.Reader) TSBatchReader {
 	c := make(chan bundleOrError, 64)
 	go runReader(NewProtoJSONRecReader(r), c)
 	return &InfoBundleReader{c: c}
@@ -179,7 +179,7 @@ type HostStatsReader struct {
 	s *bufio.Scanner
 }
 
-func NewHostStatsReader(r io.Reader) *HostStatsReader {
+func NewHostStatsReader(r io.Reader) TSBatchReader {
 	ret := &HostStatsReader{}
 	ret.s = bufio.NewScanner(r)
 	return ret
@@ -197,6 +197,57 @@ func (r *HostStatsReader) Read(times []time.Time, data []interface{}) (int, erro
 		}
 		times[i] = hs.Time
 		data[i] = hs
+	}
+
+	return len(times), nil
+}
+
+var _ TSBatchReader = &HostStatsReader{}
+
+type HostStatDiffsReader struct {
+	s    *bufio.Scanner
+	last *stats.HostStats
+}
+
+func NewHostStatDiffsReader(r io.Reader) TSBatchReader {
+	ret := &HostStatDiffsReader{s: bufio.NewScanner(r)}
+	return ret
+}
+
+func (r *HostStatDiffsReader) get() (*stats.HostStats, error) {
+	if !r.s.Scan() {
+		err := r.s.Err()
+		if err == nil {
+			err = io.EOF
+		}
+		return nil, err
+	}
+	hs := new(stats.HostStats)
+	if err := json.Unmarshal(r.s.Bytes(), hs); err != nil {
+		return nil, err
+	}
+	return hs, nil
+}
+
+func (r *HostStatDiffsReader) Read(times []time.Time, data []interface{}) (int, error) {
+	if r.last == nil {
+		hs, err := r.get()
+		if err != nil {
+			return 0, err
+		}
+		r.last = hs
+	}
+
+	for i := range times {
+		hs, err := r.get()
+		if err != nil {
+			return i, err
+		}
+
+		diff := hs.Sub(r.last)
+		r.last = hs
+		times[i] = diff.Time
+		data[i] = diff
 	}
 
 	return len(times), nil
