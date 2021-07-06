@@ -283,11 +283,11 @@ func StartCollectingHostStats(c *pb.DeploymentConfig, remoteTopdir string) error
 	for _, n := range c.GetNodes() {
 		n := n
 		eg.Go(func() error {
-			err := TracingCommand(LogWithPrefix("collect-host-stats: "),
+			out, err := TracingCommand(LogWithPrefix("collect-host-stats: "),
 				"ssh", n.GetExternalAddr(),
-				fmt.Sprintf("tmux new-session -d -s collect-host-stats '%[1]s/aux/collect-host-stats -me %[2]s -out %[1]s/logs/host-stats.log -pid %[1]s/logs/host-stats.pid'", remoteTopdir, n.GetExperimentAddr())).Run()
+				fmt.Sprintf("tmux kill-session -t collect-host-stats; tmux new-session -d -s collect-host-stats '%[1]s/aux/collect-host-stats -me %[2]s -out %[1]s/logs/host-stats.log -pid %[1]s/logs/host-stats.pid'", remoteTopdir, n.GetExperimentAddr())).CombinedOutput()
 			if err != nil {
-				return fmt.Errorf("failed to start collecting stats on Node %q: %w", n.GetName(), err)
+				return fmt.Errorf("failed to start collecting stats on Node %q: %w; output:\n%s", n.GetName(), err, out)
 			}
 			return nil
 		})
