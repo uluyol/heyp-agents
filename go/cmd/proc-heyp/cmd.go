@@ -44,6 +44,8 @@ func main() {
 	subcommands.Register(new(fortioMakeTimeseries), "fortio")
 	subcommands.Register(new(alignInfosCmd), "")
 
+	flag.Parse()
+
 	log.SetFlags(0)
 	log.SetPrefix("proc-heyp: ")
 
