@@ -186,10 +186,10 @@ absl::Status ParseLine(uint64_t host_id, absl::string_view line,
   }
 
   if (!found_cum_usage_bytes) {
-    return absl::InvalidArgumentError("no 'bytes_sent' field");
+    LOG(WARNING) << "no 'bytes_sent' field: " << line;
   }
   if (!found_usage_bps) {
-    return absl::InvalidArgumentError("no send bps field");
+    LOG(WARNING) << "no 'send' bps field: " << line;
   }
 
   return absl::OkStatus();
@@ -230,8 +230,10 @@ void SSFlowStateReporter::MonitorDone() {
         continue;
       }
       if (IgnoreFlow(f)) {
+        VLOG(2) << "ignoring done flow: " << f.ShortDebugString();
         continue;
       }
+      VLOG(2) << "counting done flow: " << f.ShortDebugString();
 
       impl_->flow_tracker->FinalizeFlows(
           now, {{f, usage_bps, cum_usage_bytes, FlowPri::kUnset}});
@@ -269,8 +271,10 @@ absl::Status SSFlowStateReporter::ReportState(
         continue;
       }
       if (IgnoreFlow(f)) {
+        VLOG(2) << "ignoring flow: " << f.ShortDebugString();
         continue;
       }
+      VLOG(2) << "counting flow: " << f.ShortDebugString();
       FlowPri pri = FlowPri::kHi;
       if (is_lopri(f)) {
         pri = FlowPri::kLo;

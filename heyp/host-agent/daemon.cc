@@ -30,7 +30,8 @@ HostDaemon::HostDaemon(const std::shared_ptr<grpc::Channel>& channel, Config con
 
 namespace {
 
-proto::FlowMarker WithDCs(proto::FlowMarker marker, const DCMapper& dc_mapper) {
+bool WithDCs(proto::FlowMarker marker, const DCMapper& dc_mapper,
+             proto::FlowMarker* out) {
   auto src_dc = dc_mapper.HostDC(marker.src_addr());
   auto dst_dc = dc_mapper.HostDC(marker.dst_addr());
   if (src_dc != nullptr) {
@@ -39,7 +40,8 @@ proto::FlowMarker WithDCs(proto::FlowMarker marker, const DCMapper& dc_mapper) {
   if (dst_dc != nullptr) {
     marker.set_dst_dc(*dst_dc);
   }
-  return marker;
+  *out = std::move(marker);
+  return src_dc != nullptr && dst_dc != nullptr;
 }
 
 bool FlaggedOrWaitFor(absl::Duration dur, std::atomic<bool>* exit_flag) {
@@ -57,8 +59,12 @@ void CollectStats(absl::Duration period, bool force_run,
                   FlowAggregator* socket_to_host_aggregator,
                   NdjsonLogger* flow_state_logger, HostEnforcer* enforcer,
                   std::atomic<bool>* should_exit) {
+  LOG(INFO) << "will collect stats once every " << period;
+
   // Wait the first time since Run() refreshes once
   while (force_run || !FlaggedOrWaitFor(period, should_exit)) {
+    LOG(INFO) << "refresh stats";
+
     force_run = false;
     // Step 1: refresh stats on all socket-level flows.
     absl::Status report_status = flow_state_reporter->ReportState(
@@ -75,9 +81,10 @@ void CollectStats(absl::Duration period, bool force_run,
     *bundle.mutable_timestamp() = ToProtoTimestamp(absl::Now());
     flow_state_provider->ForEachActiveFlow(
         [&bundle, dc_mapper](absl::Time time, const proto::FlowInfo& info) {
-          auto send_info = bundle.add_flow_infos();
-          *send_info = info;
-          *send_info->mutable_flow() = WithDCs(info.flow(), *dc_mapper);
+          proto::FlowInfo send_info = info;
+          if (WithDCs(info.flow(), *dc_mapper, send_info.mutable_flow())) {
+            *bundle.add_flow_infos() = std::move(send_info);
+          }
         });
 
     // Step 3: aggregate socket-level flows to host-level.
