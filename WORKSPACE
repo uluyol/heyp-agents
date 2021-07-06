@@ -28,13 +28,6 @@ http_archive(
 )
 
 http_archive(
-    name = "com_github_gflags_gflags",
-    sha256 = "34af2f15cf7367513b352bdcd2493ab14ce43692d2dcd9dfc499492966c64dcf",
-    strip_prefix = "gflags-2.2.2",
-    urls = ["https://github.com/gflags/gflags/archive/v2.2.2.tar.gz"],
-)
-
-http_archive(
     name = "com_google_benchmark",
     strip_prefix = "benchmark-bf585a2789e30585b4e3ce6baf11ef2750b54677",
     urls = ["https://github.com/google/benchmark/archive/bf585a2789e30585b4e3ce6baf11ef2750b54677.zip"],
@@ -75,6 +68,13 @@ http_archive(
     urls = [
         "https://github.com/uluyol/routing-algos/archive/a43ab38b70d0301e38f0114df651edbffa730d4c.tar.gz",
     ],
+)
+
+http_archive(
+    name = "glpk",
+    build_file = "@com_google_ortools//bazel:glpk.BUILD",
+    sha256 = "4281e29b628864dfe48d393a7bedd781e5b475387c20d8b0158f329994721a10",
+    url = "http://ftp.gnu.org/gnu/glpk/glpk-4.65.tar.gz",
 )
 
 http_archive(
