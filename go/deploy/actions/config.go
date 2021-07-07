@@ -1,7 +1,7 @@
 package actions
 
 import (
-	pb "github.com/uluyol/heyp-agents/go/proto"
+	"github.com/uluyol/heyp-agents/go/pb"
 )
 
 func LookupNode(c *pb.DeploymentConfig, name string) *pb.DeployedNode {

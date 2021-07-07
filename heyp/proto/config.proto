@@ -6,7 +6,7 @@ syntax = "proto2";
 
 package heyp.proto;
 
-option go_package = "github.com/uluyol/heyp-agents/go/proto";
+option go_package = "github.com/uluyol/heyp-agents/go/pb";
 
 message DemandPredictorConfig {
   optional string time_window_dur = 1 [default = "10s"];

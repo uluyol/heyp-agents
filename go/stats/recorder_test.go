@@ -8,8 +8,8 @@ import (
 	"testing/fstest"
 	"time"
 
+	"github.com/uluyol/heyp-agents/go/pb"
 	"github.com/uluyol/heyp-agents/go/proc"
-	"github.com/uluyol/heyp-agents/go/proto"
 	"github.com/uluyol/heyp-agents/go/stats"
 	"google.golang.org/protobuf/encoding/prototext"
 )
@@ -20,7 +20,7 @@ type ClosableBuffer struct {
 
 func (ClosableBuffer) Close() error { return nil }
 
-func flatten(h *proto.HdrHistogram) []int64 {
+func flatten(h *pb.HdrHistogram) []int64 {
 	var data []int64
 	for _, b := range h.GetBuckets() {
 		v := b.GetV()
@@ -37,7 +37,7 @@ func (x int64s) Len() int           { return len(x) }
 func (x int64s) Less(i, j int) bool { return x[i] < x[j] }
 func (x int64s) Swap(i, j int)      { x[i], x[j] = x[j], x[i] }
 
-func hasHist(hists []*proto.StatsRecord_LatencyStats, label string, data []int64) bool {
+func hasHist(hists []*pb.StatsRecord_LatencyStats, label string, data []int64) bool {
 	for _, h := range hists {
 		if h.GetKind() == label {
 			gotData := flatten(h.GetHistNs())
@@ -79,7 +79,7 @@ type wantRecord struct {
 	Latencies         []wantLatency
 }
 
-func checkExpected(t *testing.T, got *proto.StatsRecord, want wantRecord) {
+func checkExpected(t *testing.T, got *pb.StatsRecord, want wantRecord) {
 	t.Helper()
 
 	if got.GetLabel() != want.Label {
@@ -141,7 +141,7 @@ func TestRecorderReadBack(t *testing.T) {
 	var gotStep2 bool
 
 	var err error
-	proc.ForEachStatsRec(&err, fsys, "data.log.0", func(r *proto.StatsRecord) error {
+	proc.ForEachStatsRec(&err, fsys, "data.log.0", func(r *pb.StatsRecord) error {
 		switch {
 		case !gotStep1:
 			checkExpected(t, r, wantRecord{

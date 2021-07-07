@@ -12,7 +12,7 @@ import (
 
 	"github.com/uluyol/heyp-agents/go/deploy/writetar"
 	"github.com/uluyol/heyp-agents/go/multierrgroup"
-	pb "github.com/uluyol/heyp-agents/go/proto"
+	"github.com/uluyol/heyp-agents/go/pb"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"

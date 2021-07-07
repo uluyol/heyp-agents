@@ -7,7 +7,7 @@ import (
 	"io"
 	"os"
 
-	pb "github.com/uluyol/heyp-agents/go/proto"
+	"github.com/uluyol/heyp-agents/go/pb"
 )
 
 type rspec struct {

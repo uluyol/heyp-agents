@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package heyp.proto;
 
-option go_package = "github.com/uluyol/heyp-agents/go/proto";
+option go_package = "github.com/uluyol/heyp-agents/go/pb";
 
 import "google/protobuf/timestamp.proto";
 

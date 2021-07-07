@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/HdrHistogram/hdrhistogram-go"
-	"github.com/uluyol/heyp-agents/go/proto"
+	"github.com/uluyol/heyp-agents/go/pb"
 	"google.golang.org/protobuf/encoding/protojson"
-	pbproto "google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/proto"
 )
 
 type counters struct {
@@ -109,7 +109,7 @@ func (r *Recorder) DoneStep(label string) {
 	r.writeWG.Wait()
 	r.writeWG.Add(1)
 	go func() {
-		rec := &proto.StatsRecord{
+		rec := &pb.StatsRecord{
 			Label:     label,
 			Timestamp: now.In(time.UTC).Format(time.RFC3339Nano),
 			DurSec:    elapsedSec,
@@ -153,10 +153,10 @@ func (r *Recorder) Close() error {
 	return err
 }
 
-func toProtoLatencyStats(hists map[string]*hdrhistogram.Histogram) []*proto.StatsRecord_LatencyStats {
-	stats := make([]*proto.StatsRecord_LatencyStats, 0, len(hists))
+func toProtoLatencyStats(hists map[string]*hdrhistogram.Histogram) []*pb.StatsRecord_LatencyStats {
+	stats := make([]*pb.StatsRecord_LatencyStats, 0, len(hists))
 	for kind, hist := range hists {
-		stats = append(stats, &proto.StatsRecord_LatencyStats{
+		stats = append(stats, &pb.StatsRecord_LatencyStats{
 			Kind:   kind,
 			HistNs: HistToProto(hist),
 			P50Ns:  hist.ValueAtPercentile(50),
@@ -171,19 +171,19 @@ func toProtoLatencyStats(hists map[string]*hdrhistogram.Histogram) []*proto.Stat
 	return stats
 }
 
-func HistToProto(h *hdrhistogram.Histogram) *proto.HdrHistogram {
-	ret := &proto.HdrHistogram{
-		Config: &proto.HdrHistogram_Config{
+func HistToProto(h *hdrhistogram.Histogram) *pb.HdrHistogram {
+	ret := &pb.HdrHistogram{
+		Config: &pb.HdrHistogram_Config{
 			LowestDiscernibleValue: h.LowestTrackableValue(),
 			HighestTrackableValue:  h.HighestTrackableValue(),
 			SignificantFigures:     int32(h.SignificantFigures()),
 		},
 	}
 	dist := h.Distribution()
-	ret.Buckets = make([]*proto.HdrHistogram_Bucket, 0, h.TotalCount()/10)
+	ret.Buckets = make([]*pb.HdrHistogram_Bucket, 0, h.TotalCount()/10)
 	for _, bar := range dist {
 		if bar.Count > 0 {
-			ret.Buckets = append(ret.Buckets, &proto.HdrHistogram_Bucket{
+			ret.Buckets = append(ret.Buckets, &pb.HdrHistogram_Bucket{
 				C: bar.Count,
 				V: bar.From,
 			})
@@ -192,7 +192,7 @@ func HistToProto(h *hdrhistogram.Histogram) *proto.HdrHistogram {
 	return ret
 }
 
-func writeJSONLine(w io.Writer, m pbproto.Message) error {
+func writeJSONLine(w io.Writer, m proto.Message) error {
 	marshaller := protojson.MarshalOptions{
 		Multiline:       false,
 		EmitUnpopulated: true,

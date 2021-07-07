@@ -6,7 +6,7 @@ import (
 	"io"
 
 	"github.com/uluyol/heyp-agents/go/multierrgroup"
-	pb "github.com/uluyol/heyp-agents/go/proto"
+	"github.com/uluyol/heyp-agents/go/pb"
 )
 
 type ipAddrRec struct {

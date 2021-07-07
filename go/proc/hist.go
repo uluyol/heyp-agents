@@ -2,7 +2,7 @@ package proc
 
 import (
 	"github.com/HdrHistogram/hdrhistogram-go"
-	pb "github.com/uluyol/heyp-agents/go/proto"
+	"github.com/uluyol/heyp-agents/go/pb"
 )
 
 func HistFromProto(p *pb.HdrHistogram) *hdrhistogram.Histogram {

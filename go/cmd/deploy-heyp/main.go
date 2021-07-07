@@ -13,7 +13,7 @@ import (
 	"github.com/google/subcommands"
 	"github.com/uluyol/heyp-agents/go/deploy/actions"
 	"github.com/uluyol/heyp-agents/go/deploy/configgen"
-	pb "github.com/uluyol/heyp-agents/go/proto"
+	"github.com/uluyol/heyp-agents/go/pb"
 	"google.golang.org/protobuf/encoding/prototext"
 )
 

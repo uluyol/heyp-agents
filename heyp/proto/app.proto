@@ -6,7 +6,7 @@ syntax = "proto2";
 
 package heyp.proto;
 
-option go_package = "github.com/uluyol/heyp-agents/go/proto";
+option go_package = "github.com/uluyol/heyp-agents/go/pb";
 
 enum LoadGenerator {
   LG_UNSET = 0;

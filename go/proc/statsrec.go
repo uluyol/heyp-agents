@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io/fs"
 
-	pb "github.com/uluyol/heyp-agents/go/proto"
+	"github.com/uluyol/heyp-agents/go/pb"
 )
 
 func ForEachStatsRec(err *error, fsys fs.FS, path string,

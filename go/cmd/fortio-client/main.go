@@ -17,7 +17,7 @@ import (
 	"fortio.org/fortio/log"
 	"github.com/uluyol/heyp-agents/go/fortio/stagedperiodic"
 	"github.com/uluyol/heyp-agents/go/fortio/wanhttp"
-	"github.com/uluyol/heyp-agents/go/proto"
+	"github.com/uluyol/heyp-agents/go/pb"
 	"github.com/uluyol/heyp-agents/go/stats"
 	"google.golang.org/protobuf/encoding/prototext"
 )
@@ -37,7 +37,7 @@ var (
 	startTimeFlag = flag.String("start_time", time.Now().Add(3*time.Second).Format(time.RFC3339Nano), "time to start run")
 )
 
-func meanBitsPerReq(sizeDist []*proto.FortioClientConfig_SizeAndWeight) float64 {
+func meanBitsPerReq(sizeDist []*pb.FortioClientConfig_SizeAndWeight) float64 {
 	var sumWeightedBytes, sumWeight float64
 	for _, sd := range sizeDist {
 		sumWeightedBytes += float64(sd.GetRespSizeBytes()) * float64(sd.GetWeight())
@@ -46,7 +46,7 @@ func meanBitsPerReq(sizeDist []*proto.FortioClientConfig_SizeAndWeight) float64 
 	return 8 * sumWeightedBytes / sumWeight
 }
 
-func convertStages(stages []*proto.FortioClientConfig_WorkloadStage, bitsPerReq float64) ([]stagedperiodic.WorkloadStage, error) {
+func convertStages(stages []*pb.FortioClientConfig_WorkloadStage, bitsPerReq float64) ([]stagedperiodic.WorkloadStage, error) {
 	out := make([]stagedperiodic.WorkloadStage, len(stages))
 	for i, s := range stages {
 		dur, err := time.ParseDuration(s.GetRunDur())
@@ -60,7 +60,7 @@ func convertStages(stages []*proto.FortioClientConfig_WorkloadStage, bitsPerReq 
 	return out, nil
 }
 
-func withDists(addr string, c *proto.FortioClientConfig) (string, error) {
+func withDists(addr string, c *pb.FortioClientConfig) (string, error) {
 	url, err := url.Parse(addr)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse addr %q: %w", addr, err)
@@ -97,7 +97,7 @@ func withDists(addr string, c *proto.FortioClientConfig) (string, error) {
 	return url.String(), nil
 }
 
-func toHTTPOptions(addr string, c *proto.FortioClientConfig) (wanhttp.HTTPOptions, error) {
+func toHTTPOptions(addr string, c *pb.FortioClientConfig) (wanhttp.HTTPOptions, error) {
 	httpc := c.GetHttpOptions()
 
 	url, err := withDists(addr, c)
@@ -132,7 +132,7 @@ func toHTTPOptions(addr string, c *proto.FortioClientConfig) (wanhttp.HTTPOption
 	return opts, nil
 }
 
-func maxSize(sds []*proto.FortioClientConfig_SizeAndWeight) int32 {
+func maxSize(sds []*pb.FortioClientConfig_SizeAndWeight) int32 {
 	maxSize := int32(1024)
 	for _, sd := range sds {
 		if sd.GetRespSizeBytes() > maxSize {
@@ -142,7 +142,7 @@ func maxSize(sds []*proto.FortioClientConfig_SizeAndWeight) int32 {
 	return maxSize
 }
 
-func workerMain(shardIndex, numShards int, config *proto.FortioClientConfig, startTime time.Time) {
+func workerMain(shardIndex, numShards int, config *pb.FortioClientConfig, startTime time.Time) {
 	*log.LogPrefix = fmt.Sprintf("> [shard %d] ", shardIndex)
 
 	for _, s := range config.GetWorkloadStages() {
@@ -232,7 +232,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to read in config: %v", err)
 	}
-	config := new(proto.FortioClientConfig)
+	config := new(pb.FortioClientConfig)
 	if err := prototext.Unmarshal(configData, config); err != nil {
 		log.Fatalf("failed to unmarshal config: %v", err)
 	}

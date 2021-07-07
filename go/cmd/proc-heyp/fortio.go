@@ -14,8 +14,8 @@ import (
 	"github.com/HdrHistogram/hdrhistogram-go"
 	"github.com/google/subcommands"
 	"github.com/uluyol/heyp-agents/go/cmd/flagtypes"
+	"github.com/uluyol/heyp-agents/go/pb"
 	"github.com/uluyol/heyp-agents/go/proc"
-	pb "github.com/uluyol/heyp-agents/go/proto"
 )
 
 const fortioDefaultTrimDuration = 5 * time.Second
