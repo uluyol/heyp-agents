@@ -17,6 +17,7 @@
 #include "heyp/proto/alg.h"
 #include "heyp/proto/config.pb.h"
 #include "heyp/proto/heyp.pb.h"
+#include "small-string-set.h"
 
 namespace heyp {
 
@@ -189,12 +190,23 @@ constexpr int64_t kMaxBandwidthBps = 100 * (static_cast<int64_t>(1) << 30);  // 
 constexpr char kDscpHipri[] = "AF21";
 constexpr char kDscpLopri[] = "BE";
 
+SmallStringSet DscpsToIgnore(const proto::HostEnforcerConfig& config) {
+  std::vector<absl::string_view> to_ignore;
+  if (!config.enforce_hipri()) {
+    to_ignore.push_back(kDscpHipri);
+  }
+  if (!config.limit_lopri()) {
+    to_ignore.push_back(kDscpLopri);
+  }
+  return SmallStringSet(to_ignore);
+}
+
 LinuxHostEnforcerImpl::LinuxHostEnforcerImpl(
     absl::string_view device, const MatchHostFlowsFunc& match_host_flows_fn,
     const proto::HostEnforcerConfig& config)
     : device_(device),
       match_host_flows_fn_(match_host_flows_fn),
-      ipt_controller_(device, config.enforce_hipri() ? "" : kDscpHipri),
+      ipt_controller_(device, DscpsToIgnore(config)),
       debug_logger_(config.debug_log_dir()),
       next_class_id_(2),
       report_error_on_dyn_qdisc_(false) {}

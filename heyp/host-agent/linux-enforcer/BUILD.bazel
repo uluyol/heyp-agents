@@ -60,9 +60,20 @@ cc_library(
     hdrs = ["iptables-controller.h"],
     deps = [
         ":iptables",
+        ":small-string-set",
         "//heyp/log",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:str_format",
+    ],
+)
+
+cc_library(
+    name = "small-string-set",
+    srcs = ["small-string-set.cc"],
+    hdrs = ["small-string-set.h"],
+    deps = [
+        "@com_google_absl//absl/container:inlined_vector",
+        "@com_google_absl//absl/strings",
     ],
 )
 
@@ -136,6 +147,15 @@ cc_test(
     ],
     deps = [
         ":iptables",
+        "//heyp/init:test-main",
+    ],
+)
+
+cc_test(
+    name = "small-string-set-test",
+    srcs = ["small-string-set-test.cc"],
+    deps = [
+        ":small-string-set",
         "//heyp/init:test-main",
     ],
 )

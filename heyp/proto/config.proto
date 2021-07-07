@@ -31,6 +31,7 @@ message HostEnforcerConfig {
   // If specified, will periodically dump iptables and tc state here.
   optional string debug_log_dir = 1;
   optional bool enforce_hipri = 2 [default = true];
+  optional bool limit_lopri = 3 [default = true];
 }
 
 message HostDaemonConfig {

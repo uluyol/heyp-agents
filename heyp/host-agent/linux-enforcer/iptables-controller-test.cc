@@ -4,6 +4,7 @@
 #include "absl/strings/str_split.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "small-string-set.h"
 
 namespace heyp {
 namespace iptables {
@@ -169,7 +170,7 @@ TEST(AddRuleLinesToDeleteTest, Basic) {
 TEST(AddRuleLinesToAddTest, Basic) {
   absl::Cord lines;
   AddRuleLinesToAdd(
-      "AF31", "eth5",
+      SmallStringSet({"AF31"}), "eth5",
       SettingBatch{{
           {.dst_addr = "10.0.0.2", .class_id = "2:99", .dscp = "AF41"},
           {.dst_port = 555, .dst_addr = "10.0.0.1", .class_id = "2:100", .dscp = "AF31"},

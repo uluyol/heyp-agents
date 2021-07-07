@@ -8,6 +8,7 @@
 #include "absl/status/status.h"
 #include "absl/strings/string_view.h"
 #include "heyp/host-agent/linux-enforcer/iptables.h"
+#include "heyp/host-agent/linux-enforcer/small-string-set.h"
 
 namespace heyp {
 namespace iptables {
@@ -39,7 +40,7 @@ void ComputeDiff(SettingBatch& old_batch, SettingBatch& new_batch, SettingBatch*
 
 class Controller {
  public:
-  explicit Controller(absl::string_view dev, absl::string_view dscp_to_ignore_class_id);
+  explicit Controller(absl::string_view dev, SmallStringSet dscps_to_ignore_class_id);
 
   Runner& GetRunner();
 
@@ -52,7 +53,7 @@ class Controller {
 
  private:
   const std::string dev_;
-  const std::string dscp_to_ignore_class_id_;
+  const SmallStringSet dscps_to_ignore_class_id_;
   std::unique_ptr<Runner> runner_;
 
   SettingBatch staged_;
@@ -66,8 +67,9 @@ class Controller {
 
 void AddRuleLinesToDelete(absl::string_view dev, const SettingBatch& batch,
                           absl::Cord& lines);
-void AddRuleLinesToAdd(absl::string_view dscp_to_ignore_class_id, absl::string_view dev,
-                       const SettingBatch& batch, absl::Cord& lines);
+void AddRuleLinesToAdd(const SmallStringSet& dscp_to_ignore_class_id,
+                       absl::string_view dev, const SettingBatch& batch,
+                       absl::Cord& lines);
 
 absl::string_view SettingsFindDscp(const SettingBatch& batch, uint16_t src_port,
                                    uint16_t dst_port, absl::string_view dst_addr,
