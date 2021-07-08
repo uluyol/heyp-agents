@@ -29,9 +29,17 @@ func usage() {
 
 func mustLogsArg(fs *flag.FlagSet) string {
 	if len(fs.Args()) != 1 {
-		flag.Usage()
+		fs.Usage()
 	}
 	return fs.Arg(0)
+}
+
+type namedCommand interface {
+	Name() string
+}
+
+func logsUsage(c namedCommand) string {
+	return c.Name() + " [args] logfile\n\n"
 }
 
 func main() {
@@ -44,6 +52,7 @@ func main() {
 	subcommands.Register(new(fortioMakeTimeseries), "fortio")
 	subcommands.Register(new(alignInfosCmd), "")
 	subcommands.Register(new(alignHostStatsCmd), "")
+	subcommands.Register(new(clusterAllocBWStatsCmd), "")
 
 	flag.Parse()
 

@@ -115,6 +115,6 @@ func SortedPrintTable(w io.Writer, bufs [][]byte, sep string) error {
 		return fmt.Errorf("failed to sort data: %w\nfull ouput: %s", err, sortErr.Bytes())
 	}
 
-	_, err := io.Copy(os.Stdout, &sortOutput)
+	_, err := io.Copy(w, &sortOutput)
 	return err
 }

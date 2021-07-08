@@ -30,7 +30,7 @@ func (*testlopriMakeLatencyCDFs) Name() string {
 }
 
 func (*testlopriMakeLatencyCDFs) Synopsis() string { return "" }
-func (*testlopriMakeLatencyCDFs) Usage() string    { return "" }
+func (c *testlopriMakeLatencyCDFs) Usage() string  { return logsUsage(c) }
 
 func (c *testlopriMakeLatencyCDFs) SetFlags(fs *flag.FlagSet) {
 	c.level = "per-instance"
@@ -130,7 +130,7 @@ func (*testlopriMakeTimeseries) Name() string {
 
 func (*testlopriMakeTimeseries) Synopsis() string { return "" }
 
-func (*testlopriMakeTimeseries) Usage() string { return "" }
+func (c *testlopriMakeTimeseries) Usage() string { return logsUsage(c) }
 
 func (c *testlopriMakeTimeseries) SetFlags(fs *flag.FlagSet) {
 	c.trimDur.D = testlopriDefaultTrimDuration

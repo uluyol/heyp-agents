@@ -28,7 +28,7 @@ type fortioMakeLatencyCDFs struct {
 func (*fortioMakeLatencyCDFs) Name() string { return "fortio-mk-latency-cdfs" }
 
 func (*fortioMakeLatencyCDFs) Synopsis() string { return "" }
-func (*fortioMakeLatencyCDFs) Usage() string    { return "" }
+func (c *fortioMakeLatencyCDFs) Usage() string  { return logsUsage(c) }
 
 func (c *fortioMakeLatencyCDFs) SetFlags(fs *flag.FlagSet) {
 	c.level = "per-instance"
@@ -138,7 +138,7 @@ type fortioMakeTimeseries struct {
 func (*fortioMakeTimeseries) Name() string { return "fortio-mk-timeseries" }
 
 func (*fortioMakeTimeseries) Synopsis() string { return "" }
-func (*fortioMakeTimeseries) Usage() string    { return "" }
+func (c *fortioMakeTimeseries) Usage() string  { return logsUsage(c) }
 
 func (c *fortioMakeTimeseries) SetFlags(fs *flag.FlagSet) {
 	c.trimDur.D = fortioDefaultTrimDuration
