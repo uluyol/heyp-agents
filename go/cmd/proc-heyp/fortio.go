@@ -56,7 +56,7 @@ func (c *fortioMakeLatencyCDFs) Execute(ctx context.Context, fs *flag.FlagSet, a
 
 	bw := bufio.NewWriter(os.Stdout)
 	defer bw.Flush()
-	fmt.Fprintln(bw, "Group,Instance,Client,Shard,LatencyKind,Percentile,LatencyNanos,NumSamples")
+	fmt.Fprintln(bw, "Group,Instance,Client,Shard,LatencyKind,Percentile,LatencyNanos,NumSamples,CumNumSamples")
 
 	hists := make(map[string]*hdrhistogram.Histogram)
 
@@ -113,9 +113,9 @@ func printFortioCDF(w io.Writer, hists map[string]*hdrhistogram.Histogram, group
 		h := hists[k]
 		var cumCount int64
 
-		out := func(pct float64, v, c int64) {
-			fmt.Fprintf(w, "%s,%s,%s,%d,%s,%f,%d,%d\n",
-				group, inst, client, shard, k, pct, v, c)
+		out := func(pct float64, v, c, cumCount int64) {
+			fmt.Fprintf(w, "%s,%s,%s,%d,%s,%f,%d,%d,%d\n",
+				group, inst, client, shard, k, pct, v, c, cumCount)
 		}
 		total := float64(h.TotalCount())
 		for _, bar := range h.Distribution() {
@@ -123,10 +123,10 @@ func printFortioCDF(w io.Writer, hists map[string]*hdrhistogram.Histogram, group
 				continue
 			}
 			if cumCount == 0 {
-				out(0, bar.From, 0)
+				out(0, bar.From, 0, 0)
 			}
 			cumCount += bar.Count
-			out(100*float64(cumCount)/total, bar.From, bar.Count)
+			out(100*float64(cumCount)/total, bar.From, bar.Count, cumCount)
 		}
 	}
 }
