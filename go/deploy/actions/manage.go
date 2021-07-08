@@ -100,14 +100,16 @@ func hasRole(n *pb.DeployedNode, want string) bool {
 }
 
 type HEYPAgentsConfig struct {
-	CollectAllocLogs bool
-	CollectHostStats bool
+	LogClusterAllocState bool
+	LogEnforcerState     bool
+	LogHostStats         bool
 }
 
 func DefaultHEYPAgentsConfig() HEYPAgentsConfig {
 	return HEYPAgentsConfig{
-		CollectAllocLogs: true,
-		CollectHostStats: true,
+		LogClusterAllocState: true,
+		LogEnforcerState:     true,
+		LogHostStats:         true,
 	}
 }
 
@@ -195,7 +197,7 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string, startConfig HE
 				)
 
 				allocLogsPath := ""
-				if startConfig.CollectAllocLogs {
+				if startConfig.LogClusterAllocState {
 					allocLogsPath = path.Join(remoteTopdir, "logs", "cluster-agent-"+n.cluster.GetName()+"-alloc-log.json")
 				}
 
@@ -227,8 +229,13 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string, startConfig HE
 				hostConfig := proto.Clone(c.HostAgentTemplate).(*pb.HostAgentConfig)
 				hostConfig.ThisHostAddrs = []string{n.host.GetExperimentAddr()}
 				hostConfig.Daemon.ClusterAgentAddr = &n.clusterAgentAddr
-				if startConfig.CollectHostStats {
-					hostConfig.Daemon.StatsLogFile = proto.String(path.Join(remoteTopdir, "logs/host-agent-stats.log"))
+				if startConfig.LogHostStats {
+					hostConfig.Daemon.StatsLogFile = proto.String(
+						path.Join(remoteTopdir, "logs/host-agent-stats.log"))
+				}
+				if startConfig.LogEnforcerState {
+					hostConfig.Enforcer.DebugLogDir = proto.String(
+						path.Join(remoteTopdir, "logs/host-enforcer-debug"))
 				}
 				hostConfig.DcMapper = dcMapperConfig
 

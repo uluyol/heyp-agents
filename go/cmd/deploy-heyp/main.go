@@ -197,8 +197,9 @@ func (c *startHEYPAgentsCmd) SetFlags(fs *flag.FlagSet) {
 	configVar(&c.configPath, fs)
 	remdirVar(&c.remDir, fs)
 	c.startConfig = actions.DefaultHEYPAgentsConfig()
-	fs.BoolVar(&c.startConfig.CollectAllocLogs, "collect-alloc-logs", c.startConfig.CollectAllocLogs, "collect detailed logs with input/allocation info at cluster agents")
-	fs.BoolVar(&c.startConfig.CollectHostStats, "collect-host-stats", c.startConfig.CollectHostStats, "collect host statistics at host agents")
+	fs.BoolVar(&c.startConfig.LogClusterAllocState, "log-cluster-alloc-state", c.startConfig.LogClusterAllocState, "collect detailed logs with input/allocation info at cluster agents")
+	fs.BoolVar(&c.startConfig.LogEnforcerState, "log-enforcer-state", c.startConfig.LogEnforcerState, "collect host enforcer state at host agents for debugging")
+	fs.BoolVar(&c.startConfig.LogHostStats, "log-host-stats", c.startConfig.LogHostStats, "collect host statistics at host agents")
 }
 
 func (c *startHEYPAgentsCmd) Execute(ctx context.Context, fs *flag.FlagSet,
