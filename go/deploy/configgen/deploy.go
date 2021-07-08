@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -78,6 +79,11 @@ MainLoop:
 					if login.Username == sshUser {
 						curBuf.Reset()
 						newBuf.Reset()
+
+						if n.GetExperimentAddr() == "" {
+							return errors.New(
+								"experimental addr should be a unique token")
+						}
 
 						curBuf.WriteByte('"')
 						curBuf.WriteString(n.GetExternalAddr())
