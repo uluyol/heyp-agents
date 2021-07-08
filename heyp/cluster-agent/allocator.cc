@@ -292,8 +292,12 @@ class DowngradeAllocator : public PerAggAllocator {
                 << " lopri admission = " << lopri_admission;
     }
 
+    const int64_t lopri_bps =
+        std::max<int64_t>(0, agg_info.parent().predicted_demand_bps() - hipri_admission);
+
     const double frac_lopri =
-        FracAdmittedAtLOPRI(agg_info.parent(), hipri_admission, lopri_admission);
+        static_cast<double>(lopri_bps) /
+        static_cast<double>(agg_info.parent().predicted_demand_bps());
 
     if (should_debug) {
       LOG(INFO) << "lopri_frac = " << frac_lopri;
@@ -312,8 +316,13 @@ class DowngradeAllocator : public PerAggAllocator {
       lopri_admission = lopri_admission * burstiness;
     }
 
-    std::vector<bool> lopri_children =
-        PickLOPRIChildren(agg_info, frac_lopri, config_.downgrade_selector());
+    std::vector<bool> lopri_children;
+    if (frac_lopri > 0) {
+      lopri_children =
+          PickLOPRIChildren(agg_info, frac_lopri, config_.downgrade_selector());
+    } else {
+      lopri_children = std::vector<bool>(agg_info.children_size(), false);
+    }
 
     std::vector<int64_t> hipri_demands;
     std::vector<int64_t> lopri_demands;
