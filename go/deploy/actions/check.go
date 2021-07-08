@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/uluyol/heyp-agents/go/multierrgroup"
 	"github.com/uluyol/heyp-agents/go/pb"
@@ -63,4 +64,72 @@ func CheckNodeIPs(c *pb.DeploymentConfig) error {
 	}
 
 	return eg.Wait()
+}
+
+func CheckNodeConnectivity(c *pb.DeploymentConfig) error {
+	var startEg multierrgroup.Group
+
+	cmds := make([]*TracingCmd, len(c.Nodes))
+
+	for i, n := range c.Nodes {
+		i := i
+		n := n
+		startEg.Go(func() error {
+			cmd := TracingCommand(
+				LogWithPrefix("check-node-connectivity: "),
+				"ssh", n.GetExternalAddr(),
+				"python3 -m http.server",
+			)
+
+			cmds[i] = cmd
+
+			return cmd.Start()
+		})
+	}
+
+	defer func() {
+		for _, c := range cmds {
+			if c != nil {
+				c.Process.Kill()
+			}
+		}
+	}()
+
+	if err := startEg.Wait(); err != nil {
+		return err
+	}
+
+	var eg multierrgroup.Group
+
+	for _, n := range c.Nodes {
+		n := n
+		eg.Go(func() error {
+			var cmdToRunB strings.Builder
+			for i, n := range c.Nodes {
+				if i > 0 {
+					cmdToRunB.WriteString(" && ")
+				}
+				cmdToRunB.WriteString("curl --retry 5 --retry-delay 1 http://")
+				cmdToRunB.WriteString(n.GetExperimentAddr())
+				cmdToRunB.WriteString(":8000/")
+			}
+
+			out, err := TracingCommand(
+				LogWithPrefix("check-node-connectivity: "),
+				"ssh", n.GetExternalAddr(), cmdToRunB.String(),
+			).CombinedOutput()
+
+			if err != nil {
+				return fmt.Errorf("src %s failed to connect to all: %v; output:\n%s", n.GetName(), err, out)
+			}
+
+			return nil
+		})
+	}
+
+	if err := eg.Wait(); err != nil {
+		return err
+	}
+
+	return nil
 }

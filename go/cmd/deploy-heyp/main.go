@@ -348,8 +348,16 @@ func (c *fetchDataCmd) Execute(ctx context.Context, fs *flag.FlagSet,
 
 var checkNodesCmd = &configCmd{
 	name:     "check-nodes",
-	synopsis: "check node config (currently just ip addresses)",
-	exec:     actions.CheckNodeIPs,
+	synopsis: "check node config (ip address match & connectivity)",
+	exec: func(c *pb.DeploymentConfig) error {
+		if err := actions.CheckNodeIPs(c); err != nil {
+			return err
+		}
+		if err := actions.CheckNodeConnectivity(c); err != nil {
+			return err
+		}
+		return nil
+	},
 }
 
 type subst struct {
