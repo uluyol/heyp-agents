@@ -2,6 +2,7 @@ package configgen
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -38,6 +39,11 @@ type rspecLogin struct {
 	Username       string `xml:"username,attr"`
 }
 
+func randomBytes(buf []byte) error {
+	_, err := rand.Read(buf)
+	return err
+}
+
 func UpdateDeploymentConfig(c *pb.DeploymentConfig, cbytes []byte, manifestReader io.Reader, sshUser, outfile string, perm os.FileMode) error {
 	var rspec rspec
 	dec := xml.NewDecoder(manifestReader)
@@ -46,6 +52,13 @@ func UpdateDeploymentConfig(c *pb.DeploymentConfig, cbytes []byte, manifestReade
 	}
 	var curBuf, newBuf bytes.Buffer
 
+	type rewrite struct {
+		from, to []byte
+	}
+
+	var rewrites []rewrite
+
+	// First record the rewrites that we want to do
 MainLoop:
 	for _, n := range c.GetNodes() {
 		addrToFind := n.GetExperimentAddr()
@@ -76,13 +89,40 @@ MainLoop:
 						newBuf.WriteString(login.Hostname)
 						newBuf.WriteByte('"')
 
-						// Rewrite external address in raw bytes so we preserve other formatting
-						cbytes = bytes.ReplaceAll(cbytes, curBuf.Bytes(), newBuf.Bytes())
+						// Record that we want to do this rewrite
+						rewrites = append(rewrites, rewrite{
+							from: append([]byte(nil), curBuf.Bytes()...),
+							to:   append([]byte(nil), newBuf.Bytes()...),
+						})
 						continue MainLoop
 					}
 				}
 			}
 		}
+	}
+
+	// Rewrite all instances of X to random tokens of equal length
+	for i := range rewrites {
+		rewrite := &rewrites[i]
+		tok := make([]byte, len(rewrite.from))
+		if err := randomBytes(tok); err != nil {
+			return err
+		}
+		// fmt.Printf("replace %s with %s\n", rewrite.from, tok)
+		for {
+			idx := bytes.Index(cbytes, rewrite.from)
+			if idx < 0 {
+				break
+			}
+			copy(cbytes[idx:], tok)
+		}
+		rewrite.from = tok
+	}
+
+	// Replace the tokens with the desired bytes
+	for _, rewrite := range rewrites {
+		// fmt.Printf("replace %s with %s\n", rewrite.from, rewrite.to)
+		cbytes = bytes.ReplaceAll(cbytes, rewrite.from, rewrite.to)
 	}
 
 	os.WriteFile(outfile, cbytes, perm)
