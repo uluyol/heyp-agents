@@ -5,6 +5,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
@@ -395,18 +396,18 @@ func (l substList) Apply(data []byte) []byte {
 }
 
 type updateConfigCmd struct {
-	configPath string
-	rspecPath  string
-	sshUser    string
-	subst      substList
+	rspecPath string
+	sshUser   string
+	subst     substList
 }
 
 func (*updateConfigCmd) Name() string     { return "update-config" }
 func (*updateConfigCmd) Synopsis() string { return "updates the config using the cloudlab manifest" }
-func (*updateConfigCmd) Usage() string    { return "" }
+func (*updateConfigCmd) Usage() string {
+	return "update-config [args] configfile [configfile...]\n\n"
+}
 
 func (c *updateConfigCmd) SetFlags(fs *flag.FlagSet) {
-	configVar(&c.configPath, fs)
 	fs.StringVar(&c.rspecPath, "rspec", "/dev/stdin", "cloudlab manifest")
 	fs.StringVar(&c.sshUser, "ssh-user", "uluyol", "ssh username to connect with")
 	fs.Var(&c.subst, "subst", "substitutions to make before looking for patterns to replace (csv of K=V where %K% will be replaced by V")
@@ -420,29 +421,36 @@ func (c *updateConfigCmd) Execute(ctx context.Context, fs *flag.FlagSet,
 	}
 	defer f.Close()
 
-	cfgF, err := os.Open(c.configPath)
-	if err != nil {
-		log.Fatalf("failed to open config: %s", err)
-	}
-	data, err := ioutil.ReadAll(cfgF)
-	if err != nil {
-		log.Fatalf("failed to read config: %s", err)
-	}
-	fi, err := cfgF.Stat()
-	if err != nil {
-		log.Fatalf("failed to stat config: %s", err)
-	}
+	for _, configPath := range fs.Args() {
+		cfgF, err := os.Open(configPath)
+		if err != nil {
+			log.Fatalf("failed to open config: %s", err)
+		}
+		data, err := ioutil.ReadAll(cfgF)
+		if err != nil {
+			log.Fatalf("failed to read config: %s", err)
+		}
+		fi, err := cfgF.Stat()
+		if err != nil {
+			log.Fatalf("failed to stat config: %s", err)
+		}
 
-	substData := c.subst.Apply(data)
+		substData := c.subst.Apply(data)
 
-	cfg := new(pb.DeploymentConfig)
-	if err := prototext.Unmarshal(substData, cfg); err != nil {
-		log.Fatalf("failed to parse config: %s", err)
-	}
+		cfg := new(pb.DeploymentConfig)
+		if err := prototext.Unmarshal(substData, cfg); err != nil {
+			log.Fatalf("failed to parse %s: %s", configPath, err)
+		}
 
-	err = configgen.UpdateDeploymentConfig(cfg, data, f, c.sshUser, c.configPath, fi.Mode())
-	if err != nil {
-		log.Fatal(err)
+		_, err = f.Seek(0, io.SeekStart)
+		if err != nil {
+			log.Fatalf("failed to reset rspec reader: %v", err)
+		}
+		err = configgen.UpdateDeploymentConfig(
+			cfg, data, f, c.sshUser, configPath, fi.Mode())
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 	return subcommands.ExitSuccess
 }
