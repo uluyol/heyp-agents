@@ -103,6 +103,8 @@ type HEYPAgentsConfig struct {
 	LogClusterAllocState bool
 	LogEnforcerState     bool
 	LogHostStats         bool
+
+	HostAgentVLog int
 }
 
 func DefaultHEYPAgentsConfig() HEYPAgentsConfig {
@@ -244,13 +246,18 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string, startConfig HE
 					return fmt.Errorf("failed to marshal host_agent config: %w", err)
 				}
 
+				vlogArg := ""
+				if startConfig.HostAgentVLog > 0 {
+					vlogArg = "-v=" + strconv.Itoa(startConfig.HostAgentVLog)
+				}
+
 				cmd := TracingCommand(
 					LogWithPrefix("start-heyp-agents: "),
 					"ssh", n.host.GetExternalAddr(),
 					fmt.Sprintf(
 						"cat >%[1]s/configs/host-agent-config.textproto;"+
 							"tmux kill-session -t heyp-host-agent;"+
-							"tmux new-session -d -s heyp-host-agent 'sudo %[1]s/heyp/host-agent/host-agent -logtostderr %[1]s/configs/host-agent-config.textproto 2>&1 | tee %[1]s/logs/host-agent.log; sleep 100000'", remoteTopdir))
+							"tmux new-session -d -s heyp-host-agent 'sudo %[1]s/heyp/host-agent/host-agent %[2]s -logtostderr %[1]s/configs/host-agent-config.textproto 2>&1 | tee %[1]s/logs/host-agent.log; sleep 100000'", remoteTopdir, vlogArg))
 				cmd.SetStdin("host-agent-config.textproto", bytes.NewReader(hostConfigBytes))
 				err = cmd.Run()
 				if err != nil {
