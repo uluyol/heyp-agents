@@ -1,10 +1,11 @@
 package actions
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
-	"strings"
+	"text/template"
 
 	"github.com/uluyol/heyp-agents/go/multierrgroup"
 	"github.com/uluyol/heyp-agents/go/pb"
@@ -66,6 +67,22 @@ func CheckNodeIPs(c *pb.DeploymentConfig) error {
 	return eg.Wait()
 }
 
+var curlRunTmpl = template.Must(template.New("curl-run").Parse(`
+ret=0
+src={{ .Src }}
+
+{{ range .Dests }}
+out=$(curl -s --retry 5 --retry-delay 2 http://{{.}}:8000/ 2>&1)
+if [[ $? -ne 0 ]]; then
+	echo fail $src to {{.}}: output >&2
+	echo "$out"
+	ret=1
+fi
+{{ end }}
+
+exit $ret
+`))
+
 func CheckNodeConnectivity(c *pb.DeploymentConfig) error {
 	var startEg multierrgroup.Group
 
@@ -104,20 +121,26 @@ func CheckNodeConnectivity(c *pb.DeploymentConfig) error {
 	for _, n := range c.Nodes {
 		n := n
 		eg.Go(func() error {
-			var cmdToRunB strings.Builder
-			for i, n := range c.Nodes {
-				if i > 0 {
-					cmdToRunB.WriteString(" && ")
-				}
-				cmdToRunB.WriteString("curl --retry 5 --retry-delay 1 http://")
-				cmdToRunB.WriteString(n.GetExperimentAddr())
-				cmdToRunB.WriteString(":8000/")
+			var tmplData struct {
+				Src   string
+				Dests []string
+			}
+			tmplData.Src = n.GetExperimentAddr()
+			for _, n := range c.Nodes {
+				tmplData.Dests = append(tmplData.Dests, n.GetExperimentAddr())
 			}
 
-			out, err := TracingCommand(
+			var buf bytes.Buffer
+			if err := curlRunTmpl.Execute(&buf, &tmplData); err != nil {
+				return err
+			}
+
+			cmd := TracingCommand(
 				LogWithPrefix("check-node-connectivity: "),
-				"ssh", n.GetExternalAddr(), cmdToRunB.String(),
-			).CombinedOutput()
+				"ssh", n.GetExternalAddr(), "bash",
+			)
+			cmd.SetStdin("curl-runs.bash", &buf)
+			out, err := cmd.CombinedOutput()
 
 			if err != nil {
 				return fmt.Errorf("src %s failed to connect to all: %v; output:\n%s", n.GetName(), err, out)
