@@ -17,7 +17,7 @@ absl::StatusOr<std::unique_ptr<AllocRecorder>> AllocRecorder::Create(
   return absl::make_unique<AllocRecorder>(f);
 }
 
-AllocRecorder::AllocRecorder(FILE* out) : out_(out), last_flush_(absl::InfinitePast()) {}
+AllocRecorder::AllocRecorder(FILE* out) : out_(out) {}
 
 AllocRecorder::~AllocRecorder() {
   if (out_ != nullptr) {
@@ -46,7 +46,7 @@ void AllocRecorder::Record(absl::Time time, const proto::AggInfo& info,
   *rec.mutable_info() = info;
   *rec.mutable_flow_allocs() = {allocs.begin(), allocs.end()};
   write_status_.Update(WriteJsonLine(rec, out_));
-  if (write_status_.ok() && last_flush_ + absl::Seconds(10) < absl::Now()) {
+  if (write_status_.ok()) {
     if (fflush(out_)) {
       write_status_.Update(absl::InternalError(
           std::string("failed to flush alloc records file: ") + StrError(errno)));

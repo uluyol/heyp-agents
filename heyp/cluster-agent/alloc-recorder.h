@@ -34,7 +34,6 @@ class AllocRecorder {
  private:
   FILE* out_;
   absl::Status write_status_;
-  absl::Time last_flush_;
 };
 
 }  // namespace heyp
