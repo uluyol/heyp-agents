@@ -32,6 +32,7 @@ message HostEnforcerConfig {
   optional string debug_log_dir = 1;
   optional bool limit_hipri = 2 [default = true];
   optional bool limit_lopri = 3 [default = true];
+  optional int64 pacing_burst_bytes = 4;
 }
 
 message HostDaemonConfig {

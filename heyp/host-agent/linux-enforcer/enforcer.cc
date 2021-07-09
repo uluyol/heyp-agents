@@ -371,10 +371,15 @@ void LinuxHostEnforcerImpl::StageTrafficControlForFlow(
     args.sys->class_id = absl::StrCat("1:", next_class_id_++);
   }
 
+  std::string burst_arg = "";
+  if (config_.pacing_burst_bytes() > 0) {
+    burst_arg = absl::StrFormat(" burst %db", config_.pacing_burst_bytes());
+  }
+
   if (!args.sys->did_create_class) {
     tc_batch_input_.Append(
-        absl::StrFormat("class add dev %s parent 1: classid %s htb rate %fmbit\n",
-                        device_, args.sys->class_id, rate_limit_mbps));
+        absl::StrFormat("class add dev %s parent 1: classid %s htb rate %fmbit%s\n",
+                        device_, args.sys->class_id, rate_limit_mbps, burst_arg));
     if (args.netem_config != nullptr) {
       std::string netem_handle =
           absl::StrCat(absl::StripPrefix(args.sys->class_id, "1:"), ":0");
@@ -395,8 +400,8 @@ void LinuxHostEnforcerImpl::StageTrafficControlForFlow(
     (*args.create_count)++;
   } else {
     tc_batch_input_.Append(
-        absl::StrFormat("class change dev %s parent 1: classid %s htb rate %fmbit\n",
-                        device_, args.sys->class_id, rate_limit_mbps));
+        absl::StrFormat("class change dev %s parent 1: classid %s htb rate %fmbit%s\n",
+                        device_, args.sys->class_id, rate_limit_mbps, burst_arg));
     (*args.update_count)++;
   }
 }
