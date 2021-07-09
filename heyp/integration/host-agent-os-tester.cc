@@ -90,7 +90,7 @@ class EasyEnforcer {
     if (kHostIsLinux) {
       proto::HostEnforcerConfig enforcer_config;
       enforcer_config.set_debug_log_dir(std::string(log_dir));
-      enforcer_config.set_enforce_hipri(true);
+      enforcer_config.set_limit_hipri(true);
       auto e = LinuxHostEnforcer::Create(
           device, absl::bind_front(WithFlowPriority, use_hipri), enforcer_config);
       auto st = e->ResetDeviceConfig();

@@ -172,6 +172,7 @@ class LinuxHostEnforcerImpl : public LinuxHostEnforcer {
   void StageIptablesForFlow(const MatchedHostFlows::Vec& matched_flows,
                             const std::string& dscp, const std::string& class_id);
 
+  const proto::HostEnforcerConfig config_;
   const std::string device_;
   const MatchHostFlowsFunc match_host_flows_fn_;
   absl::Cord tc_batch_input_;
@@ -192,7 +193,7 @@ constexpr char kDscpLopri[] = "BE";
 
 SmallStringSet DscpsToIgnore(const proto::HostEnforcerConfig& config) {
   std::vector<absl::string_view> to_ignore;
-  if (!config.enforce_hipri()) {
+  if (!config.limit_hipri()) {
     to_ignore.push_back(kDscpHipri);
   }
   if (!config.limit_lopri()) {
@@ -204,9 +205,10 @@ SmallStringSet DscpsToIgnore(const proto::HostEnforcerConfig& config) {
 LinuxHostEnforcerImpl::LinuxHostEnforcerImpl(
     absl::string_view device, const MatchHostFlowsFunc& match_host_flows_fn,
     const proto::HostEnforcerConfig& config)
-    : device_(device),
+    : config_(config),
+      device_(device),
       match_host_flows_fn_(match_host_flows_fn),
-      ipt_controller_(device, DscpsToIgnore(config)),
+      ipt_controller_(device, SmallStringSet({})),
       debug_logger_(config.debug_log_dir()),
       next_class_id_(2),
       report_error_on_dyn_qdisc_(false) {}
@@ -458,8 +460,12 @@ void LinuxHostEnforcerImpl::EnforceAllocs(const FlowStateProvider& flow_state_pr
     bool must_create = sys->hipri.class_id.empty() && !sys->matched.hipri.empty();
     if (must_create ||
         flow_alloc.hipri_rate_limit_bps() > sys->hipri.cur_rate_limit_bps) {
+      auto limit = flow_alloc.hipri_rate_limit_bps();
+      if (!config_.limit_hipri()) {
+        limit = kMaxBandwidthBps;
+      }
       StageTrafficControlForFlow({
-          .rate_limit_bps = flow_alloc.hipri_rate_limit_bps(),
+          .rate_limit_bps = limit,
           .sys = &sys->hipri,
           .classes_to_create = &classes_to_create,
           .create_count = &create_count,
@@ -475,8 +481,12 @@ void LinuxHostEnforcerImpl::EnforceAllocs(const FlowStateProvider& flow_state_pr
     must_create = sys->lopri.class_id.empty() && !sys->matched.lopri.empty();
     if (must_create ||
         flow_alloc.lopri_rate_limit_bps() > sys->lopri.cur_rate_limit_bps) {
+      auto limit = flow_alloc.lopri_rate_limit_bps();
+      if (!config_.limit_lopri()) {
+        limit = kMaxBandwidthBps;
+      }
       StageTrafficControlForFlow({
-          .rate_limit_bps = flow_alloc.lopri_rate_limit_bps(),
+          .rate_limit_bps = limit,
           .sys = &sys->lopri,
           .classes_to_create = &classes_to_create,
           .create_count = &create_count,
@@ -563,16 +573,24 @@ void LinuxHostEnforcerImpl::EnforceAllocs(const FlowStateProvider& flow_state_pr
     FlowSys* sys = sys_info_[flow_alloc.flow()].get();
 
     if (sys->hipri.update_after_ipt_change) {
+      auto limit = sys->hipri.cur_rate_limit_bps;
+      if (!config_.limit_hipri()) {
+        limit = kMaxBandwidthBps;
+      }
       StageTrafficControlForFlow({
-          .rate_limit_bps = sys->hipri.cur_rate_limit_bps,
+          .rate_limit_bps = limit,
           .sys = &sys->hipri,
           .create_count = &create_count,
           .update_count = &update_count,
       });
     }
     if (sys->lopri.update_after_ipt_change) {
+      auto limit = sys->lopri.cur_rate_limit_bps;
+      if (!config_.limit_lopri()) {
+        limit = kMaxBandwidthBps;
+      }
       StageTrafficControlForFlow({
-          .rate_limit_bps = sys->lopri.cur_rate_limit_bps,
+          .rate_limit_bps = limit,
           .sys = &sys->lopri,
           .create_count = &create_count,
           .update_count = &update_count,
