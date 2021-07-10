@@ -208,6 +208,9 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string, startConfig HE
 					"ssh", n.node.GetExternalAddr(),
 					fmt.Sprintf(
 						"tar xf - -C %[1]s/configs;"+
+							"mkdir -p %[1]s/logs;"+
+							"sudo chown $USER:$(groups $USER | cut -d: -f2 | awk '{print $1}') %[1]s/logs;"+
+							"sudo chmod 777 %[1]s/logs;"+
 							"tmux kill-session -t heyp-cluster-agent-%[2]s;"+
 							"tmux new-session -d -s heyp-cluster-agent-%[2]s '%[1]s/heyp/cluster-agent/cluster-agent -alloc_logs \"%[3]s\" -logtostderr %[1]s/configs/cluster-agent-config-%[2]s.textproto %[1]s/configs/cluster-limits-%[2]s.textproto 2>&1 | tee %[1]s/logs/cluster-agent-%[2]s.log; sleep 100000'", remoteTopdir, n.cluster.GetName(), allocLogsPath))
 				cmd.SetStdin("config.tar", bytes.NewReader(configTar))
@@ -256,7 +259,11 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string, startConfig HE
 					"ssh", n.host.GetExternalAddr(),
 					fmt.Sprintf(
 						"cat >%[1]s/configs/host-agent-config.textproto;"+
+							"mkdir -p %[1]s/logs;"+
+							"sudo chown $USER:$(groups $USER | cut -d: -f2 | awk '{print $1}') %[1]s/logs;"+
+							"sudo chmod 777 %[1]s/logs;"+
 							"tmux kill-session -t heyp-host-agent;"+
+							"rm -rf %[1]s/logs/host-enforcer-debug;"+
 							"tmux new-session -d -s heyp-host-agent 'sudo %[1]s/heyp/host-agent/host-agent %[2]s -logtostderr %[1]s/configs/host-agent-config.textproto 2>&1 | tee %[1]s/logs/host-agent.log; sleep 100000'", remoteTopdir, vlogArg))
 				cmd.SetStdin("host-agent-config.textproto", bytes.NewReader(hostConfigBytes))
 				err = cmd.Run()
@@ -282,7 +289,7 @@ func KillSessions(c *pb.DeploymentConfig, sessionRegexp string) error {
 			cmd := TracingCommand(
 				LogWithPrefix("kill-sessions: "),
 				"ssh", n.GetExternalAddr(),
-				fmt.Sprintf("tmux ls -F '#{session_name}' | egrep '%s' | xargs tmux kill-session -t", sessionRegexp))
+				fmt.Sprintf("sessions=($(tmux ls -F '#{session_name}' | egrep '%s')); for s in \"${sessions[@]}\"; do tmux kill-session -t $s || exit 1; done", sessionRegexp))
 			if out, err := cmd.CombinedOutput(); err != nil {
 				return fmt.Errorf("failed to query+kill session on %s: %w; out:\n%s", n.GetName(), err, out)
 			}
@@ -426,6 +433,28 @@ func FetchData(c *pb.DeploymentConfig, remoteTopdir, outdirPath string) error {
 			}
 			rc.Close()
 			return unTarCmd.Wait()
+		})
+	}
+	return eg.Wait()
+}
+
+func KillHEYP(c *pb.DeploymentConfig) error {
+	return KillSessions(c, "^heyp-.*-agent")
+}
+
+func DeleteLogs(c *pb.DeploymentConfig, remoteTopdir string) error {
+	var eg multierrgroup.Group
+	for _, n := range c.GetNodes() {
+		n := n
+		eg.Go(func() error {
+			out, err := TracingCommand(
+				LogWithPrefix("delete-logs: "),
+				"ssh", n.GetExternalAddr(),
+				fmt.Sprintf("sudo rm -rf %[1]s/logs", remoteTopdir)).CombinedOutput()
+			if err != nil {
+				return fmt.Errorf("failed to delete logs on %s: %w; output:\n%s", n.GetName(), err, out)
+			}
+			return nil
 		})
 	}
 	return eg.Wait()

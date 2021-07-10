@@ -130,6 +130,22 @@ var killFortioCmd = &configCmd{
 	exec:     actions.KillFortio,
 }
 
+var killHEYPCmd = &configCmd{
+	name:     "kill-heyp-agents",
+	synopsis: "kill all HEYP agents",
+	exec:     actions.KillHEYP,
+}
+
+var deleteLogsCmd = &configAndRemDirCmd{
+	name:     "delete-logs",
+	synopsis: "delete all remote logs used in experiments",
+	exec: func(c *configAndRemDirCmd, fs *flag.FlagSet) {
+		if err := actions.DeleteLogs(c.config, c.remDir); err != nil {
+			log.Fatal(err)
+		}
+	},
+}
+
 type configAndRemDirCmd struct {
 	name     string
 	synopsis string
@@ -509,6 +525,8 @@ func main() {
 	subcommands.Register(checkNodesCmd, "")
 	subcommands.Register(new(updateConfigCmd), "")
 	subcommands.Register(new(collectHostStatsCmd), "")
+	subcommands.Register(killHEYPCmd, "")
+	subcommands.Register(deleteLogsCmd, "")
 
 	flag.Parse()
 
