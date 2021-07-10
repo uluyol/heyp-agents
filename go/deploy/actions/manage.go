@@ -375,7 +375,7 @@ func ConfigureSys(c *pb.DeploymentConfig, sysConfig *SysConfig) error {
 				cmd = TracingCommand(
 					LogWithPrefix("config-sys: "),
 					"ssh", n.GetExternalAddr(),
-					"sudo apt-get update && sudo apt-get install -y nload htop")
+					"sudo apt-get update && sudo apt-get install -y nload htop sysstat")
 				if err := cmd.Run(); err != nil {
 					return fmt.Errorf("failed to install debugging toools: %w", err)
 				}

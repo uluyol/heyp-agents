@@ -1,13 +1,16 @@
 package stats
 
-import "time"
+import (
+	"time"
+)
 
 //go:generate go run gen.go
 
 type HostStats struct {
-	Time    time.Time
-	Global  *HostGlobalStats
-	MainDev *HostDeviceStats
+	Time     time.Time
+	CPUStats *CPUStats `json:",omitempty"`
+	Global   *HostGlobalStats
+	MainDev  *HostDeviceStats
 }
 
 type HostGlobalStats struct {
@@ -45,4 +48,17 @@ func (st *HostStats) Sub(o *HostStats) *HostStats {
 		}
 	}
 	return diff
+}
+
+type CPUStats struct {
+	Usr    float64
+	Nice   float64
+	Sys    float64
+	IOWait float64
+	IRQ    float64
+	Soft   float64
+	Steal  float64
+	Guest  float64
+	GNice  float64
+	Idle   float64
 }
