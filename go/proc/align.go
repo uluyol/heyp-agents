@@ -111,12 +111,12 @@ func AlignProto(fsys fs.FS, inputs []ToAlign, mkReader func(io.Reader) TSBatchRe
 	return nil
 }
 
-type alignedHostStatsRec struct {
+type AlignedHostStatsRec struct {
 	UnixSec float64                     `json:"unixSec"`
 	Data    map[string]*stats.HostStats `json:"data"`
 }
 
-func (r *alignedHostStatsRec) Reset() {
+func (r *AlignedHostStatsRec) Reset() {
 	if r.Data == nil {
 		r.Data = make(map[string]*stats.HostStats)
 	}
@@ -125,7 +125,8 @@ func (r *alignedHostStatsRec) Reset() {
 	}
 }
 
-func AlignHostStats(fsys fs.FS, inputs []ToAlign, mkReader func(io.Reader) TSBatchReader, output string,
+// processRec cannot own the input rec.
+func AlignHostStats(fsys fs.FS, inputs []ToAlign, mkReader func(io.Reader) TSBatchReader, output string, processRec func(*AlignedHostStatsRec),
 	start, end time.Time, prec time.Duration) error {
 
 	files := make([]fs.File, len(inputs))
@@ -156,7 +157,7 @@ func AlignHostStats(fsys fs.FS, inputs []ToAlign, mkReader func(io.Reader) TSBat
 	var tstamp time.Time
 	data := make([]interface{}, len(files))
 
-	var rec alignedHostStatsRec
+	var rec AlignedHostStatsRec
 	for merger.Next(&tstamp, data) {
 		if tstamp.Before(start) {
 			continue
@@ -183,6 +184,9 @@ func AlignHostStats(fsys fs.FS, inputs []ToAlign, mkReader func(io.Reader) TSBat
 		_, err = fout.WriteString("\n")
 		if err != nil {
 			return fmt.Errorf("failed to write data: %w", err)
+		}
+		if processRec != nil {
+			processRec(&rec)
 		}
 	}
 

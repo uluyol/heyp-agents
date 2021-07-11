@@ -172,7 +172,7 @@ func appendTo(dev string, w io.Writer) {
 	if err == nil {
 		var outData mpstats
 		if err := json.Unmarshal(out, &outData); err == nil {
-				}		MPStatsLoop:
+		MPStatsLoop:
 			for i := range outData.Sysstat.Hosts {
 				for j := range outData.Sysstat.Hosts[i].Statistics {
 					for k := range outData.Sysstat.Hosts[i].Statistics[j].CPULoad {
