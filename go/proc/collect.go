@@ -282,3 +282,26 @@ var hostStatsRegex = regexp.MustCompile(
 func GlobAndCollectHostStats(fsys fs.FS) ([]ToAlign, error) {
 	return globToAlignPerHost(fsys, hostStatsRegex)
 }
+
+var hostEnforcerLogsRegex = regexp.MustCompile(
+	`(^|.*/)([^/]+)/logs/host-enforcer-debug`)
+
+func GlobAndCollectHostEnforcerLogs(fsys fs.FS) ([]ToAlign, error) {
+	files, err := globToAlignPerHost(fsys, hostEnforcerLogsRegex)
+	if err != nil {
+		return nil, err
+	}
+
+	var logDirs []ToAlign
+	added := make(map[string]bool)
+	for _, f := range files {
+		i := strings.LastIndex(f.Path, "/logs/host-enforcer-debug")
+		d := f.Path[:i+len("/logs/host-enforcer-debug")]
+		if !added[d] {
+			added[d] = true
+			logDirs = append(logDirs, ToAlign{Name: f.Name, Path: d})
+		}
+	}
+
+	return logDirs, nil
+}
