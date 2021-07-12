@@ -144,6 +144,9 @@ func (c *alignHostStatsCmd) Execute(ctx context.Context, fs *flag.FlagSet, args 
 			cpu:       proc.NewRoleStatsCollector(deployC),
 			ingressBW: proc.NewRoleStatsCollector(deployC),
 			egressBW:  proc.NewRoleStatsCollector(deployC),
+
+			lastRXBytes: make(map[string]int64),
+			lastTXBytes: make(map[string]int64),
 		}
 		processRec = accum.RecordFrom
 	}
