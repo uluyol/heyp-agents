@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -168,42 +170,45 @@ func appendTo(dev string, w io.Writer) {
 		}
 	}
 
-	out, err = exec.Command("mpstat", "-o", "JSON").Output()
-	if err == nil {
-		var outData mpstats
-		if err := json.Unmarshal(out, &outData); err == nil {
-		MPStatsLoop:
-			for i := range outData.Sysstat.Hosts {
-				for j := range outData.Sysstat.Hosts[i].Statistics {
-					for k := range outData.Sysstat.Hosts[i].Statistics[j].CPULoad {
-						got := &outData.Sysstat.Hosts[i].Statistics[j].CPULoad[k]
-						if got.CPU != "all" {
-							continue
-						}
-						data.CPUStats = &stats.CPUStats{
-							Usr:    got.Usr,
-							Nice:   got.Nice,
-							Sys:    got.Sys,
-							IOWait: got.IOWait,
-							IRQ:    got.IRQ,
-							Soft:   got.Soft,
-							Steal:  got.Steal,
-							Guest:  got.Guest,
-							GNice:  got.GNice,
-							Idle:   got.Idle,
-						}
-						break MPStatsLoop
-					}
-				}
-			}
-		}
-	}
+	data.CPUCounters, _ = readCPUCounters()
 
 	buf, err := json.Marshal(&data)
 	if err == nil {
 		w.Write(buf)
 		io.WriteString(w, "\n")
 	}
+}
+
+func readCPUCounters() (*stats.CPUCounters, error) {
+	f, err := os.Open("/proc/stat")
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	s := bufio.NewScanner(f)
+	for s.Scan() {
+		if bytes.HasPrefix(s.Bytes(), []byte("cpu ")) {
+			fields := strings.Fields(s.Text())[1:]
+			if len(fields) < 4 {
+				continue
+			}
+			var idle int64
+			var total int64
+			for i := range fields {
+				tmp, err := strconv.ParseInt(fields[i], 10, 64)
+				if err != nil {
+					return nil, fmt.Errorf("invalid cpu line: %q", s.Text())
+				}
+				total += tmp
+				if i == 3 {
+					idle = tmp
+				}
+			}
+			return &stats.CPUCounters{Idle: idle, Total: total}, nil
+		}
+	}
+	return nil, errors.New("cpu counters not found")
 }
 
 type ipLinkStatsOut struct {
@@ -217,26 +222,4 @@ type ipLinkStatsOut struct {
 type ipLinkStatsTxRx struct {
 	Bytes   int64 `json:"bytes"`
 	Packets int64 `json:"packets"`
-}
-
-type mpstats struct {
-	Sysstat struct {
-		Hosts []struct {
-			Statistics []struct {
-				CPULoad []struct {
-					CPU    string  `json:"cpu"`
-					Usr    float64 `json:"usr"`
-					Nice   float64 `json:"nice"`
-					Sys    float64 `json:"sys"`
-					IOWait float64 `json:"iowait"`
-					IRQ    float64 `json:"irq"`
-					Soft   float64 `json:"soft"`
-					Steal  float64 `json:"steal"`
-					Guest  float64 `json:"guest"`
-					GNice  float64 `json:"gnice"`
-					Idle   float64 `json:"idle"`
-				} `json:"cpu-load"`
-			} `json:"statistics"`
-		} `json:"hosts"`
-	} `json:"sysstat"`
 }

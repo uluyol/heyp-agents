@@ -202,8 +202,8 @@ type hostStatsAccum struct {
 
 func (a *hostStatsAccum) RecordFrom(rec *proc.AlignedHostStatsRec) {
 	for n, st := range rec.Data {
-		if st.CPUStats != nil {
-			a.cpu.Record(n, st.CPUStats.Usr+st.CPUStats.Sys)
+		if st.CPUCounters != nil {
+			a.cpu.Record(n, 100*float64(st.CPUCounters.Total-st.CPUCounters.Idle)/float64(st.CPUCounters.Total))
 		}
 		if st.MainDev != nil {
 			_, haveRXTX := a.lastRXBytes[n]

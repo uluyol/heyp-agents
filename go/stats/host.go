@@ -7,10 +7,10 @@ import (
 //go:generate go run gen.go
 
 type HostStats struct {
-	Time     time.Time
-	CPUStats *CPUStats `json:",omitempty"`
-	Global   *HostGlobalStats
-	MainDev  *HostDeviceStats
+	Time        time.Time
+	CPUCounters *CPUCounters `json:",omitempty"`
+	Global      *HostGlobalStats
+	MainDev     *HostDeviceStats
 }
 
 type HostGlobalStats struct {
@@ -35,7 +35,7 @@ func (st HostLinkStats) Sub(o HostLinkStats) HostLinkStats {
 }
 
 func (st *HostStats) Sub(o *HostStats) *HostStats {
-	diff := &HostStats{Time: st.Time, CPUStats: st.CPUStats}
+	diff := &HostStats{Time: st.Time}
 	if st.Global != nil && o.Global != nil {
 		diff.Global = new(HostGlobalStats)
 		diff.Global.TCP = st.Global.TCP.Sub(&o.Global.TCP)
@@ -47,18 +47,16 @@ func (st *HostStats) Sub(o *HostStats) *HostStats {
 			TX:   st.MainDev.TX.Sub(o.MainDev.TX),
 		}
 	}
+	if st.CPUCounters != nil && o.CPUCounters != nil {
+		diff.CPUCounters = &CPUCounters{
+			Idle:  st.CPUCounters.Idle - o.CPUCounters.Idle,
+			Total: st.CPUCounters.Total - o.CPUCounters.Total,
+		}
+	}
 	return diff
 }
 
-type CPUStats struct {
-	Usr    float64
-	Nice   float64
-	Sys    float64
-	IOWait float64
-	IRQ    float64
-	Soft   float64
-	Steal  float64
-	Guest  float64
-	GNice  float64
-	Idle   float64
+type CPUCounters struct {
+	Idle  int64
+	Total int64
 }
