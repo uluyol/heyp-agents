@@ -15,6 +15,7 @@ import (
 	"github.com/uluyol/heyp-agents/go/pb"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/proto"
 )
 
 type fortioGroup struct {
@@ -256,7 +257,14 @@ func FortioRunClients(c *pb.DeploymentConfig, remoteTopdir string, showOut bool,
 		for _, inst := range group.instances {
 			inst := inst
 
-			clientConfBytes, err := prototext.MarshalOptions{Indent: "  "}.Marshal(inst.config.GetClient())
+			clientConf := proto.Clone(inst.config.GetClient()).(*pb.FortioClientConfig)
+			numClients := int32(len(inst.clients))
+			clientConf.NumConns = proto.Int32((numClients + clientConf.GetNumConns()) / numClients)
+			for _, stage := range clientConf.WorkloadStages {
+				stage.TargetAverageBps = proto.Float64(stage.GetTargetAverageBps() / float64(numClients))
+			}
+
+			clientConfBytes, err := prototext.MarshalOptions{Indent: "  "}.Marshal(clientConf)
 			if err != nil {
 				return fmt.Errorf("failed to marshal client config: %w", err)
 			}
