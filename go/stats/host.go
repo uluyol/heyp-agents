@@ -35,7 +35,7 @@ func (st HostLinkStats) Sub(o HostLinkStats) HostLinkStats {
 }
 
 func (st *HostStats) Sub(o *HostStats) *HostStats {
-	diff := &HostStats{Time: st.Time}
+	diff := &HostStats{Time: st.Time, CPUStats: st.CPUStats}
 	if st.Global != nil && o.Global != nil {
 		diff.Global = new(HostGlobalStats)
 		diff.Global.TCP = st.Global.TCP.Sub(&o.Global.TCP)
