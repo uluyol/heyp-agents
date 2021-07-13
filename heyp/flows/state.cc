@@ -101,7 +101,16 @@ const proto::FlowInfo& LeafState::cur() const { return impl_.cur(); }
 void LeafState::UpdateUsage(const Update u, absl::Duration usage_history_window,
                             const DemandPredictor& demand_predictor) {
   const proto::FlowInfo& c = impl_.cur();
-  int64_t bps_diff = u.cum_usage_bytes - c.cum_usage_bytes();
+
+  int64_t update_usage_bytes = u.cum_usage_bytes;
+  if (c.cum_usage_bytes() > update_usage_bytes) {
+    update_usage_bytes = c.cum_usage_bytes();
+    if (u.cum_usage_bytes != 0) {
+      LOG(WARNING) << "got bad usage counter with value " << u.cum_usage_bytes;
+    }
+  }
+
+  int64_t bps_diff = update_usage_bytes - c.cum_usage_bytes();
   int64_t cum_hipri_usage_bytes = c.cum_hipri_usage_bytes();
   int64_t cum_lopri_usage_bytes = c.cum_lopri_usage_bytes();
   if (u.is_lopri) {
