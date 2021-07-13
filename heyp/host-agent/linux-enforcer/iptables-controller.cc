@@ -85,7 +85,7 @@ Runner& Controller::GetRunner() { return *runner_; }
 absl::Status Controller::Clear() {
   applied_.settings.clear();
   LOG(INFO) << "flushing iptables 'mangle' table";
-  absl::Status st = runner_->Restore(Table::kMangle, absl::Cord(),
+  absl::Status st = runner_->Restore(Table::kMangle, absl::Cord("*mangle\nCOMMIT\n"),
                                      {.flush_tables = true, .restore_counters = false});
   if (!st.ok()) {
     return absl::InternalError(
