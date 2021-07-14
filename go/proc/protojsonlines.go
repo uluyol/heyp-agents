@@ -57,6 +57,12 @@ func (r *ProtoJSONRecReader) ScanInto(rec proto.Message) bool {
 			gotEOF = true
 			return false
 		} else {
+			// check if this is the last line, ignore error if we just have one final incomplete record
+			if _, err := r.r.Peek(1); err == io.EOF {
+				gotEOF = true
+				return false
+			}
+
 			r.err = fmt.Errorf("failed to unmarshal: %v", err)
 		}
 	}
