@@ -41,30 +41,53 @@ func LoadDeploymentConfig(path string) (*DeploymentConfig, error) {
 }
 
 type RoleStatsCollector struct {
-	c      *DeploymentConfig
-	values map[string][]float64
+	c        *DeploymentConfig
+	maxVals  map[string]float64
+	sawNodes map[string]map[string]struct{}
 }
 
 func NewRoleStatsCollector(c *DeploymentConfig) *RoleStatsCollector {
-	return &RoleStatsCollector{
-		c:      c,
-		values: make(map[string][]float64),
+	col := &RoleStatsCollector{
+		c:        c,
+		maxVals:  make(map[string]float64),
+		sawNodes: make(map[string]map[string]struct{}),
 	}
+
+	for _, roles := range col.c.NodeRoles {
+		for _, r := range roles {
+			col.sawNodes[r] = make(map[string]struct{})
+		}
+	}
+
+	return col
 }
 
 func (c *RoleStatsCollector) Record(node string, val float64) {
 	roles := c.c.NodeRoles[node]
 	for _, r := range roles {
-		c.values[r] = append(c.values[r], val)
+		v, ok := c.maxVals[r]
+		if ok {
+			c.maxVals[r] = math.Max(v, val)
+		} else {
+			c.maxVals[r] = val
+		}
+		c.sawNodes[r][node] = struct{}{}
 	}
 }
 
 func (c *RoleStatsCollector) RoleStats() []RoleStat {
-	stats := make([]RoleStat, 0, len(c.values))
-	for role, vals := range c.values {
+	stats := make([]RoleStat, 0, len(c.maxVals))
+	for role, max := range c.maxVals {
+		sawNodes := make([]string, 0, len(c.sawNodes[role]))
+		for n := range c.sawNodes[role] {
+			sawNodes = append(sawNodes, n)
+		}
+		sort.Strings(sawNodes)
+
 		stats = append(stats, RoleStat{
-			Role: role,
-			Max:  getMax(vals),
+			Role:  role,
+			Max:   max,
+			Nodes: sawNodes,
 		})
 	}
 	sort.Slice(stats, func(i, j int) bool {
@@ -85,6 +108,7 @@ func getMax(vals []float64) float64 {
 }
 
 type RoleStat struct {
-	Role string
-	Max  float64
+	Role  string
+	Max   float64
+	Nodes []string
 }

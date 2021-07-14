@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/google/subcommands"
@@ -145,8 +146,7 @@ func (c *alignHostStatsCmd) Execute(ctx context.Context, fs *flag.FlagSet, args 
 			ingressBW: proc.NewRoleStatsCollector(deployC),
 			egressBW:  proc.NewRoleStatsCollector(deployC),
 
-			lastRXBytes: make(map[string]int64),
-			lastTXBytes: make(map[string]int64),
+			lastUnixSec: -1,
 		}
 		processRec = accum.RecordFrom
 	}
@@ -169,18 +169,18 @@ func (c *alignHostStatsCmd) Execute(ctx context.Context, fs *flag.FlagSet, args 
 			}
 		}
 
-		_, err = f.WriteString("Role,Metric,Stat,Value\n")
+		_, err = f.WriteString("Role,Metric,Stat,Value,Nodes\n")
 		checkErr(err)
 		for _, rs := range accum.cpu.RoleStats() {
-			_, err = fmt.Fprintf(f, "%s,CPU,Max,%f\n", rs.Role, rs.Max)
+			_, err = fmt.Fprintf(f, "%s,CPU,Max,%f,%s\n", rs.Role, rs.Max, nodes(rs.Nodes))
 			checkErr(err)
 		}
 		for _, rs := range accum.ingressBW.RoleStats() {
-			_, err = fmt.Fprintf(f, "%s,IngressBW,Max,%f\n", rs.Role, rs.Max)
+			_, err = fmt.Fprintf(f, "%s,IngressBW,Max,%f,%s\n", rs.Role, rs.Max, nodes(rs.Nodes))
 			checkErr(err)
 		}
 		for _, rs := range accum.egressBW.RoleStats() {
-			_, err = fmt.Fprintf(f, "%s,EgressBW,Max,%f\n", rs.Role, rs.Max)
+			_, err = fmt.Fprintf(f, "%s,EgressBW,Max,%f,%s\n", rs.Role, rs.Max, nodes(rs.Nodes))
 			checkErr(err)
 		}
 
@@ -189,14 +189,14 @@ func (c *alignHostStatsCmd) Execute(ctx context.Context, fs *flag.FlagSet, args 
 	return subcommands.ExitSuccess
 }
 
+func nodes(ns []string) string { return strings.Join(ns, "!") }
+
 type hostStatsAccum struct {
 	cpu *proc.RoleStatsCollector
 
 	ingressBW *proc.RoleStatsCollector
 	egressBW  *proc.RoleStatsCollector
 
-	lastRXBytes map[string]int64
-	lastTXBytes map[string]int64
 	lastUnixSec float64
 }
 
@@ -206,13 +206,10 @@ func (a *hostStatsAccum) RecordFrom(rec *proc.AlignedHostStatsRec) {
 			a.cpu.Record(n, 100*float64(st.CPUCounters.Total-st.CPUCounters.Idle)/float64(st.CPUCounters.Total))
 		}
 		if st.MainDev != nil {
-			_, haveRXTX := a.lastRXBytes[n]
-			if haveRXTX {
-				a.ingressBW.Record(n, 8*float64(st.MainDev.RX.Bytes-a.lastRXBytes[n])/(rec.UnixSec-a.lastUnixSec))
-				a.egressBW.Record(n, 8*float64(st.MainDev.TX.Bytes-a.lastTXBytes[n])/(rec.UnixSec-a.lastUnixSec))
+			if a.lastUnixSec >= 0 {
+				a.ingressBW.Record(n, 8*float64(st.MainDev.RX.Bytes)/(rec.UnixSec-a.lastUnixSec))
+				a.egressBW.Record(n, 8*float64(st.MainDev.TX.Bytes)/(rec.UnixSec-a.lastUnixSec))
 			}
-			a.lastRXBytes[n] = st.MainDev.RX.Bytes
-			a.lastTXBytes[n] = st.MainDev.TX.Bytes
 		}
 	}
 
