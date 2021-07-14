@@ -136,7 +136,7 @@ func (c *alignHostStatsCmd) Execute(ctx context.Context, fs *flag.FlagSet, args 
 	var accum *hostStatsAccum
 	var processRec func(*proc.AlignedHostStatsRec)
 
-	if c.deployConfig != "" {
+	if c.deployConfig != "" && c.diff {
 		deployC, err := proc.LoadDeploymentConfig(c.deployConfig)
 		if err != nil {
 			log.Fatalf("failed to read deployment config: %v", err)
