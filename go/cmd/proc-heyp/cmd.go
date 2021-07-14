@@ -54,6 +54,7 @@ func main() {
 	subcommands.Register(new(alignHostStatsCmd), "")
 	subcommands.Register(new(clusterAllocBWStatsCmd), "")
 	subcommands.Register(new(hostEnforcerLogsCmd), "")
+	subcommands.Register(new(approvalsCmd), "")
 
 	flag.Parse()
 
