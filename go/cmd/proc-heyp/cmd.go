@@ -53,6 +53,7 @@ func main() {
 	subcommands.Register(new(alignInfosCmd), "")
 	subcommands.Register(new(alignHostStatsCmd), "")
 	subcommands.Register(new(clusterAllocBWStatsCmd), "")
+	subcommands.Register(new(clusterAllocQoSLifetime), "")
 	subcommands.Register(new(hostEnforcerLogsCmd), "")
 	subcommands.Register(new(approvalsCmd), "")
 

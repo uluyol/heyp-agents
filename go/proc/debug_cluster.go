@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -198,6 +199,144 @@ func PrintDebugClusterFGStats(fsys fs.FS, outfile string, start, end time.Time) 
 
 	if err == nil {
 		_, err = io.WriteString(f, "Time,FG,Host,Metric,Value\n")
+	}
+	if err == nil {
+		err = SortedPrintTable(f, outs, ",")
+	}
+	return err
+}
+
+func PrintDebugClusterQoSLifetime(fsys fs.FS, outfile string, start, end time.Time) error {
+	logs, err := regGlobFiles(fsys, clusterAllocLogsRegex)
+	if err != nil {
+		return fmt.Errorf("failed to find cluster alloc logs: %w", err)
+	}
+
+	idToNode := getHostIDMap(fsys)
+
+	type timeAndQoS struct {
+		startTime time.Time
+		isLOPRI   bool
+	}
+
+	type key struct {
+		SrcDC string
+		DstDC string
+		Node  string
+	}
+
+	curQoS := make(map[key]timeAndQoS)
+
+	outs := make([][]byte, len(logs))
+	var eg errgroup.Group
+	for logi, l := range logs {
+		logi := logi
+		l := l
+		eg.Go(func() error {
+			var buf bytes.Buffer
+
+			f, err := fsys.Open(l)
+			if err != nil {
+				return fmt.Errorf("failed to open %s: %w", l, err)
+			}
+			defer f.Close()
+			r := NewProtoJSONRecReader(f)
+			var curTime time.Time
+			for {
+				rec := new(pb.DebugAllocRecord)
+				if !r.ScanInto(rec) {
+					break
+				}
+
+				// Process record
+				curTime, err = time.Parse(time.RFC3339Nano, rec.GetTimestamp())
+				if err != nil {
+					// skip bad records
+					continue
+				}
+
+				if curTime.Before(start) {
+					continue // skip early records
+				}
+				if curTime.After(end) {
+					break // end early
+				}
+
+				for _, alloc := range rec.GetFlowAllocs() {
+					key := key{
+						SrcDC: alloc.GetFlow().GetSrcDc(),
+						DstDC: alloc.Flow.GetDstDc(),
+						Node:  idToNode[alloc.GetFlow().GetHostId()],
+					}
+
+					isLOPRI := alloc.LopriRateLimitBps > 0
+
+					cur, ok := curQoS[key]
+					if ok {
+						if cur.isLOPRI != isLOPRI {
+							qosString := "HIPRI"
+							if cur.isLOPRI {
+								qosString = "LOPRI"
+							}
+							fmt.Fprintf(&buf, "%s_TO_%s,%s,%s,%f\n", key.SrcDC, key.DstDC, key.Node,
+								qosString, curTime.Sub(cur.startTime).Seconds())
+							curQoS[key] = timeAndQoS{curTime, isLOPRI}
+						}
+					} else {
+						curQoS[key] = timeAndQoS{curTime, isLOPRI}
+					}
+				}
+			}
+
+			keys := make([]key, 0, len(curQoS))
+			for key := range curQoS {
+				keys = append(keys, key)
+			}
+
+			sort.Slice(keys, func(i, j int) bool {
+				if keys[i].SrcDC == keys[j].SrcDC {
+					if keys[i].DstDC == keys[j].DstDC {
+						return keys[i].Node < keys[j].Node
+					}
+					return keys[i].DstDC < keys[j].DstDC
+				}
+				return keys[i].SrcDC < keys[j].SrcDC
+			})
+
+			for _, key := range keys {
+				cur := curQoS[key]
+				if cur.startTime.Before(curTime) {
+					qosString := "HIPRI"
+					if cur.isLOPRI {
+						qosString = "LOPRI"
+					}
+					fmt.Fprintf(&buf, "%s_TO_%s,%s,%s,%f\n", key.SrcDC, key.DstDC, key.Node,
+						qosString, curTime.Sub(cur.startTime).Seconds())
+				}
+			}
+
+			err = r.Err()
+			if err != nil {
+				err = fmt.Errorf("failed to read %s: %v", l, err)
+			} else {
+				outs[logi] = buf.Bytes()
+			}
+			return err
+		})
+	}
+
+	err = eg.Wait()
+
+	var f *os.File
+	if err == nil {
+		f, err = os.Create(outfile)
+	}
+	if f != nil {
+		defer f.Close()
+	}
+
+	if err == nil {
+		_, err = io.WriteString(f, "FG,Host,QoS,LifetimeSec\n")
 	}
 	if err == nil {
 		err = SortedPrintTable(f, outs, ",")

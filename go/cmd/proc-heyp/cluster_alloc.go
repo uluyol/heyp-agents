@@ -44,3 +44,38 @@ func (c *clusterAllocBWStatsCmd) Execute(ctx context.Context, fs *flag.FlagSet, 
 
 	return subcommands.ExitSuccess
 }
+
+type clusterAllocQoSLifetime struct {
+	output   string
+	workload startEndWorkloadFlag
+}
+
+func (*clusterAllocQoSLifetime) Name() string    { return "cluster-alloc-qos-lifetime" }
+func (c *clusterAllocQoSLifetime) Usage() string { return logsUsage(c) }
+
+func (*clusterAllocQoSLifetime) Synopsis() string {
+	return "extract per-host bw stats (demand, usage, rate limits) from cluster alloc"
+}
+
+func (c *clusterAllocQoSLifetime) SetFlags(fs *flag.FlagSet) {
+	fs.StringVar(&c.output, "out", "cluster-qos-lifetime.csv", "output file")
+	wlFlag(&c.workload, fs)
+}
+
+func (c *clusterAllocQoSLifetime) Execute(ctx context.Context, fs *flag.FlagSet, args ...interface{}) subcommands.ExitStatus {
+	logsDir := mustLogsArg(fs)
+
+	fsys := os.DirFS(logsDir)
+
+	start, end, err := getStartEnd(c.workload, fsys)
+	if err != nil {
+		log.Fatalf("failed to get start/end for workload %q: %v", c.workload, err)
+	}
+
+	err = proc.PrintDebugClusterQoSLifetime(fsys, c.output, start, end)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return subcommands.ExitSuccess
+}
