@@ -377,6 +377,14 @@ var checkNodesCmd = &configCmd{
 	},
 }
 
+var measureNodesBandwidthCmd = &configCmd{
+	name:     "measure-nodes-bw",
+	synopsis: "measure bandwidth between nodes",
+	exec: func(c *pb.DeploymentConfig) error {
+		return actions.MeasureNodeBandwidth(c)
+	},
+}
+
 type subst struct {
 	key, val []byte
 }
@@ -523,6 +531,7 @@ func main() {
 	subcommands.Register(killFortioCmd, "fortio")
 	subcommands.Register(new(fetchDataCmd), "")
 	subcommands.Register(checkNodesCmd, "")
+	subcommands.Register(measureNodesBandwidthCmd, "")
 	subcommands.Register(new(updateConfigCmd), "")
 	subcommands.Register(new(collectHostStatsCmd), "")
 	subcommands.Register(killHEYPCmd, "")

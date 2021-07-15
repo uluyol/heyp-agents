@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strconv"
 	"text/template"
 
 	"github.com/uluyol/heyp-agents/go/multierrgroup"
@@ -152,6 +153,98 @@ func CheckNodeConnectivity(c *pb.DeploymentConfig) error {
 
 	if err := eg.Wait(); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func MeasureNodeBandwidth(c *pb.DeploymentConfig) error {
+	var startEg multierrgroup.Group
+
+	cmds := make([]*TracingCmd, len(c.Nodes))
+
+	for i, n := range c.Nodes {
+		i := i
+		n := n
+		startEg.Go(func() error {
+			cmd := TracingCommand(
+				LogWithPrefix("measure-node-bw: "),
+				"ssh", n.GetExternalAddr(),
+				"iperf -s",
+			)
+
+			cmds[i] = cmd
+
+			return cmd.Start()
+		})
+	}
+
+	defer func() {
+		for _, c := range cmds {
+			if c != nil {
+				c.Process.Kill()
+			}
+		}
+	}()
+
+	if err := startEg.Wait(); err != nil {
+		return err
+	}
+
+	var eg multierrgroup.Group
+
+	rounds := allToAllWithoutSharing(len(c.Nodes))
+
+	bwBps := make([][]int64, len(c.Nodes))
+	{
+		x := make([]int64, len(c.Nodes)*len(c.Nodes))
+		for i := 0; i < len(c.Nodes); i++ {
+			bwBps[i] = x[i*len(c.Nodes) : (i+1)*len(c.Nodes)]
+		}
+	}
+
+	for _, round := range rounds {
+		for _, p := range round {
+			p := p
+
+			dst := c.Nodes[p.dst]
+			src := c.Nodes[p.src]
+			eg.Go(func() error {
+				cmd := TracingCommand(
+					LogWithPrefix("measure-node-bw: "),
+					"ssh", src.GetExternalAddr(), "iperf", "-t", "4", "-c", dst.GetExperimentAddr(), "-y", "C")
+				out, err := cmd.Output()
+
+				if err != nil {
+					return fmt.Errorf("src %s failed to run iperf against %s: %v; output:\n%s", src.GetName(), dst.GetName(), err, out)
+				}
+
+				fields := bytes.Split(bytes.Fields(out)[0], []byte{','})
+				v, err := strconv.ParseInt(string(fields[len(fields)-1]), 10, 64)
+				if err != nil {
+					return fmt.Errorf("src %s failed to interpret iperf output against %s: %v; output:\n%s", src.GetName(), dst.GetName(), err, out)
+				}
+				bwBps[p.src][p.dst] = v
+
+				return nil
+			})
+		}
+	}
+
+	if err := eg.Wait(); err != nil {
+		return err
+	}
+
+	fmt.Printf("SRC\tDST\tBW-GBPS\n")
+	for i := 0; i < len(c.Nodes); i++ {
+		for j := 0; i < len(c.Nodes); j++ {
+			if i == j {
+				continue
+			}
+
+			gbps := float64(bwBps[i][j]) / (1 << 30)
+			fmt.Printf("%s\t%s\t%f\n", c.Nodes[i].GetName(), c.Nodes[j].GetName(), gbps)
+		}
 	}
 
 	return nil
