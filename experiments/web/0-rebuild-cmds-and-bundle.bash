@@ -1,9 +1,10 @@
-#!/bin/bash
+#!/bin/bash -x
 
 set -e
 
+mkdir -p bin
 wd=$PWD
 cd ../..
 go build -o "$wd/bin" ./go/cmd/...
 cd "$wd"
-bin/deploy-heyp mk-bundle -bin /w/uluyol/heyp-agents/bazel-bin -auxbin /w/uluyol/heyp-agents/aux-bin
+bin/deploy-heyp mk-bundle -bin ../../bazel-bin -auxbin ../../aux-bin

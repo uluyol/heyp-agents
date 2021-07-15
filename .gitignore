@@ -4,4 +4,7 @@ compile_commands.json
 /.cache
 /aux-bin
 /go/fortio/wanhttp/test.profile.*
+/experiments/*/bin
+/experiments/*/heyp-bundle.tar.xz
 /experiments/*/results
+/experiments/*/rspec.xml
