@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"strconv"
 	"text/template"
+	"time"
 
 	"github.com/uluyol/heyp-agents/go/multierrgroup"
 	"github.com/uluyol/heyp-agents/go/pb"
@@ -161,37 +163,26 @@ func CheckNodeConnectivity(c *pb.DeploymentConfig) error {
 func MeasureNodeBandwidth(c *pb.DeploymentConfig) error {
 	var startEg multierrgroup.Group
 
-	cmds := make([]*TracingCmd, len(c.Nodes))
-
-	for i, n := range c.Nodes {
-		i := i
+	for _, n := range c.Nodes {
 		n := n
 		startEg.Go(func() error {
 			cmd := TracingCommand(
 				LogWithPrefix("measure-node-bw: "),
 				"ssh", n.GetExternalAddr(),
-				"iperf -s",
+				"killall iperf; iperf -s -D",
 			)
 
-			cmds[i] = cmd
+			if out, err := cmd.CombinedOutput(); err != nil {
+				return fmt.Errorf("%s: faild to start iperf server: %v; output:\n%s", n.GetName(), err, out)
+			}
 
-			return cmd.Start()
+			return nil
 		})
 	}
-
-	defer func() {
-		for _, c := range cmds {
-			if c != nil {
-				c.Process.Kill()
-			}
-		}
-	}()
 
 	if err := startEg.Wait(); err != nil {
 		return err
 	}
-
-	var eg multierrgroup.Group
 
 	rounds := allToAllWithoutSharing(len(c.Nodes))
 
@@ -203,7 +194,14 @@ func MeasureNodeBandwidth(c *pb.DeploymentConfig) error {
 		}
 	}
 
-	for _, round := range rounds {
+	log.Print("waiting for servers to start")
+	time.Sleep(3 * time.Second)
+
+	for ri, round := range rounds {
+		log.Printf("round %d/%d", ri, len(rounds))
+
+		var eg multierrgroup.Group
+
 		for _, p := range round {
 			p := p
 
@@ -213,31 +211,34 @@ func MeasureNodeBandwidth(c *pb.DeploymentConfig) error {
 				cmd := TracingCommand(
 					LogWithPrefix("measure-node-bw: "),
 					"ssh", src.GetExternalAddr(), "iperf", "-t", "4", "-c", dst.GetExperimentAddr(), "-y", "C")
-				out, err := cmd.Output()
+				var bout, berr bytes.Buffer
+				cmd.SetStdout("out", &bout)
+				cmd.SetStderr("err", &berr)
+				err := cmd.Run()
 
-				if err != nil {
-					return fmt.Errorf("src %s failed to run iperf against %s: %v; output:\n%s", src.GetName(), dst.GetName(), err, out)
+				if err != nil || bytes.Contains(berr.Bytes(), []byte("failed")) {
+					return fmt.Errorf("src %s failed to run iperf against %s: %v; output:\n%s\nerr:\n%s", src.GetName(), dst.GetName(), err, bout.Bytes(), berr.Bytes())
 				}
 
-				fields := bytes.Split(bytes.Fields(out)[0], []byte{','})
+				fields := bytes.Split(bytes.Fields(bout.Bytes())[0], []byte{','})
 				v, err := strconv.ParseInt(string(fields[len(fields)-1]), 10, 64)
 				if err != nil {
-					return fmt.Errorf("src %s failed to interpret iperf output against %s: %v; output:\n%s", src.GetName(), dst.GetName(), err, out)
+					return fmt.Errorf("src %s failed to interpret iperf output against %s: %v; output:\n%s\nerr:\n%s", src.GetName(), dst.GetName(), err, bout.Bytes(), berr.Bytes())
 				}
 				bwBps[p.src][p.dst] = v
 
 				return nil
 			})
 		}
-	}
 
-	if err := eg.Wait(); err != nil {
-		return err
+		if err := eg.Wait(); err != nil {
+			return err
+		}
 	}
 
 	fmt.Printf("SRC\tDST\tBW-GBPS\n")
 	for i := 0; i < len(c.Nodes); i++ {
-		for j := 0; i < len(c.Nodes); j++ {
+		for j := 0; j < len(c.Nodes); j++ {
 			if i == j {
 				continue
 			}
