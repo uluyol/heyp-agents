@@ -16,13 +16,28 @@ type EnforcementRule struct {
 	ClassID TCHandle
 }
 
+type rulesAndRets struct {
+	rules   []EnforcementRule
+	didRets []bool
+}
+
+func (r rulesAndRets) Len() int { return len(r.rules) }
+func (r rulesAndRets) Less(i, j int) bool {
+	return r.rules[i].DstIP < r.rules[j].DstIP
+}
+func (r rulesAndRets) Swap(i, j int) {
+	r.rules[i], r.rules[j] = r.rules[j], r.rules[i]
+	r.didRets[i], r.didRets[j] = r.didRets[j], r.didRets[i]
+}
+
 func ReadIPTablesEnforcementRules(r io.Reader) ([]EnforcementRule, error) {
 	s := bufio.NewScanner(r)
 
+	var didRets []bool
 	var rules []EnforcementRule
 	for s.Scan() {
 		p := iptFieldParser{fields: bytes.Fields(s.Bytes())}
-		r, err := p.ParseRule()
+		r, didRet, err := p.ParseRule()
 		if err != nil && err.Error() == unknownRecMesg {
 			continue
 		}
@@ -30,27 +45,29 @@ func ReadIPTablesEnforcementRules(r io.Reader) ([]EnforcementRule, error) {
 			return nil, fmt.Errorf("line %q: %w", s.Text(), err)
 		}
 		rules = append(rules, r)
+		didRets = append(didRets, didRet)
 	}
 
 	if s.Err() != nil {
 		return nil, fmt.Errorf("failed to read input: %w", s.Err())
 	}
 
-	sort.SliceStable(rules, func(i, j int) bool {
-		return rules[i].DstIP < rules[j].DstIP
-	})
+	sort.Stable(rulesAndRets{rules, didRets})
 
 	// Enforce last-write-wins
 
 	last := 0
 	for i := 1; i < len(rules); i++ {
 		if rules[i].DstIP == rules[last].DstIP {
-			// Merge
-			if rules[i].QoS != "" {
-				rules[last].QoS = rules[i].QoS
-			}
-			if (rules[i].ClassID != TCHandle{}) {
-				rules[last].ClassID = rules[i].ClassID
+			if !didRets[last] {
+				// Merge
+				if rules[i].QoS != "" {
+					rules[last].QoS = rules[i].QoS
+				}
+				if (rules[i].ClassID != TCHandle{}) {
+					rules[last].ClassID = rules[i].ClassID
+				}
+				didRets[last] = didRets[i]
 			}
 		} else {
 			last++
@@ -81,7 +98,7 @@ const (
 	missingValueMesg = "missing value for flag"
 )
 
-func (p *iptFieldParser) ParseRule() (EnforcementRule, error) {
+func (p *iptFieldParser) ParseRule() (rule EnforcementRule, didRet bool, err error) {
 	p.parse()
 
 	switch p.target {
@@ -95,7 +112,6 @@ func (p *iptFieldParser) ParseRule() (EnforcementRule, error) {
 		}
 	}
 
-	var err error
 	switch len(p.errs) {
 	case 0:
 		err = nil
@@ -105,13 +121,15 @@ func (p *iptFieldParser) ParseRule() (EnforcementRule, error) {
 		err = fmt.Errorf("saw multiple errors:\n\t%s", strings.Join(p.errs, "\n\t"))
 	}
 
-	r := EnforcementRule{
+	rule = EnforcementRule{
 		DstIP:   p.dstIP,
 		QoS:     p.qos,
 		ClassID: p.classID,
 	}
 
-	return r, err
+	didRet = p.target == "RETURN"
+
+	return rule, didRet, err
 }
 
 func (p *iptFieldParser) parse() {
