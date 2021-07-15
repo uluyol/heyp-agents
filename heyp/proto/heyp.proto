@@ -60,12 +60,6 @@ message AllocBundle {
   repeated FlowAlloc flow_allocs = 1;
 }
 
-message DebugAllocRecord {
-  string timestamp = 1;
-  AggInfo info = 2;
-  repeated FlowAlloc flow_allocs = 3;
-}
-
 service ClusterAgent {
   rpc RegisterHost(stream InfoBundle) returns (stream AllocBundle) {}
 }

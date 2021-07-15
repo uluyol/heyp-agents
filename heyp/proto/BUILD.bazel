@@ -5,6 +5,27 @@ load("@com_github_grpc_grpc//bazel:cc_grpc_library.bzl", "cc_grpc_library")
 package(default_visibility = ["//heyp:__subpackages__"])
 
 proto_library(
+    name = "app_proto",
+    srcs = ["app.proto"],
+)
+
+cc_proto_library(
+    name = "app_cc_proto",
+    deps = [":app_proto"],
+)
+
+proto_library(
+    name = "config_proto",
+    srcs = ["config.proto"],
+    deps = [":heyp_proto"],
+)
+
+cc_proto_library(
+    name = "config_cc_proto",
+    deps = [":config_proto"],
+)
+
+proto_library(
     name = "heyp_proto",
     srcs = ["heyp.proto"],
     deps = [
@@ -25,27 +46,6 @@ cc_grpc_library(
 )
 
 proto_library(
-    name = "config_proto",
-    srcs = ["config.proto"],
-    deps = [":heyp_proto"],
-)
-
-cc_proto_library(
-    name = "config_cc_proto",
-    deps = [":config_proto"],
-)
-
-proto_library(
-    name = "app_proto",
-    srcs = ["app.proto"],
-)
-
-cc_proto_library(
-    name = "app_cc_proto",
-    deps = [":app_proto"],
-)
-
-proto_library(
     name = "integration_proto",
     srcs = ["integration.proto"],
 )
@@ -53,6 +53,19 @@ proto_library(
 cc_proto_library(
     name = "integration_cc_proto",
     deps = [":integration_proto"],
+)
+
+proto_library(
+    name = "monitoring_proto",
+    srcs = ["monitoring.proto"],
+    deps = [
+        ":heyp_proto",
+    ],
+)
+
+cc_proto_library(
+    name = "monitoring_cc_proto",
+    deps = [":monitoring_proto"],
 )
 
 proto_library(

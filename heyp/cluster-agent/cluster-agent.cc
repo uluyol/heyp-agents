@@ -8,13 +8,13 @@
 #include "absl/time/time.h"
 #include "grpcpp/grpcpp.h"
 #include "heyp/cli/parse.h"
-#include "heyp/cluster-agent/alloc-recorder.h"
 #include "heyp/cluster-agent/allocator.h"
 #include "heyp/cluster-agent/server.h"
 #include "heyp/flows/aggregator.h"
 #include "heyp/init/init.h"
 #include "heyp/log/logging.h"
 #include "heyp/proto/fileio.h"
+#include "heyp/proto/ndjson-logger.h"
 
 static std::atomic<bool> should_exit_flag{false};
 
@@ -44,9 +44,9 @@ absl::Status Run(const proto::ClusterAgentConfig& c, const proto::AllocBundle& a
     return predictor_status;
   }
 
-  std::unique_ptr<AllocRecorder> alloc_recorder;
+  std::unique_ptr<NdjsonLogger> alloc_recorder;
   if (!alloc_records_file.empty()) {
-    auto alloc_recorder_or = AllocRecorder::Create(alloc_records_file);
+    auto alloc_recorder_or = CreateNdjsonLogger(alloc_records_file);
     if (!alloc_recorder_or.ok()) {
       return alloc_recorder_or.status();
     }

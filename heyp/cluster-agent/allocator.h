@@ -6,10 +6,10 @@
 
 #include "absl/status/statusor.h"
 #include "absl/time/time.h"
-#include "heyp/cluster-agent/alloc-recorder.h"
 #include "heyp/cluster-agent/allocs.h"
 #include "heyp/proto/config.pb.h"
 #include "heyp/proto/heyp.pb.h"
+#include "heyp/proto/ndjson-logger.h"
 #include "heyp/threads/executor.h"
 
 namespace heyp {
@@ -21,7 +21,7 @@ class ClusterAllocator {
   static absl::StatusOr<std::unique_ptr<ClusterAllocator>> Create(
       const proto::ClusterAllocatorConfig& config,
       const proto::AllocBundle& cluster_wide_allocs, double demand_multiplier,
-      AllocRecorder* recorder = nullptr /* optional */);
+      NdjsonLogger* alloc_recorder = nullptr /* optional */);
 
   ~ClusterAllocator();
 
@@ -30,14 +30,14 @@ class ClusterAllocator {
   AllocSet GetAllocs();
 
  private:
-  ClusterAllocator(std::unique_ptr<PerAggAllocator> alloc, AllocRecorder* recorder);
+  ClusterAllocator(std::unique_ptr<PerAggAllocator> alloc, NdjsonLogger* alloc_recorder);
 
   std::unique_ptr<PerAggAllocator> alloc_;
   Executor exec_;
 
   std::unique_ptr<TaskGroup> group_;
   absl::Mutex mu_;
-  AllocRecorder* recorder_ ABSL_GUARDED_BY(mu_);
+  NdjsonLogger* alloc_recorder_ ABSL_GUARDED_BY(mu_);
   AllocSet allocs_ ABSL_GUARDED_BY(mu_);
 };
 

@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package heyp.proto;
+
+option go_package = "github.com/uluyol/heyp-agents/go/pb";
+
+import "heyp/proto/heyp.proto";
+
+message DebugAllocRecord {
+  message DebugState {
+    double burstiness = 1;
+    int64 hipri_bonus = 2;
+    int64 lopri_bonus = 3;
+
+    double frac_lopri_initial = 10;
+    double frac_lopri_with_probing = 11;
+    double frac_lopri_post_partition = 12;
+    double frac_lopri_final = 13;
+  }
+
+  string timestamp = 1;
+  AggInfo info = 2;
+  repeated FlowAlloc flow_allocs = 3;
+
+  // If present, debug_states has the internal state of the allocator
+  // when computing flow_allocs.
+  DebugState debug_state = 4;
+}

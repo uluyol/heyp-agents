@@ -5,7 +5,6 @@ heyp_cc_binary(
     name = "cluster-agent",
     srcs = ["cluster-agent.cc"],
     deps = [
-        ":alloc-recorder",
         ":allocator",
         ":server",
         "//heyp/cli:parse",
@@ -20,25 +19,10 @@ heyp_cc_binary(
 )
 
 cc_library(
-    name = "alloc-recorder",
-    srcs = ["alloc-recorder.cc"],
-    hdrs = ["alloc-recorder.h"],
-    deps = [
-        "//heyp/log",
-        "//heyp/posix:strerror",
-        "//heyp/proto:fileio",
-        "//heyp/proto:heyp_cc_proto",
-        "@com_google_absl//absl/status:statusor",
-        "@com_google_absl//absl/time",
-    ],
-)
-
-cc_library(
     name = "allocator",
     srcs = ["allocator.cc"],
     hdrs = ["allocator.h"],
     deps = [
-        ":alloc-recorder",
         ":allocs",
         "//heyp/alg:qos-downgrade",
         "//heyp/alg:rate-limits",
@@ -46,6 +30,8 @@ cc_library(
         "//heyp/proto:alg",
         "//heyp/proto:config_cc_proto",
         "//heyp/proto:heyp_cc_proto",
+        "//heyp/proto:monitoring_cc_proto",
+        "//heyp/proto:ndjson-logger",
         "//heyp/threads:executor",
         "@com_github_uluyol_routing_algos//routing-algos/alg:max-min-fairness",
         "@com_google_absl//absl/container:flat_hash_map",

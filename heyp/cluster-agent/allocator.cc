@@ -8,6 +8,7 @@
 #include "heyp/proto/alg.h"
 #include "heyp/proto/config.pb.h"
 #include "heyp/proto/heyp.pb.h"
+#include "heyp/proto/monitoring.pb.h"
 #include "routing-algos/alg/max-min-fairness.h"
 
 namespace heyp {
@@ -15,15 +16,16 @@ namespace heyp {
 class PerAggAllocator {
  public:
   virtual ~PerAggAllocator() = default;
-  virtual std::vector<proto::FlowAlloc> AllocAgg(absl::Time time,
-                                                 const proto::AggInfo& agg_info) = 0;
+  virtual std::vector<proto::FlowAlloc> AllocAgg(
+      absl::Time time, const proto::AggInfo& agg_info,
+      proto::DebugAllocRecord::DebugState* debug_state) = 0;
 };
 
 constexpr int kNumAllocCores = 8;
 
 ClusterAllocator::ClusterAllocator(std::unique_ptr<PerAggAllocator> alloc,
-                                   AllocRecorder* recorder)
-    : alloc_(std::move(alloc)), exec_(kNumAllocCores), recorder_(recorder) {}
+                                   NdjsonLogger* alloc_recorder)
+    : alloc_(std::move(alloc)), exec_(kNumAllocCores), alloc_recorder_(alloc_recorder) {}
 
 ClusterAllocator::~ClusterAllocator() {}
 
@@ -35,10 +37,18 @@ void ClusterAllocator::Reset() {
 
 void ClusterAllocator::AddInfo(absl::Time time, const proto::AggInfo& info) {
   group_->AddTaskNoStatus([time, info, this] {
-    auto a = this->alloc_->AllocAgg(time, info);
+    proto::DebugAllocRecord record;
+    std::vector<proto::FlowAlloc> a =
+        this->alloc_->AllocAgg(time, info, record.mutable_debug_state());
     absl::MutexLock l(&this->mu_);
-    if (this->recorder_ != nullptr) {
-      this->recorder_->Record(time, info, a);
+    if (this->alloc_recorder_ != nullptr) {
+      record.set_timestamp(absl::FormatTime(time, absl::UTCTimeZone()));
+      *record.mutable_info() = info;
+      *record.mutable_flow_allocs() = {a.begin(), a.end()};
+      absl::Status log_status = this->alloc_recorder_->Write(record);
+      if (!log_status.ok()) {
+        LOG(WARNING) << "failed to log allocation record: " << log_status;
+      }
     }
     allocs_.partial_sets.push_back(std::move(a));
   });
@@ -68,8 +78,9 @@ class BweAggAllocator : public PerAggAllocator {
                   FlowMap<proto::FlowAlloc> agg_admissions)
       : config_(config), agg_admissions_(std::move(agg_admissions)) {}
 
-  std::vector<proto::FlowAlloc> AllocAgg(absl::Time time,
-                                         const proto::AggInfo& agg_info) override {
+  std::vector<proto::FlowAlloc> AllocAgg(
+      absl::Time time, const proto::AggInfo& agg_info,
+      proto::DebugAllocRecord::DebugState* debug_state) override {
     const proto::FlowAlloc& admission = agg_admissions_.at(agg_info.parent().flow());
 
     CHECK_EQ(admission.lopri_rate_limit_bps(), 0)
@@ -78,6 +89,9 @@ class BweAggAllocator : public PerAggAllocator {
     if (config_.enable_burstiness()) {
       double burstiness = BweBurstinessFactor(agg_info);
       cluster_admission = cluster_admission * burstiness;
+      debug_state->set_burstiness(burstiness);
+    } else {
+      debug_state->set_burstiness(1);
     }
 
     std::vector<int64_t> demands;
@@ -93,6 +107,7 @@ class BweAggAllocator : public PerAggAllocator {
     if (config_.enable_bonus()) {
       bonus = EvenlyDistributeExtra(cluster_admission, demands, waterlevel);
     }
+    debug_state->set_hipri_bonus(bonus);
 
     const int64_t limit = config_.oversub_factor() * (waterlevel + bonus);
 
@@ -137,8 +152,9 @@ class HeypSigcomm20Allocator : public PerAggAllocator {
     }
   }
 
-  std::vector<proto::FlowAlloc> AllocAgg(absl::Time time,
-                                         const proto::AggInfo& agg_info) override {
+  std::vector<proto::FlowAlloc> AllocAgg(
+      absl::Time time, const proto::AggInfo& agg_info,
+      proto::DebugAllocRecord::DebugState* debug_state) override {
     const bool should_debug = DebugQosAndRateLimitSelection();
 
     PerAggState& cur_state = agg_states_.at(agg_info.parent().flow());
@@ -169,6 +185,9 @@ class HeypSigcomm20Allocator : public PerAggAllocator {
       cur_state.frac_lopri_with_probing = cur_state.frac_lopri;
     }
 
+    debug_state->set_frac_lopri_initial(cur_state.frac_lopri);
+    debug_state->set_frac_lopri_with_probing(cur_state.frac_lopri_with_probing);
+
     if (should_debug) {
       LOG(INFO) << "lopri_frac = " << cur_state.frac_lopri
                 << " lopri_frac_with_debugging = " << cur_state.frac_lopri_with_probing;
@@ -185,6 +204,10 @@ class HeypSigcomm20Allocator : public PerAggAllocator {
       }
       hipri_admission = hipri_admission * burstiness;
       lopri_admission = lopri_admission * burstiness;
+
+      debug_state->set_burstiness(burstiness);
+    } else {
+      debug_state->set_burstiness(1);
     }
 
     std::vector<bool> lopri_children = PickLOPRIChildren(
@@ -206,16 +229,19 @@ class HeypSigcomm20Allocator : public PerAggAllocator {
       }
     }
 
-    double post_partition_lopri_frac =
+    double frac_lopri_post_partition =
         sum_lopri_demand / (sum_hipri_demand + sum_lopri_demand);
-    if (post_partition_lopri_frac < cur_state.frac_lopri) {
+    if (frac_lopri_post_partition < cur_state.frac_lopri) {
       // We may not send as much demand using LOPRI as we'd like because we weren't able
       // to partition children in the correct proportion.
       //
       // To avoid inferring congestion when there is none, record the actual fraction of
       // demand using LOPRI as frac_lopri when it is lower.
-      cur_state.frac_lopri = post_partition_lopri_frac;
+      cur_state.frac_lopri = frac_lopri_post_partition;
     }
+
+    debug_state->set_frac_lopri_post_partition(frac_lopri_post_partition);
+    debug_state->set_frac_lopri_final(cur_state.frac_lopri);
 
     routing_algos::SingleLinkMaxMinFairnessProblem problem;
     int64_t hipri_waterlevel =
@@ -241,6 +267,9 @@ class HeypSigcomm20Allocator : public PerAggAllocator {
         LOG(INFO) << "hipri bonus = " << hipri_bonus << " lopri bonus = " << lopri_bonus;
       }
     }
+
+    debug_state->set_hipri_bonus(hipri_bonus);
+    debug_state->set_lopri_bonus(lopri_bonus);
 
     const int64_t hipri_limit =
         config_.oversub_factor() * (hipri_waterlevel + hipri_bonus);
@@ -277,8 +306,9 @@ class DowngradeAllocator : public PerAggAllocator {
                      FlowMap<proto::FlowAlloc> agg_admissions, double demand_multiplier)
       : config_(config), agg_admissions_(agg_admissions) {}
 
-  std::vector<proto::FlowAlloc> AllocAgg(absl::Time time,
-                                         const proto::AggInfo& agg_info) override {
+  std::vector<proto::FlowAlloc> AllocAgg(
+      absl::Time time, const proto::AggInfo& agg_info,
+      proto::DebugAllocRecord::DebugState* debug_state) override {
     const bool should_debug = DebugQosAndRateLimitSelection();
 
     const proto::FlowAlloc& admissions = agg_admissions_.at(agg_info.parent().flow());
@@ -299,6 +329,9 @@ class DowngradeAllocator : public PerAggAllocator {
         static_cast<double>(lopri_bps) /
         static_cast<double>(agg_info.parent().predicted_demand_bps());
 
+    debug_state->set_frac_lopri_initial(frac_lopri);
+    debug_state->set_frac_lopri_with_probing(frac_lopri);
+
     if (should_debug) {
       LOG(INFO) << "lopri_frac = " << frac_lopri;
     }
@@ -314,6 +347,9 @@ class DowngradeAllocator : public PerAggAllocator {
       }
       hipri_admission = hipri_admission * burstiness;
       lopri_admission = lopri_admission * burstiness;
+      debug_state->set_burstiness(burstiness);
+    } else {
+      debug_state->set_burstiness(0);
     }
 
     std::vector<bool> lopri_children;
@@ -328,13 +364,23 @@ class DowngradeAllocator : public PerAggAllocator {
     std::vector<int64_t> lopri_demands;
     hipri_demands.reserve(agg_info.children_size());
     lopri_demands.reserve(agg_info.children_size());
+    double sum_hipri_demand = 0;
+    double sum_lopri_demand = 0;
     for (size_t i = 0; i < agg_info.children_size(); ++i) {
       if (lopri_children[i]) {
         lopri_demands.push_back(agg_info.children(i).predicted_demand_bps());
+        sum_lopri_demand += lopri_demands.back();
       } else {
         hipri_demands.push_back(agg_info.children(i).predicted_demand_bps());
+        sum_hipri_demand += hipri_demands.back();
       }
     }
+
+    double frac_lopri_post_partition =
+        sum_lopri_demand / (sum_hipri_demand + sum_lopri_demand);
+
+    debug_state->set_frac_lopri_post_partition(frac_lopri_post_partition);
+    debug_state->set_frac_lopri_final(std::min(frac_lopri, frac_lopri_post_partition));
 
     routing_algos::SingleLinkMaxMinFairnessProblem problem;
     int64_t hipri_waterlevel =
@@ -360,6 +406,9 @@ class DowngradeAllocator : public PerAggAllocator {
         LOG(INFO) << "hipri bonus = " << hipri_bonus << " lopri bonus = " << lopri_bonus;
       }
     }
+
+    debug_state->set_hipri_bonus(hipri_bonus);
+    debug_state->set_lopri_bonus(lopri_bonus);
 
     const int64_t hipri_limit =
         config_.oversub_factor() * (hipri_waterlevel + hipri_bonus);
@@ -391,23 +440,23 @@ class DowngradeAllocator : public PerAggAllocator {
 absl::StatusOr<std::unique_ptr<ClusterAllocator>> ClusterAllocator::Create(
     const proto::ClusterAllocatorConfig& config,
     const proto::AllocBundle& cluster_wide_allocs, double demand_multiplier,
-    AllocRecorder* recorder) {
+    NdjsonLogger* alloc_recorder) {
   FlowMap<proto::FlowAlloc> cluster_admissions = ToAdmissionsMap(cluster_wide_allocs);
   switch (config.type()) {
     case proto::CA_BWE:
       return absl::WrapUnique(new ClusterAllocator(
           absl::make_unique<BweAggAllocator>(config, std::move(cluster_admissions)),
-          recorder));
+          alloc_recorder));
     case proto::CA_HEYP_SIGCOMM20:
       return absl::WrapUnique(new ClusterAllocator(
           absl::make_unique<HeypSigcomm20Allocator>(config, std::move(cluster_admissions),
                                                     demand_multiplier),
-          recorder));
+          alloc_recorder));
     case proto::CA_SIMPLE_DOWNGRADE:
       return absl::WrapUnique(new ClusterAllocator(
           absl::make_unique<DowngradeAllocator>(config, std::move(cluster_admissions),
                                                 demand_multiplier),
-          recorder));
+          alloc_recorder));
   }
   LOG(FATAL) << "unreachable: got cluster allocator type: " << config.type();
   return nullptr;
