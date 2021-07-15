@@ -1,0 +1,19 @@
+
+wd=$PWD
+n=12-baseline
+
+c=config-$n.textproto
+o=data2-$n
+(cd /w/uluyol/heyp-agents && go build -o "$wd/bin" ./go/cmd/...)
+
+bin/deploy-heyp check-nodes -c $c
+bin/deploy-heyp config-sys -c $c -cc bbr -debugmon
+bin/deploy-heyp mk-bundle -bin /w/uluyol/heyp-agents/bazel-bin -auxbin /w/uluyol/heyp-agents/aux-bin
+bin/deploy-heyp install-bundle -c $c
+bin/deploy-heyp start-heyp-agents -c $c
+bin/deploy-heyp fortio-start-servers -c $c
+sleep 10
+bin/deploy-heyp collect-host-stats -c $c
+bin/deploy-heyp fortio-run-clients -c $c
+bin/deploy-heyp collect-host-stats -c $c -stop
+bin/deploy-heyp fetch-data -c $c -o $o

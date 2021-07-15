@@ -1,0 +1,292 @@
+nodes {
+  name: "n1"
+  external_addr: "uluyol@hp067.utah.cloudlab.us"
+  experiment_addr: "192.168.1.1"
+  roles: "cluster-agent"
+}
+nodes {
+  name: "n2"
+  external_addr: "uluyol@hp071.utah.cloudlab.us"
+  experiment_addr: "192.168.1.2"
+  roles: "host-agent"
+  roles: "fortio-G-envoy-proxy"
+}
+nodes {
+  name: "n3"
+  external_addr: "uluyol@hp110.utah.cloudlab.us"
+  experiment_addr: "192.168.1.3"
+  roles: "host-agent"
+  roles: "fortio-G-envoy-proxy"
+}
+nodes {
+  name: "n4"
+  external_addr: "uluyol@hp062.utah.cloudlab.us"
+  experiment_addr: "192.168.1.4"
+  roles: "host-agent"
+  roles: "fortio-G-BE1-server"
+}
+nodes {
+  name: "n5"
+  external_addr: "uluyol@hp079.utah.cloudlab.us"
+  experiment_addr: "192.168.1.5"
+  roles: "host-agent"
+  roles: "fortio-G-BE1-server"
+}
+nodes {
+  name: "n6"
+  external_addr: "uluyol@hp057.utah.cloudlab.us"
+  experiment_addr: "192.168.1.6"
+  roles: "host-agent"
+  roles: "fortio-G-BE1-server"
+}
+nodes {
+  name: "n7"
+  external_addr: "uluyol@hp053.utah.cloudlab.us"
+  experiment_addr: "192.168.1.7"
+  roles: "host-agent"
+  roles: "fortio-G-BE1-server"
+}
+nodes {
+  name: "n8"
+  external_addr: "uluyol@hp068.utah.cloudlab.us"
+  experiment_addr: "192.168.1.8"
+  roles: "host-agent"
+  roles: "fortio-G-BE1-server"
+}
+nodes {
+  name: "n9"
+  external_addr: "uluyol@hp061.utah.cloudlab.us"
+  experiment_addr: "192.168.1.9"
+  roles: "host-agent"
+  roles: "fortio-G-BE1-server"
+}
+nodes {
+  name: "n10"
+  external_addr: "uluyol@hp049.utah.cloudlab.us"
+  experiment_addr: "192.168.1.10"
+  roles: "host-agent"
+  roles: "fortio-G-BE1-server"
+}
+nodes {
+  name: "n11"
+  external_addr: "uluyol@hp052.utah.cloudlab.us"
+  experiment_addr: "192.168.1.11"
+  roles: "host-agent"
+  roles: "fortio-G-BE1-server"
+}
+nodes {
+  name: "n12"
+  external_addr: "uluyol@hp045.utah.cloudlab.us"
+  experiment_addr: "192.168.1.12"
+  roles: "host-agent"
+  roles: "fortio-G-BE1-server"
+}
+nodes {
+  name: "n13"
+  external_addr: "uluyol@hp043.utah.cloudlab.us"
+  experiment_addr: "192.168.1.13"
+  roles: "host-agent"
+  roles: "fortio-G-BE2-server"
+}
+nodes {
+  name: "n14"
+  external_addr: "uluyol@hp050.utah.cloudlab.us"
+  experiment_addr: "192.168.1.14"
+  roles: "host-agent"
+  roles: "fortio-G-BE2-server"
+}
+nodes {
+  name: "n15"
+  external_addr: "uluyol@hp066.utah.cloudlab.us"
+  experiment_addr: "192.168.1.15"
+  roles: "host-agent"
+  roles: "fortio-G-BE1-client"
+  roles: "fortio-G-BE2-client"
+}
+nodes {
+  name: "n16"
+  external_addr: "uluyol@hp054.utah.cloudlab.us"
+  experiment_addr: "192.168.1.16"
+  roles: "host-agent"
+  roles: "fortio-G-BE1-client"
+  roles: "fortio-G-BE2-client"
+}
+clusters {
+  name: "EDGE"
+  node_names: ["n1", "n2", "n3"]
+  cluster_agent_port: 4560
+}
+clusters {
+  name: "A"
+  node_names: ["n1", "n4", "n5", "n6", "n7", "n8", "n9", "n10", "n11", "n12"]
+  #limits {
+  #  flow_allocs {
+  #    flow {
+  #      src_dc: "A"
+  #      dst_dc: "EDGE"
+  #    }
+  #    hipri_rate_limit_bps: %BE1_APPROVED_BPS%
+  #    #lopri_rate_limit_bps: %BE1_SURPLUS_BPS%
+  #  }
+  #}
+  cluster_agent_port: 4570
+}
+clusters {
+  name: "B"
+  node_names: ["n1", "n13", "n14"]
+  #limits {
+  #  flow_allocs {
+  #    flow {
+  #      src_dc: "B"
+  #      dst_dc: "EDGE"
+  #    }
+  #    hipri_rate_limit_bps: %BE2_APPROVED_BPS%
+  #  }
+  #}
+  cluster_agent_port: 4580
+}
+clusters {
+  name: "CLIENT"
+  node_names: ["n1", "n15", "n16"]
+  cluster_agent_port: 4590
+}
+cluster_agent_config {
+  flow_aggregator {
+    demand_predictor {
+      time_window_dur: "30s"
+      usage_multiplier: 1.1
+      min_demand_bps: 5000000
+    }
+  }
+  allocator {
+    type: CA_BWE
+    enable_burstiness: true
+    enable_bonus: true
+    oversub_factor: 1.25
+  }
+  server {
+    # address is automatically filled
+    control_period: "5s"
+  }
+}
+host_agent_template {
+  # this_host_addrs is automatically filled
+  flow_tracker {
+    demand_predictor {
+      time_window_dur: "5s"
+      usage_multiplier: 1.25
+      min_demand_bps: 1000000
+    }
+    ignore_instantaneous_usage: true
+  }
+  socket_to_host_aggregator {
+    demand_predictor {
+      time_window_dur: "10s"
+      usage_multiplier: 1.1
+      min_demand_bps: 5000000
+    }
+  }
+  flow_state_reporter {
+    ss_binary_name: "ss"
+  }
+  enforcer {
+    # debug_log_dir is automatically filled
+    limit_hipri: false
+    limit_lopri: false
+    pacing_burst_bytes: 0
+  }
+  daemon {
+    collect_stats_period: "500ms"
+    inform_period_dur: "2s"
+    # cluster_agent_addr is automatically filled
+    cluster_agent_connection_timeout_dur: "10s"
+    # stats_log_file is automatically filled
+  }
+  # dc_mapper is automatically filled
+  simulated_wan {
+    dc_pairs {
+      src_dc: "EDGE"
+      dst_dc: "A"
+      netem {
+        delay_ms: 30
+        delay_jitter_ms: 1 # 5
+        delay_correlation_pct: 1 # 25
+        delay_dist: NETEM_NO_DIST
+      }
+    }
+    dc_pairs {
+      src_dc: "EDGE"
+      dst_dc: "B"
+      netem {
+        delay_ms: 50
+        delay_jitter_ms: 1 # 10
+        delay_correlation_pct: 1 # 25
+        delay_dist: NETEM_NO_DIST
+      }
+    }
+    dc_pairs {
+      src_dc: "CLIENT"
+      dst_dc: "A"
+      netem {
+        delay_ms: 30
+        delay_jitter_ms: 1 # 5
+        delay_correlation_pct: 1 # 25
+        delay_dist: NETEM_NO_DIST
+      }
+    }
+    dc_pairs {
+      src_dc: "CLIENT"
+      dst_dc: "B"
+      netem {
+        delay_ms: 50
+        delay_jitter_ms: 1 # 10
+        delay_correlation_pct: 1 # 25
+        delay_dist: NETEM_NO_DIST
+      }
+    }
+  }
+}
+fortio_groups {
+  name: "G"
+  envoy_port: 5000
+  envoy_admin_port: 5001
+  envoy_num_threads: 10
+}
+fortio_instances {
+  group: "G"
+  name: "BE1"
+  serve_ports: [6000, 6001, 6002, 6003]
+  lb_policy: "LEAST_REQUEST"
+  client {
+    num_shards: 5
+    num_conns: %BE1_CONNS%
+    workload_stages {
+      target_average_bps: %BE1_BPS%
+      run_dur: "45s"
+    }
+    size_dist {
+      resp_size_bytes: 51200
+      weight: 100
+    }
+    jitter_on: false
+  }
+}
+fortio_instances {
+  group: "G"
+  name: "BE2"
+  serve_ports: [6100, 6101, 6102, 6103]
+  lb_policy: "LEAST_REQUEST"
+  client {
+    num_shards: 5
+    num_conns: %BE2_CONNS%
+    workload_stages {
+      target_average_bps: %BE2_BPS%
+      run_dur: "45s"
+    }
+    size_dist {
+      resp_size_bytes: 51200
+      weight: 100
+    }
+    jitter_on: false
+  }
+}

@@ -4,3 +4,4 @@ compile_commands.json
 /.cache
 /aux-bin
 /go/fortio/wanhttp/test.profile.*
+/experiments/*/results
