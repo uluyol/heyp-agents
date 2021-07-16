@@ -160,6 +160,29 @@ func CheckNodeConnectivity(c *pb.DeploymentConfig) error {
 	return nil
 }
 
+func KillIPerf(c *pb.DeploymentConfig) error {
+	var eg multierrgroup.Group
+
+	for _, n := range c.Nodes {
+		n := n
+		eg.Go(func() error {
+			cmd := TracingCommand(
+				LogWithPrefix("measure-node-bw: "),
+				"ssh", n.GetExternalAddr(),
+				"killall iperf || true",
+			)
+
+			if out, err := cmd.CombinedOutput(); err != nil {
+				return fmt.Errorf("%s: faild to kill iperf: %v; output:\n%s", n.GetName(), err, out)
+			}
+
+			return nil
+		})
+	}
+
+	return eg.Wait()
+}
+
 func MeasureNodeBandwidth(c *pb.DeploymentConfig) error {
 	var startEg multierrgroup.Group
 

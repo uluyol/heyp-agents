@@ -136,6 +136,12 @@ var killHEYPCmd = &configCmd{
 	exec:     actions.KillHEYP,
 }
 
+var killIPerfCmd = &configCmd{
+	name:     "kill-iperf",
+	synopsis: "kill all iperf servers",
+	exec:     actions.KillIPerf,
+}
+
 var deleteLogsCmd = &configAndRemDirCmd{
 	name:     "delete-logs",
 	synopsis: "delete all remote logs used in experiments",
@@ -530,8 +536,9 @@ func main() {
 	subcommands.Register(new(fortioRunClientsCmd), "fortio")
 	subcommands.Register(killFortioCmd, "fortio")
 	subcommands.Register(new(fetchDataCmd), "")
-	subcommands.Register(checkNodesCmd, "")
-	subcommands.Register(measureNodesBandwidthCmd, "")
+	subcommands.Register(checkNodesCmd, "check")
+	subcommands.Register(measureNodesBandwidthCmd, "check")
+	subcommands.Register(killIPerfCmd, "check")
 	subcommands.Register(new(updateConfigCmd), "")
 	subcommands.Register(new(collectHostStatsCmd), "")
 	subcommands.Register(killHEYPCmd, "")
