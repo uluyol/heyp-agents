@@ -28,6 +28,8 @@ run_one() {
   dpids="$dpids $!"
   bin/deploy-heyp kill-heyp-agents -c $c &
   dpids="$dpids $!"
+  bin/deploy-heyp kill-iperf -c $c &
+  dpids="$dpids $!"
   wait_all $dpids || return 1
 
   echo delete remote logs
