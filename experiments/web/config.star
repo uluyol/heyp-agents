@@ -3,7 +3,7 @@ config_pb = proto.file("heyp/proto/config.proto")
 
 def GenConfig(
         ca_allocator = None,
-        enable_ca_limits = None,
+        ca_limits_to_apply = None,
         limit_hipri = None,
         limit_lopri = None,
         be1_approved_bps = None,
@@ -60,9 +60,17 @@ def GenConfig(
             "cluster_agent_port": 4590,
         },
     }
-    if not enable_ca_limits:
+    if ca_limits_to_apply == "":
         for c in clusters.values():
             c["limits"] = {}
+    elif ca_limits_to_apply == "H":
+        for c in clusters.values():
+            for alloc in c.get("limits", {}).get("flow_allocs", []):
+                alloc["lopri_rate_limit_bps"] = 0
+    elif ca_limits_to_apply == "HL":
+        pass
+    else:
+        fail("got ca_limits_to_apply = ", ca_limits_to_apply, "must be \"H\"/\"HL\"/\"\"")
 
     for idx in range(16):
         i = idx + 1
@@ -251,7 +259,7 @@ def NoLimitConfig(**kwargs):
 
     return GenConfig(
         ca_allocator = allocator,
-        enable_ca_limits = False,
+        ca_limits_to_apply = "",
         limit_hipri = False,
         limit_lopri = False,
         **kwargs
@@ -268,7 +276,7 @@ def RateLimitConfig(**kwargs):
 
     return GenConfig(
         ca_allocator = allocator,
-        enable_ca_limits = True,
+        ca_limits_to_apply = "H",
         limit_hipri = True,
         limit_lopri = True,
         **kwargs
@@ -286,7 +294,7 @@ def QoSDowngradeConfig(**kwargs):
 
     return GenConfig(
         ca_allocator = allocator,
-        enable_ca_limits = True,
+        ca_limits_to_apply = "HL",
         limit_hipri = False,
         limit_lopri = False,
         **kwargs
@@ -304,7 +312,7 @@ def QoSDowngradeAndLimitLOPRIConfig(**kwargs):
 
     return GenConfig(
         ca_allocator = allocator,
-        enable_ca_limits = True,
+        ca_limits_to_apply = "HL",
         limit_hipri = False,
         limit_lopri = True,
         **kwargs
@@ -324,7 +332,7 @@ def HSC20Config(**kwargs):
 
     return GenConfig(
         ca_allocator = allocator,
-        enable_ca_limits = True,
+        ca_limits_to_apply = "HL",
         limit_hipri = True,
         limit_lopri = True,
         **kwargs
