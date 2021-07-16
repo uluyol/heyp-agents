@@ -435,6 +435,44 @@ func (l substList) Apply(data []byte) []byte {
 	return data
 }
 
+type genConfigsCmd struct {
+	rspecPath string
+	sshUser   string
+	outdir    string
+	input     string
+}
+
+func (*genConfigsCmd) Name() string     { return "gen-configs" }
+func (*genConfigsCmd) Synopsis() string { return "execute starlark file to generate proto configs" }
+func (*genConfigsCmd) Usage() string    { return "" }
+
+func (c *genConfigsCmd) SetFlags(fs *flag.FlagSet) {
+	fs.StringVar(&c.rspecPath, "rspec", "", "cloudlab manifest")
+	fs.StringVar(&c.sshUser, "ssh-user", "uluyol", "ssh username to connect with")
+	fs.StringVar(&c.input, "i", "config.star", "input starlark file")
+	fs.StringVar(&c.outdir, "o", "configs", "output directory for configs")
+}
+
+func (c *genConfigsCmd) Execute(ctx context.Context, fs *flag.FlagSet,
+	args ...interface{}) subcommands.ExitStatus {
+	extAddrs, err := configgen.ReadExternalAddrsMap(c.rspecPath, c.sshUser)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	cfgs, err := configgen.GenDeploymentConfigs(c.input, extAddrs)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = configgen.WriteConfigsTo(cfgs, c.outdir)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return subcommands.ExitSuccess
+}
+
 type updateConfigCmd struct {
 	rspecPath string
 	sshUser   string
@@ -543,6 +581,7 @@ func main() {
 	subcommands.Register(new(collectHostStatsCmd), "")
 	subcommands.Register(killHEYPCmd, "")
 	subcommands.Register(deleteLogsCmd, "")
+	subcommands.Register(new(genConfigsCmd), "")
 
 	flag.Parse()
 
