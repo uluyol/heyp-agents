@@ -136,9 +136,10 @@ int64_t HdrHistogram::ValueAtPercentile(double percentile) const {
 
 std::vector<int64_t> HdrHistogram::ValuesAtPercentiles(
     const std::vector<double>& percentiles) const {
-  std::vector<int64_t> values(percentiles.size(), 0);
+  std::vector<int64_t> values(percentiles.size() + 1, 0);
   CHECK_EQ(hdr_value_at_percentiles(h_, percentiles.data(), values.data(), values.size()),
            0);
+  values.resize(percentiles.size());
   return values;
 }
 
