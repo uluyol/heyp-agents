@@ -1,103 +1,103 @@
 nodes {
   name: "n1"
-  external_addr: "uluyol@hp067.utah.cloudlab.us"
+  external_addr: "uluyol@hp075.utah.cloudlab.us"
   experiment_addr: "192.168.1.1"
   roles: "cluster-agent"
 }
 nodes {
   name: "n2"
-  external_addr: "uluyol@hp071.utah.cloudlab.us"
+  external_addr: "uluyol@hp048.utah.cloudlab.us"
   experiment_addr: "192.168.1.2"
   roles: "host-agent"
   roles: "fortio-G-envoy-proxy"
 }
 nodes {
   name: "n3"
-  external_addr: "uluyol@hp110.utah.cloudlab.us"
+  external_addr: "uluyol@hp071.utah.cloudlab.us"
   experiment_addr: "192.168.1.3"
   roles: "host-agent"
   roles: "fortio-G-envoy-proxy"
 }
 nodes {
   name: "n4"
-  external_addr: "uluyol@hp062.utah.cloudlab.us"
+  external_addr: "uluyol@hp044.utah.cloudlab.us"
   experiment_addr: "192.168.1.4"
   roles: "host-agent"
   roles: "fortio-G-BE1-server"
 }
 nodes {
   name: "n5"
-  external_addr: "uluyol@hp079.utah.cloudlab.us"
+  external_addr: "uluyol@hp055.utah.cloudlab.us"
   experiment_addr: "192.168.1.5"
   roles: "host-agent"
   roles: "fortio-G-BE1-server"
 }
 nodes {
   name: "n6"
-  external_addr: "uluyol@hp057.utah.cloudlab.us"
+  external_addr: "uluyol@hp067.utah.cloudlab.us"
   experiment_addr: "192.168.1.6"
   roles: "host-agent"
   roles: "fortio-G-BE1-server"
 }
 nodes {
   name: "n7"
-  external_addr: "uluyol@hp053.utah.cloudlab.us"
+  external_addr: "uluyol@hp058.utah.cloudlab.us"
   experiment_addr: "192.168.1.7"
   roles: "host-agent"
   roles: "fortio-G-BE1-server"
 }
 nodes {
   name: "n8"
-  external_addr: "uluyol@hp068.utah.cloudlab.us"
+  external_addr: "uluyol@hp052.utah.cloudlab.us"
   experiment_addr: "192.168.1.8"
   roles: "host-agent"
   roles: "fortio-G-BE1-server"
 }
 nodes {
   name: "n9"
-  external_addr: "uluyol@hp061.utah.cloudlab.us"
+  external_addr: "uluyol@hp065.utah.cloudlab.us"
   experiment_addr: "192.168.1.9"
   roles: "host-agent"
   roles: "fortio-G-BE1-server"
 }
 nodes {
   name: "n10"
-  external_addr: "uluyol@hp049.utah.cloudlab.us"
+  external_addr: "uluyol@hp046.utah.cloudlab.us"
   experiment_addr: "192.168.1.10"
   roles: "host-agent"
   roles: "fortio-G-BE1-server"
 }
 nodes {
   name: "n11"
-  external_addr: "uluyol@hp052.utah.cloudlab.us"
+  external_addr: "uluyol@hp057.utah.cloudlab.us"
   experiment_addr: "192.168.1.11"
   roles: "host-agent"
   roles: "fortio-G-BE1-server"
 }
 nodes {
   name: "n12"
-  external_addr: "uluyol@hp045.utah.cloudlab.us"
+  external_addr: "uluyol@hp062.utah.cloudlab.us"
   experiment_addr: "192.168.1.12"
   roles: "host-agent"
   roles: "fortio-G-BE1-server"
 }
 nodes {
   name: "n13"
-  external_addr: "uluyol@hp043.utah.cloudlab.us"
+  external_addr: "uluyol@hp079.utah.cloudlab.us"
   experiment_addr: "192.168.1.13"
   roles: "host-agent"
   roles: "fortio-G-BE2-server"
 }
 nodes {
   name: "n14"
-  external_addr: "uluyol@hp050.utah.cloudlab.us"
+  external_addr: "uluyol@hp051.utah.cloudlab.us"
   experiment_addr: "192.168.1.14"
   roles: "host-agent"
   roles: "fortio-G-BE2-server"
 }
 nodes {
   name: "n15"
-  external_addr: "uluyol@hp066.utah.cloudlab.us"
+  external_addr: "uluyol@hp050.utah.cloudlab.us"
   experiment_addr: "192.168.1.15"
   roles: "host-agent"
   roles: "fortio-G-BE1-client"
@@ -105,7 +105,7 @@ nodes {
 }
 nodes {
   name: "n16"
-  external_addr: "uluyol@hp054.utah.cloudlab.us"
+  external_addr: "uluyol@hp049.utah.cloudlab.us"
   experiment_addr: "192.168.1.16"
   roles: "host-agent"
   roles: "fortio-G-BE1-client"
@@ -153,7 +153,7 @@ clusters {
 cluster_agent_config {
   flow_aggregator {
     demand_predictor {
-      time_window_dur: "30s"
+      time_window_dur: "15s"
       usage_multiplier: 1.1
       min_demand_bps: 5000000
     }
@@ -181,7 +181,7 @@ host_agent_template {
   }
   socket_to_host_aggregator {
     demand_predictor {
-      time_window_dur: "10s"
+      time_window_dur: "15s"
       usage_multiplier: 1.1
       min_demand_bps: 5000000
     }
@@ -262,7 +262,7 @@ fortio_instances {
     num_conns: %BE1_CONNS%
     workload_stages {
       target_average_bps: %BE1_BPS%
-      run_dur: "45s"
+      run_dur: "120s"
     }
     size_dist {
       resp_size_bytes: 51200
@@ -281,7 +281,7 @@ fortio_instances {
     num_conns: %BE2_CONNS%
     workload_stages {
       target_average_bps: %BE2_BPS%
-      run_dur: "45s"
+      run_dur: "120s"
     }
     size_dist {
       resp_size_bytes: 51200
