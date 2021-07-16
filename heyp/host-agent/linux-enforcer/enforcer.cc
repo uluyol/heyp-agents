@@ -191,17 +191,6 @@ constexpr int64_t kMaxBandwidthBps = 100 * (static_cast<int64_t>(1) << 30);  // 
 constexpr char kDscpHipri[] = "AF21";
 constexpr char kDscpLopri[] = "BE";
 
-SmallStringSet DscpsToIgnore(const proto::HostEnforcerConfig& config) {
-  std::vector<absl::string_view> to_ignore;
-  if (!config.limit_hipri()) {
-    to_ignore.push_back(kDscpHipri);
-  }
-  if (!config.limit_lopri()) {
-    to_ignore.push_back(kDscpLopri);
-  }
-  return SmallStringSet(to_ignore);
-}
-
 LinuxHostEnforcerImpl::LinuxHostEnforcerImpl(
     absl::string_view device, const MatchHostFlowsFunc& match_host_flows_fn,
     const proto::HostEnforcerConfig& config)
@@ -364,7 +353,7 @@ absl::string_view NetemDistToString(proto::NetemDelayDist dist) {
 
 void LinuxHostEnforcerImpl::StageTrafficControlForFlow(
     StageTrafficControlForFlowArgs args) {
-  double rate_limit_mbps = args.rate_limit_bps;
+  double rate_limit_mbps = std::max(args.rate_limit_bps, config_.min_rate_limit_bps());
   rate_limit_mbps /= 1024.0 * 1024.0;
 
   if (args.sys->class_id.empty()) {

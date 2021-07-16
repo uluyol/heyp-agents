@@ -11,7 +11,7 @@ option go_package = "github.com/uluyol/heyp-agents/go/pb";
 message DemandPredictorConfig {
   optional string time_window_dur = 1 [default = "10s"];
   optional double usage_multiplier = 2 [default = 1.1];
-  optional int64 min_demand_bps = 3 [default = 5000000];
+  optional int64 min_demand_bps = 3 [default = 5242880];
 }
 
 message HostFlowTrackerConfig {
@@ -33,6 +33,9 @@ message HostEnforcerConfig {
   optional bool limit_hipri = 2 [default = true];
   optional bool limit_lopri = 3 [default = true];
   optional int64 pacing_burst_bytes = 4;
+
+  // HostEnforcer will never drop rate limits below min_rate_limit_bps.
+  optional int64 min_rate_limit_bps = 5 [default = 5242880];
 }
 
 message HostDaemonConfig {
