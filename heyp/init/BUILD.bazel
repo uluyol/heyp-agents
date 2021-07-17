@@ -9,6 +9,7 @@ cc_library(
     deps = [
         "//heyp/log",
         "@com_google_absl//absl/debugging:failure_signal_handler",
+        "@com_google_absl//absl/debugging:leak_check",
         "@com_google_absl//absl/debugging:symbolize",
         "@com_google_absl//absl/flags:parse",
     ],
