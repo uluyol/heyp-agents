@@ -46,6 +46,7 @@ Add the following script as 'bazel' to your PATH
 exec env \\
     BAZEL_CXXOPTS=-stdlib=libc++:-std=c++17 \\
     BAZEL_LINKOPTS=-Wl,-rpath=$TOOLCHAIN/clang+llvm/lib/:-lc++:-lm \\
+    ASAN_SYMBOLIZER_PATH=$TOOLCHAIN/clang+llvm/bin/llvm-symbolizer \\
     CC=$TOOLCHAIN/clang+llvm/bin/clang \\
     ${TOOLCHAIN}/bazel/bin/bazel --output_user_root=${TOOLCHAIN}/bazel-output_user_root "\$@"
 EOF

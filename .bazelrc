@@ -26,6 +26,30 @@ build:clang-opt --config=libc++
 build:clang-dbg -c dbg
 build:clang-dbg --config=libc++
 
+build:clang-asan -c dbg
+build:clang-asan --strip=never
+build:clang-asan --copt -fsanitize=address
+build:clang-asan --copt -DADDRESS_SANITIZER
+build:clang-asan --copt -O1
+build:clang-asan --copt -g
+build:clang-asan --copt -fno-omit-frame-pointer
+build:clang-asan --linkopt -fsanitize=address
+build:clang-asan --config=libc++
+build:clang-asan --test_env=ASAN_SYMBOLIZER_PATH
+
+build:clang-tsan -c dbg
+build:clang-tsan --strip=never
+build:clang-tsan --copt -fsanitize=thread
+build:clang-tsan --copt -DADDRESS_SANITIZER
+build:clang-tsan --copt -O1
+build:clang-tsan --copt -g
+build:clang-tsan --copt -fno-omit-frame-pointer
+build:clang-tsan --linkopt -fsanitize=thread
+# This is needed to address false positive problem with abseil.
+# https://github.com/google/sanitizers/issues/953
+build:clang-tsan --test_env=TSAN_OPTIONS=report_atomic_races=0
+build:clang-tsan --config=libc++
+
 build:asan --strip=never
 build:asan --copt -fsanitize=address
 build:asan --copt -DADDRESS_SANITIZER
