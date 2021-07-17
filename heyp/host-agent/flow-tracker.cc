@@ -112,21 +112,26 @@ struct SSFlowStateReporter::Impl {
   const Config config;
   FlowTracker* flow_tracker;
 
-  bp::child monitor_done_proc;
+  absl::Mutex monitor_done_proc_mu;
+  bp::child monitor_done_proc ABSL_GUARDED_BY(monitor_done_proc_mu);
   std::unique_ptr<bp::ipstream> monitor_done_out;
 
   std::thread monitor_done_thread;
-  bool is_dying;
+  std::atomic<bool> is_dying;
 };
 
 SSFlowStateReporter::~SSFlowStateReporter() {
   impl_->is_dying = true;
-  impl_->monitor_done_proc.terminate();
-  impl_->monitor_done_out->pipe().close();
+  {
+    absl::MutexLock l(&impl_->monitor_done_proc_mu);
+    impl_->monitor_done_proc.terminate();
+  }
 
   if (impl_->monitor_done_thread.joinable()) {
     impl_->monitor_done_thread.join();
   }
+
+  impl_->monitor_done_out->pipe().close();
 }
 
 namespace {
@@ -196,8 +201,10 @@ absl::Status ParseLine(uint64_t host_id, absl::string_view line,
 }
 
 absl::Status StartDoneMonitor(const std::string& ss_binary_name,
-                              std::unique_ptr<bp::ipstream>* out, bp::child* proc) {
+                              std::unique_ptr<bp::ipstream>* out, bp::child* proc,
+                              absl::Mutex* proc_mu) {
   try {
+    absl::MutexLock l(proc_mu);
     *out = absl::make_unique<bp::ipstream>();
     *proc = bp::child(bp::search_path(ss_binary_name), "-E", "-i", "-t", "-n", "-H", "-O",
                       bp::std_out > **out);
@@ -243,7 +250,7 @@ void SSFlowStateReporter::MonitorDone() {
     } else {
       LOG(WARNING) << "restarting ss to monitor done flows";
       if (!StartDoneMonitor(impl_->config.ss_binary_name, &impl_->monitor_done_out,
-                            &impl_->monitor_done_proc)
+                            &impl_->monitor_done_proc, &impl_->monitor_done_proc_mu)
                .ok()) {
         absl::SleepFor(absl::Milliseconds(500));
       }
@@ -303,9 +310,9 @@ absl::StatusOr<std::unique_ptr<SSFlowStateReporter>> SSFlowStateReporter::Create
 
   auto tracker = absl::WrapUnique(new SSFlowStateReporter(config, flow_tracker));
 
-  absl::Status st =
-      StartDoneMonitor(config.ss_binary_name, &tracker->impl_->monitor_done_out,
-                       &tracker->impl_->monitor_done_proc);
+  absl::Status st = StartDoneMonitor(
+      config.ss_binary_name, &tracker->impl_->monitor_done_out,
+      &tracker->impl_->monitor_done_proc, &tracker->impl_->monitor_done_proc_mu);
   if (!st.ok()) {
     return st;
   }
