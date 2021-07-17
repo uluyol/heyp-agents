@@ -42,7 +42,8 @@ absl::StatusOr<std::string> FindDeviceResponsibleFor(
       return absl::InternalError(absl::StrCat("failed to parse ip output to json: ",
                                               simdjson::error_message(result.error())));
     }
-    for (auto dev_config : result.value().get_array().value()) {
+    auto dev_configs = result.value().get_array().value();
+    for (auto dev_config : dev_configs) {
       absl::flat_hash_set<std::string> want_addrs{ip_addrs.begin(), ip_addrs.end()};
       auto dev_maybe = dev_config["ifname"];
       if (dev_maybe.error() != simdjson::SUCCESS) {
