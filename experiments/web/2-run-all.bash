@@ -36,7 +36,7 @@ run_one() {
   bin/deploy-heyp delete-logs -c $c || return 1
 
   echo start HEYP agents
-  bin/deploy-heyp start-heyp-agents -host-agent-vlog=2 -c $c || return 1
+  bin/deploy-heyp start-heyp-agents -c $c || return 1
   echo start fortio servers
   bin/deploy-heyp fortio-start-servers -c $c || return 1
   sleep 10
