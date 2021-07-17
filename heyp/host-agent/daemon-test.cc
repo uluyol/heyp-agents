@@ -127,11 +127,12 @@ TEST(HostDaemonTest, CreateAndTeardownNoActions) {
       .Times(testing::AtLeast(0));
   EXPECT_CALL(flow_state_reporter, ReportState(testing::_)).Times(testing::AtLeast(0));
   EXPECT_CALL(enforcer, EnforceAllocs(testing::_, testing::_)).Times(testing::AtLeast(0));
+
+  std::atomic<bool> exit(true);
   {
     HostDaemon daemon(server.GetChannel(), {.inform_period = absl::Milliseconds(100)},
                       &dc_mapper, &flow_state_provider, MakeFlowAggregator(),
                       &flow_state_reporter, &enforcer);
-    std::atomic<bool> exit(true);
     daemon.Run(&exit);
   }
 
@@ -197,11 +198,11 @@ TEST(HostDaemonTest, CallsIntoHostEnforcer) {
     EXPECT_CALL(enforcer, EnforceAllocs(testing::_, testing::_))
         .Times(testing::AtLeast(0));
   }
+  std::atomic<bool> exit(false);
   {
     HostDaemon daemon(server.GetChannel(), {.inform_period = absl::Milliseconds(10)},
                       &dc_mapper, &flow_state_provider, MakeFlowAggregator(),
                       &flow_state_reporter, &enforcer);
-    std::atomic<bool> exit(false);
     daemon.Run(&exit);
     absl::SleepFor(absl::Milliseconds(150));
     exit.store(true);
