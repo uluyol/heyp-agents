@@ -41,6 +41,7 @@ PlotFG <- function(subset, fg, output) {
       xlab("Time (sec)") +
       ylab("Usage (Gbps)") +
       coord_cartesian(ylim=c(0, 10)) +
+      scale_y_continuous(breaks=seq(0, 10, by=2)) +
       theme_bw() +
       theme(
           legend.title=element_blank(),
