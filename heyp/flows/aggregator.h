@@ -6,6 +6,7 @@
 
 #include "absl/container/flat_hash_map.h"
 #include "absl/functional/function_ref.h"
+#include "absl/synchronization/mutex.h"
 #include "absl/time/time.h"
 #include "heyp/alg/demand-predictor.h"
 #include "heyp/flows/state.h"
@@ -67,13 +68,14 @@ class FlowAggregator {
     FlowMap<std::pair<absl::Time, proto::FlowInfo>> dead;
   };
 
-  AggWIP& GetAggWIP(const proto::FlowMarker& child);
+  AggWIP& GetAggWIP(const proto::FlowMarker& child) ABSL_EXCLUSIVE_LOCKS_REQUIRED(mu_);
 
   const Config config_;
   const std::unique_ptr<DemandPredictor> agg_demand_predictor_;
 
-  FlowMap<AggWIP> agg_wips_;
-  FlowMap<BundleState> bundle_states_;
+  absl::Mutex mu_;
+  FlowMap<AggWIP> agg_wips_ ABSL_GUARDED_BY(mu_);
+  FlowMap<BundleState> bundle_states_ ABSL_GUARDED_BY(mu_);
 };
 
 }  // namespace heyp

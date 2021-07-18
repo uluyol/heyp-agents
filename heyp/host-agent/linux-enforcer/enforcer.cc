@@ -156,9 +156,6 @@ class LinuxHostEnforcerImpl : public LinuxHostEnforcer {
     MatchedHostFlows matched;
   };
 
-  absl::Status ResetIptables();
-  absl::Status ResetTrafficControl();
-
   struct StageTrafficControlForFlowArgs {
     int64_t rate_limit_bps;                                        // required
     const proto::NetemConfig* netem_config = nullptr;              // optional
@@ -168,22 +165,28 @@ class LinuxHostEnforcerImpl : public LinuxHostEnforcer {
     int* update_count;                                             // required
   };
 
-  void StageTrafficControlForFlow(StageTrafficControlForFlowArgs args);
-  void StageIptablesForFlow(const MatchedHostFlows::Vec& matched_flows,
-                            const std::string& dscp, const std::string& class_id);
-
   const proto::HostEnforcerConfig config_;
   const std::string device_;
   const MatchHostFlowsFunc match_host_flows_fn_;
-  absl::Cord tc_batch_input_;
-  TcCaller tc_caller_;
-  iptables::Controller ipt_controller_;
-  DebugOutputLogger debug_logger_;
-  int32_t next_class_id_;
-  bool report_error_on_dyn_qdisc_;
+  absl::Mutex mu_;
+  absl::Cord tc_batch_input_ ABSL_GUARDED_BY(mu_);
+  TcCaller tc_caller_ ABSL_GUARDED_BY(mu_);
+  iptables::Controller ipt_controller_ ABSL_GUARDED_BY(mu_);
+  DebugOutputLogger debug_logger_ ABSL_GUARDED_BY(mu_);
+  int32_t next_class_id_ ABSL_GUARDED_BY(mu_);
 
   absl::flat_hash_map<proto::FlowMarker, std::unique_ptr<FlowSys>, HashFlow, EqFlow>
-      sys_info_;  // entries are never deleted, values are pointer for stability
+      sys_info_ ABSL_GUARDED_BY(
+          mu_);  // entries are never deleted, values are pointer for stability
+
+  absl::Status ResetIptables() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mu_);
+  absl::Status ResetTrafficControl() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mu_);
+
+  void StageTrafficControlForFlow(StageTrafficControlForFlowArgs args)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mu_);
+  void StageIptablesForFlow(const MatchedHostFlows::Vec& matched_flows,
+                            const std::string& dscp, const std::string& class_id)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mu_);
 };
 
 constexpr int64_t kMaxBandwidthBps = 100 * (static_cast<int64_t>(1) << 30);  // 100 Gbps
@@ -199,10 +202,11 @@ LinuxHostEnforcerImpl::LinuxHostEnforcerImpl(
       match_host_flows_fn_(match_host_flows_fn),
       ipt_controller_(device, SmallStringSet({})),
       debug_logger_(config.debug_log_dir()),
-      next_class_id_(2),
-      report_error_on_dyn_qdisc_(false) {}
+      next_class_id_(2) {}
 
 absl::Status LinuxHostEnforcerImpl::ResetDeviceConfig() {
+  absl::MutexLock l(&mu_);
+
   auto st = ResetTrafficControl();
   if (!st.ok()) {
     return absl::Status(st.code(),
@@ -218,6 +222,8 @@ absl::Status LinuxHostEnforcerImpl::ResetDeviceConfig() {
 
 absl::Status LinuxHostEnforcerImpl::InitSimulatedWan(std::vector<FlowNetemConfig> configs,
                                                      bool contains_all_flows) {
+  absl::MutexLock l(&mu_);
+
   int num_created_classes = 0;
   int num_updated_classes = 0;
 
@@ -266,8 +272,6 @@ absl::Status LinuxHostEnforcerImpl::InitSimulatedWan(std::vector<FlowNetemConfig
           st.code(), absl::StrCat("multiple errors:\n\t", absl::StrJoin(errors, "\n\t")));
     }
   }
-
-  report_error_on_dyn_qdisc_ = contains_all_flows;
 
   // ==== Stage 2: set up iptables ====
 
@@ -407,36 +411,7 @@ void LinuxHostEnforcerImpl::StageTrafficControlForFlow(
 //
 void LinuxHostEnforcerImpl::EnforceAllocs(const FlowStateProvider& flow_state_provider,
                                           const proto::AllocBundle& bundle) {
-  auto cleanup = absl::MakeCleanup([this] {
-    if (debug_logger_.should_log()) {
-      absl::Cord mangle_table;
-      ipt_controller_.GetRunner()
-          .SaveInto(iptables::Table::kMangle, mangle_table)
-          .IgnoreError();
-      bool have_qdisc_output = false;
-      absl::Cord qdisc_output;
-      if (tc_caller_.Call({"qdisc"}, false).ok()) {
-        qdisc_output.Append(tc_caller_.RawOut());
-        have_qdisc_output = true;
-      }
-      bool have_class_output = false;
-      absl::Cord class_output;
-      if (tc_caller_.Call({"class", "show", "dev", device_}, false).ok()) {
-        class_output.Append(tc_caller_.RawOut());
-        have_class_output = true;
-      }
-
-      absl::Time timestamp = absl::Now();
-      debug_logger_.Write("iptables:mangle", mangle_table, timestamp);
-      if (have_qdisc_output) {
-        debug_logger_.Write("tc:qdisc", qdisc_output, timestamp);
-      }
-      if (have_class_output) {
-        debug_logger_.Write("tc:class", class_output, timestamp);
-      }
-    }
-  });
-
+  absl::MutexLock l(&mu_);
   // ==== Stage 1: Initialize qdiscs and increase any rate limits ====
 
   std::vector<FlowSys::Priority*> classes_to_create;
@@ -555,50 +530,78 @@ void LinuxHostEnforcerImpl::EnforceAllocs(const FlowStateProvider& flow_state_pr
   if (!st.ok()) {
     LOG(ERROR) << "failed to commit iptables config: " << st;
     LOG(WARNING) << "will not decrease rate limits";
-    return;
+  } else {
+    // ==== Stage 3: Decrease any rate limits ====
+
+    tc_batch_input_.Clear();
+    create_count = 0;
+    update_count = 0;
+    for (const proto::FlowAlloc& flow_alloc : bundle.flow_allocs()) {
+      FlowSys* sys = sys_info_[flow_alloc.flow()].get();
+
+      if (sys->hipri.update_after_ipt_change) {
+        auto limit = sys->hipri.cur_rate_limit_bps;
+        if (!config_.limit_hipri()) {
+          limit = kMaxBandwidthBps;
+        }
+        StageTrafficControlForFlow({
+            .rate_limit_bps = limit,
+            .sys = &sys->hipri,
+            .create_count = &create_count,
+            .update_count = &update_count,
+        });
+      }
+      if (sys->lopri.update_after_ipt_change) {
+        auto limit = sys->lopri.cur_rate_limit_bps;
+        if (!config_.limit_lopri()) {
+          limit = kMaxBandwidthBps;
+        }
+        StageTrafficControlForFlow({
+            .rate_limit_bps = limit,
+            .sys = &sys->lopri,
+            .create_count = &create_count,
+            .update_count = &update_count,
+        });
+      }
+    }
+    LOG(INFO) << absl::StrFormat("decreasing %d rate limits", update_count);
+    st = tc_caller_.Batch(tc_batch_input_, /*force=*/true);
+    if (!st.ok()) {
+      LOG(ERROR) << "failed to decrease rate limits for some flows: " << st;
+    }
   }
 
-  // ==== Stage 3: Decrease any rate limits ====
-
-  tc_batch_input_.Clear();
-  create_count = 0;
-  update_count = 0;
-  for (const proto::FlowAlloc& flow_alloc : bundle.flow_allocs()) {
-    FlowSys* sys = sys_info_[flow_alloc.flow()].get();
-
-    if (sys->hipri.update_after_ipt_change) {
-      auto limit = sys->hipri.cur_rate_limit_bps;
-      if (!config_.limit_hipri()) {
-        limit = kMaxBandwidthBps;
-      }
-      StageTrafficControlForFlow({
-          .rate_limit_bps = limit,
-          .sys = &sys->hipri,
-          .create_count = &create_count,
-          .update_count = &update_count,
-      });
+  if (debug_logger_.should_log()) {
+    absl::Cord mangle_table;
+    ipt_controller_.GetRunner()
+        .SaveInto(iptables::Table::kMangle, mangle_table)
+        .IgnoreError();
+    bool have_qdisc_output = false;
+    absl::Cord qdisc_output;
+    if (tc_caller_.Call({"qdisc"}, false).ok()) {
+      qdisc_output.Append(tc_caller_.RawOut());
+      have_qdisc_output = true;
     }
-    if (sys->lopri.update_after_ipt_change) {
-      auto limit = sys->lopri.cur_rate_limit_bps;
-      if (!config_.limit_lopri()) {
-        limit = kMaxBandwidthBps;
-      }
-      StageTrafficControlForFlow({
-          .rate_limit_bps = limit,
-          .sys = &sys->lopri,
-          .create_count = &create_count,
-          .update_count = &update_count,
-      });
+    bool have_class_output = false;
+    absl::Cord class_output;
+    if (tc_caller_.Call({"class", "show", "dev", device_}, false).ok()) {
+      class_output.Append(tc_caller_.RawOut());
+      have_class_output = true;
     }
-  }
-  LOG(INFO) << absl::StrFormat("decreasing %d rate limits", update_count);
-  st = tc_caller_.Batch(tc_batch_input_, /*force=*/true);
-  if (!st.ok()) {
-    LOG(ERROR) << "failed to decrease rate limits for some flows: " << st;
+
+    absl::Time timestamp = absl::Now();
+    debug_logger_.Write("iptables:mangle", mangle_table, timestamp);
+    if (have_qdisc_output) {
+      debug_logger_.Write("tc:qdisc", qdisc_output, timestamp);
+    }
+    if (have_class_output) {
+      debug_logger_.Write("tc:class", class_output, timestamp);
+    }
   }
 }
 
 bool LinuxHostEnforcerImpl::IsLopri(const proto::FlowMarker& flow) {
+  absl::MutexLock l(&mu_);
   return ipt_controller_.DscpFor(flow.src_port(), flow.dst_port(), flow.dst_addr(),
                                  kDscpHipri) == kDscpLopri;
 }

@@ -91,6 +91,8 @@ FlowAggregator::FlowAggregator(std::unique_ptr<DemandPredictor> agg_demand_predi
 
 void FlowAggregator::Update(const proto::InfoBundle& bundle) {
   const absl::Time timestamp = FromProtoTimestamp(bundle.timestamp());
+
+  absl::MutexLock l(&mu_);
   BundleState& bs = bundle_states_[bundle.bundler()];
   for (const proto::FlowInfo& fi : bundle.flow_infos()) {
     if (config_.is_valid_child != nullptr) {
@@ -120,6 +122,8 @@ void FlowAggregator::Update(const proto::InfoBundle& bundle) {
 
 void FlowAggregator::ForEachAgg(
     absl::FunctionRef<void(absl::Time, const proto::AggInfo&)> func) {
+  absl::MutexLock l(&mu_);
+
   for (auto& p : agg_wips_) {
     AggWIP& wip = p.second;
     wip.oldest_active_time = absl::InfiniteFuture();
