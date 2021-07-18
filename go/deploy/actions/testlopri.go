@@ -78,7 +78,7 @@ func TestLOPRIStartServers(c *pb.DeploymentConfig, remoteTopdir string) error {
 					"ssh", server.GetExternalAddr(),
 					fmt.Sprintf(
 						"tmux kill-session -t testlopri-%[2]s-server;"+
-							"tmux new-session -d -s testlopri-%[2]s-server '%[1]s/heyp/app/testlopri/server %[4]d %[3]d 2>&1 | tee %[1]s/logs/testlopri-%[2]s-server.log; sleep 100000'", remoteTopdir, config.config.GetName(), config.config.GetServePort(), config.config.GetNumServerShards()))
+							"tmux new-session -d -s testlopri-%[2]s-server 'env ASAN_OPTIONS=detect_container_overflow=0 TSAN_OPTIONS=report_atomic_races=0 %[1]s/heyp/app/testlopri/server %[4]d %[3]d 2>&1 | tee %[1]s/logs/testlopri-%[2]s-server.log; sleep 100000'", remoteTopdir, config.config.GetName(), config.config.GetServePort(), config.config.GetNumServerShards()))
 				err := cmd.Run()
 				if err != nil {
 					return fmt.Errorf("failed to start server for %q on Node %q: %w", config.config.GetName(), server.GetName(), err)
@@ -146,7 +146,7 @@ func TestLOPRIRunClients(c *pb.DeploymentConfig, remoteTopdir string, showOut bo
 					LogWithPrefix("testlopri-run-clients: "),
 					"ssh", client.GetExternalAddr(),
 					fmt.Sprintf("cat > %[1]s/configs/testlopri-client-config-%[2]s-%[4]d.textproto && "+
-						"%[1]s/heyp/app/testlopri/client -logtostderr -c %[1]s/configs/testlopri-client-config-%[2]s-%[4]d.textproto -server %[3]s -out %[1]s/logs/testlopri-%[2]s-client-%[4]d.out -start_time %[5]s -shards %[6]d 2>&1 | tee %[1]s/logs/testlopri-%[2]s-client-%[4]d.log; exit ${PIPESTATUS[0]}", remoteTopdir, config.config.GetName(), strings.Join(allAddrs, ","), i, startTimestamp, config.config.GetNumClientShards()))
+						"env ASAN_OPTIONS=detect_container_overflow=0 TSAN_OPTIONS=report_atomic_races=0 %[1]s/heyp/app/testlopri/client -logtostderr -c %[1]s/configs/testlopri-client-config-%[2]s-%[4]d.textproto -server %[3]s -out %[1]s/logs/testlopri-%[2]s-client-%[4]d.out -start_time %[5]s -shards %[6]d 2>&1 | tee %[1]s/logs/testlopri-%[2]s-client-%[4]d.log; exit ${PIPESTATUS[0]}", remoteTopdir, config.config.GetName(), strings.Join(allAddrs, ","), i, startTimestamp, config.config.GetNumClientShards()))
 				cmd.SetStdin(fmt.Sprintf("testlopri-client-config-%s-%d.textproto", config.config.GetName(), i), bytes.NewReader(clientConfBytes))
 				if showOut {
 					cmd.Stdout = os.Stdout
