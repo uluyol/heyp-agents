@@ -1,0 +1,16 @@
+load("@bazel_skylib//rules:common_settings.bzl", "string_flag")
+
+string_flag(
+    name = "debug",
+    build_setting_default = "none",
+)
+
+config_setting(
+    name = "sanitizer",
+    constraint_values = [
+        "@bazel_tools//platforms:linux",
+    ],
+    flag_values = {
+        ":debug": "sanitizer",
+    },
+)

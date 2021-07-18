@@ -20,6 +20,7 @@ def heyp_cc_binary(
         linkstatic = 1,
         visibility = visibility,
         malloc = select({
+            "//heyp:sanitizer": "@bazel_tools//tools/cpp:malloc",
             "@bazel_tools//platforms:linux": "@com_google_tcmalloc//tcmalloc",
             "//conditions:default": "@bazel_tools//tools/cpp:malloc",
         }),

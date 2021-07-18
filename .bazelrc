@@ -37,6 +37,7 @@ build:clang-asan --copt -fno-omit-frame-pointer
 build:clang-asan --linkopt -fsanitize=address
 build:clang-asan --config=libc++
 build:clang-asan --test_env=ASAN_SYMBOLIZER_PATH
+build:clang-asan --//heyp:debug=sanitizer
 
 build:clang-tsan -c dbg
 build:clang-tsan --strip=never
@@ -50,6 +51,7 @@ build:clang-tsan --linkopt -fsanitize=thread
 # https://github.com/google/sanitizers/issues/953
 build:clang-tsan --test_env=TSAN_OPTIONS=report_atomic_races=0
 build:clang-tsan --config=libc++
+build:clang-tsan --//heyp:debug=sanitizer
 
 build:asan --strip=never
 build:asan --copt -fsanitize=address
