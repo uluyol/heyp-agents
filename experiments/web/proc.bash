@@ -22,60 +22,61 @@ mkdir -p "$procdir/cluster-alloc"
 (
   ./bin/proc-heyp align-infos -workload fortio -prec 500ms -out "$procdir/host-stats.json" "$outdir" && \
   echo UnixTime,Duration,Node,FG,QoS,Usage > "$procdir/host-fg-usage-ts.csv" && \
-   jq -r '
-    .unixSec as $time |
-      .data |
-      to_entries[] |
-      .key as $key |
-      .value.flowInfos[] |
-      "\($time),\($key),\(.flow.srcDc)_TO_\(.flow.dstDc),\(.cumHipriUsageBytes),\(.cumLopriUsageBytes)"
-    ' \
-    "$procdir/host-stats.json" \
-    | sort -t, -k1,1 -k3,3 \
-    | awk -F, '
-    {
-      node_fg = $2 "," $3;
-      if (node_fg in last_time && $1 != last_time[node_fg]) {
-        diff = $1 - last_time[node_fg];
-        printf "%s,%s,%s,HIPRI,%s\n", last_time[node_fg], diff, node_fg,
-          8 * ($4 - cum_hipri_usage[node_fg]) / diff;
-        printf "%s,%s,%s,LOPRI,%s\n", last_time[node_fg], diff, node_fg,
-          8 * ($5 - cum_lopri_usage[node_fg]) / diff;
-      }
-      cum_hipri_usage[node_fg] = $4;
-      cum_lopri_usage[node_fg] = $5;
-      last_time[node_fg] = $1;
-    }
-  ' >> "$procdir/host-fg-usage-ts.csv"
-  # jq -r '
+  #  jq -r '
   #   .unixSec as $time |
   #     .data |
   #     to_entries[] |
   #     .key as $key |
   #     .value.flowInfos[] |
-  #     if .currentlyLopri == true then
-  #       "\($time),\($key),\(.flow.srcDc)_TO_\(.flow.dstDc),HIPRI,0\n\($time),\($key),\(.flow.srcDc)_TO_\(.flow.dstDc),LOPRI,\(.ewmaUsageBps)"
-  #     else
-  #       "\($time),\($key),\(.flow.srcDc)_TO_\(.flow.dstDc),HIPRI,\(.ewmaUsageBps)\n\($time),\($key),\(.flow.srcDc)_TO_\(.flow.dstDc),LOPRI,0"
-  #     end
+  #     "\($time),\($key),\(.flow.srcDc)_TO_\(.flow.dstDc),\(.cumHipriUsageBytes),\(.cumLopriUsageBytes)"
   #   ' \
   #   "$procdir/host-stats.json" \
-  #   | sort -t, -k1,1 -k3,3 \
   #   | awk -F, '
-  #   BEGIN {
-  #     last_time = -1.0;
-  #   }
   #   {
-  #     if ($1 != last_time && last_time >= 0) {
-  #       for (node_fg in usage) {
-  #         printf "%s,%s,%s,%s\n", last_time, $1-last_time, node_fg, usage[node_fg];
-  #       }
-  #       delete usage;
+  #     node_fg = $2 "," $3;
+  #     if (node_fg in last_time && $1 != last_time[node_fg]) {
+  #       diff = $1 - last_time[node_fg];
+  #       printf "%s,%s,%s,HIPRI,%s\n", $1, diff, node_fg,
+  #         8 * ($4 - cum_hipri_usage[node_fg]) / diff;
+  #       printf "%s,%s,%s,LOPRI,%s\n", $1, diff, node_fg,
+  #         8 * ($5 - cum_lopri_usage[node_fg]) / diff;
   #     }
-  #     usage[$2 "," $3 "," $4] = $5;
-  #     last_time = $1;
+  #     if ($4 > cum_hipri_usage[node_fg] || $5 > cum_lopri_usage[node_fg]) {
+  #       cum_hipri_usage[node_fg] = $4;
+  #       cum_lopri_usage[node_fg] = $5;
+  #       last_time[node_fg] = $1;
+  #     }
   #   }
   # ' >> "$procdir/host-fg-usage-ts.csv"
+  jq -r '
+    .unixSec as $time |
+      .data |
+      to_entries[] |
+      .key as $key |
+      .value.flowInfos[] |
+      if .currentlyLopri == true then
+        "\($time),\($key),\(.flow.srcDc)_TO_\(.flow.dstDc),HIPRI,0\n\($time),\($key),\(.flow.srcDc)_TO_\(.flow.dstDc),LOPRI,\(.ewmaUsageBps)"
+      else
+        "\($time),\($key),\(.flow.srcDc)_TO_\(.flow.dstDc),HIPRI,\(.ewmaUsageBps)\n\($time),\($key),\(.flow.srcDc)_TO_\(.flow.dstDc),LOPRI,0"
+      end
+    ' \
+    "$procdir/host-stats.json" \
+    | sort -t, -k1,1 -k3,3 \
+    | awk -F, '
+    BEGIN {
+      last_time = -1.0;
+    }
+    {
+      if ($1 != last_time && last_time >= 0) {
+        for (node_fg in usage) {
+          printf "%s,%s,%s,%s\n", last_time, $1-last_time, node_fg, usage[node_fg];
+        }
+        delete usage;
+      }
+      usage[$2 "," $3 "," $4] = $5;
+      last_time = $1;
+    }
+  ' >> "$procdir/host-fg-usage-ts.csv"
 ) &
 (
   ./bin/proc-heyp align-host-stats -deploy-config "$config" -summary "$procdir/host-stats-summary.csv" -diff -workload fortio -prec 1s -out "$procdir/global-host-stats.json" "$outdir" && \
