@@ -12,6 +12,8 @@ message DebugAllocRecord {
     int64 hipri_bonus = 2;
     int64 lopri_bonus = 3;
 
+    FlowAlloc parent_alloc = 9;
+
     double frac_lopri_initial = 10;
     double frac_lopri_with_probing = 11;
     double frac_lopri_post_partition = 12;

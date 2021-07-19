@@ -86,6 +86,9 @@ class BweAggAllocator : public PerAggAllocator {
     CHECK_EQ(admission.lopri_rate_limit_bps(), 0)
         << "Bwe allocation incompatible with QoS downgrade";
     int64_t cluster_admission = admission.hipri_rate_limit_bps();
+
+    *debug_state->mutable_parent_alloc() = admission;
+
     if (config_.enable_burstiness()) {
       double burstiness = BweBurstinessFactor(agg_info);
       cluster_admission = cluster_admission * burstiness;
@@ -174,6 +177,8 @@ class HeypSigcomm20Allocator : public PerAggAllocator {
       LOG(INFO) << "hipri admission = " << hipri_admission
                 << " lopri admission = " << lopri_admission;
     }
+
+    *debug_state->mutable_parent_alloc() = cur_state.alloc;
 
     cur_state.frac_lopri =
         FracAdmittedAtLOPRI(agg_info.parent(), hipri_admission, lopri_admission);
@@ -329,6 +334,7 @@ class DowngradeAllocator : public PerAggAllocator {
         static_cast<double>(lopri_bps) /
         static_cast<double>(agg_info.parent().predicted_demand_bps());
 
+    *debug_state->mutable_parent_alloc() = admissions;
     debug_state->set_frac_lopri_initial(frac_lopri);
     debug_state->set_frac_lopri_with_probing(frac_lopri);
 
