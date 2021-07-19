@@ -1,6 +1,51 @@
 deploy_pb = proto.file("heyp/proto/deployment.proto")
 config_pb = proto.file("heyp/proto/config.proto")
 
+def GenWorkloadStagesStatic(
+        be1_bps = None,
+        be2_bps = None):
+    return {
+        "be1_stages": [{
+            "target_average_bps": be1_bps,
+            "run_dur": "60s",
+        }],
+        "be2_stages": [{
+            "target_average_bps": be2_bps,
+            "run_dur": "60s",
+        }],
+        "be1_conns": int(10 + 35 * be1_bps // Gbps(1)),
+        "be2_conns": int(10 + 35 * be2_bps // Gbps(1)),
+    }
+
+def GenWorkloadStagesOscillating(
+        be1_bps_min = None,
+        be1_bps_max = None,
+        be2_bps = None):
+    be2_stages = [{
+        "target_average_bps": be2_bps,
+        "run_dur": "240s",
+    }]
+
+    half_be1_bps_range = (be1_bps_max - be1_bps_min) // 2
+    be1_stages = []
+
+    #print("start ====")
+    for cycle in range(4):
+        for tick in range(30):
+            bps = be1_bps_min + half_be1_bps_range + half_be1_bps_range * math.sin(fdiv(tick * 2 * math.pi, float(30)))
+            be1_stages.append({
+                "target_average_bps": bps,
+                "run_dur": "2s",
+            })
+            #print(tick, bps)
+
+    return {
+        "be1_stages": be1_stages,
+        "be2_stages": be2_stages,
+        "be1_conns": int(10 + 35 * be1_bps_max // Gbps(1)),
+        "be2_conns": int(10 + 35 * be2_bps // Gbps(1)),
+    }
+
 def GenConfig(
         ca_allocator = None,
         ca_limits_to_apply = None,
@@ -9,9 +54,9 @@ def GenConfig(
         be1_approved_bps = None,
         be1_surplus_bps = None,
         be2_approved_bps = None,
-        be1_bps = None,
+        be1_stages = None,
         be1_conns = None,
-        be2_bps = None,
+        be2_stages = None,
         be2_conns = None):
     nodes = []
     clusters = {
@@ -213,10 +258,7 @@ def GenConfig(
                 "client": {
                     "num_shards": 5,
                     "num_conns": be1_conns,
-                    "workload_stages": [{
-                        "target_average_bps": be1_bps,
-                        "run_dur": "120s",
-                    }],
+                    "workload_stages": be1_stages,
                     "size_dist": [{
                         "resp_size_bytes": 51200,
                         "weight": 100,
@@ -232,10 +274,7 @@ def GenConfig(
                 "client": {
                     "num_shards": 5,
                     "num_conns": be2_conns,
-                    "workload_stages": [{
-                        "target_average_bps": be2_bps,
-                        "run_dur": "120s",
-                    }],
+                    "workload_stages": be2_stages,
                     "size_dist": [{
                         "resp_size_bytes": 51200,
                         "weight": 100,
@@ -246,7 +285,7 @@ def GenConfig(
         ],
     )
 
-OVERSUB_FACTOR = float("1.25")
+OVERSUB_FACTOR = float("1.0")
 
 def NoLimitConfig(**kwargs):
     # Basically does nothing
@@ -345,20 +384,24 @@ def GenConfigs():
     ALL_X = [2]  # [2, 4, 6, 8]
     ALL_Y = [float("2.5")]  # [2.5, 5]
     ALL_C = [float("1.5")]  # [1.25, 1.5]
-    D = 1
+    D = float("1.5")
     configs = {}
     for x in ALL_X:
         for y in ALL_Y:
             for c in ALL_C:
-                kwargs = {
+                kwargs = dict({
                     "be1_approved_bps": int(Gbps(x)),
                     "be1_surplus_bps": int(Gbps(c * x - x)),
                     "be2_approved_bps": int(Gbps(y)),
-                    "be1_bps": int(D * c * Gbps(x)),
-                    "be1_conns": int(10 + 35 * D * c * x),
-                    "be2_bps": int(Gbps(y)),
-                    "be2_conns": int(10 + 35 * y),
-                }
+                }, **GenWorkloadStagesOscillating(
+                    be1_bps_min = int(Gbps(x) // 2),
+                    be1_bps_max = int(3 * Gbps(x) // 2),
+                    be2_bps = int(Gbps(y)),
+                ))
+                # }, **GenWorkloadStagesStatic(
+                #     be1_bps = int(D * c * Gbps(x)),
+                #     be2_bps = int(Gbps(y)),
+                # ))
 
                 configs["X-{0}-C-{1}-Y-{2}-hsc".format(x, c, y)] = HSC20Config(**kwargs)
                 configs["X-{0}-C-{1}-Y-{2}-nl".format(x, c, y)] = NoLimitConfig(**kwargs)
