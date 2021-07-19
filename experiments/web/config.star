@@ -355,9 +355,9 @@ def GenConfigs():
                     "be1_surplus_bps": int(Gbps(c * x - x)),
                     "be2_approved_bps": int(Gbps(y)),
                     "be1_bps": int(D * c * Gbps(x)),
-                    "be1_conns": int(10 + 25 * D * c * x),
+                    "be1_conns": int(10 + 35 * D * c * x),
                     "be2_bps": int(Gbps(y)),
-                    "be2_conns": int(10 + 25 * y),
+                    "be2_conns": int(10 + 35 * y),
                 }
 
                 configs["X-{0}-C-{1}-Y-{2}-hsc".format(x, c, y)] = HSC20Config(**kwargs)
