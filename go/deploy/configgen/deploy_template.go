@@ -8,7 +8,9 @@ import (
 	"path/filepath"
 
 	"github.com/uluyol/heyp-agents/go/pb"
+	starlarkmath "go.starlark.net/lib/math"
 	starlarkproto "go.starlark.net/lib/proto"
+	starlarktime "go.starlark.net/lib/time"
 	"go.starlark.net/starlark"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/reflect/protoregistry"
@@ -58,9 +60,22 @@ func GenDeploymentConfigs(filename string, externalAddrForIP map[string]string) 
 		starExternalAddrForIP.SetKey(starlark.String(k), starlark.String(v))
 	}
 
+	starDivide := starlark.NewBuiltin("fdiv", func(thread *starlark.Thread, fn *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+		var x, y starlark.Float
+		err := starlark.UnpackPositionalArgs(fn.Name(), args, kwargs, 2, &x, &y)
+		if err != nil {
+			return nil, err
+		}
+		z := starlark.Float(float64(x) / float64(y))
+		return z, nil
+	})
+
 	predeclared := starlark.StringDict{
+		"math":            starlarkmath.Module,
 		"proto":           starlarkproto.Module,
+		"time":            starlarktime.Module,
 		"ext_addr_for_ip": starExternalAddrForIP,
+		"fdiv":            starDivide, // used because buildifier doesn't support floats
 	}
 
 	// Execute the Starlark file.
