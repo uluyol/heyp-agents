@@ -17,7 +17,6 @@
 package stagedperiodic
 
 import (
-	"math"
 	"os"
 	"strings"
 	"sync"
@@ -254,52 +253,6 @@ func TestID(t *testing.T) {
 	}
 }
 
-func TestInfiniteDurationAndAbort(t *testing.T) {
-	var count int64
-	var lock sync.Mutex
-	c := TestCount{&count, &lock}
-	o := RunnerOptions{
-		Stages: []WorkloadStage{
-			{
-				QPS:      10,
-				Duration: -1, // infinite but we'll abort after 1sec
-			},
-		},
-		Recorder:   stats.NewRecorder(devNull{}),
-		NumThreads: 1,
-	}
-	r := NewPeriodicRunner(&o)
-	r.Options().MakeRunners(&c)
-	count = 0
-	go func() {
-		time.Sleep(1 * time.Second)
-		log.LogVf("Calling abort after 1 sec")
-		r.Options().Abort()
-	}()
-	r.Run()
-	if count < 9 || count > 13 {
-		t.Errorf("Test executed unexpected number of times %d instead of 9-13", count)
-	}
-	// Same with infinite qps
-	count = 0
-	o.Stages[0].QPS = -1 // infinite qps
-	r.Options().ReleaseRunners()
-	r = NewPeriodicRunner(&o)
-	r.Options().MakeRunners(&c)
-	go func() {
-		time.Sleep(140 * time.Millisecond)
-		log.LogVf("Sending global interrupt after 0.14 sec")
-		gAbortMutex.Lock()
-		gAbortChan <- os.Interrupt
-		gAbortMutex.Unlock()
-	}()
-	r.Run()
-	r.Options().ReleaseRunners()
-	if count > 8 { // should get 3 in 140ms
-		t.Errorf("Test executed unexpected number of times %d instead of 3 (2-4)", count)
-	}
-}
-
 func TestExactlyAndAbort(t *testing.T) {
 	var count int64
 	var lock sync.Mutex
@@ -393,22 +346,17 @@ func Test2Watchers(t *testing.T) {
 }
 
 func TestGetJitter(t *testing.T) {
-	d := getJitter(4)
-	if d != time.Duration(0) {
-		t.Errorf("getJitter < 5 got %v instead of expected 0", d)
-	}
-	sum := 0.
+	sum := 0
 	for i := 0; i < 100; i++ {
-		d = getJitter(6)
-		a := math.Abs(float64(d))
+		d := getJitter(60)
 		// only valid values are -1, 0, 1
-		if a != 1. && d != 0 {
-			t.Errorf("getJitter 6 got %v (%v) instead of expected -1/+1", d, a)
+		if abs(d) > 6 {
+			t.Errorf("getJitter(60) got %v which is outside of 10%%", d)
 		}
 		// make sure we don't always get 0
-		sum += a
+		sum += int(abs(d))
 	}
-	if sum <= 60 {
-		t.Errorf("getJitter 6 got %v sum of abs value instead of expected > 60 at -1/+1", sum)
+	if sum <= 300 {
+		t.Errorf("getJitter(60) got %v sum of abs value instead of expected > 600 at -1/+1", sum)
 	}
 }

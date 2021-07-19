@@ -120,10 +120,6 @@ type WorkloadStage struct {
 	Exactly int64
 }
 
-func (s *WorkloadStage) hasDuration() bool { return s.Duration > 0 }
-func (s *WorkloadStage) useExactly() bool  { return s.Exactly > 0 }
-func (s *WorkloadStage) useQPS() bool      { return s.QPS > 0 }
-
 // RunnerOptions are the parameters to the PeriodicRunner.
 type RunnerOptions struct {
 	// Type of run (to be copied into results)
@@ -210,18 +206,6 @@ func cumDurs(stages []WorkloadStage) []time.Duration {
 		cumDurs[i] = d
 	}
 	return cumDurs
-}
-
-type stageTracker struct {
-	cur       int
-	startTime time.Time
-	cumDurs   []time.Duration
-}
-
-func (t *stageTracker) maybeAdvance() {
-	if t.cur < len(t.cumDurs)-1 && time.Since(t.startTime) > t.cumDurs[t.cur] {
-		t.cur++
-	}
 }
 
 var (
@@ -497,7 +481,7 @@ func (r *periodicRunner) Run() RunnerResults {
 	}
 	r.Recorder.StartRecording()
 	c := &stepCounter{dur: time.Second, next: time.Now().Add(time.Second)}
-	qpsScheduler := newQPSScheduler(r.Stages, r.Jitter)
+	qpsScheduler := newQPSScheduler(r.Stages, r.Jitter, clock{nil}, 1)
 	go qpsScheduler.Run(r.Recorder, stages, c, runnerChan)
 
 	if r.NumThreads <= 1 {
@@ -632,7 +616,7 @@ func formatDate(d *time.Time) string {
 
 // getJitter returns a jitter time that is (+/-)10% of the duration t if t is >0.
 func getJitter(t time.Duration) time.Duration {
-	i := int64(float64(t)/10. + 0.5) // rounding to nearest instead of truncate
+	i := int64(t / 10)
 	if i <= 0 {
 		return time.Duration(0)
 	}
