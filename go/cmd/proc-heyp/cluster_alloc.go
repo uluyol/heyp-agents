@@ -5,10 +5,50 @@ import (
 	"flag"
 	"log"
 	"os"
+	"time"
 
 	"github.com/google/subcommands"
+	"github.com/uluyol/heyp-agents/go/cmd/flagtypes"
 	"github.com/uluyol/heyp-agents/go/proc"
 )
+
+type alignClusterAllocLogsCmd struct {
+	output   string
+	workload startEndWorkloadFlag
+	prec     flagtypes.Duration
+}
+
+func (*alignClusterAllocLogsCmd) Name() string    { return "align-cluster-alloc-logs" }
+func (c *alignClusterAllocLogsCmd) Usage() string { return logsUsage(c) }
+
+func (*alignClusterAllocLogsCmd) Synopsis() string {
+	return "extract per-host bw stats (demand, usage, rate limits) from cluster alloc"
+}
+
+func (c *alignClusterAllocLogsCmd) SetFlags(fs *flag.FlagSet) {
+	fs.StringVar(&c.output, "out", "cluster-alloc.log", "output file")
+	wlFlag(&c.workload, fs)
+	c.prec.D = 1 * time.Second
+	fs.Var(&c.prec, "prec", "precision of time measurements")
+}
+
+func (c *alignClusterAllocLogsCmd) Execute(ctx context.Context, fs *flag.FlagSet, args ...interface{}) subcommands.ExitStatus {
+	logsDir := mustLogsArg(fs)
+
+	fsys := os.DirFS(logsDir)
+
+	start, end, err := getStartEnd(c.workload, fsys)
+	if err != nil {
+		log.Fatalf("failed to get start/end for workload %q: %v", c.workload, err)
+	}
+
+	err = proc.AlignDebugClusterLogs(fsys, c.output, start, end, c.prec.D)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return subcommands.ExitSuccess
+}
 
 type clusterAllocBWStatsCmd struct {
 	output   string

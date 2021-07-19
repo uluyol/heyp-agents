@@ -20,7 +20,7 @@ import (
 )
 
 var clusterAllocLogsRegex = regexp.MustCompile(
-	`(^|.*/)cluster-agent-.*-alloc-log.json$`)
+	`(^|.*/)cluster-agent-(.*)-alloc-log.json$`)
 
 type counter struct {
 	usage, demand int64
@@ -343,3 +343,65 @@ func PrintDebugClusterQoSLifetime(fsys fs.FS, outfile string, start, end time.Ti
 	}
 	return err
 }
+
+func AlignDebugClusterLogs(fsys fs.FS, outfile string, start, end time.Time, prec time.Duration) error {
+	logs, err := regGlobFiles(fsys, clusterAllocLogsRegex)
+	if err != nil {
+		return fmt.Errorf("failed to find cluster alloc logs: %w", err)
+	}
+
+	inputs := make([]ToAlign, 0, len(logs))
+
+	for _, l := range logs {
+		fi, err := fs.Stat(fsys, l)
+		if err != nil {
+			return fmt.Errorf("failed to stat %s: %w", l, err)
+		}
+		if fi.Size() > 0 {
+			inputs = append(inputs, ToAlign{
+				Name: clusterAllocLogsRegex.FindStringSubmatch(l)[2],
+				Path: l,
+			})
+		}
+	}
+
+	return AlignProto(fsys, inputs, NewDebugAllocRecordReader, outfile, start, end, prec)
+}
+
+type DebugAllocRecordReader struct {
+	r   *ProtoJSONRecReader
+	err error
+}
+
+func NewDebugAllocRecordReader(r io.Reader) TSBatchReader {
+	return &DebugAllocRecordReader{r: NewProtoJSONRecReader(r)}
+}
+
+func (r *DebugAllocRecordReader) Read(times []time.Time, data []interface{}) (int, error) {
+	for i := range times {
+		if r.err != nil {
+			return i, r.err
+		}
+
+		rec := new(pb.DebugAllocRecord)
+		if !r.r.ScanInto(rec) {
+			r.err = io.EOF
+			if r.r.Err() != nil {
+				r.err = r.r.Err()
+			}
+			return i, r.r.err
+		}
+
+		t, err := time.Parse(time.RFC3339Nano, rec.GetTimestamp())
+		if err != nil {
+			log.Printf("saw bad time %q: %v", rec.GetTimestamp(), err)
+		}
+
+		times[i] = t
+		data[i] = rec
+	}
+
+	return len(times), nil
+}
+
+var _ TSBatchReader = &DebugAllocRecordReader{}

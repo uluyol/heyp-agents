@@ -7,7 +7,8 @@ library(wesanderson)
 args <- commandArgs(trailingOnly=TRUE)
 input.approvals <- args[1]
 input <- args[2]
-outpre <- args[3]
+input.alloc <- args[3]
+outpre <- args[4]
 
 data <- read.csv(input, header=TRUE, stringsAsFactors=FALSE)
 
@@ -18,9 +19,17 @@ if (nrow(data) == 0) {
 approvals <- read.csv(input.approvals, header=TRUE, stringsAsFactors=FALSE)
 approvals$FG <- paste(approvals$SrcDC, approvals$DstDC, sep="_TO_")
 
-data$Timestamp <- data$UnixTime - min(data$UnixTime)
+allocs.state <- read.csv(input.alloc, header=TRUE, stringsAsFactors=FALSE)
+
+minTime <- min(c(data$UnixTime, allocs.state$UnixTime))
+
+data$Timestamp <- data$UnixTime - minTime
 data$Usage <- data$Usage / (1024 * 1024 * 1024)
 data$Demand <- data$Demand / (1024 * 1024 * 1024)
+
+allocs.state$Timestamp <- allocs.state$UnixTime - minTime
+allocs.state$HIPRIRateLimitBps <- allocs.state$HIPRIRateLimitBps / (1024 * 1024 * 1024)
+allocs.state$LOPRIRateLimitBps <- allocs.state$LOPRIRateLimitBps / (1024 * 1024 * 1024)
 
 fgs <- unique(data$FG)
 
@@ -37,8 +46,8 @@ PlotFG <- function(subset, fg, ycol, ylabel, output) {
   subset$QoS <- factor(subset$QoS, levels=c("LOPRI", "HIPRI"))
 
   pdf(output, height=2.5, width=5)
-  p <- ggplot(subset, aes(x=Timestamp, y=Y, fill=QoS)) +
-      geom_area(position="stack", alpha=0.8) +
+  p <- ggplot() +
+      geom_area(data=subset, aes(x=Timestamp, y=Y, fill=QoS), position="stack", alpha=0.8) +
       geom_hline(yintercept=approval, linetype="solid") +
       geom_hline(yintercept=approval.plus.lopri, linetype="dashed", color="purple") +
       xlab("Time (sec)") +
@@ -65,6 +74,11 @@ PlotFG <- function(subset, fg, ycol, ylabel, output) {
           axis.text=element_text(color="black", size=11),
           axis.title.y=element_text(size=12, margin=margin(0, 3, 0, 0)),
           axis.title.x=element_text(size=12, margin=margin(3, 0, 0, 0)))
+
+  if (approval.plus.lopri > approval && nrow(allocs.state[allocs.state$FG == fg,]) > 0 && max(allocs.state$LOPRIRateLimitBps[allocs.state$FG == fg]) > 0) {
+    p <- p + geom_line(aes(x=Timestamp, y=HIPRIRateLimitBps+LOPRIRateLimitBps), color="orange", data=allocs.state[allocs.state$FG == fg,])
+  }
+
   print(p)
   .junk <- dev.off()
 }

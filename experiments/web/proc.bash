@@ -20,6 +20,18 @@ mkdir -p "$procdir/cluster-alloc"
 ./bin/proc-heyp fortio-mk-latency-cdfs -trimdur 15s -level per-instance "$outdir" > "$procdir/cdf-per-instance.csv" &
 ./bin/proc-heyp cluster-alloc-bw-stats -workload fortio -out "$procdir/cluster-alloc-bw-stats.csv" "$outdir" &
 (
+  ./bin/proc-heyp align-cluster-alloc-logs -workload fortio -prec 1s -out "$procdir/cluster-alloc-logs.json" "$outdir" && \
+  echo UnixTime,FG,Burstiness,HIPRIBonus,LOPRIBonus,HIPRIRateLimitBps,LOPRIRateLimitBps,FracLOPRIInitial,FracLOPRIWithProbing,FracLOPRIPostPartition,FracLOPRIFinal > "$procdir/cluster-alloc-debug-state.csv" && \
+  jq -r '
+    .unixSec as $time |
+    .data |
+    to_entries[] |
+    .value.debugState as $ds |
+    "\($time),\(.value.info.parent.flow.srcDc)_TO_\(.value.info.parent.flow.dstDc),\($ds.burstiness),\($ds.hipriBonus),\($ds.lopriBonus),\($ds.parentAlloc.hipriRateLimitBps),\($ds.parentAlloc.lopriRateLimitBps),\($ds.fracLopriInitial),\($ds.fracLopriWithProbing),\($ds.fracLopriPostPartition),\($ds.fracLopriFinal)"' \
+      "$procdir/cluster-alloc-logs.json" \
+      >> "$procdir/cluster-alloc-debug-state.csv"
+) &
+(
   ./bin/proc-heyp align-infos -workload fortio -prec 500ms -out "$procdir/host-stats.json" "$outdir" && \
   echo UnixTime,Duration,Node,FG,QoS,Usage,Demand > "$procdir/host-fg-usage-ts.csv" && \
   #  jq -r '
@@ -130,6 +142,7 @@ done
 ./code/plot-fg-usage-ts.R \
   "$procdir/approvals.csv" \
   "$procdir/host-fg-usage-ts.csv" \
+  "$procdir/cluster-alloc-debug-state.csv" \
   "$procdir/fg-" &
 ./code/plot-global-host-usage-ts.R "$procdir/global-host-ts.csv" \
   "$procdir/global-host-ts-" &
