@@ -21,7 +21,7 @@ mkdir -p "$procdir/cluster-alloc"
 ./bin/proc-heyp cluster-alloc-bw-stats -workload fortio -out "$procdir/cluster-alloc-bw-stats.csv" "$outdir" &
 (
   ./bin/proc-heyp align-infos -workload fortio -prec 500ms -out "$procdir/host-stats.json" "$outdir" && \
-  echo UnixTime,Duration,Node,FG,QoS,Usage > "$procdir/host-fg-usage-ts.csv" && \
+  echo UnixTime,Duration,Node,FG,QoS,Usage,Demand > "$procdir/host-fg-usage-ts.csv" && \
   #  jq -r '
   #   .unixSec as $time |
   #     .data |
@@ -55,9 +55,9 @@ mkdir -p "$procdir/cluster-alloc"
       .key as $key |
       .value.flowInfos[] |
       if .currentlyLopri == true then
-        "\($time),\($key),\(.flow.srcDc)_TO_\(.flow.dstDc),HIPRI,0\n\($time),\($key),\(.flow.srcDc)_TO_\(.flow.dstDc),LOPRI,\(.ewmaUsageBps)"
+        "\($time),\($key),\(.flow.srcDc)_TO_\(.flow.dstDc),HIPRI,0,0\n\($time),\($key),\(.flow.srcDc)_TO_\(.flow.dstDc),LOPRI,\(.ewmaUsageBps),\(.predictedDemandBps)"
       else
-        "\($time),\($key),\(.flow.srcDc)_TO_\(.flow.dstDc),HIPRI,\(.ewmaUsageBps)\n\($time),\($key),\(.flow.srcDc)_TO_\(.flow.dstDc),LOPRI,0"
+        "\($time),\($key),\(.flow.srcDc)_TO_\(.flow.dstDc),HIPRI,\(.ewmaUsageBps),\(.predictedDemandBps)\n\($time),\($key),\(.flow.srcDc)_TO_\(.flow.dstDc),LOPRI,0,0"
       end
     ' \
     "$procdir/host-stats.json" \
@@ -69,11 +69,12 @@ mkdir -p "$procdir/cluster-alloc"
     {
       if ($1 != last_time && last_time >= 0) {
         for (node_fg in usage) {
-          printf "%s,%s,%s,%s\n", last_time, $1-last_time, node_fg, usage[node_fg];
+          printf "%s,%s,%s,%s,%s\n", last_time, $1-last_time, node_fg, usage[node_fg], demand[node_fg];
         }
         delete usage;
       }
       usage[$2 "," $3 "," $4] = $5;
+      demand[$2 "," $3 "," $4] = $6;
       last_time = $1;
     }
   ' >> "$procdir/host-fg-usage-ts.csv"
@@ -129,7 +130,7 @@ done
 ./code/plot-fg-usage-ts.R \
   "$procdir/approvals.csv" \
   "$procdir/host-fg-usage-ts.csv" \
-  "$procdir/fg-usage-ts-" &
+  "$procdir/fg-" &
 ./code/plot-global-host-usage-ts.R "$procdir/global-host-ts.csv" \
   "$procdir/global-host-ts-" &
 ./code/plot-cluster-alloc-bw.R "$procdir/cluster-alloc-bw-stats.csv" \

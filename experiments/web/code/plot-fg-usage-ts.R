@@ -20,26 +20,29 @@ approvals$FG <- paste(approvals$SrcDC, approvals$DstDC, sep="_TO_")
 
 data$Timestamp <- data$UnixTime - min(data$UnixTime)
 data$Usage <- data$Usage / (1024 * 1024 * 1024)
+data$Demand <- data$Demand / (1024 * 1024 * 1024)
 
 fgs <- unique(data$FG)
 
-PlotFG <- function(subset, fg, output) {
+PlotFG <- function(subset, fg, ycol, ylabel, output) {
   approval <- approvals$ApprovalBps[approvals$FG == fg]
   approval.plus.lopri <- approval + approvals$LOPRILimitBps[approvals$FG == fg]
 
   approval <- approval / (1024 * 1024 * 1024)
   approval.plus.lopri <- approval.plus.lopri / (1024 * 1024 * 1024)
 
-  subset <- aggregate(Usage ~ QoS + Timestamp, FUN=sum, data=subset)
+  subset$Y <- subset[[ycol]]
+
+  subset <- aggregate(Y ~ QoS + Timestamp, FUN=sum, data=subset)
   subset$QoS <- factor(subset$QoS, levels=c("LOPRI", "HIPRI"))
 
   pdf(output, height=2.5, width=5)
-  p <- ggplot(subset, aes(x=Timestamp, y=Usage, fill=QoS)) +
+  p <- ggplot(subset, aes(x=Timestamp, y=Y, fill=QoS)) +
       geom_area(position="stack", alpha=0.8) +
       geom_hline(yintercept=approval, linetype="solid") +
       geom_hline(yintercept=approval.plus.lopri, linetype="dashed", color="purple") +
       xlab("Time (sec)") +
-      ylab("Usage (Gbps)") +
+      ylab(paste(ylabel, "(Gbps)")) +
       coord_cartesian(ylim=c(0, 10)) +
       scale_y_continuous(breaks=seq(0, 10, by=2)) +
       theme_bw() +
@@ -75,6 +78,7 @@ PlotFGNode <- function(subset, output) {
       xlab("Time (sec)") +
       ylab("Usage (Gbps)") +
       coord_cartesian(ylim=c(0, 10)) +
+      scale_y_continuous(breaks=seq(0, 10, by=2)) +
       theme_bw() +
       theme(
           legend.title=element_blank(),
@@ -107,7 +111,8 @@ PlotAgg <- function(subset, output) {
       geom_line(size=1) +
       xlab("Time (sec)") +
       ylab("Usage (Gbps)") +
-      coord_cartesian(ylim=c(0, 20)) +
+      coord_cartesian(ylim=c(0, 0)) +
+      scale_y_continuous(breaks=seq(0, 10, by=2)) +
       theme_bw() +
       guides(color=guide_legend(ncol=2)) +
       theme(
@@ -135,14 +140,15 @@ PlotAgg <- function(subset, output) {
 
 for (fg in fgs) {
   subset <- data[data$FG == fg,]
-  PlotFG(subset, fg, paste(outpre, "fg-", fg, ".pdf", sep=""))
+  PlotFG(subset, fg, "Usage", "Usage", paste0(outpre, "usage-ts-fg-", fg, ".pdf"))
+  PlotFG(subset, fg, "Demand", "Predicted Demand", paste0(outpre, "demand-ts-fg-", fg, ".pdf"))
 }
 
 for (fg in fgs) {
   subset <- data[data$FG == fg,]
-  PlotFGNode(subset, paste(outpre, "fg-node-", fg, ".pdf", sep=""))
+  PlotFGNode(subset, paste0(outpre, "usage-ts-fg-node-", fg, ".pdf"))
 }
 
 PlotAgg(
   data,
-  paste(outpre, "agg.pdf", sep=""))
+  paste0(outpre, "usage-ts-agg.pdf"))
