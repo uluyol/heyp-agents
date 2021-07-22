@@ -1,6 +1,38 @@
 deploy_pb = proto.file("heyp/proto/deployment.proto")
 config_pb = proto.file("heyp/proto/config.proto")
 
+def NumShards(load_bps):
+    inflated_load = float(2 * load_bps)
+    one_gbps = float(Gbps(1)) * float("1.5")
+
+    return int(math.ceil(fdiv(inflated_load, one_gbps)))
+
+def NumConnsPerShard(stages, size_dist, num_shards, prop_delay_ms):
+    """
+    NumConnsPerShard estimates how many conns are needed to serve the requested load.
+
+    It does so by looking at the max_load, latency, and number of shards.
+    It doesn't take into account number of clients or transmission latency,
+    but it's OK to be conservatively large, so we just multiply by a fudge factor
+    """
+    max_load_bps = float(1000000)
+    for stage in stages:
+        max_load_bps = max(max_load_bps, float(stage["target_average_bps"]))
+
+    sum_size = float(0)
+    sum_weight = float(0)
+    for se in size_dist:
+        sum_size += se["resp_size_bytes"] * se["weight"]
+        sum_weight += se["weight"]
+    mean_size_bits = 8 * fdiv(sum_size, sum_weight)
+
+    max_qps_per_shard = fdiv(fdiv(max_load_bps, mean_size_bits), float(num_shards))
+    qps_per_conn = fdiv(float(1000), float(prop_delay_ms))
+
+    num_conns_per_shard = fdiv(max_qps_per_shard, qps_per_conn)
+
+    return int(math.ceil(num_conns_per_shard * float(5)))
+
 def GenWorkloadStagesStatic(
         be1_bps = None,
         be2_bps = None):
@@ -13,8 +45,8 @@ def GenWorkloadStagesStatic(
             "target_average_bps": be2_bps,
             "run_dur": "60s",
         }],
-        "be1_conns": int(10 + 35 * be1_bps // Gbps(1)),
-        "be2_conns": int(10 + 35 * be2_bps // Gbps(1)),
+        "be1_shards": NumShards(be1_bps),
+        "be2_shards": NumShards(be2_bps),
     }
 
 def GenWorkloadStagesOscillating(
@@ -42,8 +74,8 @@ def GenWorkloadStagesOscillating(
     return {
         "be1_stages": be1_stages,
         "be2_stages": be2_stages,
-        "be1_conns": int(10 + 35 * be1_bps_max // Gbps(1)),
-        "be2_conns": int(10 + 35 * be2_bps // Gbps(1)),
+        "be1_shards": NumShards(be1_bps_max),
+        "be2_shards": NumShards(be2_bps),
     }
 
 def GenConfig(
@@ -55,9 +87,9 @@ def GenConfig(
         be1_surplus_bps = None,
         be2_approved_bps = None,
         be1_stages = None,
-        be1_conns = None,
+        be1_shards = None,
         be2_stages = None,
-        be2_conns = None):
+        be2_shards = None):
     nodes = []
     clusters = {
         "EDGE": {
@@ -150,6 +182,16 @@ def GenConfig(
             "experiment_addr": experiment_ip,
             "roles": roles,
         })
+
+    be1_size_dist = [{
+        "resp_size_bytes": 51200,
+        "weight": 100,
+    }]
+    be2_size_dist = [{
+        "resp_size_bytes": 51200,
+        "weight": 100,
+    }]
+
     return deploy_pb.DeploymentConfig(
         nodes = nodes,
         clusters = [c for c in clusters.values()],
@@ -253,16 +295,13 @@ def GenConfig(
             {
                 "group": "G",
                 "name": "BE1",
-                "serve_ports": [6000, 6001, 6002, 6003],
+                "serve_ports": [6000, 6001],
                 "lb_policy": "LEAST_REQUEST",
                 "client": {
-                    "num_shards": 5,
-                    "num_conns": be1_conns,
+                    "num_shards": be1_shards,
+                    "num_conns": NumConnsPerShard(be1_stages, be1_size_dist, be1_shards, 30),
                     "workload_stages": be1_stages,
-                    "size_dist": [{
-                        "resp_size_bytes": 51200,
-                        "weight": 100,
-                    }],
+                    "size_dist": be1_size_dist,
                     "jitter_on": False,
                 },
             },
@@ -272,20 +311,17 @@ def GenConfig(
                 "serve_ports": [6100, 6101, 6102, 6103],
                 "lb_policy": "LEAST_REQUEST",
                 "client": {
-                    "num_shards": 5,
-                    "num_conns": be2_conns,
+                    "num_shards": be2_shards,
+                    "num_conns": NumConnsPerShard(be2_stages, be2_size_dist, be2_shards, 50),
                     "workload_stages": be2_stages,
-                    "size_dist": [{
-                        "resp_size_bytes": 51200,
-                        "weight": 100,
-                    }],
+                    "size_dist": be2_size_dist,
                     "jitter_on": False,
                 },
             },
         ],
     )
 
-OVERSUB_FACTOR = float("1.0")
+OVERSUB_FACTOR = float("1.25")
 
 def NoLimitConfig(**kwargs):
     # Basically does nothing
@@ -384,7 +420,7 @@ def GenConfigs():
     ALL_X = [2]  # [2, 4, 6, 8]
     ALL_Y = [float("2.5")]  # [2.5, 5]
     ALL_C = [float("1.5")]  # [1.25, 1.5]
-    D = float("1.5")
+    D = float("1.0")
     configs = {}
     for x in ALL_X:
         for y in ALL_Y:
@@ -393,13 +429,13 @@ def GenConfigs():
                     "be1_approved_bps": int(Gbps(x)),
                     "be1_surplus_bps": int(Gbps(c * x - x)),
                     "be2_approved_bps": int(Gbps(y)),
-                }, **GenWorkloadStagesOscillating(
-                    be1_bps_min = int(Gbps(x) // 2),
-                    be1_bps_max = int(3 * Gbps(x) // 2),
+                }, **GenWorkloadStagesStatic(
+                    be1_bps = int(D * c * Gbps(x)),
                     be2_bps = int(Gbps(y)),
                 ))
-                # }, **GenWorkloadStagesStatic(
-                #     be1_bps = int(D * c * Gbps(x)),
+                # }, **GenWorkloadStagesOscillating(
+                #     be1_bps_min = int(Gbps(x) // 2),
+                #     be1_bps_max = int(3 * Gbps(x) // 2),
                 #     be2_bps = int(Gbps(y)),
                 # ))
 
