@@ -433,9 +433,8 @@ type stageState struct {
 	numCalls          int64
 	requestedDuration string
 
-	// results
+	// results, populated by qpsScheduler
 	sleepTime *stats.Histogram // managed by Run
-	mu        sync.Mutex       // mu protects the following when written by parallel workers
 	start     time.Time
 	elapsed   time.Duration
 	numRPCs   int64
@@ -486,13 +485,13 @@ func (r *periodicRunner) Run() RunnerResults {
 
 	if r.NumThreads <= 1 {
 		log.LogVf("Running single threaded")
-		runOne(0, r, qpsScheduler, stages)
+		runOne(0, r, qpsScheduler)
 	} else {
 		var wg sync.WaitGroup
 		for t := 0; t < r.NumThreads; t++ {
 			wg.Add(1)
 			go func(t int) {
-				runOne(t, r, qpsScheduler, stages)
+				runOne(t, r, qpsScheduler)
 				wg.Done()
 			}(t)
 		}
@@ -565,42 +564,13 @@ func (r *periodicRunner) Run() RunnerResults {
 
 // runOne runs in 1 go routine (or main one when -c 1 == single threaded mode).
 // nolint: gocognit // we should try to simplify it though.
-func runOne(id int,
-	r *periodicRunner, sched *qpsScheduler, stageStates []*stageState) {
+func runOne(id int, r *periodicRunner, sched *qpsScheduler) {
 	f := r.Runners[id]
-
-	curStage := -2
-	var stageStart time.Time
-	var state *stageState
 
 	for {
 		stage := sched.Ask()
-
-		if stage != curStage {
-			if curStage >= 0 {
-				state2 := stageStates[curStage]
-				elapsed := time.Since(stageStart)
-				state2.mu.Lock()
-				if elapsed > state2.elapsed {
-					state2.elapsed = elapsed
-				}
-				state2.mu.Unlock()
-			}
-
-			if stage >= 0 {
-				state = stageStates[stage]
-				state.mu.Lock()
-				if state.start.IsZero() {
-					state.start = time.Now()
-					log.Infof("starting workload stage = %d", stage)
-				}
-				stageStart = state.start
-				state.mu.Unlock()
-				curStage = stage
-			} else if stage == -1 {
-				// signal to exit
-				break
-			}
+		if stage == -1 {
+			break
 		}
 
 		fStart := time.Now()

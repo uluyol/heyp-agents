@@ -63,6 +63,50 @@ func newQPSScheduler(stages []WorkloadStage, jitter bool, c clock, numBuffered i
 	return s
 }
 
+// TODO: Currently unused. We just return expected delay + jitter, no inter-req handling.
+//
+// ubatch -- A small set of requests whose scheduling is impacted by one another.
+//
+// Each request is a ubatch is intended to wait 1/N seconds (where we want to send N QPS).
+// When one request is scheduled late, follow-on requests in a ubatch may wait less than
+// 1/N seconds to keep the schedule of the batch as a whole on time.
+//
+// Why doesn't qpsScheduler follow this catch-up behavior for all requests?
+// Answer: because for our workloads, we want to shed load under when limited by bandwidth,
+// not maintain a high rate. Catching up enables us to counter unwanted scheduling delays
+// at the client without overloading the remote server(s) or network.
+
+const ubatchCap = 8
+
+type ubatchScheduler struct {
+	start         time.Time
+	expectedSleep time.Duration
+	len           int
+}
+
+func (s *ubatchScheduler) SleepDur(c clock, jitter bool) time.Duration {
+	toSleep := s.expectedSleep
+	if jitter {
+		toSleep = s.expectedSleep + getJitter(s.expectedSleep)
+	}
+
+	return toSleep // simple thing
+
+	// if s.len == ubatchCap {
+	// 	s.len = 0
+	// 	s.start = c.Now()
+	// 	return toSleep
+	// }
+	// elapsed := c.Since(s.start)
+	// expectedElapsed := s.expectedSleep*time.Duration(s.len) + toSleep
+	// s.len++
+
+	// if elapsed >= expectedElapsed {
+	// 	return 0
+	// }
+	// return expectedElapsed - elapsed
+}
+
 // Run will run the scheduling loop in the current goroutine.
 func (s *qpsScheduler) Run(rec *heypstats.Recorder, stageStates []*stageState, sc *stepCounter, runnerChan chan struct{}) {
 	runStart := s.clock.Now()
@@ -77,11 +121,16 @@ func (s *qpsScheduler) Run(rec *heypstats.Recorder, stageStates []*stageState, s
 
 		var expectedSleep time.Duration
 		if useQPS {
-			expectedSleep = time.Duration(1/qps) * time.Nanosecond
+			expectedSleep = time.Duration(1e9/qps) * time.Nanosecond
 		}
 
 		stageEndTime := runStart.Add(s.cumDurs[stage])
 		stageStart := s.clock.Now()
+
+		stageStates[stage].start = stageStart
+		log.Infof("starting workload stage = %d", stage)
+
+		usched := ubatchScheduler{start: stageStart, expectedSleep: expectedSleep}
 
 		var i int64
 
@@ -109,22 +158,8 @@ func (s *qpsScheduler) Run(rec *heypstats.Recorder, stageStates []*stageState, s
 				if (useExactly || hasDuration) && i >= numCalls {
 					break // expected exit for that mode
 				}
-				elapsed := s.clock.Since(stageStart)
-				var targetElapsedInSec float64
-				// if hasDuration {
-				// 	// This next line is tricky - such as for 2s duration and 1qps there is 1
-				// 	// sleep of 2s between the 2 calls and for 3qps in 1sec 2 sleep of 1/2s etc
-				// 	targetElapsedInSec = (float64(i) + float64(i)/float64(numCalls-1)) / qps
-				// } else {
-				// Calculate the target elapsed when in endless execution
-				targetElapsedInSec = float64(i+1) / qps
-				// }
-				targetElapsedDuration := time.Duration(int64(targetElapsedInSec * 1e9))
-				sleepDuration := targetElapsedDuration - elapsed
-				if s.jitter {
-					sleepDuration += getJitter(expectedSleep)
-				}
-				log.Debugf("target next dur %v - sleep %v", targetElapsedDuration, sleepDuration)
+				sleepDuration := usched.SleepDur(s.clock, s.jitter)
+				log.Debugf("target next dur sleep %v", sleepDuration)
 				s.sleepTimes[stage].Record(sleepDuration.Seconds())
 				s.clock.Sleep(sleepDuration)
 				s.c <- stage + 1
@@ -160,9 +195,8 @@ func (s *qpsScheduler) Run(rec *heypstats.Recorder, stageStates []*stageState, s
 			}
 		}
 
-		stageStates[stage].mu.Lock()
 		stageStates[stage].numRPCs += i
-		stageStates[stage].mu.Unlock()
+		stageStates[stage].elapsed = elapsed
 	}
 
 	close(s.c)

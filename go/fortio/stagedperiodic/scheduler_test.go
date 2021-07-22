@@ -77,6 +77,8 @@ func abs(d time.Duration) time.Duration {
 }
 
 func TestQPSSchedulerConstant(t *testing.T) {
+	t.Parallel()
+
 	clock, clockCtl := NewMockClock(time.Unix(0, 0), nil)
 	sched := newQPSScheduler(
 		[]WorkloadStage{{QPS: 1000, Duration: time.Minute}},
@@ -121,6 +123,8 @@ func TestQPSSchedulerConstant(t *testing.T) {
 }
 
 func TestQPSSchedulerTwoStages(t *testing.T) {
+	t.Parallel()
+
 	clock, clockCtl := NewMockClock(time.Unix(0, 0), nil)
 	sched := newQPSScheduler(
 		[]WorkloadStage{
@@ -181,6 +185,8 @@ func TestQPSSchedulerTwoStages(t *testing.T) {
 }
 
 func TestQPSSchedulerTwoStagesWithJitter(t *testing.T) {
+	t.Parallel()
+
 	clock, clockCtl := NewMockClock(time.Unix(0, 0), nil)
 	sched := newQPSScheduler(
 		[]WorkloadStage{
@@ -212,10 +218,10 @@ func TestQPSSchedulerTwoStagesWithJitter(t *testing.T) {
 		gotStage[stage]++
 	}
 
-	if gotStage[0] != 60000 {
+	if gotStage[0] <= 59400 || 60600 <= gotStage[0] {
 		t.Errorf("%d reqs for stage 0", gotStage[0])
 	}
-	if gotStage[1] != 45000 {
+	if gotStage[1] <= 44550 || 45450 <= gotStage[1] {
 		t.Errorf("%d reqs for stage 1", gotStage[1])
 	}
 
@@ -223,12 +229,12 @@ func TestQPSSchedulerTwoStagesWithJitter(t *testing.T) {
 		t.Errorf("elapsed = %s, want 2m30s", elapsed)
 	}
 
-	if len(diffs) != 60000+45000 {
+	if len(diffs) <= 104_475 || 105_525 <= len(diffs) {
 		t.Errorf("got only %d calls", len(diffs))
 	}
 
 	for i, d := range diffs {
-		if i < 60000 {
+		if i < gotStage[0] {
 			if abs(d-time.Millisecond) > 100*time.Microsecond {
 				t.Errorf("%d: sleep dur: got %v, want %v", i, d, time.Millisecond)
 			}
@@ -239,3 +245,90 @@ func TestQPSSchedulerTwoStagesWithJitter(t *testing.T) {
 		}
 	}
 }
+
+// type TestPipe struct {
+// 	capBPS    float64
+// 	propDelay time.Duration
+// }
+
+// func NewLink(capBPS int64, propDelay time.Duration) TestPipe {
+// 	return TestPipe{float64(capBPS), propDelay}
+// }
+
+// func (p TestPipe) Split(numConn int64) TestPipe {
+// 	return TestPipe{p.capBPS / float64(numConn), p.propDelay}
+// }
+
+// func (p TestPipe) Fetch(sizeBytes int64) time.Duration {
+// 	txDelay := time.Duration(float64(sizeBytes*8)/p.capBPS*1e9) * time.Nanosecond
+// 	return p.propDelay + txDelay
+// }
+
+// type WorkerPool struct {
+// 	numReady int
+// 	waiting  []time.Time
+// }
+
+// func (p *WorkerPool) Drain(now time.Time) {
+// 	var i int
+// 	for p.waiting[i].Before(now) {
+// 		i++
+// 	}
+
+// 	p.waiting = p.waiting[i:]
+// 	p.numReady += i
+// }
+
+// func (p *WorkerPool) Enqueue(wakeTime time.Time) {
+// 	p.numReady--
+// 	p.waiting = append(p.waiting, wakeTime)
+// }
+
+// func TestWAN25GbpsLinkWant4_5Gbps(t *testing.T) {
+// 	link := NewLink(25<<30, 30*time.Millisecond)
+// 	const (
+// 		numShards        = 10
+// 		numConnsPerShard = 167
+// 		respSizeBytes    = 51200
+// 		targetQPS        = 4.831838208e+09 / (8 * respSizeBytes)
+// 	)
+
+// 	oneConn := link.Split(numShards + numConnsPerShard)
+
+// 	clock, clockCtl := NewMockClock(time.Unix(0, 0), nil)
+// 	sched := newQPSScheduler(
+// 		[]WorkloadStage{
+// 			{QPS: targetQPS, Duration: 30 * time.Second},
+// 		},
+// 		false,
+// 		clock,
+// 		1)
+
+// 	var statsBuf bytes.Buffer
+// 	c := &stepCounter{dur: time.Second, next: time.Unix(1, 0)}
+// 	rec := heypstats.NewRecorder(nopCloser{&statsBuf})
+// 	rec.StartRecording()
+// 	go sched.Run(rec, []*stageState{
+// 		{stageIdx: 0, requestedQPS: strconv.FormatFloat(targetQPS, 'f', -1, 64), numCalls: 60000, requestedDuration: "30s", sleepTime: stats.NewHistogram(-0.001, 0.001)},
+// 	}, c, nil)
+
+// 	pool := WorkerPool{numReady: numShards * numConnsPerShard}
+
+// 	var isDone bool
+// 	for !isDone {
+// 		if pool.numReady == 0 {
+// 			clock.Sleep(pool.waiting[0].Sub(clock.Now()))
+// 			pool.Drain(clock.Now())
+// 		}
+// 		for pool.numReady > 0 {
+// 			stage := sched.Ask()
+// 			if stage < 0 {
+// 				isDone = true
+// 				break
+// 			}
+
+// 			pool.Enqueue(clock.Now().Add(oneConn.Fetch(respSizeBytes)))
+// 			pool.Drain(clock.Now())
+// 		}
+// 	}
+// }
