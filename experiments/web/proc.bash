@@ -32,7 +32,7 @@ mkdir -p "$procdir/cluster-alloc"
       >> "$procdir/cluster-alloc-debug-state.csv"
 ) &
 (
-  ./bin/proc-heyp align-infos -workload fortio -prec 500ms -out "$procdir/host-stats.json" "$outdir" && \
+  ./bin/proc-heyp align-infos -workload fortio -prec 1s -out "$procdir/host-stats.json" "$outdir" && \
   echo UnixTime,Duration,Node,FG,QoS,Usage,Demand > "$procdir/host-fg-usage-ts.csv" && \
   #  jq -r '
   #   .unixSec as $time |
@@ -40,7 +40,11 @@ mkdir -p "$procdir/cluster-alloc"
   #     to_entries[] |
   #     .key as $key |
   #     .value.flowInfos[] |
-  #     "\($time),\($key),\(.flow.srcDc)_TO_\(.flow.dstDc),\(.cumHipriUsageBytes),\(.cumLopriUsageBytes)"
+  #     if .currentlyLopri == true then
+  #       "\($time),\($key),\(.flow.srcDc)_TO_\(.flow.dstDc),\(.cumHipriUsageBytes),\(.cumLopriUsageBytes),0,\(.predictedDemandBps)"
+  #     else
+  #       "\($time),\($key),\(.flow.srcDc)_TO_\(.flow.dstDc),\(.cumHipriUsageBytes),\(.cumLopriUsageBytes),\(.predictedDemandBps),0"
+  #     end
   #   ' \
   #   "$procdir/host-stats.json" \
   #   | awk -F, '
@@ -48,14 +52,16 @@ mkdir -p "$procdir/cluster-alloc"
   #     node_fg = $2 "," $3;
   #     if (node_fg in last_time && $1 != last_time[node_fg]) {
   #       diff = $1 - last_time[node_fg];
-  #       printf "%s,%s,%s,HIPRI,%s\n", $1, diff, node_fg,
-  #         8 * ($4 - cum_hipri_usage[node_fg]) / diff;
-  #       printf "%s,%s,%s,LOPRI,%s\n", $1, diff, node_fg,
-  #         8 * ($5 - cum_lopri_usage[node_fg]) / diff;
+  #       printf "%s,%s,%s,HIPRI,%s,%s\n", $1, diff, node_fg,
+  #         8 * ($4 - cum_hipri_usage[node_fg]) / diff, demand_hipri[node_fg];
+  #       printf "%s,%s,%s,LOPRI,%s,%s\n", $1, diff, node_fg,
+  #         8 * ($5 - cum_lopri_usage[node_fg]) / diff, demand_lopri[node_fg];
   #     }
   #     if ($4 > cum_hipri_usage[node_fg] || $5 > cum_lopri_usage[node_fg]) {
   #       cum_hipri_usage[node_fg] = $4;
   #       cum_lopri_usage[node_fg] = $5;
+  #       demand_hipri[node_fg] = $6;
+  #       demand_lopri[node_fg] = $7;
   #       last_time[node_fg] = $1;
   #     }
   #   }
