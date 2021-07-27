@@ -22,76 +22,6 @@ SumClientGoodput <- function(subset) {
         data=subset)
 }
 
-outdir <- args[1]
-
-procdirs <- Sys.glob(file.path(outdir, "proc-indiv", "*"))
-summarydir <- file.path(outdir, "proc-summary-bw-cdfs")
-
-unlink(summarydir, recursive=TRUE)
-dir.create(summarydir, recursive=TRUE)
-
-overage <- data.frame()
-goodput <- data.frame()
-
-for (procdir in procdirs) {
-    sys_name <- SYS_LONG[[gsub(".*-", "", procdir)]]
-
-    approvals <- read.csv(file.path(procdir, "approvals.csv"), header=TRUE, stringsAsFactors=FALSE)
-    client.ts <- read.csv(file.path(procdir, "ts.csv"), header=TRUE, stringsAsFactors=FALSE)
-    usage.ts <- read.csv(file.path(procdir, "host-fg-usage-ts.csv"), header=TRUE, stringsAsFactors=FALSE)
-    #approvals$FG <- paste0(approvals$SrcDC, "_TO_", approvals$DstDC)
-
-    goodput.summed <- SumClientGoodput(client.ts)
-    goodput <- rbind(
-        goodput,
-        data.frame(
-            Sys=rep.int(sys_name, nrow(goodput.summed)),
-            GoodputGbps=goodput.summed$MeanBps / (2^30),
-            Kind=paste0(goodput.summed$Group, "/", goodput.summed$Instance)))
-
-    a2edge.hipri <- max(0, approvals$ApprovalBps[approvals$SrcDC == "A" & approvals$DstDC == "EDGE"]) / (2^30)
-    a2edge.lopri <- max(0, approvals$LOPRILimitBps[approvals$SrcDC == "A" & approvals$DstDC == "EDGE"]) / (2^30)
-
-    b2edge.hipri <- max(0, approvals$ApprovalBps[approvals$SrcDC == "B" & approvals$DstDC == "EDGE"]) / (2^30)
-    b2edge.lopri <- max(0, approvals$LOPRILimitBps[approvals$SrcDC == "B" & approvals$DstDC == "EDGE"]) / (2^30)
-
-    usage.ts <- usage.ts[grepl("(A|B)_TO_EDGE", usage.ts$FG),]
-
-    usage.ts$UsageGbps <- usage.ts$Usage / (2^30)
-    usage.summed <- aggregate(UsageGbps ~ UnixTime + FG + QoS,
-        FUN=sum,
-        data=usage.ts)
-
-    usage.summed$Overage <- rep.int(-1, nrow(usage.summed))
-
-    mask <- usage.summed$FG == "A_TO_EDGE" & usage.summed$QoS == "HIPRI"
-    usage.summed$Overage[mask] <-
-        pmax(0, usage.summed$UsageGbps[mask] - a2edge.hipri)
-
-    mask <- usage.summed$FG == "A_TO_EDGE" & usage.summed$QoS == "LOPRI"
-    usage.summed$Overage[mask] <-
-        pmax(0, usage.summed$UsageGbps[mask] - a2edge.lopri)
-
-    mask <- usage.summed$FG == "B_TO_EDGE" & usage.summed$QoS == "HIPRI"
-    usage.summed$Overage[mask] <-
-        pmax(0, usage.summed$UsageGbps[mask] - b2edge.hipri)
-
-    mask <- usage.summed$FG == "B_TO_EDGE" & usage.summed$QoS == "LOPRI"
-    usage.summed$Overage[mask] <-
-        pmax(0, usage.summed$UsageGbps[mask] - b2edge.lopri)
-
-    overage <- rbind(
-        overage,
-        data.frame(
-            Sys=rep.int(sys_name, nrow(usage.summed)),
-            FG=usage.summed$FG,
-            QoS=usage.summed$QoS,
-            OverageGbps=usage.summed$Overage))
-}
-
-write.csv(goodput, file.path(summarydir, "goodput.csv"), quote=FALSE, row.names=FALSE)
-write.csv(overage, file.path(summarydir, "overage.csv"), quote=FALSE, row.names=FALSE)
-
 PlotGoodputTo <- function(subset, output) {
     subset$Sys <- factor(subset$Sys, levels=c("RateLimit", "HSC20", "QD+LimitLO", "QD", "NoLimit"))
 
@@ -164,15 +94,90 @@ PlotOverageTo <- function(subset, output) {
     .junk <- dev.off()
 }
 
-for (kind in unique(goodput$Kind)) {
-    PlotGoodputTo(goodput[goodput$Kind == kind,], file.path(summarydir, paste0("goodput-", gsub("/", "_", kind), ".pdf")))
-}
+outdir <- args[1]
 
-for (fg in unique(overage$FG)) {
-    fgsubset <- overage[overage$FG == fg,]
-    for (qos in unique(fgsubset$QoS)) {
-        if (sum(fgsubset$Overage[fgsubset$QoS == qos]) > 0) {
-            PlotOverageTo(fgsubset[fgsubset$QoS == qos,], file.path(summarydir, paste0("overage-", fg, "-", qos, ".pdf")))
+summarydir <- file.path(outdir, "proc-summary-bw-cdfs")
+
+unlink(summarydir, recursive=TRUE)
+dir.create(summarydir, recursive=TRUE)
+
+cfgGroups <- basename(unique(gsub("-[^-]+$", "", Sys.glob(file.path(outdir, "proc-indiv", "*")))))
+
+for (cfgGroup in cfgGroups) {
+    procdirs <- Sys.glob(file.path(outdir, "proc-indiv", paste0(cfgGroup, "*")))
+
+    overage <- data.frame()
+    goodput <- data.frame()
+
+    for (procdir in procdirs) {
+        sys_name <- SYS_LONG[[gsub(".*-", "", procdir)]]
+
+        approvals <- read.csv(file.path(procdir, "approvals.csv"), header=TRUE, stringsAsFactors=FALSE)
+        client.ts <- read.csv(file.path(procdir, "ts.csv"), header=TRUE, stringsAsFactors=FALSE)
+        usage.ts <- read.csv(file.path(procdir, "host-fg-usage-ts.csv"), header=TRUE, stringsAsFactors=FALSE)
+        #approvals$FG <- paste0(approvals$SrcDC, "_TO_", approvals$DstDC)
+
+        goodput.summed <- SumClientGoodput(client.ts)
+        goodput <- rbind(
+            goodput,
+            data.frame(
+                Sys=rep.int(sys_name, nrow(goodput.summed)),
+                GoodputGbps=goodput.summed$MeanBps / (2^30),
+                Kind=paste0(goodput.summed$Group, "/", goodput.summed$Instance)))
+
+        a2edge.hipri <- max(0, approvals$ApprovalBps[approvals$SrcDC == "A" & approvals$DstDC == "EDGE"]) / (2^30)
+        a2edge.lopri <- max(0, approvals$LOPRILimitBps[approvals$SrcDC == "A" & approvals$DstDC == "EDGE"]) / (2^30)
+
+        b2edge.hipri <- max(0, approvals$ApprovalBps[approvals$SrcDC == "B" & approvals$DstDC == "EDGE"]) / (2^30)
+        b2edge.lopri <- max(0, approvals$LOPRILimitBps[approvals$SrcDC == "B" & approvals$DstDC == "EDGE"]) / (2^30)
+
+        usage.ts <- usage.ts[grepl("(A|B)_TO_EDGE", usage.ts$FG),]
+
+        usage.ts$UsageGbps <- usage.ts$Usage / (2^30)
+        usage.summed <- aggregate(UsageGbps ~ UnixTime + FG + QoS,
+            FUN=sum,
+            data=usage.ts)
+
+        usage.summed$Overage <- rep.int(-1, nrow(usage.summed))
+
+        mask <- usage.summed$FG == "A_TO_EDGE" & usage.summed$QoS == "HIPRI"
+        usage.summed$Overage[mask] <-
+            pmax(0, usage.summed$UsageGbps[mask] - a2edge.hipri)
+
+        mask <- usage.summed$FG == "A_TO_EDGE" & usage.summed$QoS == "LOPRI"
+        usage.summed$Overage[mask] <-
+            pmax(0, usage.summed$UsageGbps[mask] - a2edge.lopri)
+
+        mask <- usage.summed$FG == "B_TO_EDGE" & usage.summed$QoS == "HIPRI"
+        usage.summed$Overage[mask] <-
+            pmax(0, usage.summed$UsageGbps[mask] - b2edge.hipri)
+
+        mask <- usage.summed$FG == "B_TO_EDGE" & usage.summed$QoS == "LOPRI"
+        usage.summed$Overage[mask] <-
+            pmax(0, usage.summed$UsageGbps[mask] - b2edge.lopri)
+
+        overage <- rbind(
+            overage,
+            data.frame(
+                Sys=rep.int(sys_name, nrow(usage.summed)),
+                FG=usage.summed$FG,
+                QoS=usage.summed$QoS,
+                OverageGbps=usage.summed$Overage))
+    }
+
+    write.csv(goodput, file.path(summarydir, paste0(cfgGroup, "-goodput.csv")), quote=FALSE, row.names=FALSE)
+    write.csv(overage, file.path(summarydir, paste0(cfgGroup, "-overage.csv")), quote=FALSE, row.names=FALSE)
+
+    for (kind in unique(goodput$Kind)) {
+        PlotGoodputTo(goodput[goodput$Kind == kind,], file.path(summarydir, paste0(cfgGroup, "-goodput-", gsub("/", "_", kind), ".pdf")))
+    }
+
+    for (fg in unique(overage$FG)) {
+        fgsubset <- overage[overage$FG == fg,]
+        for (qos in unique(fgsubset$QoS)) {
+            if (sum(fgsubset$Overage[fgsubset$QoS == qos]) > 0) {
+                PlotOverageTo(fgsubset[fgsubset$QoS == qos,], file.path(summarydir, paste0(cfgGroup, "-overage-", fg, "-", qos, ".pdf")))
+            }
         }
     }
 }
