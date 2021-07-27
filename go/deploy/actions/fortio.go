@@ -18,28 +18,28 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-type fortioGroup struct {
-	config    *pb.DeployedFortioGroup
-	proxies   []*pb.DeployedNode
-	instances map[string]*fortioInstance
+type FortioGroup struct {
+	Config    *pb.DeployedFortioGroup
+	Proxies   []*pb.DeployedNode
+	Instances map[string]*FortioInstance
 }
 
-func (g *fortioGroup) GetEnvoyYAML() string {
+func (g *FortioGroup) GetEnvoyYAML() string {
 	c := configgen.EnvoyReverseProxy{
-		Port:      int(g.config.GetEnvoyPort()),
-		AdminPort: int(g.config.GetEnvoyAdminPort()),
+		Port:      int(g.Config.GetEnvoyPort()),
+		AdminPort: int(g.Config.GetEnvoyAdminPort()),
 	}
-	for _, inst := range g.instances {
+	for _, inst := range g.Instances {
 		be := configgen.Backend{
-			Name:               inst.config.GetName(),
-			LBPolicy:           inst.config.GetLbPolicy(),
-			MaxConnections:     int(inst.config.GetMaxConnections()),
-			MaxPendingRequests: int(inst.config.GetMaxPendingRequests()),
-			MaxRequests:        int(inst.config.GetMaxRequests()),
-			Remotes:            make([]configgen.AddrAndPort, 0, len(inst.servers)*len(inst.config.GetServePorts())),
+			Name:               inst.Config.GetName(),
+			LBPolicy:           inst.Config.GetLbPolicy(),
+			MaxConnections:     int(inst.Config.GetMaxConnections()),
+			MaxPendingRequests: int(inst.Config.GetMaxPendingRequests()),
+			MaxRequests:        int(inst.Config.GetMaxRequests()),
+			Remotes:            make([]configgen.AddrAndPort, 0, len(inst.Servers)*len(inst.Config.GetServePorts())),
 		}
-		for _, port := range inst.config.GetServePorts() {
-			for _, s := range inst.servers {
+		for _, port := range inst.Config.GetServePorts() {
+			for _, s := range inst.Servers {
 				be.Remotes = append(be.Remotes,
 					configgen.AddrAndPort{
 						Addr: s.GetExperimentAddr(),
@@ -55,23 +55,23 @@ func (g *fortioGroup) GetEnvoyYAML() string {
 	return c.ToYAML()
 }
 
-type fortioInstance struct {
-	config  *pb.DeployedFortioInstance
-	servers []*pb.DeployedNode
-	clients []*pb.DeployedNode
+type FortioInstance struct {
+	Config  *pb.DeployedFortioInstance
+	Servers []*pb.DeployedNode
+	Clients []*pb.DeployedNode
 }
 
-func getAndValidateFortioGroups(c *pb.DeploymentConfig) (map[string]*fortioGroup, error) {
-	groups := make(map[string]*fortioGroup)
+func GetAndValidateFortioGroups(c *pb.DeploymentConfig) (map[string]*FortioGroup, error) {
+	groups := make(map[string]*FortioGroup)
 	for _, g := range c.GetFortioGroups() {
-		groups[g.GetName()] = &fortioGroup{
-			config:    g,
-			instances: make(map[string]*fortioInstance),
+		groups[g.GetName()] = &FortioGroup{
+			Config:    g,
+			Instances: make(map[string]*FortioInstance),
 		}
 	}
 	for _, inst := range c.GetFortioInstances() {
-		groups[inst.GetGroup()].instances[inst.GetName()] = &fortioInstance{
-			config: inst,
+		groups[inst.GetGroup()].Instances[inst.GetName()] = &FortioInstance{
+			Config: inst,
 		}
 	}
 
@@ -88,7 +88,7 @@ func getAndValidateFortioGroups(c *pb.DeploymentConfig) (map[string]*fortioGroup
 				if groups[g] == nil {
 					return nil, fmt.Errorf("role %q matches non-existent fortio group %q", origRole, g)
 				}
-				groups[g].proxies = append(groups[g].proxies, n)
+				groups[g].Proxies = append(groups[g].Proxies, n)
 			case strings.HasSuffix(role, "-server"):
 				fields := strings.Split(strings.TrimSuffix(role, "-server"), "-")
 				if len(fields) != 2 {
@@ -98,11 +98,11 @@ func getAndValidateFortioGroups(c *pb.DeploymentConfig) (map[string]*fortioGroup
 				if g == nil {
 					return nil, fmt.Errorf("role %q matches non-existent fortio group %q", origRole, fields[0])
 				}
-				inst := g.instances[fields[1]]
+				inst := g.Instances[fields[1]]
 				if inst == nil {
 					return nil, fmt.Errorf("role %q matches a non-existent fortio instance %q", origRole, fields[1])
 				}
-				inst.servers = append(inst.servers, n)
+				inst.Servers = append(inst.Servers, n)
 			case strings.HasSuffix(role, "-client"):
 				fields := strings.Split(strings.TrimSuffix(role, "-client"), "-")
 				if len(fields) != 2 {
@@ -112,11 +112,11 @@ func getAndValidateFortioGroups(c *pb.DeploymentConfig) (map[string]*fortioGroup
 				if g == nil {
 					return nil, fmt.Errorf("role %q matches non-existent fortio group %q", origRole, fields[0])
 				}
-				inst := g.instances[fields[1]]
+				inst := g.Instances[fields[1]]
 				if inst == nil {
 					return nil, fmt.Errorf("role %q matches a non-existent fortio instance %q", origRole, fields[1])
 				}
-				inst.clients = append(inst.clients, n)
+				inst.Clients = append(inst.Clients, n)
 			default:
 				return nil, fmt.Errorf("invalid fortio role %q", origRole)
 			}
@@ -125,15 +125,15 @@ func getAndValidateFortioGroups(c *pb.DeploymentConfig) (map[string]*fortioGroup
 
 	// validate that fields are populated
 	for _, g := range groups {
-		if len(g.proxies) == 0 {
-			return nil, fmt.Errorf("no proxies found for fortio group %q", g.config.GetName())
+		if len(g.Proxies) == 0 {
+			return nil, fmt.Errorf("no proxies found for fortio group %q", g.Config.GetName())
 		}
-		for _, inst := range g.instances {
-			if len(inst.servers) == 0 {
-				return nil, fmt.Errorf("no servers found for fortio instance %q/%q", g.config.GetName(), inst.config.GetName())
+		for _, inst := range g.Instances {
+			if len(inst.Servers) == 0 {
+				return nil, fmt.Errorf("no servers found for fortio instance %q/%q", g.Config.GetName(), inst.Config.GetName())
 			}
-			if len(inst.clients) == 0 {
-				return nil, fmt.Errorf("no clients found for fortio instance %q/%q", g.config.GetName(), inst.config.GetName())
+			if len(inst.Clients) == 0 {
+				return nil, fmt.Errorf("no clients found for fortio instance %q/%q", g.Config.GetName(), inst.Config.GetName())
 			}
 		}
 	}
@@ -145,7 +145,7 @@ func KillFortio(c *pb.DeploymentConfig) error {
 }
 
 func FortioStartServers(c *pb.DeploymentConfig, remoteTopdir, envoyLogLevel string) error {
-	groups, err := getAndValidateFortioGroups(c)
+	groups, err := GetAndValidateFortioGroups(c)
 	if err != nil {
 		return err
 	}
@@ -153,11 +153,11 @@ func FortioStartServers(c *pb.DeploymentConfig, remoteTopdir, envoyLogLevel stri
 	var eg multierrgroup.Group
 	for _, group := range groups {
 		group := group
-		for _, proxy := range group.proxies {
+		for _, proxy := range group.Proxies {
 			proxy := proxy
 			eg.Go(func() error {
 				configTar := writetar.ConcatInMem(writetar.Add(
-					"fortio-envoy-config-"+group.config.GetName()+".yaml",
+					"fortio-envoy-config-"+group.Config.GetName()+".yaml",
 					[]byte(group.GetEnvoyYAML()),
 				))
 
@@ -167,20 +167,20 @@ func FortioStartServers(c *pb.DeploymentConfig, remoteTopdir, envoyLogLevel stri
 					fmt.Sprintf(
 						"tar xf - -C %[1]s/configs;"+
 							"tmux kill-session -t fortio-%[2]s-proxy;"+
-							"tmux new-session -d -s fortio-%[2]s-proxy 'ulimit -Sn unlimited; %[1]s/aux/envoy --log-level %[3]s --concurrency %[4]d --config-path %[1]s/configs/fortio-envoy-config-%[2]s.yaml 2>&1 | tee %[1]s/logs/fortio-%[2]s-proxy.log; sleep 100000'", remoteTopdir, group.config.GetName(), envoyLogLevel, group.config.GetEnvoyNumThreads()))
+							"tmux new-session -d -s fortio-%[2]s-proxy 'ulimit -Sn unlimited; %[1]s/aux/envoy --log-level %[3]s --concurrency %[4]d --config-path %[1]s/configs/fortio-envoy-config-%[2]s.yaml 2>&1 | tee %[1]s/logs/fortio-%[2]s-proxy.log; sleep 100000'", remoteTopdir, group.Config.GetName(), envoyLogLevel, group.Config.GetEnvoyNumThreads()))
 				cmd.SetStdin("config.tar", bytes.NewReader(configTar))
 				err := cmd.Run()
 				if err != nil {
-					return fmt.Errorf("failed to start proxy for %q on Node %q: %w", group.config.GetName(), proxy.GetName(), err)
+					return fmt.Errorf("failed to start proxy for %q on Node %q: %w", group.Config.GetName(), proxy.GetName(), err)
 				}
 				return nil
 			})
 		}
 
-		for _, inst := range group.instances {
+		for _, inst := range group.Instances {
 			inst := inst
 			maxPayload := 102400
-			for _, sd := range inst.config.GetClient().GetSizeDist() {
+			for _, sd := range inst.Config.GetClient().GetSizeDist() {
 				if int(sd.GetRespSizeBytes()) > maxPayload {
 					maxPayload = int(sd.GetRespSizeBytes())
 				}
@@ -191,9 +191,9 @@ func FortioStartServers(c *pb.DeploymentConfig, remoteTopdir, envoyLogLevel stri
 			// needs some slack. Better to err high here.
 			maxPayload = maxPayload / 1000
 
-			for _, server := range inst.servers {
+			for _, server := range inst.Servers {
 				server := server
-				for _, port := range inst.config.GetServePorts() {
+				for _, port := range inst.Config.GetServePorts() {
 					port := port
 					eg.Go(func() error {
 						cmd := TracingCommand(
@@ -202,10 +202,10 @@ func FortioStartServers(c *pb.DeploymentConfig, remoteTopdir, envoyLogLevel stri
 							fmt.Sprintf(
 								"tmux kill-session -t fortio-%[2]s-%[3]s-server-port-%[4]d;"+
 									"tmux new-session -d -s fortio-%[2]s-%[3]s-server-port-%[4]d 'ulimit -Sn unlimited; env GOMAXPROCS=4 %[1]s/aux/fortio server -http-port %[4]d -maxpayloadsizekb %[5]d 2>&1 | tee %[1]s/logs/fortio-%[2]s-%[3]s-server-port-%[4]d.log; sleep 100000'",
-								remoteTopdir, inst.config.GetGroup(), inst.config.GetName(), port, maxPayload))
+								remoteTopdir, inst.Config.GetGroup(), inst.Config.GetName(), port, maxPayload))
 						err := cmd.Run()
 						if err != nil {
-							return fmt.Errorf("failed to start server for %q/%q on Node %q: %w", inst.config.GetGroup(), inst.config.GetName(), server.GetName(), err)
+							return fmt.Errorf("failed to start server for %q/%q on Node %q: %w", inst.Config.GetGroup(), inst.Config.GetName(), server.GetName(), err)
 						}
 						return nil
 					})
@@ -217,15 +217,15 @@ func FortioStartServers(c *pb.DeploymentConfig, remoteTopdir, envoyLogLevel stri
 }
 
 func FortioRunClients(c *pb.DeploymentConfig, remoteTopdir string, showOut bool, directDebug bool) error {
-	groups, err := getAndValidateFortioGroups(c)
+	groups, err := GetAndValidateFortioGroups(c)
 	if err != nil {
 		return err
 	}
 
 	clientNodes := make(map[string]bool)
 	for _, g := range groups {
-		for _, inst := range g.instances {
-			for _, client := range inst.clients {
+		for _, inst := range g.Instances {
+			for _, client := range inst.Clients {
 				clientNodes[client.GetExternalAddr()] = true
 			}
 		}
@@ -254,11 +254,11 @@ func FortioRunClients(c *pb.DeploymentConfig, remoteTopdir string, showOut bool,
 	var eg multierrgroup.Group
 	for _, group := range groups {
 		group := group
-		for _, inst := range group.instances {
+		for _, inst := range group.Instances {
 			inst := inst
 
-			clientConf := proto.Clone(inst.config.GetClient()).(*pb.FortioClientConfig)
-			numClients := int32(len(inst.clients))
+			clientConf := proto.Clone(inst.Config.GetClient()).(*pb.FortioClientConfig)
+			numClients := int32(len(inst.Clients))
 			clientConf.NumConns = proto.Int32((numClients + clientConf.GetNumConns()) / numClients)
 			for _, stage := range clientConf.WorkloadStages {
 				stage.TargetAverageBps = proto.Float64(stage.GetTargetAverageBps() / float64(numClients))
@@ -272,24 +272,24 @@ func FortioRunClients(c *pb.DeploymentConfig, remoteTopdir string, showOut bool,
 			var allAddrs []string
 			if directDebug {
 				// DEBUG MODE: contact servers directly
-				allAddrs = make([]string, 0, len(inst.servers)*len(inst.config.GetServePorts()))
-				for _, port := range inst.config.GetServePorts() {
-					for _, s := range inst.servers {
+				allAddrs = make([]string, 0, len(inst.Servers)*len(inst.Config.GetServePorts()))
+				for _, port := range inst.Config.GetServePorts() {
+					for _, s := range inst.Servers {
 						allAddrs = append(allAddrs, fmt.Sprintf("http://%s:%d/", s.GetExperimentAddr(), port))
 					}
 				}
 			} else {
 				// NORMAL MODE: contact envoy proxies
-				allAddrs = make([]string, len(group.proxies))
-				for i, s := range group.proxies {
+				allAddrs = make([]string, len(group.Proxies))
+				for i, s := range group.Proxies {
 					allAddrs[i] = fmt.Sprintf("http://%s:%d/service/%s",
-						s.GetExperimentAddr(), group.config.GetEnvoyPort(), inst.config.GetName())
+						s.GetExperimentAddr(), group.Config.GetEnvoyPort(), inst.Config.GetName())
 				}
 			}
 
 			allAddrsCSV := strings.Join(allAddrs, ",")
 
-			for i, client := range inst.clients {
+			for i, client := range inst.Clients {
 				i := i
 				client := client
 
@@ -298,14 +298,14 @@ func FortioRunClients(c *pb.DeploymentConfig, remoteTopdir string, showOut bool,
 						LogWithPrefix("fortio-run-clients: "),
 						"ssh", client.GetExternalAddr(),
 						fmt.Sprintf("cat > %[1]s/configs/fortio-client-config-%[2]s-%[3]s-%[5]d.textproto && "+
-							"env GOGC=500 %[1]s/aux/fortio-client -c %[1]s/configs/fortio-client-config-%[2]s-%[3]s-%[5]d.textproto -addrs %[4]s -out %[1]s/logs/fortio-%[2]s-%[3]s-client-%[5]d.out -summary %[1]s/logs/fortio-%[2]s-%[3]s-client-%[5]d.summary.json -start_time %[6]s 2>&1 | tee %[1]s/logs/fortio-%[2]s-%[3]s-client-%[5]d.log; exit ${PIPESTATUS[0]}", remoteTopdir, inst.config.GetGroup(), inst.config.GetName(), allAddrsCSV, i, startTimestamp))
-					cmd.SetStdin(fmt.Sprintf("fortio-client-config-%s-%s-%d.textproto", inst.config.GetGroup(), inst.config.GetName(), i), bytes.NewReader(clientConfBytes))
+							"env GOGC=500 %[1]s/aux/fortio-client -c %[1]s/configs/fortio-client-config-%[2]s-%[3]s-%[5]d.textproto -addrs %[4]s -out %[1]s/logs/fortio-%[2]s-%[3]s-client-%[5]d.out -summary %[1]s/logs/fortio-%[2]s-%[3]s-client-%[5]d.summary.json -start_time %[6]s 2>&1 | tee %[1]s/logs/fortio-%[2]s-%[3]s-client-%[5]d.log; exit ${PIPESTATUS[0]}", remoteTopdir, inst.Config.GetGroup(), inst.Config.GetName(), allAddrsCSV, i, startTimestamp))
+					cmd.SetStdin(fmt.Sprintf("fortio-client-config-%s-%s-%d.textproto", inst.Config.GetGroup(), inst.Config.GetName(), i), bytes.NewReader(clientConfBytes))
 					if showOut {
 						cmd.Stdout = os.Stdout
 					}
 					err := cmd.Run()
 					if err != nil {
-						return fmt.Errorf("instance %q/%q client %d on Node %q failed: %w", inst.config.GetGroup(), inst.config.GetName(), i, client.GetName(), err)
+						return fmt.Errorf("instance %q/%q client %d on Node %q failed: %w", inst.Config.GetGroup(), inst.Config.GetName(), i, client.GetName(), err)
 					}
 					return nil
 				})

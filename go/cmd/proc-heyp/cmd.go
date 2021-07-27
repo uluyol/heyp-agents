@@ -50,6 +50,7 @@ func main() {
 	subcommands.Register(new(testlopriMakeTimeseries), "testlopri")
 	subcommands.Register(new(fortioMakeLatencyCDFs), "fortio")
 	subcommands.Register(new(fortioMakeTimeseries), "fortio")
+	subcommands.Register(new(fortioDemandTraceCmd), "fortio")
 	subcommands.Register(new(alignInfosCmd), "")
 	subcommands.Register(new(alignHostStatsCmd), "")
 	subcommands.Register(new(clusterAllocBWStatsCmd), "")

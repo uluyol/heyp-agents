@@ -9,11 +9,13 @@ import (
 	"log"
 	"os"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/HdrHistogram/hdrhistogram-go"
 	"github.com/google/subcommands"
 	"github.com/uluyol/heyp-agents/go/cmd/flagtypes"
+	"github.com/uluyol/heyp-agents/go/deploy/actions"
 	"github.com/uluyol/heyp-agents/go/pb"
 	"github.com/uluyol/heyp-agents/go/proc"
 )
@@ -210,4 +212,180 @@ func findLat(rec *pb.StatsRecord, kind string) *pb.StatsRecord_LatencyStats {
 	}
 
 	return nil
+}
+
+type fortioDemandTraceCmd struct {
+	deployConfig string
+	output       string
+	prec         flagtypes.Duration
+}
+
+func (*fortioDemandTraceCmd) Name() string     { return "fortio-demand-trace" }
+func (*fortioDemandTraceCmd) Synopsis() string { return "" }
+func (c *fortioDemandTraceCmd) Usage() string  { return logsUsage(c) }
+
+func (c *fortioDemandTraceCmd) SetFlags(fs *flag.FlagSet) {
+	fs.StringVar(&c.output, "out", "fortio-demand-trace.csv", "output file")
+	fs.StringVar(&c.deployConfig, "deploy-config", "", "path to deployment configuration")
+	c.prec.D = time.Second
+	fs.Var(&c.prec, "prec", "precision of time measurements")
+}
+
+func (c *fortioDemandTraceCmd) Execute(ctx context.Context, fs *flag.FlagSet, args ...interface{}) subcommands.ExitStatus {
+	log.SetPrefix("fortio-demand-trace: ")
+
+	logsDir := mustLogsArg(fs)
+
+	deployC, err := proc.LoadDeploymentConfig(c.deployConfig)
+	if err != nil {
+		log.Fatalf("failed to read deployment config: %v", err)
+	}
+
+	fsys := os.DirFS(logsDir)
+
+	start, end, err := getStartEnd("fortio", fsys)
+	if err != nil {
+		log.Fatalf("failed to get start/end for workload \"fortio\": %v", err)
+	}
+
+	cumDurs := make([][]time.Duration, len(deployC.C.FortioInstances))
+	for i, inst := range deployC.C.FortioInstances {
+		cumDurs[i] = make([]time.Duration, len(inst.Client.WorkloadStages))
+		{
+			var dur time.Duration
+			for j, stage := range inst.Client.WorkloadStages {
+				d, err := time.ParseDuration(stage.GetRunDur())
+				if err != nil {
+					log.Fatalf("failed to parse stage run duration: %v", err)
+				}
+				dur += d
+				cumDurs[i][j] = dur
+			}
+		}
+	}
+
+	fortioGroups, err := actions.GetAndValidateFortioGroups(deployC.C)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	nodeCluster := make(map[string]string)
+	for _, c := range deployC.C.Clusters {
+		for _, node := range c.NodeNames {
+			nodeCluster[node] = c.GetName()
+		}
+	}
+
+	nodesCluster := func(nodes []*pb.DeployedNode) string {
+		if len(nodes) == 0 {
+			return ""
+		}
+		ret := nodeCluster[nodes[0].GetName()]
+		for _, n := range nodes[1:] {
+			if got := nodeCluster[n.GetName()]; got != ret {
+				log.Fatalf("nodes %v span multiple clusters (found %s and %s)", nodes, ret, got)
+			}
+		}
+		return ret
+	}
+
+	var (
+		instanceFG = make(map[[2]string]string)
+		fgIDMap    = make(map[string]int)
+		fgNames    []string
+	)
+
+	{
+		nextFGID := 1
+		for _, g := range fortioGroups {
+			dstCluster := nodesCluster(g.Proxies)
+			for _, inst := range g.Instances {
+				srcCluster := nodesCluster(inst.Servers)
+				fg := srcCluster + "_TO_" + dstCluster
+				instanceFG[[2]string{inst.Config.GetGroup(), inst.Config.GetName()}] = fg
+				if _, ok := fgIDMap[fg]; !ok {
+					fgNames = append(fgNames, fg)
+					fgIDMap[fg] = nextFGID
+					nextFGID++
+				}
+			}
+		}
+	}
+
+	fgID := func(fg string) int {
+		return fgIDMap[fg] - 1
+	}
+
+	fout, err := os.Create(c.output)
+	if err != nil {
+		log.Fatalf("failed to create output file: %v", err)
+	}
+	bout := bufio.NewWriter(fout)
+
+	if _, err := bout.WriteString("UnixTime,FG,Demand\n"); err != nil {
+		log.Fatalf("failed to write output file: %v", err)
+	}
+
+	fgDemands := make([]float64, len(fgIDMap))
+
+	now := start.Round(c.prec.D)
+	end = end.Add(500 * time.Millisecond)
+	for ; now.Before(end); now = now.Add(c.prec.D) {
+		for i := range fgDemands {
+			fgDemands[i] = 0
+		}
+		for i, inst := range deployC.C.FortioInstances {
+			stageFor := func(t time.Time) *pb.FortioClientConfig_WorkloadStage {
+				for j := 0; j < len(cumDurs[i])-1; j++ {
+					jPlusOneStart := start.Add(cumDurs[i][j+1])
+					if t.Before(jPlusOneStart) {
+						// we are in this stage
+						return inst.Client.WorkloadStages[j]
+					}
+				}
+				return inst.Client.WorkloadStages[len(inst.Client.WorkloadStages)-1]
+			}
+			stage := stageFor(now)
+			id := fgID(instanceFG[[2]string{inst.GetGroup(), inst.GetName()}])
+			fgDemands[id] += stage.GetTargetAverageBps()
+		}
+
+		for id, fg := range fgNames {
+			demand := fgDemands[id]
+			if _, err := bout.WriteString(strconv.FormatFloat(unixSec(now), 'f', -1, 64)); err != nil {
+				log.Fatalf("failed to write output file: %v", err)
+			}
+			if err := bout.WriteByte(','); err != nil {
+				log.Fatalf("failed to write output file: %v", err)
+			}
+			if _, err := bout.WriteString(fg); err != nil {
+				log.Fatalf("failed to write output file: %v", err)
+			}
+			if err := bout.WriteByte(','); err != nil {
+				log.Fatalf("failed to write output file: %v", err)
+			}
+			if _, err := bout.WriteString(strconv.FormatFloat(demand, 'f', -1, 64)); err != nil {
+				log.Fatalf("failed to write output file: %v", err)
+			}
+			if err := bout.WriteByte('\n'); err != nil {
+				log.Fatalf("failed to write output file: %v", err)
+			}
+		}
+	}
+
+	if err := bout.Flush(); err != nil {
+		log.Fatalf("failed to write output file: %v", err)
+	}
+
+	if err := fout.Close(); err != nil {
+		log.Fatalf("failed to write output file: %v", err)
+	}
+
+	return subcommands.ExitSuccess
+}
+
+func unixSec(t time.Time) float64 {
+	sec := float64(t.Unix())
+	ns := float64(t.Nanosecond())
+	return sec + (ns / 1e9)
 }
