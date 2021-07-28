@@ -94,36 +94,33 @@ class Runner {
       IpFamily family, absl::string_view iptables_cmd,
       absl::string_view iptables_save_cmd, absl::string_view iptables_restore_cmd);
 
-  virtual ~Runner() = default;
-
   // EnsureChain checks if the specified chain exists and, if not, creates it.
   // If the chain existed, return true.
-  virtual absl::StatusOr<bool> EnsureChain(Table table, Chain chain) = 0;
+  absl::StatusOr<bool> EnsureChain(Table table, Chain chain);
 
   // FlushChain clears the specified chain.  If the chain did not exist,
   // return error.
-  virtual absl::Status FlushChain(Table table, Chain chain) = 0;
+  absl::Status FlushChain(Table table, Chain chain);
 
   // DeleteChain deletes the specified chain.  If the chain did not exist,
   // return error.
-  virtual absl::Status DeleteChain(Table table, Chain chain) = 0;
+  absl::Status DeleteChain(Table table, Chain chain);
 
   // EnsureRule checks if the specified rule is present and, if not, creates
   // it.  If the rule existed, return true.
-  virtual absl::StatusOr<bool> EnsureRule(RulePosition position, Table table, Chain chain,
-                                          std::vector<std::string> args) = 0;
+  absl::StatusOr<bool> EnsureRule(RulePosition position, Table table, Chain chain,
+                                  std::vector<std::string> args);
 
   // DeleteRule checks if the specified rule is present and, if so, deletes
   // it.
-  virtual absl::Status DeleteRule(Table table, Chain chain,
-                                  std::vector<std::string> args) = 0;
+  absl::Status DeleteRule(Table table, Chain chain, std::vector<std::string> args);
 
   // Protocol returns the IP family this instance is managing,
-  virtual IpFamily ip_family() const = 0;
+  IpFamily ip_family() const;
 
   // SaveInto calls `iptables-save` for table and stores result in a given
   // buffer.
-  virtual absl::Status SaveInto(Table table, absl::Cord& buffer) = 0;
+  absl::Status SaveInto(Table table, absl::Cord& buffer);
 
   struct RestoreFlags {
     bool flush_tables = true;
@@ -135,11 +132,39 @@ class Runner {
   // data should be formatted like the output of SaveInto()
   // flush sets the presence of the "--noflush" flag. see: FlushFlag
   // counters sets the "--counters" flag. see: RestoreCountersFlag
-  virtual absl::Status Restore(Table table, const absl::Cord& data,
-                               RestoreFlags flags) = 0;
+  absl::Status Restore(Table table, const absl::Cord& data, RestoreFlags flags);
 
   // RestoreAll is the same as Restore except that no table is specified.
-  virtual absl::Status RestoreAll(const absl::Cord& data, RestoreFlags flags) = 0;
+  absl::Status RestoreAll(const absl::Cord& data, RestoreFlags flags);
+
+ private:
+  Runner(IpFamily family, absl::string_view iptables_cmd,
+         absl::string_view iptables_save_cmd, absl::string_view iptables_restore_cmd,
+         std::vector<std::string> wait_flag, std::vector<std::string> restore_wait_flag);
+
+  absl::Status RestoreInternal(std::vector<std::string> args, const absl::Cord& data,
+                               RestoreFlags flags);
+
+  const IpFamily family_;
+  const std::string iptables_cmd_;
+  const std::string iptables_save_cmd_;
+  const std::string iptables_restore_cmd_;
+  const bool has_check_;
+  std::vector<std::string> wait_flag_;
+  std::vector<std::string> restore_wait_flag_;
+
+  absl::Mutex mu_;
+
+  absl::StatusOr<std::string> Run(Operation op, const std::vector<std::string>& args,
+                                  int* exit_status = nullptr)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mu_);
+
+  absl::StatusOr<bool> CheckRule(Table table, Chain chain,
+                                 const std::vector<std::string>& args)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mu_);
+
+  absl::StatusOr<bool> CheckRuleUsingCheck(std::vector<std::string> args)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mu_);
 };
 
 }  // namespace iptables
