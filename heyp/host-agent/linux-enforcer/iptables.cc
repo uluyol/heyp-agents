@@ -20,14 +20,8 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
 #include "absl/synchronization/mutex.h"
-#include "boost/process/args.hpp"
-#include "boost/process/child.hpp"
-#include "boost/process/io.hpp"
-#include "boost/process/pipe.hpp"
-#include "boost/process/search_path.hpp"
+#include "heyp/io/subprocess.h"
 #include "heyp/log/logging.h"
-
-namespace bp = boost::process;
 
 namespace heyp {
 namespace iptables {
@@ -265,29 +259,12 @@ absl::StatusOr<std::string> RunnerImpl::Run(Operation op,
   for (const std::string& arg : args) {
     full_args.push_back(arg);
   }
-  VLOG(2) << "running iptables: " << iptables_cmd_ << " "
-          << absl::StrJoin(full_args, " ");
 
-  try {
-    bp::ipstream out_stream;
-    bp::child c(bp::search_path(iptables_cmd_), bp::args(full_args),
-                bp::std_out > out_stream, bp::std_err > out_stream);
-
-    std::string out;
-    std::copy(std::istreambuf_iterator<char>(out_stream), {}, std::back_inserter(out));
-
-    c.wait();
-    if (exit_status != nullptr) {
-      *exit_status = c.exit_code();
-    } else if (c.exit_code() != 0) {
-      return absl::InternalError(absl::StrCat("iptables exit status ", c.exit_code()));
-    }
-
-    return out;
-  } catch (const std::system_error& e) {
-    return absl::InternalError(
-        absl::StrCat("failed to run iptables subprocess: ", e.what()));
+  auto result = RunSubprocess(iptables_cmd_, full_args);
+  if (!result.ok()) {
+    return result.ErrorWhenRunning("iptables");
   }
+  return std::string(result.out);
 }
 
 absl::StatusOr<bool> RunnerImpl::EnsureChain(Table table, Chain chain) {
@@ -401,44 +378,13 @@ absl::Status RunnerImpl::SaveInto(Table table, absl::Cord& buffer) {
   std::vector<std::string> args{"-t", std::string(ToString(table))};
 
   absl::MutexLock lock(&mu_);
-  VLOG(2) << "running iptables save: " << iptables_save_cmd_ << " "
-          << absl::StrJoin(args, " ");
-
-  try {
-    bp::ipstream out_stream;
-    bp::child c(bp::search_path(iptables_save_cmd_), bp::args(args),
-                bp::std_out > out_stream, bp::std_err > stderr);
-
-    {
-      constexpr size_t kChunkSize = 4096;
-      char* chunk = nullptr;
-      while (true) {
-        chunk = new char[kChunkSize];
-        if (!out_stream.read(chunk, kChunkSize)) {
-          break;
-        }
-        buffer.Append(
-            absl::MakeCordFromExternal(absl::string_view(chunk, kChunkSize),
-                                       [](absl::string_view v) { delete &v[0]; }));
-      }
-      buffer.Append(
-          absl::MakeCordFromExternal(absl::string_view(chunk, out_stream.gcount()),
-                                     [](absl::string_view v) { delete &v[0]; }));
-      if (out_stream.bad()) {
-        return absl::UnknownError("i/o error reading process output");
-      }
-    }
-
-    c.wait();
-    if (c.exit_code() != 0) {
-      return absl::InternalError(
-          absl::StrCat("iptables save exit status ", c.exit_code()));
-    }
-    return absl::OkStatus();
-  } catch (const std::system_error& e) {
-    return absl::InternalError(
-        absl::StrCat("failed to run iptables subprocess: ", e.what()));
+  auto result = RunSubprocess(iptables_save_cmd_, args);
+  if (!result.ok()) {
+    return result.ErrorWhenRunning("iptables save");
   }
+
+  buffer = result.out;
+  return absl::OkStatus();
 }
 
 absl::Status RunnerImpl::Restore(Table table, const absl::Cord& data,
@@ -465,31 +411,17 @@ absl::Status RunnerImpl::RestoreInternal(std::vector<std::string> args,
   }
 
   absl::MutexLock lock(&mu_);
-  VLOG(2) << "running iptables restore: " << iptables_restore_cmd_ << " "
-          << absl::StrJoin(full_args, " ");
 
   CHECK(!restore_wait_flag_.empty())
       << "support for older iptables-restore not implemented";
 
-  try {
-    bp::opstream input_stream;
-    bp::child c(bp::search_path(iptables_restore_cmd_), bp::args(full_args),
-                bp::std_out > stdout, bp::std_err > stderr, bp::std_in < input_stream);
-
-    input_stream << data;
-    input_stream.flush();
-    input_stream.pipe().close();
-
-    c.wait();
-    if (c.exit_code() != 0) {
-      return absl::InternalError(
-          absl::StrCat("iptables restore exit status ", c.exit_code()));
+  auto result = RunSubprocess(iptables_restore_cmd_, full_args, data);
+  if (!result.ok()) {
+    if (!result.ok()) {
+      return result.ErrorWhenRunning("iptables restore");
     }
-    return absl::OkStatus();
-  } catch (const std::system_error& e) {
-    return absl::InternalError(
-        absl::StrCat("failed to run iptables restore subprocess: ", e.what()));
   }
+  return absl::OkStatus();
 }
 
 }  // namespace iptables

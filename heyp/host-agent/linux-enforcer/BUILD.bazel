@@ -45,8 +45,8 @@ cc_library(
     srcs = ["iptables.cc"],
     hdrs = ["iptables.h"],
     deps = [
+        "//heyp/io:subprocess",
         "//heyp/log",
-        "@boost//:process",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
         "@com_google_absl//absl/strings",
@@ -82,9 +82,9 @@ cc_library(
     srcs = ["tc-caller.cc"],
     hdrs = ["tc-caller.h"],
     deps = [
+        "//heyp/io:subprocess",
         "//heyp/log",
         "//third_party/simdjson",
-        "@boost//:process",
         "@com_google_absl//absl/status",
     ],
 )
