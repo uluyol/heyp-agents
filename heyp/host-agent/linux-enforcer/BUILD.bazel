@@ -9,9 +9,9 @@ cc_library(
         "//heyp/host-agent:__subpackages__",
     ],
     deps = [
+        "//heyp/io:subprocess",
         "//heyp/log",
         "//third_party/simdjson",
-        "@boost//:process",
         "@com_google_absl//absl/container:flat_hash_set",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
