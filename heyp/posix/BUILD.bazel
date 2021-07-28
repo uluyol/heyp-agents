@@ -1,4 +1,4 @@
-load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
 
 package(
     default_visibility = ["//heyp:__subpackages__"],
@@ -10,10 +10,33 @@ cc_library(
 )
 
 cc_library(
+    name = "pidfile",
+    srcs = ["pidfile.cc"],
+    hdrs = ["pidfile.h"],
+    deps = [
+        ":strerror",
+        "//heyp/io:file",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_library(
     name = "strerror",
     srcs = ["strerror.cc"],
     hdrs = ["strerror.h"],
     deps = [
         "//third_party/chromium:safe_strerror",
+    ],
+)
+
+cc_test(
+    name = "pidfile_test",
+    srcs = ["pidfile_test.cc"],
+    deps = [
+        ":pidfile",
+        "//heyp/io:file",
+        "@com_google_absl//absl/status",
+        "@com_google_absl//absl/strings",
     ],
 )
