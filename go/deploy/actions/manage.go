@@ -299,6 +299,24 @@ func KillSessions(c *pb.DeploymentConfig, sessionRegexp string) error {
 	return eg.Wait()
 }
 
+func StopSessions(c *pb.DeploymentConfig, sessionRegexp string) error {
+	var eg multierrgroup.Group
+	for _, n := range c.GetNodes() {
+		n := n
+		eg.Go(func() error {
+			cmd := TracingCommand(
+				LogWithPrefix("stop-sessions: "),
+				"ssh", n.GetExternalAddr(),
+				fmt.Sprintf("sessions=($(tmux ls -F '#{session_name}' | egrep '%s')); for s in \"${sessions[@]}\"; do tmux send-keys -t $s C-c || exit 1; done", sessionRegexp))
+			if out, err := cmd.CombinedOutput(); err != nil {
+				return fmt.Errorf("failed to query+stop session on %s: %w; out:\n%s", n.GetName(), err, out)
+			}
+			return nil
+		})
+	}
+	return eg.Wait()
+}
+
 func StartCollectingHostStats(c *pb.DeploymentConfig, remoteTopdir string) error {
 	var eg multierrgroup.Group
 	for _, n := range c.GetNodes() {
@@ -440,6 +458,10 @@ func FetchData(c *pb.DeploymentConfig, remoteTopdir, outdirPath string) error {
 
 func KillHEYP(c *pb.DeploymentConfig) error {
 	return KillSessions(c, "^heyp-.*-agent")
+}
+
+func StopHEYP(c *pb.DeploymentConfig) error {
+	return StopSessions(c, "^heyp-.*-agent")
 }
 
 func DeleteLogs(c *pb.DeploymentConfig, remoteTopdir string) error {

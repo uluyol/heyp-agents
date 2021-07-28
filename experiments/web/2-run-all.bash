@@ -22,6 +22,11 @@ run_one() {
   local c=$1
   local o=$2
 
+  if [[ -f "$o/done" ]]; then
+    echo "already have $o/done; skipping..."
+    return 0
+  fi
+
   echo kill existing daemons
   local dpids=""
   bin/deploy-heyp kill-fortio -c $c &
@@ -44,8 +49,16 @@ run_one() {
   bin/deploy-heyp collect-host-stats -c $c || return 1
   echo run fortio clients
   bin/deploy-heyp fortio-run-clients -c $c || return 1
-  echo stop collecting host stats
-  bin/deploy-heyp collect-host-stats -c $c -stop || return 1
+  echo stop heyp agents and host stat collection
+  dpids=""
+  bin/deploy-heyp collect-host-stats -c $c -stop &
+  dpids="$dpids $!"
+  bin/deploy-heyp stop-heyp-agents -c $c & # graceful shutdown
+  dpids="$dpids $!"
+
+  wait_all $dpids || return 1
+
+  sleep 3
 
   local did_fetch=0
   local try=1
@@ -60,6 +73,8 @@ run_one() {
   if ((did_fetch == 0)); then
     return 1
   fi
+
+  touch "$o/done"
   return 0
 }
 

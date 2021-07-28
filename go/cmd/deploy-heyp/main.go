@@ -142,6 +142,12 @@ var killIPerfCmd = &configCmd{
 	exec:     actions.KillIPerf,
 }
 
+var stopHEYPCmd = &configCmd{
+	name:     "stop-heyp-agents",
+	synopsis: "gracefully stop all HEYP agents",
+	exec:     actions.StopHEYP,
+}
+
 var deleteLogsCmd = &configAndRemDirCmd{
 	name:     "delete-logs",
 	synopsis: "delete all remote logs used in experiments",
@@ -580,6 +586,7 @@ func main() {
 	subcommands.Register(new(updateConfigCmd), "")
 	subcommands.Register(new(collectHostStatsCmd), "")
 	subcommands.Register(killHEYPCmd, "")
+	subcommands.Register(stopHEYPCmd, "")
 	subcommands.Register(deleteLogsCmd, "")
 	subcommands.Register(new(genConfigsCmd), "")
 
