@@ -16,6 +16,7 @@ type alignClusterAllocLogsCmd struct {
 	output   string
 	workload startEndWorkloadFlag
 	prec     flagtypes.Duration
+	debug    bool
 }
 
 func (*alignClusterAllocLogsCmd) Name() string    { return "align-cluster-alloc-logs" }
@@ -30,6 +31,7 @@ func (c *alignClusterAllocLogsCmd) SetFlags(fs *flag.FlagSet) {
 	wlFlag(&c.workload, fs)
 	c.prec.D = 1 * time.Second
 	fs.Var(&c.prec, "prec", "precision of time measurements")
+	fs.BoolVar(&c.debug, "debug", false, "debug timeseries alignment")
 }
 
 func (c *alignClusterAllocLogsCmd) Execute(ctx context.Context, fs *flag.FlagSet, args ...interface{}) subcommands.ExitStatus {
@@ -42,7 +44,7 @@ func (c *alignClusterAllocLogsCmd) Execute(ctx context.Context, fs *flag.FlagSet
 		log.Fatalf("failed to get start/end for workload %q: %v", c.workload, err)
 	}
 
-	err = proc.AlignDebugClusterLogs(fsys, c.output, start, end, c.prec.D)
+	err = proc.AlignDebugClusterLogs(fsys, c.output, start, end, c.prec.D, c.debug)
 	if err != nil {
 		log.Fatal(err)
 	}

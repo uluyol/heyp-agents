@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"time"
 
 	"github.com/uluyol/heyp-agents/go/pb"
@@ -35,15 +36,17 @@ type TSBatchReader interface {
 type TSMerger struct {
 	precision time.Duration
 	readers   []TSBatchReader
+	debug     bool
 
 	cur []tsBatch
 	err error
 }
 
-func NewTSMerger(precision time.Duration, r []TSBatchReader) *TSMerger {
+func NewTSMerger(precision time.Duration, r []TSBatchReader, debug bool) *TSMerger {
 	m := &TSMerger{
 		precision: precision,
 		readers:   r,
+		debug:     debug,
 		cur:       make([]tsBatch, len(r)),
 	}
 	return m
@@ -81,6 +84,9 @@ func (m *TSMerger) Next(gotTime *time.Time, data []interface{}) bool {
 				m.read(i)
 			}
 			if m.err != nil || m.cur[i].i >= m.cur[i].num {
+				if m.debug {
+					log.Printf("TSMerger.Next: reader %v was the first to end", m.readers[i])
+				}
 				return false
 			}
 		}
@@ -130,6 +136,7 @@ type bundleOrError struct {
 }
 
 type InfoBundleReader struct {
+	src string
 	c   <-chan bundleOrError
 	err error
 }
@@ -149,10 +156,10 @@ func runReader(r *ProtoJSONRecReader, c chan<- bundleOrError) {
 	}
 }
 
-func NewInfoBundleReader(r io.Reader) TSBatchReader {
+func NewInfoBundleReader(src string, r io.Reader) TSBatchReader {
 	c := make(chan bundleOrError, 64)
 	go runReader(NewProtoJSONRecReader(r), c)
-	return &InfoBundleReader{c: c}
+	return &InfoBundleReader{src: src, c: c}
 }
 
 func (r *InfoBundleReader) Read(times []time.Time, data []interface{}) (int, error) {

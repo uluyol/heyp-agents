@@ -344,7 +344,7 @@ func PrintDebugClusterQoSLifetime(fsys fs.FS, outfile string, start, end time.Ti
 	return err
 }
 
-func AlignDebugClusterLogs(fsys fs.FS, outfile string, start, end time.Time, prec time.Duration) error {
+func AlignDebugClusterLogs(fsys fs.FS, outfile string, start, end time.Time, prec time.Duration, debug bool) error {
 	logs, err := regGlobFiles(fsys, clusterAllocLogsRegex)
 	if err != nil {
 		return fmt.Errorf("failed to find cluster alloc logs: %w", err)
@@ -365,16 +365,25 @@ func AlignDebugClusterLogs(fsys fs.FS, outfile string, start, end time.Time, pre
 		}
 	}
 
-	return AlignProto(fsys, inputs, NewDebugAllocRecordReader, outfile, start, end, prec)
+	return AlignProto(AlignArgs{
+		FS:     fsys,
+		Inputs: inputs,
+		Output: outfile,
+		Start:  start,
+		End:    end,
+		Prec:   prec,
+		Debug:  debug,
+	}, NewDebugAllocRecordReader)
 }
 
 type DebugAllocRecordReader struct {
+	src string
 	r   *ProtoJSONRecReader
 	err error
 }
 
-func NewDebugAllocRecordReader(r io.Reader) TSBatchReader {
-	return &DebugAllocRecordReader{r: NewProtoJSONRecReader(r)}
+func NewDebugAllocRecordReader(src string, r io.Reader) TSBatchReader {
+	return &DebugAllocRecordReader{src: src, r: NewProtoJSONRecReader(r)}
 }
 
 func (r *DebugAllocRecordReader) Read(times []time.Time, data []interface{}) (int, error) {

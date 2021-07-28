@@ -118,7 +118,7 @@ func TestTSMerger(t *testing.T) {
 		for ri := range readers {
 			readers[ri] = &simpleTSReader{Data: tc.inputs[ri]}
 		}
-		merger := NewTSMerger(tc.prec, readers)
+		merger := NewTSMerger(tc.prec, readers, false)
 		var result []mergedEntry
 		var tstamp time.Time
 		data := make([]interface{}, len(readers))

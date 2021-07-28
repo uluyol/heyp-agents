@@ -52,6 +52,7 @@ type alignInfosCmd struct {
 	output   string
 	workload startEndWorkloadFlag
 	prec     flagtypes.Duration
+	debug    bool
 }
 
 func (*alignInfosCmd) Name() string    { return "align-infos" }
@@ -66,6 +67,7 @@ func (c *alignInfosCmd) SetFlags(fs *flag.FlagSet) {
 	wlFlag(&c.workload, fs)
 	c.prec.D = 50 * time.Millisecond
 	fs.Var(&c.prec, "prec", "precision of time measurements")
+	fs.BoolVar(&c.debug, "debug", false, "debug timeseries alignment")
 }
 
 func (c *alignInfosCmd) Execute(ctx context.Context, fs *flag.FlagSet, args ...interface{}) subcommands.ExitStatus {
@@ -81,7 +83,15 @@ func (c *alignInfosCmd) Execute(ctx context.Context, fs *flag.FlagSet, args ...i
 		log.Fatalf("failed to find host stats: %v", err)
 	}
 
-	err = proc.AlignProto(os.DirFS(logsDir), toAlign, proc.NewInfoBundleReader, c.output, start, end, c.prec.D)
+	err = proc.AlignProto(proc.AlignArgs{
+		FS:     os.DirFS(logsDir),
+		Inputs: toAlign,
+		Output: c.output,
+		Start:  start,
+		End:    end,
+		Prec:   c.prec.D,
+		Debug:  c.debug,
+	}, proc.NewInfoBundleReader)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -96,6 +106,7 @@ type alignHostStatsCmd struct {
 	workload startEndWorkloadFlag
 	prec     flagtypes.Duration
 	diff     bool
+	debug    bool
 }
 
 func (*alignHostStatsCmd) Name() string    { return "align-host-stats" }
@@ -113,6 +124,7 @@ func (c *alignHostStatsCmd) SetFlags(fs *flag.FlagSet) {
 	c.prec.D = 50 * time.Millisecond
 	fs.Var(&c.prec, "prec", "precision of time measurements")
 	fs.BoolVar(&c.diff, "diff", false, "compute diffs instead of cumulative counters")
+	fs.BoolVar(&c.debug, "debug", false, "debug timeseries alignment")
 }
 
 func (c *alignHostStatsCmd) Execute(ctx context.Context, fs *flag.FlagSet, args ...interface{}) subcommands.ExitStatus {
@@ -151,7 +163,15 @@ func (c *alignHostStatsCmd) Execute(ctx context.Context, fs *flag.FlagSet, args 
 		processRec = accum.RecordFrom
 	}
 
-	err = proc.AlignHostStats(os.DirFS(logsDir), toAlign, mkReader, c.output, processRec, start, end, c.prec.D)
+	err = proc.AlignHostStats(proc.AlignArgs{
+		FS:     os.DirFS(logsDir),
+		Inputs: toAlign,
+		Output: c.output,
+		Start:  start,
+		End:    end,
+		Prec:   c.prec.D,
+		Debug:  c.debug,
+	}, mkReader, processRec)
 	if err != nil {
 		log.Fatal(err)
 	}

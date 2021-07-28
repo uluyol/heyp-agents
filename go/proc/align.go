@@ -45,11 +45,9 @@ func (r *alignedRec) Reset() {
 	}
 }
 
-func AlignProto(fsys fs.FS, inputs []ToAlign, mkReader func(io.Reader) TSBatchReader, output string,
-	start, end time.Time, prec time.Duration) error {
-
-	files := make([]fs.File, len(inputs))
-	readers := make([]TSBatchReader, len(inputs))
+func AlignProto(args AlignArgs, mkReader func(string, io.Reader) TSBatchReader) error {
+	files := make([]fs.File, len(args.Inputs))
+	readers := make([]TSBatchReader, len(args.Inputs))
 	defer func() {
 		for _, f := range files {
 			if f != nil {
@@ -57,40 +55,40 @@ func AlignProto(fsys fs.FS, inputs []ToAlign, mkReader func(io.Reader) TSBatchRe
 			}
 		}
 	}()
-	for i, arg := range inputs {
+	for i, arg := range args.Inputs {
 		var err error
-		files[i], err = fsys.Open(arg.Path)
+		files[i], err = args.FS.Open(arg.Path)
 		if err != nil {
 			return fmt.Errorf("failed to open input %s: %w", arg.Name, err)
 		}
-		readers[i] = mkReader(files[i])
+		readers[i] = mkReader(arg.Path, files[i])
 	}
 
-	fout, err := os.Create(output)
+	fout, err := os.Create(args.Output)
 	if err != nil {
 		return fmt.Errorf("failed to create output: %w", err)
 	}
 	defer fout.Close()
 
-	merger := NewTSMerger(prec, readers)
+	merger := NewTSMerger(args.Prec, readers, args.Debug)
 	var tstamp time.Time
 	data := make([]interface{}, len(files))
 
 	var rec alignedRec
 	for merger.Next(&tstamp, data) {
-		if tstamp.Before(start) {
+		if tstamp.Before(args.Start) {
 			continue
 		}
-		if end.Before(tstamp) {
+		if args.End.Before(tstamp) {
 			break
 		}
 
 		rec.Reset()
 		rec.UnixSec = unixSec(tstamp)
 
-		_ = data[len(inputs)-1]
+		_ = data[len(args.Inputs)-1]
 		for i := range data {
-			rec.Data[inputs[i].Name] = protoMesg{data[i].(proto.Message)}
+			rec.Data[args.Inputs[i].Name] = protoMesg{data[i].(proto.Message)}
 		}
 		buf, err := json.Marshal(&rec)
 		if err != nil {
@@ -126,12 +124,19 @@ func (r *AlignedHostStatsRec) Reset() {
 	}
 }
 
-// processRec cannot own the input rec.
-func AlignHostStats(fsys fs.FS, inputs []ToAlign, mkReader func(io.Reader) TSBatchReader, output string, processRec func(*AlignedHostStatsRec),
-	start, end time.Time, prec time.Duration) error {
+type AlignArgs struct {
+	FS         fs.FS
+	Inputs     []ToAlign
+	Output     string
+	Start, End time.Time
+	Prec       time.Duration
+	Debug      bool
+}
 
-	files := make([]fs.File, len(inputs))
-	readers := make([]TSBatchReader, len(inputs))
+// processRec cannot own the input rec.
+func AlignHostStats(args AlignArgs, mkReader func(io.Reader) TSBatchReader, processRec func(*AlignedHostStatsRec)) error {
+	files := make([]fs.File, len(args.Inputs))
+	readers := make([]TSBatchReader, len(args.Inputs))
 	defer func() {
 		for _, f := range files {
 			if f != nil {
@@ -139,40 +144,40 @@ func AlignHostStats(fsys fs.FS, inputs []ToAlign, mkReader func(io.Reader) TSBat
 			}
 		}
 	}()
-	for i, arg := range inputs {
+	for i, arg := range args.Inputs {
 		var err error
-		files[i], err = fsys.Open(arg.Path)
+		files[i], err = args.FS.Open(arg.Path)
 		if err != nil {
 			return fmt.Errorf("failed to open input %s: %w", arg.Name, err)
 		}
 		readers[i] = mkReader(files[i])
 	}
 
-	fout, err := os.Create(output)
+	fout, err := os.Create(args.Output)
 	if err != nil {
 		return fmt.Errorf("failed to create output: %w", err)
 	}
 	defer fout.Close()
 
-	merger := NewTSMerger(prec, readers)
+	merger := NewTSMerger(args.Prec, readers, args.Debug)
 	var tstamp time.Time
 	data := make([]interface{}, len(files))
 
 	var rec AlignedHostStatsRec
 	for merger.Next(&tstamp, data) {
-		if tstamp.Before(start) {
+		if tstamp.Before(args.Start) {
 			continue
 		}
-		if end.Before(tstamp) {
+		if args.End.Before(tstamp) {
 			break
 		}
 
 		rec.Reset()
 		rec.UnixSec = unixSec(tstamp)
 
-		_ = data[len(inputs)-1]
+		_ = data[len(args.Inputs)-1]
 		for i := range data {
-			rec.Data[inputs[i].Name] = data[i].(*stats.HostStats)
+			rec.Data[args.Inputs[i].Name] = data[i].(*stats.HostStats)
 		}
 		buf, err := json.Marshal(&rec)
 		if err != nil {
@@ -212,13 +217,11 @@ func (r *AlignedEnforcerLogs) Reset() {
 }
 
 // processRec cannot own the input rec.
-func AlignHostEnforcerLogs(fsys fs.FS, inputs []ToAlign, output string,
-	hostDC, nodeIP map[string]string, start, end time.Time, prec time.Duration) error {
-
-	readers := make([]TSBatchReader, len(inputs))
-	for i, arg := range inputs {
+func AlignHostEnforcerLogs(args AlignArgs, hostDC, nodeIP map[string]string) error {
+	readers := make([]TSBatchReader, len(args.Inputs))
+	for i, arg := range args.Inputs {
 		var err error
-		logDirFS, err := fs.Sub(fsys, arg.Path)
+		logDirFS, err := fs.Sub(args.FS, arg.Path)
 		if err != nil {
 			return fmt.Errorf("failed to open input %q: %w", arg.Path, err)
 		}
@@ -229,31 +232,31 @@ func AlignHostEnforcerLogs(fsys fs.FS, inputs []ToAlign, output string,
 		}
 	}
 
-	fout, err := os.Create(output)
+	fout, err := os.Create(args.Output)
 	if err != nil {
 		return fmt.Errorf("failed to create output: %w", err)
 	}
 	defer fout.Close()
 
-	merger := NewTSMerger(prec, readers)
+	merger := NewTSMerger(args.Prec, readers, args.Debug)
 	var tstamp time.Time
 	data := make([]interface{}, len(readers))
 
 	var rec AlignedEnforcerLogs
 	for merger.Next(&tstamp, data) {
-		if tstamp.Before(start) {
+		if tstamp.Before(args.Start) {
 			continue
 		}
-		if end.Before(tstamp) {
+		if args.End.Before(tstamp) {
 			break
 		}
 
 		rec.Reset()
 		rec.UnixSec = unixSec(tstamp)
 
-		_ = data[len(inputs)-1]
+		_ = data[len(args.Inputs)-1]
 		for i := range data {
-			rec.Data[inputs[i].Name] = data[i].(*logs.HostEnforcerLogEntry)
+			rec.Data[args.Inputs[i].Name] = data[i].(*logs.HostEnforcerLogEntry)
 		}
 		buf, err := json.Marshal(&rec)
 		if err != nil {

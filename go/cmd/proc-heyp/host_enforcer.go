@@ -17,6 +17,7 @@ type hostEnforcerLogsCmd struct {
 	output       string
 	workload     startEndWorkloadFlag
 	prec         flagtypes.Duration
+	debug        bool
 }
 
 func (*hostEnforcerLogsCmd) Name() string    { return "host-enforcer-logs" }
@@ -32,6 +33,7 @@ func (c *hostEnforcerLogsCmd) SetFlags(fs *flag.FlagSet) {
 	fs.StringVar(&c.deployConfig, "deploy-config", "", "path to deployment configuration")
 	c.prec.D = time.Second
 	fs.Var(&c.prec, "prec", "precision of time measurements")
+	fs.BoolVar(&c.debug, "debug", false, "debug timeseries alignment")
 }
 
 func (c *hostEnforcerLogsCmd) Execute(ctx context.Context, fs *flag.FlagSet, args ...interface{}) subcommands.ExitStatus {
@@ -69,7 +71,15 @@ func (c *hostEnforcerLogsCmd) Execute(ctx context.Context, fs *flag.FlagSet, arg
 		}
 	}
 
-	err = proc.AlignHostEnforcerLogs(fsys, toAlign, c.output, hostDC, nodeIP, start, end, c.prec.D)
+	err = proc.AlignHostEnforcerLogs(proc.AlignArgs{
+		FS:     fsys,
+		Inputs: toAlign,
+		Output: c.output,
+		Start:  start,
+		End:    end,
+		Prec:   c.prec.D,
+		Debug:  c.debug,
+	}, hostDC, nodeIP)
 	if err != nil {
 		log.Fatal(err)
 	}
