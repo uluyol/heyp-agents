@@ -11,7 +11,10 @@ NdjsonLogger::NdjsonLogger(FILE* out) : out_(out) {}
 NdjsonLogger::~NdjsonLogger() {
   if (out_ != nullptr) {
     LOG(WARNING) << "NdjsonLogger: should call close";
-    fclose(out_);
+    int ret = fclose(out_);
+    if (ret != 0) {
+      LOG(WARNING) << "NdjsonLogger: failed to close output file";
+    }
   }
 }
 
