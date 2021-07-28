@@ -103,27 +103,47 @@ func (r *HostEnforcerLogReader) ReadOne(e *HostEnforcerLogEntry) bool {
 
 	f, err := r.dir.Open(r.remaining[0] + "-iptables:mangle")
 	if err != nil {
-		r.err = fmt.Errorf("failed to open iptables 'mangle' table dump at time %s: %w", r.remaining[0], err)
+		if len(r.remaining) == 1 {
+			// we may be missing iptables or tc data for the last record, ignore this
+			r.remaining = r.remaining[1:]
+		} else {
+			r.err = fmt.Errorf("failed to open iptables 'mangle' table dump at time %s: %w\nremaining: %v", r.remaining[0], err, r.remaining[1:])
+		}
 		return false
 	}
 	ipt, err := ReadIPTablesEnforcementRules(f)
 	f.Close()
 
 	if err != nil {
-		r.err = fmt.Errorf("failed to read iptables 'mangle' table dump at time %s: %w", r.remaining[0], err)
+		if len(r.remaining) == 1 {
+			// we may be missing iptables or tc data for the last record, ignore this
+			r.remaining = r.remaining[1:]
+		} else {
+			r.err = fmt.Errorf("failed to read iptables 'mangle' table dump at time %s: %w\nremaining: %v", r.remaining[0], err, r.remaining[1:])
+		}
 		return false
 	}
 
 	f, err = r.dir.Open(r.remaining[0] + "-tc:class")
 	if err != nil {
-		r.err = fmt.Errorf("failed to open htb classes dump at time %s: %w", r.remaining[0], err)
+		if len(r.remaining) == 1 {
+			// we may be missing iptables or tc data for the last record, ignore this
+			r.remaining = r.remaining[1:]
+		} else {
+			r.err = fmt.Errorf("failed to open htb classes dump at time %s: %w\nremaining: %v", r.remaining[0], err, r.remaining[1:])
+		}
 		return false
 	}
 	classes, err := ReadHTBClasses(f)
 	f.Close()
 
 	if err != nil {
-		r.err = fmt.Errorf("failed to read htb classes table dump at time %s: %w", r.remaining[0], err)
+		if len(r.remaining) == 1 {
+			// we may be missing iptables or tc data for the last record, ignore this
+			r.remaining = r.remaining[1:]
+		} else {
+			r.err = fmt.Errorf("failed to read htb classes table dump at time %s: %w\nremaining: %v", r.remaining[0], err, r.remaining[1:])
+		}
 		return false
 	}
 
