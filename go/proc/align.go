@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
 	"os"
 	"time"
 
@@ -46,6 +47,10 @@ func (r *alignedRec) Reset() {
 }
 
 func AlignProto(args AlignArgs, mkReader func(string, io.Reader) TSBatchReader) error {
+	if args.Debug {
+		log.Printf("AlignProto: inputs = %v", args.Inputs)
+	}
+
 	files := make([]fs.File, len(args.Inputs))
 	readers := make([]TSBatchReader, len(args.Inputs))
 	defer func() {
@@ -77,9 +82,15 @@ func AlignProto(args AlignArgs, mkReader func(string, io.Reader) TSBatchReader) 
 	var rec alignedRec
 	for merger.Next(&tstamp, data) {
 		if tstamp.Before(args.Start) {
+			if args.Debug {
+				log.Printf("discarding record at time %s: too early", tstamp)
+			}
 			continue
 		}
 		if args.End.Before(tstamp) {
+			if args.Debug {
+				log.Printf("discarding record at time %s: too late", tstamp)
+			}
 			break
 		}
 

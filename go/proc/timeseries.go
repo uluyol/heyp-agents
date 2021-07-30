@@ -34,20 +34,29 @@ type TSBatchReader interface {
 }
 
 type TSMerger struct {
-	precision time.Duration
-	readers   []TSBatchReader
-	debug     bool
+	precision         time.Duration
+	readers           []TSBatchReader
+	readerLastTime    []time.Time
+	readerHasLastTime []bool
+	debug             bool
 
-	cur []tsBatch
-	err error
+	hasFirstTime bool
+	firstTime    time.Time
+	cur          []tsBatch
+	err          error
 }
 
 func NewTSMerger(precision time.Duration, r []TSBatchReader, debug bool) *TSMerger {
 	m := &TSMerger{
-		precision: precision,
-		readers:   r,
-		debug:     debug,
-		cur:       make([]tsBatch, len(r)),
+		precision:         precision,
+		readers:           r,
+		readerLastTime:    make([]time.Time, len(r)),
+		readerHasLastTime: make([]bool, len(r)),
+		debug:             debug,
+		cur:               make([]tsBatch, len(r)),
+	}
+	if debug {
+		log.Printf("NewTSMerge: m.readers = %v", m.readers)
 	}
 	return m
 }
@@ -63,6 +72,10 @@ func (m *TSMerger) read(ri int) {
 	b.num, e = m.readers[ri].Read(b.times[:], b.data[:])
 	if e != nil {
 		m.err = fmt.Errorf("failure in reader %d: %w", ri, e)
+	}
+	if b.num > 0 {
+		m.readerLastTime[ri] = b.times[b.num-1]
+		m.readerHasLastTime[ri] = true
 	}
 	for ti := range b.times[0:b.num] {
 		b.times[ti] = b.times[ti].Round(m.precision)
@@ -85,7 +98,11 @@ func (m *TSMerger) Next(gotTime *time.Time, data []interface{}) bool {
 			}
 			if m.err != nil || m.cur[i].i >= m.cur[i].num {
 				if m.debug {
-					log.Printf("TSMerger.Next: reader %v was the first to end", m.readers[i])
+					var elapsed time.Duration
+					if m.readerHasLastTime[i] && m.hasFirstTime {
+						elapsed = m.readerLastTime[i].Sub(m.firstTime)
+					}
+					log.Printf("TSMerger.Next: reader %v was the first to end after %v", m.readers[i], elapsed)
 				}
 				return false
 			}
@@ -97,6 +114,11 @@ func (m *TSMerger) Next(gotTime *time.Time, data []interface{}) bool {
 			if t.Before(minTime) {
 				minTime = t
 			}
+		}
+
+		if !m.hasFirstTime {
+			m.firstTime = minTime
+			m.hasFirstTime = true
 		}
 
 		missingData := false
