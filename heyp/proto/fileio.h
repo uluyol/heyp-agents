@@ -14,6 +14,7 @@ bool ReadTextProtoFromFile(const std::string& path, google::protobuf::Message* o
 bool WriteTextProtoToFile(const google::protobuf::Message& message,
                           const std::string& path);
 
+absl::Status WriteJsonLine(const google::protobuf::Message& mesg, int fd);
 absl::Status WriteJsonLine(const google::protobuf::Message& mesg, FILE* out);
 
 }  // namespace heyp
