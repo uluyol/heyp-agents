@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+#include "absl/cleanup/cleanup.h"
 #include "absl/status/status.h"
 #include "absl/strings/str_split.h"
 #include "boost/process/child.hpp"
@@ -166,6 +167,18 @@ absl::Status ParseLine(uint64_t host_id, absl::string_view line,
   cum_usage_bytes = 0;
   bool next_is_usage_bps = false;
   usage_bps = 0;
+
+  bool is_estab = false;
+  bool is_unconn = false;
+
+  if (fields.size() >= 1) {
+    if (fields[0] == "ESTAB") {
+      is_estab = true;
+    } else if (fields[0] == "UNCONN") {
+      is_unconn = true;
+    }
+  }
+
   for (absl::string_view field : fields) {
     if (absl::StartsWith(field, "bytes_sent:")) {
       field = absl::StripPrefix(field, "bytes_sent:");
@@ -190,10 +203,10 @@ absl::Status ParseLine(uint64_t host_id, absl::string_view line,
     }
   }
 
-  if (!found_cum_usage_bytes) {
+  if (!found_cum_usage_bytes && !is_estab) {
     LOG(WARNING) << "no 'bytes_sent' field: " << line;
   }
-  if (!found_usage_bps) {
+  if (!found_usage_bps && !is_unconn) {
     LOG(WARNING) << "no 'send' bps field: " << line;
   }
 
@@ -223,8 +236,12 @@ bool SSFlowStateReporter::IgnoreFlow(const proto::FlowMarker& f) {
 }
 
 void SSFlowStateReporter::MonitorDone() {
-  std::string line;
+  LOG(INFO) << "SSFlowStateReporter::MonitorDone: entered loop";
+  absl::Cleanup loop_done = [] {
+    LOG(INFO) << "SSFlowStateReporter::MonitorDone: exited loop";
+  };
 
+  std::string line;
   while (true) {
     while (std::getline(*impl_->monitor_done_out, line) && !line.empty()) {
       absl::Time now = absl::Now();
