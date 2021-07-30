@@ -142,10 +142,14 @@ var killIPerfCmd = &configCmd{
 	exec:     actions.KillIPerf,
 }
 
-var stopHEYPCmd = &configCmd{
+var stopHEYPCmd = &configAndRemDirCmd{
 	name:     "stop-heyp-agents",
 	synopsis: "gracefully stop all HEYP agents",
-	exec:     actions.StopHEYP,
+	exec: func(c *configAndRemDirCmd, fs *flag.FlagSet) {
+		if err := actions.GracefulStopHEYPAgents(c.config, c.remDir); err != nil {
+			log.Fatal(err)
+		}
+	},
 }
 
 var deleteLogsCmd = &configAndRemDirCmd{
