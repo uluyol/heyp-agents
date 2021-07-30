@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/uluyol/heyp-agents/go/cmd/graceful-stop/pidfiles"
 	"github.com/uluyol/heyp-agents/go/stats"
 )
 
@@ -34,7 +35,7 @@ func main() {
 	flag.Parse()
 
 	if *stopCollecting {
-		if err := stop(*pidFile); err != nil {
+		if err := pidfiles.Stop(*pidFile, syscall.SIGINT, 3*time.Second); err != nil {
 			log.Fatal(err)
 		}
 	} else {
@@ -42,24 +43,6 @@ func main() {
 			log.Fatal(err)
 		}
 	}
-}
-
-func stop(pidFile string) error {
-	pidBytes, err := os.ReadFile(pidFile)
-	if err != nil {
-		return fmt.Errorf("failed to read pid file: %w", err)
-	}
-
-	pid, err := strconv.Atoi(string(bytes.TrimSpace(pidBytes)))
-	if err != nil {
-		return fmt.Errorf("found bad pid: %w", err)
-	}
-
-	if err := syscall.Kill(pid, syscall.SIGINT); err != nil {
-		return fmt.Errorf("failed to stop: %w", err)
-	}
-
-	return nil
 }
 
 func collect(localAddr, outFile, pidFile string) error {
