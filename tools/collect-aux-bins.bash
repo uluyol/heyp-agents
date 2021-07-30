@@ -23,6 +23,9 @@ for cmd in $TOINSTALL; do
   collect-host-stats)
     GOOS=linux GOARCH=amd64 go build -o $PWD/aux-bin ./go/cmd/collect-host-stats
     ;;
+  graceful-stop)
+    GOOS=linux GOARCH=amd64 go build -o $PWD/aux-bin ./go/cmd/graceful-stop
+    ;;
   *)
     echo "unknown cmd $cmd"
     exit 2
