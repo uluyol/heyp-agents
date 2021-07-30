@@ -48,6 +48,7 @@ func MakeCodeBundle(binDir, auxBinDir, tarballPath string) error {
 		"envoy",
 		"fortio-client",
 		"fortio",
+		"graceful-stop",
 	}
 
 	for _, b := range auxBins {
@@ -115,22 +116,27 @@ func DefaultHEYPAgentsConfig() HEYPAgentsConfig {
 	}
 }
 
-func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string, startConfig HEYPAgentsConfig) error {
-	type hostAgentNode struct {
-		host             *pb.DeployedNode
-		clusterAgentAddr string
-	}
+type HEYPNodeConfigs struct {
+	ClusterAgentNodes []ClusterAgentNode
+	HostAgentNodes    []HostAgentNode
+	DCMapperConfig    *pb.StaticDCMapperConfig
+}
 
-	type clusterAgentNode struct {
-		node    *pb.DeployedNode
-		cluster *pb.DeployedCluster
-		address string
-	}
+type HostAgentNode struct {
+	Host             *pb.DeployedNode
+	ClusterAgentAddr string
+}
 
-	var clusterAgentNodes []clusterAgentNode
-	var hostAgentNodes []hostAgentNode
+type ClusterAgentNode struct {
+	Node    *pb.DeployedNode
+	Cluster *pb.DeployedCluster
+	Address string
+}
 
-	dcMapperConfig := new(pb.StaticDCMapperConfig)
+func GetHEYPNodeConfigs(c *pb.DeploymentConfig) (HEYPNodeConfigs, error) {
+	var nodeConfigs HEYPNodeConfigs
+	nodeConfigs.DCMapperConfig = new(pb.StaticDCMapperConfig)
+
 	numHostsFilled := 0
 	for _, cluster := range c.Clusters {
 		var thisClusterAgentNode *pb.DeployedNode
@@ -138,13 +144,14 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string, startConfig HE
 		for _, nodeName := range cluster.NodeNames {
 			n := LookupNode(c, nodeName)
 			if n == nil {
-				return fmt.Errorf("node not found: %s", nodeName)
+				return nodeConfigs, fmt.Errorf("node not found: %s", nodeName)
 			}
 			if hasRole(n, "host-agent") {
-				if dcMapperConfig.Mapping == nil {
-					dcMapperConfig.Mapping = new(pb.DCMapping)
+				if nodeConfigs.DCMapperConfig.Mapping == nil {
+					nodeConfigs.DCMapperConfig.Mapping = new(pb.DCMapping)
 				}
-				dcMapperConfig.Mapping.Entries = append(dcMapperConfig.Mapping.Entries,
+				nodeConfigs.DCMapperConfig.Mapping.Entries = append(
+					nodeConfigs.DCMapperConfig.Mapping.Entries,
 					&pb.DCMapping_Entry{
 						HostAddr: proto.String(n.GetExperimentAddr()),
 						Dc:       proto.String(cluster.GetName()),
@@ -153,59 +160,71 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string, startConfig HE
 			for _, role := range n.Roles {
 				switch role {
 				case "host-agent":
-					hostAgentNodes = append(hostAgentNodes, hostAgentNode{host: n})
+					nodeConfigs.HostAgentNodes = append(
+						nodeConfigs.HostAgentNodes, HostAgentNode{Host: n})
 				case "cluster-agent":
-					clusterAgentNodes = append(clusterAgentNodes, clusterAgentNode{n, cluster, "0.0.0.0:" + strconv.Itoa(int(cluster.GetClusterAgentPort()))})
+					nodeConfigs.ClusterAgentNodes = append(
+						nodeConfigs.ClusterAgentNodes,
+						ClusterAgentNode{n, cluster, "0.0.0.0:" + strconv.Itoa(int(cluster.GetClusterAgentPort()))})
 					thisClusterAgentNode = n
 				}
 			}
 		}
 
 		if thisClusterAgentNode == nil {
-			if numHostsFilled < len(hostAgentNodes) {
-				return fmt.Errorf("cluster '%s': need a node that has role 'cluster-agent'",
+			if numHostsFilled < len(nodeConfigs.HostAgentNodes) {
+				return nodeConfigs, fmt.Errorf("cluster '%s': need a node that has role 'cluster-agent'",
 					cluster.GetName())
 			}
 		} else {
-			for i := numHostsFilled; i < len(hostAgentNodes); i++ {
-				hostAgentNodes[i].clusterAgentAddr = thisClusterAgentNode.GetExperimentAddr() + ":" + strconv.Itoa(int(cluster.GetClusterAgentPort()))
+			for i := numHostsFilled; i < len(nodeConfigs.HostAgentNodes); i++ {
+				nodeConfigs.HostAgentNodes[i].ClusterAgentAddr =
+					thisClusterAgentNode.GetExperimentAddr() + ":" + strconv.Itoa(int(cluster.GetClusterAgentPort()))
 			}
-			numHostsFilled = len(hostAgentNodes)
+			numHostsFilled = len(nodeConfigs.HostAgentNodes)
 		}
+	}
+	return nodeConfigs, nil
+}
+
+func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string, startConfig HEYPAgentsConfig) error {
+	nodeConfigs, err := GetHEYPNodeConfigs(c)
+	if err != nil {
+		return err
 	}
 
 	{
 
 		var eg multierrgroup.Group
-		for _, n := range clusterAgentNodes {
+		for _, n := range nodeConfigs.ClusterAgentNodes {
 			n := n
 
 			t := c.ClusterAgentConfig
-			t.Server.Address = &n.address
+			t.Server.Address = &n.Address
 			clusterAgentConfigBytes, err := prototext.MarshalOptions{Indent: "  "}.Marshal(t)
 			if err != nil {
 				return fmt.Errorf("failed to marshal cluster_agent_config: %w", err)
 			}
 
 			eg.Go(func() error {
-				limitsBytes, err := prototext.MarshalOptions{Indent: "  "}.Marshal(n.cluster.GetLimits())
+				limitsBytes, err := prototext.MarshalOptions{Indent: "  "}.Marshal(n.Cluster.GetLimits())
 				if err != nil {
 					return fmt.Errorf("failed to marshal limits: %w", err)
 				}
 
 				configTar := writetar.ConcatInMem(
-					writetar.Add("cluster-agent-config-"+n.cluster.GetName()+".textproto", clusterAgentConfigBytes),
-					writetar.Add("cluster-limits-"+n.cluster.GetName()+".textproto", limitsBytes),
+					writetar.Add("cluster-agent-config-"+n.Cluster.GetName()+".textproto", clusterAgentConfigBytes),
+					writetar.Add("cluster-limits-"+n.Cluster.GetName()+".textproto", limitsBytes),
 				)
 
 				allocLogsPath := ""
 				if startConfig.LogClusterAllocState {
-					allocLogsPath = path.Join(remoteTopdir, "logs", "cluster-agent-"+n.cluster.GetName()+"-alloc-log.json")
+					allocLogsPath = path.Join(remoteTopdir, "logs", "cluster-agent-"+n.Cluster.GetName()+"-alloc-log.json")
 				}
 
 				cmd := TracingCommand(
 					LogWithPrefix("start-heyp-agents: "),
-					"ssh", n.node.GetExternalAddr(),
+					"ssh", n.Node.GetExternalAddr(),
 					fmt.Sprintf(
 						"tar xf - -C %[1]s/configs;"+
 							"mkdir -p %[1]s/logs;"+
@@ -213,11 +232,11 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string, startConfig HE
 							"sudo chown $USER:$(groups $USER | cut -d: -f2 | awk '{print $1}') %[1]s/logs;"+
 							"sudo chmod 777 %[1]s/logs;"+
 							"tmux kill-session -t heyp-cluster-agent-%[2]s;"+
-							"tmux new-session -d -s heyp-cluster-agent-%[2]s 'env ASAN_OPTIONS=detect_container_overflow=0 TSAN_OPTIONS=report_atomic_races=0 %[1]s/heyp/cluster-agent/cluster-agent -alloc_logs \"%[3]s\" -log_dir %[1]s/logs/cluster-agent-%[2]s-logs %[1]s/configs/cluster-agent-config-%[2]s.textproto %[1]s/configs/cluster-limits-%[2]s.textproto 2>&1 | tee %[1]s/logs/cluster-agent-%[2]s.log; sleep 100000'", remoteTopdir, n.cluster.GetName(), allocLogsPath))
+							"tmux new-session -d -s heyp-cluster-agent-%[2]s 'env ASAN_OPTIONS=detect_container_overflow=0 TSAN_OPTIONS=report_atomic_races=0 %[1]s/heyp/cluster-agent/cluster-agent -alloc_logs \"%[3]s\" -log_dir %[1]s/logs/cluster-agent-%[2]s-logs %[1]s/configs/cluster-agent-config-%[2]s.textproto %[1]s/configs/cluster-limits-%[2]s.textproto 2>&1 | tee %[1]s/logs/cluster-agent-%[2]s.log; sleep 100000'", remoteTopdir, n.Cluster.GetName(), allocLogsPath))
 				cmd.SetStdin("config.tar", bytes.NewReader(configTar))
 				err = cmd.Run()
 				if err != nil {
-					return fmt.Errorf("failed to deploy cluster agent to Node %q: %w", n.node.GetName(), err)
+					return fmt.Errorf("failed to deploy cluster agent to Node %q: %w", n.Node.GetName(), err)
 				}
 				return nil
 			})
@@ -229,12 +248,12 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string, startConfig HE
 
 	{
 		var eg multierrgroup.Group
-		for _, n := range hostAgentNodes {
+		for _, n := range nodeConfigs.HostAgentNodes {
 			n := n
 			eg.Go(func() error {
 				hostConfig := proto.Clone(c.HostAgentTemplate).(*pb.HostAgentConfig)
-				hostConfig.ThisHostAddrs = []string{n.host.GetExperimentAddr()}
-				hostConfig.Daemon.ClusterAgentAddr = &n.clusterAgentAddr
+				hostConfig.ThisHostAddrs = []string{n.Host.GetExperimentAddr()}
+				hostConfig.Daemon.ClusterAgentAddr = &n.ClusterAgentAddr
 				if startConfig.LogHostStats {
 					hostConfig.Daemon.StatsLogFile = proto.String(
 						path.Join(remoteTopdir, "logs/host-agent-stats.log"))
@@ -243,7 +262,7 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string, startConfig HE
 					hostConfig.Enforcer.DebugLogDir = proto.String(
 						path.Join(remoteTopdir, "logs/host-enforcer-debug"))
 				}
-				hostConfig.DcMapper = dcMapperConfig
+				hostConfig.DcMapper = nodeConfigs.DCMapperConfig
 
 				hostConfigBytes, err := prototext.MarshalOptions{Indent: "  "}.Marshal(hostConfig)
 				if err != nil {
@@ -257,7 +276,7 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string, startConfig HE
 
 				cmd := TracingCommand(
 					LogWithPrefix("start-heyp-agents: "),
-					"ssh", n.host.GetExternalAddr(),
+					"ssh", n.Host.GetExternalAddr(),
 					fmt.Sprintf(
 						"cat >%[1]s/configs/host-agent-config.textproto;"+
 							"mkdir -p %[1]s/logs;"+
@@ -266,11 +285,11 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string, startConfig HE
 							"sudo chmod 777 %[1]s/logs;"+
 							"tmux kill-session -t heyp-host-agent;"+
 							"rm -rf %[1]s/logs/host-enforcer-debug;"+
-							"tmux new-session -d -s heyp-host-agent 'sudo env ASAN_OPTIONS=detect_container_overflow=0 TSAN_OPTIONS=report_atomic_races=0 %[1]s/heyp/host-agent/host-agent %[2]s -log_dir %[1]s/logs/host-agent-logs %[1]s/configs/host-agent-config.textproto 2>&1 | tee %[1]s/logs/host-agent.log; sleep 100000'", remoteTopdir, vlogArg))
+							"tmux new-session -d -s heyp-host-agent 'sudo env ASAN_OPTIONS=detect_container_overflow=0 TSAN_OPTIONS=report_atomic_races=0 %[1]s/heyp/host-agent/host-agent %[2]s -pidfile %[1]s/logs/host-agent.pid -log_dir %[1]s/logs/host-agent-logs %[1]s/configs/host-agent-config.textproto 2>&1 | tee %[1]s/logs/host-agent.log; sleep 100000'", remoteTopdir, vlogArg))
 				cmd.SetStdin("host-agent-config.textproto", bytes.NewReader(hostConfigBytes))
 				err = cmd.Run()
 				if err != nil {
-					return fmt.Errorf("failed to deploy host agent to Node %q: %v", n.host.GetName(), err)
+					return fmt.Errorf("failed to deploy host agent to Node %q: %v", n.Host.GetName(), err)
 				}
 				return nil
 			})
@@ -460,6 +479,35 @@ func FetchData(c *pb.DeploymentConfig, remoteTopdir, outdirPath string) error {
 
 func KillHEYP(c *pb.DeploymentConfig) error {
 	return KillSessions(c, "^heyp-.*-agent")
+}
+
+func GracefulStopHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string) error {
+	nodeConfigs, err := GetHEYPNodeConfigs(c)
+	if err != nil {
+		return err
+	}
+
+	var eg multierrgroup.Group
+	for _, n := range nodeConfigs.HostAgentNodes {
+		n := n
+		eg.Go(func() error {
+			cmd := TracingCommand(
+				LogWithPrefix("stop-heyp-host-agents: "),
+				"ssh", n.Host.GetExternalAddr(),
+				fmt.Sprintf(
+					"sudo %[1]s/aux/graceful-stop -signal SIGINT -timeout 10s %[1]s/logs/host-agent.pid", remoteTopdir))
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				return fmt.Errorf("from Node %q: %v; output: %s", n.Host.GetName(), err, out)
+			}
+			return nil
+		})
+	}
+	if err := eg.Wait(); err != nil {
+		return fmt.Errorf("failed to stop host agents: %w", err)
+	}
+
+	return nil
 }
 
 func StopHEYP(c *pb.DeploymentConfig) error {
