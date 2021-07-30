@@ -44,7 +44,6 @@ Plot <- function(subset, output) {
       geom_area(position="stack", alpha=0.8) +
       xlab("Time (sec)") +
       ylab("Limit (Gbps)") +
-      coord_cartesian(ylim=c(0, 15)) +
       scale_fill_manual(values=colors) +
       theme_bw() +
       theme(

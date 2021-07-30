@@ -23,7 +23,7 @@ data$NetLatencyMsP50 <- data$NetLatencyNanosP50 / 1e6
 data$NetLatencyMsP90 <- data$NetLatencyNanosP90 / 1e6
 data$NetLatencyMsP95 <- data$NetLatencyNanosP95 / 1e6
 data$NetLatencyMsP99 <- data$NetLatencyNanosP99 / 1e6
-data$GoodputGbps <- data$MeanBps / 1e9
+data$GoodputGbps <- data$MeanBps / (2^30)
 data$GoodputRpcs <- data$MeanRpcsPerSec / 1e3
 
 instances <- unique(data$Instance)
