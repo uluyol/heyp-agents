@@ -56,7 +56,7 @@ run_one() {
   bin/deploy-heyp stop-heyp-agents -c $c & # graceful shutdown
   dpids="$dpids $!"
 
-  wait_all $dpids || return 1
+  wait_all $dpids || true # ignore shutdown errors
 
   sleep 3
 
