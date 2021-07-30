@@ -12,17 +12,27 @@ namespace heyp {
 
 absl::StatusOr<std::string> FindDeviceResponsibleFor(
     const std::vector<std::string>& ip_addrs, const std::string& ip_bin_name) {
-  SubprocessResult out = RunSubprocess(ip_bin_name, {"-json", "addr"});
-  if (!out.ok()) {
-    return out.ErrorWhenRunning("ip");
+  SubProcess subproc;
+  subproc.SetProgram(ip_bin_name, {"-json", "addr"});
+  subproc.SetChannelAction(CHAN_STDOUT, ACTION_PIPE);
+  subproc.SetChannelAction(CHAN_STDERR, ACTION_PIPE);
+  if (!subproc.Start()) {
+    return absl::UnknownError("failed to run ip");
   }
-  std::string buf(out.out);
+  std::string got_stdout;
+  std::string got_stderr;
+  int exit_status = subproc.Communicate(nullptr, &got_stdout, &got_stderr);
 
-  if (absl::StripAsciiWhitespace(buf).empty()) {
+  if (exit_status != 0) {
+    return absl::UnknownError(
+        absl::StrCat("ip: exit status ", exit_status, "; stderr:\n", got_stderr));
+  }
+
+  if (absl::StripAsciiWhitespace(got_stdout).empty()) {
     return absl::UnknownError("no ip output");
   }
   simdjson::dom::parser parser;
-  auto result = parser.parse(buf);
+  auto result = parser.parse(got_stdout);
   if (result.error() != simdjson::SUCCESS) {
     return absl::InternalError(absl::StrCat("failed to parse ip output to json: ",
                                             simdjson::error_message(result.error())));

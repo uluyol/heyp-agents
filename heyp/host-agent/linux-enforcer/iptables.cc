@@ -192,11 +192,22 @@ absl::StatusOr<std::string> Runner::Run(Operation op,
     full_args.push_back(arg);
   }
 
-  auto result = RunSubprocess(iptables_cmd_, full_args);
-  if (!result.ok()) {
-    return result.ErrorWhenRunning("iptables");
+  SubProcess subproc;
+  subproc.SetProgram(iptables_cmd_, full_args);
+  subproc.SetChannelAction(CHAN_STDOUT, ACTION_PIPE);
+  subproc.SetChannelAction(CHAN_STDERR, ACTION_PIPE);
+  if (!subproc.Start()) {
+    return absl::UnknownError("failed to run iptables");
   }
-  return std::string(result.out);
+  std::string got_stdout;
+  std::string got_stderr;
+  *exit_status = subproc.Communicate(nullptr, &got_stdout, &got_stderr);
+
+  if (*exit_status != 0) {
+    return absl::UnknownError(
+        absl::StrCat("iptables: exit status ", *exit_status, "; stderr:\n", got_stderr));
+  }
+  return got_stdout;
 }
 
 absl::StatusOr<bool> Runner::EnsureChain(Table table, Chain chain) {
@@ -309,12 +320,22 @@ absl::Status Runner::SaveInto(Table table, absl::Cord& buffer) {
   std::vector<std::string> args{"-t", std::string(ToString(table))};
 
   absl::MutexLock lock(&mu_);
-  auto result = RunSubprocess(iptables_save_cmd_, args);
-  if (!result.ok()) {
-    return result.ErrorWhenRunning("iptables save");
+  SubProcess subproc;
+  subproc.SetProgram(iptables_save_cmd_, args);
+  subproc.SetChannelAction(CHAN_STDOUT, ACTION_PIPE);
+  subproc.SetChannelAction(CHAN_STDERR, ACTION_PIPE);
+  if (!subproc.Start()) {
+    return absl::UnknownError("failed to run iptables save");
   }
+  std::string got_stdout;
+  std::string got_stderr;
+  int exit_status = subproc.Communicate(nullptr, &got_stdout, &got_stderr);
 
-  buffer = result.out;
+  if (exit_status != 0) {
+    return absl::UnknownError(absl::StrCat("iptables save: exit status ", exit_status,
+                                           "; stderr:\n", got_stderr));
+  }
+  buffer = got_stdout;
   return absl::OkStatus();
 }
 
@@ -345,11 +366,22 @@ absl::Status Runner::RestoreInternal(std::vector<std::string> args,
   CHECK(!restore_wait_flag_.empty())
       << "support for older iptables-restore not implemented";
 
-  auto result = RunSubprocess(iptables_restore_cmd_, full_args, data);
-  if (!result.ok()) {
-    if (!result.ok()) {
-      return result.ErrorWhenRunning("iptables restore");
-    }
+  SubProcess subproc;
+  subproc.SetProgram(iptables_restore_cmd_, full_args);
+  subproc.SetChannelAction(CHAN_STDIN, ACTION_PIPE);
+  subproc.SetChannelAction(CHAN_STDOUT, ACTION_PIPE);
+  subproc.SetChannelAction(CHAN_STDERR, ACTION_PIPE);
+  if (!subproc.Start()) {
+    return absl::UnknownError("failed to run iptables restore");
+  }
+  std::string for_stdin(data);
+  std::string got_stdout;
+  std::string got_stderr;
+  int exit_status = subproc.Communicate(&for_stdin, &got_stdout, &got_stderr);
+
+  if (exit_status != 0) {
+    return absl::UnknownError(absl::StrCat("iptables restore: exit status ", exit_status,
+                                           "; stderr:\n", got_stderr));
   }
   return absl::OkStatus();
 }
