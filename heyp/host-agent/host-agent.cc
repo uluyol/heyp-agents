@@ -20,6 +20,7 @@
 #include "heyp/init/init.h"
 #include "heyp/log/logging.h"
 #include "heyp/posix/os.h"
+#include "heyp/posix/pidfile.h"
 #include "heyp/proto/config.pb.h"
 #include "heyp/proto/fileio.h"
 
@@ -171,11 +172,14 @@ absl::Status Run(const proto::HostAgentConfig& c) {
                     flow_state_reporter.get(), enforcer.get());
   LOG(INFO) << "running daemon main loop";
   daemon.Run(&should_exit_flag);
+  LOG(INFO) << "exited daemon main loop";
   return absl::OkStatus();
 }
 
 }  // namespace
 }  // namespace heyp
+
+ABSL_FLAG(std::string, pidfile, "host-agent.pid", "path to write process id");
 
 int main(int argc, char** argv) {
   heyp::MainInit(&argc, &argv);
@@ -187,13 +191,19 @@ int main(int argc, char** argv) {
     return 1;
   }
 
+  absl::Status s = heyp::WritePidFile(absl::GetFlag(FLAGS_pidfile));
+  if (!s.ok()) {
+    std::cerr << "failed to write pid file: " << s << "\n";
+    return 2;
+  }
+
   heyp::proto::HostAgentConfig config;
   if (!heyp::ReadTextProtoFromFile(std::string(argv[1]), &config)) {
     std::cerr << "failed to read config file\n";
     return 2;
   }
 
-  absl::Status s = heyp::Run(config);
+  s = heyp::Run(config);
   if (!s.ok()) {
     std::cerr << "failed to run: " << s << "\n";
     return 3;
