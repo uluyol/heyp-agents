@@ -35,7 +35,8 @@ class ClusterController {
     Listener& operator=(const Listener&) = delete;
 
    private:
-    int64_t host_id_ = 0;
+    int64_t host_id_;
+    uint64_t lis_id_;
     ClusterController* controller_ = nullptr;
 
     friend class ClusterController;
@@ -47,7 +48,9 @@ class ClusterController {
   std::unique_ptr<ClusterAllocator> allocator_ ABSL_GUARDED_BY(state_mu_);
 
   absl::Mutex broadcasting_mu_;
-  absl::flat_hash_map<int64_t, std::function<void(proto::AllocBundle)>>
+  uint64_t next_lis_id_;
+  absl::flat_hash_map<
+      int64_t, absl::flat_hash_map<uint64_t, std::function<void(proto::AllocBundle)>>>
       on_new_bundle_funcs_ ABSL_GUARDED_BY(broadcasting_mu_);
 };
 

@@ -10,30 +10,37 @@ namespace heyp {
 
 ClusterController::ClusterController(std::unique_ptr<FlowAggregator> aggregator,
                                      std::unique_ptr<ClusterAllocator> allocator)
-    : aggregator_(std::move(aggregator)), allocator_(std::move(allocator)) {}
+    : aggregator_(std::move(aggregator)),
+      allocator_(std::move(allocator)),
+      next_lis_id_(1) {}
 
-ClusterController::Listener::Listener() : host_id_(0), controller_(nullptr) {}
+ClusterController::Listener::Listener() : host_id_(0), lis_id_(0), controller_(nullptr) {}
 
 ClusterController::Listener::~Listener() {
   if (controller_ != nullptr && host_id_ != 0) {
     absl::MutexLock l(&controller_->broadcasting_mu_);
     ABSL_ASSERT(controller_->on_new_bundle_funcs_.contains(host_id_));
-    controller_->on_new_bundle_funcs_.erase(host_id_);
+    ABSL_ASSERT(controller_->on_new_bundle_funcs_.at(host_id_).contains(lis_id_));
+    controller_->on_new_bundle_funcs_.at(host_id_).erase(lis_id_);
   }
   host_id_ = 0;
+  lis_id_ = 0;
   controller_ = nullptr;
 }
 
 ClusterController::Listener::Listener(Listener&& other)
-    : host_id_(other.host_id_), controller_(other.controller_) {
+    : host_id_(other.host_id_), lis_id_(other.lis_id_), controller_(other.controller_) {
   other.host_id_ = 0;
+  other.lis_id_ = 0;
   other.controller_ = nullptr;
 }
 
 ClusterController::Listener& ClusterController::Listener::operator=(Listener&& other) {
   host_id_ = other.host_id_;
+  lis_id_ = other.lis_id_;
   controller_ = other.controller_;
   other.host_id_ = 0;
+  other.lis_id_ = 0;
   other.controller_ = nullptr;
   return *this;
 }
@@ -42,9 +49,11 @@ ClusterController::Listener ClusterController::RegisterListener(
     int64_t host_id, const std::function<void(proto::AllocBundle)>& on_new_bundle_func) {
   ClusterController::Listener lis;
   lis.host_id_ = host_id;
+  lis.lis_id_ = next_lis_id_;
   lis.controller_ = this;
   absl::MutexLock l(&broadcasting_mu_);
-  on_new_bundle_funcs_[host_id] = on_new_bundle_func;
+  on_new_bundle_funcs_[host_id][next_lis_id_] = on_new_bundle_func;
+  next_lis_id_++;
   return lis;
 }
 
@@ -77,10 +86,12 @@ void ClusterController::ComputeAndBroadcast() {
       BundleByHost(std::move(allocs));
 
   broadcasting_mu_.Lock();
-  for (auto host_bundle_pair : alloc_bundles) {
-    auto iter = on_new_bundle_funcs_.find(host_bundle_pair.first);
+  for (auto& [host, bundle] : alloc_bundles) {
+    auto iter = on_new_bundle_funcs_.find(host);
     if (iter != on_new_bundle_funcs_.end()) {
-      iter->second(std::move(host_bundle_pair.second));
+      for (auto& [id, func] : iter->second) {
+        func(std::move(bundle));
+      }
     }
   }
   broadcasting_mu_.Unlock();
