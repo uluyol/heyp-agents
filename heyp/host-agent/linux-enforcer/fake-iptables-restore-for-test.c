@@ -3,13 +3,16 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define ASSERT_NEXT_ARG_IS(s)            \
-  if (strcmp(argv[cur_arg++], s) != 0) { \
-    return 1;                            \
+#define ASSERT_NEXT_ARG_IS(s)                                                         \
+  if (strcmp(argv[cur_arg++], s) != 0) {                                              \
+    fprintf(stderr, "bad argv[%d]: got %s want %s\n", cur_arg - 1, argv[cur_arg - 1], \
+            s);                                                                       \
+    return 1;                                                                         \
   }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   if (argc != 9) {
+    fprintf(stderr, "got %d args, want 9\n", argc);
     return 1;
   }
   int cur_arg = 1;
