@@ -8,7 +8,7 @@ namespace heyp {
 
 absl::StatusOr<std::unique_ptr<StatsRecorder>> StatsRecorder::Create(
     const std::string& file_path) {
-  auto rec = absl::make_unique<StatsRecorder>(nullptr);
+  auto rec = absl::make_unique<StatsRecorder>(-1);
   absl::Status st = rec->logger_.Init(file_path);
   if (!st.ok()) {
     return st;
@@ -16,7 +16,7 @@ absl::StatusOr<std::unique_ptr<StatsRecorder>> StatsRecorder::Create(
   return rec;
 }
 
-StatsRecorder::StatsRecorder(FILE* out) : logger_(out), executor_(1), started_(false) {}
+StatsRecorder::StatsRecorder(int fd) : logger_(fd), executor_(1), started_(false) {}
 
 absl::Status StatsRecorder::Close() {
   if (prev_tg_ != nullptr) {

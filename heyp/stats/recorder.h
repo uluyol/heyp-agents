@@ -21,7 +21,7 @@ class StatsRecorder {
   static absl::StatusOr<std::unique_ptr<StatsRecorder>> Create(
       const std::string& file_path);
 
-  explicit StatsRecorder(FILE* out);
+  explicit StatsRecorder(int fd);
 
   StatsRecorder(const StatsRecorder&) = delete;
   StatsRecorder& operator=(const StatsRecorder&) = delete;

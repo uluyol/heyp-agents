@@ -9,6 +9,7 @@
 #include "grpcpp/grpcpp.h"
 #include "heyp/flows/aggregator.h"
 #include "heyp/flows/dc-mapper.h"
+#include "heyp/host-agent/cluster-agent-channel.h"
 #include "heyp/host-agent/enforcer.h"
 #include "heyp/host-agent/flow-tracker.h"
 #include "heyp/proto/heyp.grpc.pb.h"
@@ -43,11 +44,8 @@ class HostDaemon {
   FlowStateReporter* flow_state_reporter_;
   NdjsonLogger flow_state_logger_;
   HostEnforcer* enforcer_;
-  std::unique_ptr<proto::ClusterAgent::Stub> stub_;
+  ClusterAgentChannel channel_;
 
-  grpc::ClientContext context_;
-  std::unique_ptr<grpc::ClientReaderWriter<proto::InfoBundle, proto::AllocBundle>>
-      io_stream_;
   std::thread collect_stats_thread_;
   std::thread info_thread_;
   std::thread enforcer_thread_;

@@ -1,54 +1,76 @@
 #include "heyp/proto/ndjson-logger.h"
 
+#include <fcntl.h>
+
 #include "absl/memory/memory.h"
+#include "absl/strings/str_cat.h"
 #include "heyp/log/logging.h"
 #include "heyp/posix/strerror.h"
 
 namespace heyp {
 
-NdjsonLogger::NdjsonLogger(FILE* out) : out_(out) {}
+NdjsonLogger::NdjsonLogger(int fd) : fd_(fd) {}
 
 NdjsonLogger::~NdjsonLogger() {
-  if (out_ != nullptr) {
+  if (fd_ != -1) {
     LOG(WARNING) << "NdjsonLogger: should call close";
-    int ret = fclose(out_);
+    int ret;
+    do {
+      ret = close(fd_);
+    } while (ret != 0 && errno == EINTR);
     if (ret != 0) {
-      LOG(WARNING) << "NdjsonLogger: failed to close output file";
+      LOG(WARNING) << "NdjsonLogger: failed to close output file: " << StrError(errno);
     }
   }
 }
 
-void NdjsonLogger::Init(FILE* out) { out_ = out; }
+void NdjsonLogger::Init(int fd) { fd_ = fd; }
 
 absl::Status NdjsonLogger::Init(const std::string& path) {
-  FILE* f = fopen(path.c_str(), "w");
-  if (f == nullptr) {
+  int fd;
+  do {
+    fd = creat(path.c_str(), 0644);
+  } while (fd == -1 && errno == EINTR);
+  if (fd == -1) {
     return absl::InternalError(StrError(errno));
   }
-  Init(f);
+  Init(fd);
   return absl::OkStatus();
 }
 
 absl::Status NdjsonLogger::Close() {
-  int ret = 0;
-  if (out_ != nullptr) {
-    ret = fclose(out_);
-    out_ = nullptr;
+  if (fd_ == -1) {
+    return absl::OkStatus();
   }
 
+  int ret;
+  do {
+    ret = close(fd_);
+  } while (ret != 0 && errno == EINTR);
   if (ret != 0) {
-    return absl::InternalError("failed to close output file");
+    return absl::InternalError(
+        absl::StrCat("failed to close output file: ", StrError(errno)));
   }
   return absl::OkStatus();
 }
 
 absl::Status NdjsonLogger::Write(const google::protobuf::Message& record) {
-  return WriteJsonLine(record, out_);
+  if (fd_ == -1) {
+    return absl::FailedPreconditionError(
+        "have null output file. Did you call NdjsonLogger::Close?");
+  }
+
+  auto status = WriteJsonLine(record, fd_);
+  if (!status.ok()) {
+    return absl::Status(status.code(),
+                        absl::StrCat("failed to write record: ", status.message()));
+  }
+  return absl::OkStatus();
 }
 
 absl::StatusOr<std::unique_ptr<NdjsonLogger>> CreateNdjsonLogger(
     const std::string& file_path) {
-  auto logger = absl::make_unique<NdjsonLogger>(nullptr);
+  auto logger = absl::make_unique<NdjsonLogger>(-1);
   absl::Status st = logger->Init(file_path);
   if (!st.ok()) {
     return st;

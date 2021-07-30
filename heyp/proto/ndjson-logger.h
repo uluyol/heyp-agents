@@ -12,7 +12,7 @@ namespace heyp {
 
 class NdjsonLogger {
  public:
-  explicit NdjsonLogger(FILE* out);
+  explicit NdjsonLogger(int fd);  // use -1 to avoid writing
   ~NdjsonLogger();
 
   NdjsonLogger(const NdjsonLogger&) = delete;
@@ -21,16 +21,16 @@ class NdjsonLogger {
   // Init re-initializes the Logger with the provided output file.
   // Call Close before Init in case the NdjsonLogger has an open output file.
   absl::Status Init(const std::string& file_path);
-  void Init(FILE* out);
+  void Init(int fd);  // use -1 to avoid writing
 
   absl::Status Write(const google::protobuf::Message& record);
 
   absl::Status Close();
 
-  bool should_log() const { return out_ != nullptr; }
+  bool should_log() const { return fd_ != -1; }
 
  private:
-  FILE* out_;
+  int fd_;
 };
 
 absl::StatusOr<std::unique_ptr<NdjsonLogger>> CreateNdjsonLogger(

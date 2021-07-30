@@ -22,6 +22,7 @@ heyp_cc_binary(
         "//heyp/host-agent/linux-enforcer:enforcer",
         "//heyp/init",
         "//heyp/posix:os",
+        "//heyp/posix:pidfile",
         "//heyp/proto:config_cc_proto",
         "//heyp/proto:fileio",
         "@com_google_absl//absl/functional:bind_front",
@@ -32,10 +33,23 @@ heyp_cc_binary(
 )
 
 cc_library(
+    name = "cluster-agent-channel",
+    srcs = ["cluster-agent-channel.cc"],
+    hdrs = ["cluster-agent-channel.h"],
+    deps = [
+        "//heyp/proto:heyp_cc_grpc",
+        "//heyp/proto:heyp_cc_proto",
+        "@com_github_grpc_grpc//:grpc++",
+        "@com_google_absl//absl/synchronization",
+    ],
+)
+
+cc_library(
     name = "daemon",
     srcs = ["daemon.cc"],
     hdrs = ["daemon.h"],
     deps = [
+        ":cluster-agent-channel",
         ":enforcer",
         ":flow-tracker",
         "//heyp/flows:aggregator",
@@ -46,6 +60,7 @@ cc_library(
         "//heyp/proto:heyp_cc_proto",
         "//heyp/proto:ndjson-logger",
         "@com_github_grpc_grpc//:grpc++",
+        "@com_google_absl//absl/cleanup",
         "@com_google_absl//absl/time",
         "@com_google_absl//absl/types:span",
     ],
@@ -74,6 +89,7 @@ cc_library(
         "//heyp/log",
         "//heyp/proto:alg",
         "@boost//:process",
+        "@com_google_absl//absl/cleanup",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/functional:function_ref",
         "@com_google_absl//absl/status:statusor",
