@@ -1,8 +1,23 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
+
 cc_library(
-    name = "log",
-    hdrs = ["logging.h"],
+    name = "spdlog",
+    srcs = ["spdlog.cc"],
+    hdrs = ["spdlog.h"],
     visibility = ["//visibility:public"],
     deps = [
-        "@com_google_ortools//ortools/base",
+        "@com_github_gabime_spdlog//:spdlog",
+        "@com_google_absl//absl/debugging:symbolize",
+        "@com_google_absl//absl/flags:flag",
+        "@com_google_absl//absl/strings:str_format",
+    ],
+)
+
+cc_binary(
+    name = "example_check_main",
+    srcs = ["example_check_main.cc"],
+    deps = [
+        ":spdlog",
+        "//heyp/init",
     ],
 )

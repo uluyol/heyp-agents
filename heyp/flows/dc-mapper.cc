@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-#include "heyp/log/logging.h"
+#include "heyp/log/spdlog.h"
 
 namespace heyp {
 

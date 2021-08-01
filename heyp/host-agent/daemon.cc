@@ -4,7 +4,7 @@
 #include "absl/functional/bind_front.h"
 #include "absl/time/clock.h"
 #include "enforcer.h"
-#include "heyp/log/logging.h"
+#include "heyp/log/spdlog.h"
 #include "heyp/proto/constructors.h"
 #include "heyp/proto/heyp.pb.h"
 
@@ -25,7 +25,8 @@ HostDaemon::HostDaemon(const std::shared_ptr<grpc::Channel>& channel, Config con
   if (!config.stats_log_file.empty()) {
     absl::Status st = flow_state_logger_.Init(config.stats_log_file);
     if (!st.ok()) {
-      LOG(ERROR) << "HostDaemon: failed to init flow_state_logger_: " << st;
+      auto logger = MakeLogger("host-daemon");
+      SPDLOG_LOGGER_ERROR(&logger, "failed to init flow_state_logger_: {}", st);
     }
   }
 }
@@ -62,32 +63,33 @@ void CollectStats(absl::Duration period, bool force_run,
                   NdjsonLogger* flow_state_logger, HostEnforcer* enforcer,
                   std::atomic<bool>* should_exit) {
   auto start_time = std::chrono::steady_clock::now();
+  auto logger = MakeLogger("collect-stats");
 
-  LOG(INFO) << "CollectStats: begin";
-  absl::Cleanup loop_done = [flow_state_logger] {
+  SPDLOG_LOGGER_INFO(&logger, "begin loop");
+  absl::Cleanup loop_done = [flow_state_logger, &logger] {
     if (flow_state_logger->should_log()) {
       absl::Status st = flow_state_logger->Close();
       if (!st.ok()) {
-        LOG(WARNING) << "error closing flow state logger: " << st;
+        SPDLOG_LOGGER_WARN(&logger, "error closing flow state logger: {}", st);
       }
     }
-    LOG(INFO) << "CollectStats: end";
+    SPDLOG_LOGGER_INFO(&logger, "end loop");
   };
 
-  LOG(INFO) << "will collect stats once every " << period;
+  SPDLOG_LOGGER_INFO(&logger, "will collect stats once every ", period);
 
   // Wait the first time since Run() refreshes once
   while (force_run || !FlaggedOrWaitFor(period, should_exit)) {
     absl::Duration elapsed =
         absl::FromChrono(std::chrono::steady_clock::now() - start_time);
-    LOG(INFO) << "refresh stats " << elapsed << " after start";
+    SPDLOG_LOGGER_INFO(&logger, "refresh stats {} after start", elapsed);
 
     force_run = false;
     // Step 1: refresh stats on all socket-level flows.
     absl::Status report_status = flow_state_reporter->ReportState(
         absl::bind_front(&HostEnforcer::IsLopri, enforcer));
     if (!report_status.ok()) {
-      LOG(ERROR) << "failed to report flow state: " << report_status;
+      SPDLOG_LOGGER_ERROR(&logger, "failed to report flow state: {}", report_status);
       continue;
     }
 
@@ -109,7 +111,7 @@ void CollectStats(absl::Duration period, bool force_run,
 
     // Step 3.5: log all src/dst DC-level flows on the flows, if requested.
     if (flow_state_logger->should_log()) {
-      LOG(INFO) << "log flow infos to disk";
+      SPDLOG_LOGGER_INFO(&logger, "log flow infos to disk");
       bundle.clear_flow_infos();
       socket_to_host_aggregator->ForEachAgg(
           [&bundle](absl::Time time, const proto::AggInfo& info) {
@@ -118,10 +120,10 @@ void CollectStats(absl::Duration period, bool force_run,
 
       absl::Status log_status = flow_state_logger->Write(bundle);
       if (!log_status.ok()) {
-        LOG(WARNING) << "failed to log flow infos: " << log_status;
+        SPDLOG_LOGGER_WARN(&logger, "failed to log flow infos: {}", log_status);
       }
     } else {
-      LOG(INFO) << "null log: don't log flow infos to disk";
+      SPDLOG_LOGGER_INFO(&logger, "null log: don't log flow infos to disk");
     }
   }
 }
@@ -129,8 +131,9 @@ void CollectStats(absl::Duration period, bool force_run,
 void SendInfo(absl::Duration inform_period, uint64_t host_id,
               FlowAggregator* socket_to_host_aggregator, std::atomic<bool>* should_exit,
               ClusterAgentChannel* channel) {
-  LOG(INFO) << "SendInfo: begin";
-  absl::Cleanup loop_done = [] { LOG(INFO) << "SendInfo: end"; };
+  auto logger = MakeLogger("send-info");
+  SPDLOG_LOGGER_INFO(&logger, "begin loop");
+  absl::Cleanup loop_done = [&logger] { SPDLOG_LOGGER_INFO(&logger, "end loop"); };
 
   do {
     // Step 4: collect a bundle of all src/dst DC-level flows on the host.
@@ -144,11 +147,12 @@ void SendInfo(absl::Duration inform_period, uint64_t host_id,
         });
 
     // Step 5: send to cluster agent.
-    LOG(INFO) << "sending info bundle to cluster agent with " << bundle.flow_infos_size()
-              << " FGs";
+    SPDLOG_LOGGER_INFO(&logger, "sending info bundle to cluster agent with {} FGs",
+                       bundle.flow_infos_size());
     if (auto st = channel->Write(bundle); !st.ok()) {
-      LOG(WARNING) << "failed to send info bundle to cluster agent with "
-                   << bundle.flow_infos_size() << " FGs: " << st.error_message();
+      SPDLOG_LOGGER_WARN(&logger,
+                         "failed to send info bundle to cluster agent with {} FGs: {}",
+                         bundle.flow_infos_size(), st.error_message());
     }
   } while (!FlaggedOrWaitFor(inform_period, should_exit));
 
@@ -158,19 +162,20 @@ void SendInfo(absl::Duration inform_period, uint64_t host_id,
 
 void EnforceAlloc(const FlowStateProvider* flow_state_provider, HostEnforcer* enforcer,
                   std::atomic<bool>* should_exit, ClusterAgentChannel* channel) {
-  LOG(INFO) << "EnforceAlloc: begin";
-  absl::Cleanup loop_done = [] { LOG(INFO) << "EnforceAlloc: end"; };
+  auto logger = MakeLogger("enforce-alloc");
+  SPDLOG_LOGGER_INFO(&logger, "begin loop");
+  absl::Cleanup loop_done = [&logger] { SPDLOG_LOGGER_INFO(&logger, "end loop"); };
 
   while (!should_exit->load()) {
     // Step 1: wait for allocation from cluster agent.
     proto::AllocBundle bundle;
     if (auto st = channel->Read(&bundle); !st.ok()) {
-      LOG(WARNING) << "failed to read alloc bundle: " << st.error_message();
+      SPDLOG_LOGGER_WARN(&logger, "failed to read alloc bundle: {}", st.error_message());
       continue;
     }
 
-    LOG(INFO) << "got alloc bundle from cluster agent for " << bundle.flow_allocs_size()
-              << " FGs";
+    SPDLOG_LOGGER_INFO(&logger, "got alloc bundle from cluster agent for {} FGs",
+                       bundle.flow_allocs_size());
     // Step 2: enforce the new allocation.
     enforcer->EnforceAllocs(*flow_state_provider, bundle);
   }

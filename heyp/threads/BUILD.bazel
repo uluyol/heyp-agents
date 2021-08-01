@@ -11,7 +11,7 @@ cc_library(
     linkopts = ["-pthread"],
     deps = [
         ":waitgroup",
-        "//heyp/log",
+        "//heyp/log:spdlog",
         "@com_google_absl//absl/base",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/synchronization",

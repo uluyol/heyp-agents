@@ -18,6 +18,7 @@
 #include "absl/random/distributions.h"
 #include "absl/random/random.h"
 #include "absl/strings/match.h"
+#include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "absl/strings/str_join.h"
 #include "absl/strings/str_split.h"
@@ -26,7 +27,7 @@
 #include "heyp/encoding/binary.h"
 #include "heyp/host-agent/urls.h"
 #include "heyp/init/init.h"
-#include "heyp/log/logging.h"
+#include "heyp/log/spdlog.h"
 #include "heyp/posix/strerror.h"
 #include "heyp/proto/app.pb.h"
 #include "heyp/proto/fileio.h"
@@ -36,8 +37,8 @@ namespace heyp {
 namespace {
 
 // LOG_TO_CERR, if set, will cause std::cerr to be used for logging instead of glog.
-//#define LOG_TO_CERR
-#undef LOG_TO_CERR
+#define LOG_TO_CERR
+// #undef LOG_TO_CERR
 
 #ifdef LOG_TO_CERR
 #define WITH_NEWLINE << "\n"
@@ -125,7 +126,7 @@ class ClientConn {
         num_seen_(0),
         num_issued_(0),
         read_buf_size_(0) {
-    CHECK_GE(options_.max_rpc_size_bytes, 28);
+    H_ASSERT_GE(options_.max_rpc_size_bytes, 28);
 
     uv_tcp_init(options_.loop, &client_);
     client_.data = this;
@@ -167,7 +168,7 @@ class ClientConn {
              });
   }
 
-  void AssertValid() const { CHECK_LE(num_seen_, num_issued_); }
+  void AssertValid() const { H_ASSERT_LE(num_seen_, num_issued_); }
 
  private:
   void OnConnect(uv_connect_t* req, int status) {
@@ -337,7 +338,7 @@ void ClientConnPool::WithConn(const std::function<void(ClientConn*)>& func) {
     }
   }
 
-  CHECK_NE(best, nullptr);
+  H_ASSERT(best != nullptr);
   func(best);
 }
 
@@ -360,17 +361,18 @@ struct WorkloadStage {
 double MeanOf(const std::array<uint64_t, WorkloadStage::kInterarrivalSamples>& dist) {
   constexpr int kChunkSize = 100;
   constexpr int kNumChunks = WorkloadStage::kInterarrivalSamples / kChunkSize;
-  CHECK_EQ(kChunkSize * kNumChunks, WorkloadStage::kInterarrivalSamples);
+  H_ASSERT_EQ(kChunkSize * kNumChunks, WorkloadStage::kInterarrivalSamples);
   std::array<double, kNumChunks> partial_sums;
   memset(partial_sums.data(), 0, partial_sums.size() * sizeof(double));
   for (int i = 0; i < kNumChunks; ++i) {
     for (int j = i * kChunkSize; j < (i + 1) * kChunkSize; ++j) {
       double prev = partial_sums[i];
-      CHECK_GE(dist[j], 0);
+      H_ASSERT_GE(dist[j], 0);
       partial_sums[i] += dist[j];
-      CHECK(!isnan(partial_sums[i]))
-          << "got nan partial_sum: i: " << i << " j: " << j
-          << " value: " << partial_sums[i] << " prev: " << prev << " inc: " << dist[j];
+      H_ASSERT_MESG(
+          !isnan(partial_sums[i]),
+          absl::StrFormat("got nan partial_sum: i: %d j: %d value: %f prev: %f inc: %d",
+                          i, j, partial_sums[i], prev, dist[j]));
     }
     partial_sums[i] /= kChunkSize;
   }
@@ -421,8 +423,8 @@ std::vector<WorkloadStage> StagesFromConfig(const proto::TestLopriClientConfig& 
     }
 
     const double mean_interarrival_ns = MeanOf(*interarrival_ns);
-    CHECK_GT(mean_interarrival_ns, 0.95 * 1e9 / rpcs_per_sec);
-    CHECK_LT(mean_interarrival_ns, 1.05 * 1e9 / rpcs_per_sec);
+    H_ASSERT_GT(mean_interarrival_ns, 0.95 * 1e9 / rpcs_per_sec);
+    H_ASSERT_LT(mean_interarrival_ns, 1.05 * 1e9 / rpcs_per_sec);
 
     absl::Duration run_dur;
     if (!absl::ParseDuration(p.run_dur(), &run_dur)) {
@@ -562,7 +564,7 @@ class WorkloadController {
   }
 
   proto::HdrHistogram GetInterarrivalProto() {
-    CHECK(interarrival_recorder_.is_recording());
+    H_ASSERT(interarrival_recorder_.is_recording());
     return interarrival_recorder_.hist().ToProto();
   }
 
@@ -858,21 +860,19 @@ class SemiOpenLoadGenerator : public LoadGenerator {
         self->OnCheckNextReq();
       });
     } else {
-      CHECK(waiting_on_timer || waiting_on_wip_write ||
-            caller_type == IssueCaller::Recheck)
-          << absl::StrFormat(
-                 "caller_type = %s, timer_is_running_ = %d, %d/%d queued writes",
-                 ToString(caller_type), timer_is_running_, num_wip_write_,
-                 max_queued_writes_);
+      H_ASSERT_MESG(
+          waiting_on_timer || waiting_on_wip_write || caller_type == IssueCaller::Recheck,
+          absl::StrFormat("caller_type = %s, timer_is_running_ = %d, %d/%d queued writes",
+                          ToString(caller_type), timer_is_running_, num_wip_write_,
+                          max_queued_writes_));
     }
 
     if (!DeadlineExpired(hr_now, hr_scheduled_time_)) {
-      CHECK(waiting_on_timer || waiting_on_wip_write ||
-            caller_type == IssueCaller::Recheck)
-          << absl::StrFormat(
-                 "caller_type = %s, timer_is_running_ = %d, %d/%d queued writes",
-                 ToString(caller_type), timer_is_running_, num_wip_write_,
-                 max_queued_writes_);
+      H_ASSERT_MESG(
+          waiting_on_timer || waiting_on_wip_write || caller_type == IssueCaller::Recheck,
+          absl::StrFormat("caller_type = %s, timer_is_running_ = %d, %d/%d queued writes",
+                          ToString(caller_type), timer_is_running_, num_wip_write_,
+                          max_queued_writes_));
       if (kDebugLoadGen) {
         SHARD_LOG(INFO) << "still need to wait for "
                         << (hr_scheduled_time_ - hr_now) / 1'000
@@ -1185,17 +1185,17 @@ int ShardMain(int argc, char** argv, int shard_index, int num_shards) {
       absl::ToUnixMillis(end_time));
 
   if (absl::GetFlag(FLAGS_interarrival) != "") {
-    CHECK(heyp::WriteTextProtoToFile(
-        load_gen->GetInterarrivalProto(),
-        absl::StrCat(absl::GetFlag(FLAGS_interarrival), ".shard.", shard_index)))
-        << "failed to write latency hist";
+    H_ASSERT_MESG(
+        heyp::WriteTextProtoToFile(
+            load_gen->GetInterarrivalProto(),
+            absl::StrCat(absl::GetFlag(FLAGS_interarrival), ".shard.", shard_index)),
+        "failed to write latency hist");
   }
   if (absl::GetFlag(FLAGS_msgput) != "") {
     absl::Status st = heyp::WriteGoodputTS(
         *goodput_ts, absl::StrCat(absl::GetFlag(FLAGS_msgput), ".shard.", shard_index));
-    if (!st.ok()) {
-      LOG(FATAL) << "failed to write goodput timeseries: " << st;
-    }
+    H_ASSERT_MESG(st.ok(),
+                  absl::StrCat("failed to write goodput timeseries: ", st.ToString()));
   }
   return 0;
 }

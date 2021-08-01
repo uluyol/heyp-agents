@@ -13,6 +13,7 @@
 #include "absl/status/statusor.h"
 #include "absl/synchronization/mutex.h"
 #include "absl/synchronization/notification.h"
+#include "heyp/log/spdlog.h"
 #include "heyp/proto/integration.pb.h"
 
 namespace heyp {
@@ -48,6 +49,7 @@ class HostWorker {
 
   const int serve_fd_;
   const int serve_port_;
+  spdlog::logger logger_;
 
   bool got_metrics_ = false;
   absl::Notification go_;

@@ -2,7 +2,7 @@
 
 #include "absl/memory/memory.h"
 #include "absl/time/clock.h"
-#include "heyp/log/logging.h"
+#include "heyp/log/spdlog.h"
 
 namespace heyp {
 
@@ -55,7 +55,7 @@ google::protobuf::RepeatedPtrField<proto::StatsRecord::LatencyStats> ToProtoLate
 }
 
 void StatsRecorder::DoneStep(absl::string_view label) {
-  CHECK(started_);
+  H_ASSERT(started_);
 
   // copy for async writing
   std::string label_str(label);

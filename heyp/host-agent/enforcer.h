@@ -4,6 +4,7 @@
 #include "absl/types/span.h"
 #include "heyp/host-agent/flow-tracker.h"
 #include "heyp/proto/heyp.pb.h"
+#include "spdlog/spdlog.h"
 
 namespace heyp {
 
@@ -19,10 +20,15 @@ class HostEnforcer {
 
 class NopHostEnforcer : public HostEnforcer {
  public:
+  NopHostEnforcer();
+
   void EnforceAllocs(const FlowStateProvider& flow_state_provider,
                      const proto::AllocBundle& bundle) override;
 
   bool IsLopri(const proto::FlowMarker& flow) override;
+
+ private:
+  spdlog::logger logger_;
 };
 
 // See linux-enforcer/enforcer.h for an implementation of a real enforcer.

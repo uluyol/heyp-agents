@@ -6,6 +6,7 @@
 
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "heyp/log/spdlog.h"
 #include "heyp/proto/fileio.h"
 
 namespace heyp {
@@ -31,6 +32,7 @@ class NdjsonLogger {
 
  private:
   int fd_;
+  spdlog::logger logger_;
 };
 
 absl::StatusOr<std::unique_ptr<NdjsonLogger>> CreateNdjsonLogger(

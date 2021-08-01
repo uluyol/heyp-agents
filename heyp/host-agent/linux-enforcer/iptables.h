@@ -29,6 +29,7 @@
 #include "absl/status/statusor.h"
 #include "absl/strings/cord.h"
 #include "absl/strings/string_view.h"
+#include "spdlog/spdlog.h"
 
 namespace heyp {
 namespace iptables {
@@ -150,6 +151,7 @@ class Runner {
   const std::string iptables_save_cmd_;
   const std::string iptables_restore_cmd_;
   const bool has_check_;
+  spdlog::logger logger_;
   std::vector<std::string> wait_flag_;
   std::vector<std::string> restore_wait_flag_;
 

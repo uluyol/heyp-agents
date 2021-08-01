@@ -114,7 +114,7 @@ cc_library(
     hdrs = ["ndjson-logger.h"],
     deps = [
         ":fileio",
-        "//heyp/log",
+        "//heyp/log:spdlog",
         "//heyp/posix:strerror",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/status:statusor",
@@ -125,7 +125,7 @@ cc_library(
     name = "parse-text",
     hdrs = ["parse-text.h"],
     deps = [
-        "//heyp/log",
+        "//heyp/log:spdlog",
         "@com_google_protobuf//:protobuf",
     ],
 )

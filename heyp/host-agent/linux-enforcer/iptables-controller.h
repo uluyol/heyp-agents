@@ -9,6 +9,7 @@
 #include "absl/strings/string_view.h"
 #include "heyp/host-agent/linux-enforcer/iptables.h"
 #include "heyp/host-agent/linux-enforcer/small-string-set.h"
+#include "spdlog/spdlog.h"
 
 namespace heyp {
 namespace iptables {
@@ -54,6 +55,7 @@ class Controller {
  private:
   const std::string dev_;
   const SmallStringSet dscps_to_ignore_class_id_;
+  spdlog::logger logger_;
   std::unique_ptr<Runner> runner_;
 
   SettingBatch staged_;

@@ -6,12 +6,13 @@
 #include "absl/debugging/leak_check.h"
 #include "absl/debugging/symbolize.h"
 #include "absl/flags/parse.h"
-#include "heyp/log/logging.h"
+#include "ortools/base/logging.h"
 
 namespace heyp {
 
 void MainInit(int* argc, char*** argv) {
   google::InitGoogleLogging((*argv)[0]);
+  absl::SetFlag(&FLAGS_logtostderr, 1);
   absl::InitializeSymbolizer((*argv)[0]);
   absl::InstallFailureSignalHandler(absl::FailureSignalHandlerOptions());
   std::vector<char*> updated = absl::ParseCommandLine(*argc, *argv);

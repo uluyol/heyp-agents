@@ -30,7 +30,7 @@ limitations under the License.
 
 #include "absl/strings/str_join.h"
 #include "heyp/io/look-path.h"
-#include "heyp/log/logging.h"
+#include "heyp/log/spdlog.h"
 
 // Android versions older than 28 do not have posix_spawn().
 #define USE_POSIX_SPAWN !defined(__ANDROID_API__) || __ANDROID_API__ >= 28
@@ -81,8 +81,12 @@ extern char** environ;
 
 namespace heyp {
 
-SubProcess::SubProcess(int nfds)
-    : running_(false), pid_(-1), exec_path_(nullptr), exec_argv_(nullptr) {
+SubProcess::SubProcess(spdlog::logger* logger, int nfds)
+    : logger_(logger),
+      running_(false),
+      pid_(-1),
+      exec_path_(nullptr),
+      exec_argv_(nullptr) {
   // The input 'nfds' parameter is currently ignored and the internal constant
   // 'kNFds' is used to support the 3 channels (stdin, stdout, stderr).
   for (int i = 0; i < kNFds; i++) {
@@ -118,13 +122,13 @@ void SubProcess::ClosePipes() {
   for (int i = 0; i < kNFds; i++) {
     if (parent_pipe_[i] >= 0) {
       if (close(parent_pipe_[i]) < 0) {
-        LOG(ERROR) << "close() failed: " << strerror(errno);
+        SPDLOG_LOGGER_ERROR(logger_, "close() failed: {}", strerror(errno));
       }
       parent_pipe_[i] = -1;
     }
     if (child_pipe_[i] >= 0) {
       if (close(child_pipe_[i]) < 0) {
-        LOG(ERROR) << "close() failed: " << strerror(errno);
+        SPDLOG_LOGGER_ERROR(logger_, "close() failed: {}", strerror(errno));
       }
       child_pipe_[i] = -1;
     }
@@ -139,19 +143,21 @@ void SubProcess::SetProgram(const std::string& file_raw,
 
   std::string file = LookPath(file_raw);
 
-  VLOG(2) << "running " << absl::StrJoin(argv, " ");
+  SPDLOG_LOGGER_DEBUG(logger_, "running {}", absl::StrJoin(argv, " "));
 
   absl::MutexLock procLock(&proc_mu_);
   absl::MutexLock dataLock(&data_mu_);
   if (running_) {
-    LOG(FATAL) << "SetProgram called after the process was started.";
+    SPDLOG_LOGGER_CRITICAL(logger_, "SetProgram called after the process was started.");
+    DumpStackTraceAndExit(12);
     return;
   }
 
   FreeArgs();
   exec_path_ = strdup(file.c_str());
   if (exec_path_ == nullptr) {
-    LOG(FATAL) << "SetProgram failed to allocate file string.";
+    SPDLOG_LOGGER_CRITICAL(logger_, "SetProgram failed to allocate file string.");
+    DumpStackTraceAndExit(12);
     return;
   }
 
@@ -160,7 +166,8 @@ void SubProcess::SetProgram(const std::string& file_raw,
   for (int i = 0; i < argc; i++) {
     exec_argv_[i] = strdup(argv[i].c_str());
     if (exec_argv_[i] == nullptr) {
-      LOG(FATAL) << "SetProgram failed to allocate command argument.";
+      SPDLOG_LOGGER_CRITICAL(logger_, "SetProgram failed to allocate command argument.");
+      DumpStackTraceAndExit(12);
       return;
     }
   }
@@ -171,12 +178,18 @@ void SubProcess::SetChannelAction(Channel chan, ChannelAction action) {
   absl::MutexLock procLock(&proc_mu_);
   absl::MutexLock dataLock(&data_mu_);
   if (running_) {
-    LOG(FATAL) << "SetChannelAction called after the process was started.";
+    SPDLOG_LOGGER_CRITICAL(logger_,
+                           "SetChannelAction called after the process was started.");
+    DumpStackTraceAndExit(12);
   } else if (!chan_valid(chan)) {
-    LOG(FATAL) << "SetChannelAction called with invalid channel: " << chan;
+    SPDLOG_LOGGER_CRITICAL(logger_, "SetChannelAction called with invalid channel: {}",
+                           chan);
+    DumpStackTraceAndExit(12);
   } else if ((action != ACTION_CLOSE) && (action != ACTION_PIPE) &&
              (action != ACTION_DUPPARENT)) {
-    LOG(FATAL) << "SetChannelAction called with invalid action: " << action;
+    SPDLOG_LOGGER_CRITICAL(logger_, "SetChannelAction called with invalid action: {}",
+                           action);
+    DumpStackTraceAndExit(12);
   } else {
     action_[chan] = action;
   }
@@ -192,11 +205,11 @@ bool SubProcess::Start() {
   absl::MutexLock procLock(&proc_mu_);
   absl::MutexLock dataLock(&data_mu_);
   if (running_) {
-    LOG(ERROR) << "Start called after the process was started.";
+    SPDLOG_LOGGER_ERROR(logger_, "Start called after the process was started.");
     return false;
   }
   if ((exec_path_ == nullptr) || (exec_argv_ == nullptr)) {
-    LOG(ERROR) << "Start called without setting a program.";
+    SPDLOG_LOGGER_ERROR(logger_, "Start called without setting a program.");
     return false;
   }
 
@@ -206,7 +219,7 @@ bool SubProcess::Start() {
     if (action_[i] == ACTION_PIPE) {
       int pipe_fds[2];
       if (pipe(pipe_fds) < 0) {
-        LOG(ERROR) << "Start cannot create pipe: " << strerror(errno);
+        SPDLOG_LOGGER_ERROR(logger_, "Start cannot create pipe: {}", strerror(errno));
         ClosePipes();
         return false;
       }
@@ -220,12 +233,14 @@ bool SubProcess::Start() {
       }
 
       if (fcntl(parent_pipe_[i], F_SETFL, O_NONBLOCK) < 0) {
-        LOG(ERROR) << "Start cannot make pipe non-blocking: " << strerror(errno);
+        SPDLOG_LOGGER_ERROR(logger_, "Start cannot make pipe non-blocking: {}",
+                            strerror(errno));
         ClosePipes();
         return false;
       }
       if (fcntl(parent_pipe_[i], F_SETFD, FD_CLOEXEC) < 0) {
-        LOG(ERROR) << "Start cannot make pipe close-on-exec: " << strerror(errno);
+        SPDLOG_LOGGER_ERROR(logger_, "Start cannot make pipe close-on-exec: {}",
+                            strerror(errno));
         ClosePipes();
         return false;
       }
@@ -236,7 +251,8 @@ bool SubProcess::Start() {
   int ret;
   ret = posix_spawn_file_actions_init(&file_actions);
   if (ret != 0) {
-    LOG(ERROR) << "Start cannot initialize POSIX file actions: " << strerror(ret);
+    SPDLOG_LOGGER_ERROR(logger_, "Start cannot initialize POSIX file actions: {}",
+                        strerror(ret));
     ClosePipes();
     return false;
   }
@@ -249,7 +265,8 @@ bool SubProcess::Start() {
     if (parent_pipe_[i] >= 0) {
       ret = posix_spawn_file_actions_addclose(&file_actions, parent_pipe_[i]);
       if (ret != 0) {
-        LOG(ERROR) << "posix_spawn_file_actions_addclose() failed: " << strerror(ret);
+        SPDLOG_LOGGER_ERROR(logger_, "posix_spawn_file_actions_addclose() failed: {}",
+                            strerror(ret));
       }
     }
 
@@ -261,11 +278,13 @@ bool SubProcess::Start() {
       case ACTION_PIPE:
         ret = posix_spawn_file_actions_adddup2(&file_actions, child_pipe_[i], i);
         if (ret != 0) {
-          LOG(ERROR) << "posix_spawn_file_actions_adddup2() failed: " << strerror(ret);
+          SPDLOG_LOGGER_ERROR(logger_, "posix_spawn_file_actions_adddup2() failed: {}",
+                              strerror(ret));
         }
         ret = posix_spawn_file_actions_addclose(&file_actions, child_pipe_[i]);
         if (ret != 0) {
-          LOG(ERROR) << "posix_spawn_file_actions_addclose() failed: " << strerror(ret);
+          SPDLOG_LOGGER_ERROR(logger_, "posix_spawn_file_actions_addclose() failed: {}",
+                              strerror(ret));
         }
         break;
 
@@ -278,21 +297,24 @@ bool SubProcess::Start() {
             ret = posix_spawn_file_actions_addopen(&file_actions, i, "/dev/null", O_RDWR,
                                                    0);
             if (ret != 0) {
-              LOG(ERROR) << "posix_spawn_file_actions_addopen() failed: "
-                         << strerror(ret);
+              SPDLOG_LOGGER_ERROR(logger_,
+                                  "posix_spawn_file_actions_addopen() failed: {}",
+                                  strerror(ret));
             }
             devnull_fd = i;
           } else {
             ret = posix_spawn_file_actions_adddup2(&file_actions, devnull_fd, i);
             if (ret != 0) {
-              LOG(ERROR) << "posix_spawn_file_actions_adddup2() failed: "
-                         << strerror(ret);
+              SPDLOG_LOGGER_ERROR(logger_,
+                                  "posix_spawn_file_actions_adddup2() failed: {}",
+                                  strerror(ret));
             }
           }
         } else {
           ret = posix_spawn_file_actions_addclose(&file_actions, i);
           if (ret != 0) {
-            LOG(ERROR) << "posix_spawn_file_actions_addclose() failed: " << strerror(ret);
+            SPDLOG_LOGGER_ERROR(logger_, "posix_spawn_file_actions_addclose() failed: {}",
+                                strerror(ret));
           }
         }
         break;
@@ -302,14 +324,15 @@ bool SubProcess::Start() {
   // Start the child process and setup the file descriptors of both processes.
   ret = posix_spawnp(&pid_, exec_path_, &file_actions, nullptr, exec_argv_, environ);
   if (ret != 0) {
-    LOG(ERROR) << "Start cannot spawn child process: " << strerror(ret);
+    SPDLOG_LOGGER_ERROR(logger_, "Start cannot spawn child process: {}", strerror(ret));
     ClosePipes();
     return false;
   }
 
   ret = posix_spawn_file_actions_destroy(&file_actions);
   if (ret != 0) {
-    LOG(WARNING) << "Start cannot destroy POSIX file actions: " << strerror(ret);
+    SPDLOG_LOGGER_WARN(logger_, "Start cannot destroy POSIX file actions: {}",
+                       strerror(ret));
   }
 
   // Parent process: close the child-side pipes and return.
@@ -317,7 +340,7 @@ bool SubProcess::Start() {
   for (int i = 0; i < kNFds; i++) {
     if (child_pipe_[i] >= 0) {
       if (close(child_pipe_[i]) < 0) {
-        LOG(ERROR) << "close() failed: " << strerror(errno);
+        SPDLOG_LOGGER_ERROR(logger_, "close() failed: {}", strerror(errno));
       }
       child_pipe_[i] = -1;
     }
@@ -333,11 +356,11 @@ bool SubProcess::Start() {
   absl::MutexLock procLock(&proc_mu_);
   absl::MutexLock dataLock(&data_mu_);
   if (running_) {
-    LOG(ERROR) << "Start called after the process was started.";
+    SPDLOG_LOGGER_ERROR(logger_, "Start called after the process was started.");
     return false;
   }
   if ((exec_path_ == nullptr) || (exec_argv_ == nullptr)) {
-    LOG(ERROR) << "Start called without setting a program.";
+    SPDLOG_LOGGER_ERROR(logger_, "Start called without setting a program.");
     return false;
   }
 
@@ -347,7 +370,7 @@ bool SubProcess::Start() {
     if (action_[i] == ACTION_PIPE) {
       int pipe_fds[2];
       if (pipe(pipe_fds) < 0) {
-        LOG(ERROR) << "Start cannot create pipe: " << strerror(errno);
+        SPDLOG_LOGGER_ERROR(logger_, "Start cannot create pipe: {}", strerror(errno));
         ClosePipes();
         return false;
       }
@@ -361,12 +384,14 @@ bool SubProcess::Start() {
       }
 
       if (fcntl(parent_pipe_[i], F_SETFL, O_NONBLOCK) < 0) {
-        LOG(ERROR) << "Start cannot make pipe non-blocking: " << strerror(errno);
+        SPDLOG_LOGGER_ERROR(logger_, "Start cannot make pipe non-blocking: {}",
+                            strerror(errno));
         ClosePipes();
         return false;
       }
       if (fcntl(parent_pipe_[i], F_SETFD, FD_CLOEXEC) < 0) {
-        LOG(ERROR) << "Start cannot make pipe close-on-exec: " << strerror(errno);
+        SPDLOG_LOGGER_ERROR(logger_, "Start cannot make pipe close-on-exec: {}",
+                            strerror(errno));
         ClosePipes();
         return false;
       }
@@ -377,7 +402,8 @@ bool SubProcess::Start() {
   // See comment (1) in the header about issues with the use of fork().
   pid_ = fork();
   if (pid_ < 0) {
-    LOG(ERROR) << "Start cannot fork() child process: " << strerror(errno);
+    SPDLOG_LOGGER_ERROR(logger_, "Start cannot fork() child process: {}",
+                        strerror(errno));
     ClosePipes();
     return false;
   }
@@ -388,7 +414,7 @@ bool SubProcess::Start() {
     for (int i = 0; i < kNFds; i++) {
       if (child_pipe_[i] >= 0) {
         if (close(child_pipe_[i]) < 0) {
-          LOG(ERROR) << "close() failed: " << strerror(errno);
+          SPDLOG_LOGGER_ERROR(logger_, "close() failed: {}", strerror(errno));
         }
         child_pipe_[i] = -1;
       }
@@ -402,7 +428,7 @@ bool SubProcess::Start() {
   for (int i = 0; i < kNFds; i++) {
     if (parent_pipe_[i] >= 0) {
       if (close(parent_pipe_[i]) < 0) {
-        LOG(ERROR) << "close() failed: " << strerror(errno);
+        SPDLOG_LOGGER_ERROR(logger_, "close() failed: {}", strerror(errno));
       }
       parent_pipe_[i] = -1;
     }
@@ -419,7 +445,7 @@ bool SubProcess::Start() {
           }
         }
         if (close(child_pipe_[i]) < 0) {
-          LOG(ERROR) << "close() failed: " << strerror(errno);
+          SPDLOG_LOGGER_ERROR(logger_, "close() failed: {}", strerror(errno));
         }
         child_pipe_[i] = -1;
         break;
@@ -443,7 +469,7 @@ bool SubProcess::Start() {
           }
         } else {
           if (close(i) < 0) {
-            LOG(ERROR) << "close() failed: " << strerror(errno);
+            SPDLOG_LOGGER_ERROR(logger_, "close() failed: {}", strerror(errno));
           }
         }
         break;
@@ -452,7 +478,7 @@ bool SubProcess::Start() {
 
   if (devnull_fd >= 0) {
     if (close(devnull_fd) < 0) {
-      LOG(ERROR) << "close() failed: " << strerror(errno);
+      SPDLOG_LOGGER_ERROR(logger_, "close() failed: {}", strerror(errno));
     }
   }
 
@@ -526,7 +552,7 @@ int SubProcess::Communicate(const std::string* stdin_input, std::string* stdout_
   bool running = running_;
   proc_mu_.Unlock();
   if (!running) {
-    LOG(ERROR) << "Communicate called without a running process.";
+    SPDLOG_LOGGER_ERROR(logger_, "Communicate called without a running process.");
     return 1;
   }
 
@@ -538,7 +564,8 @@ int SubProcess::Communicate(const std::string* stdin_input, std::string* stdout_
   // by the premature death of the child process, don't overwrite its handler.
   struct sigaction act;
   if (sigaction(SIGPIPE, nullptr, &act) < 0) {
-    LOG(ERROR) << "Communicate cannot get SIGPIPE handler: " << strerror(errno);
+    SPDLOG_LOGGER_ERROR(logger_, "Communicate cannot get SIGPIPE handler: {}",
+                        strerror(errno));
     return 1;
   }
   if (act.sa_handler == SIG_DFL) {
@@ -546,7 +573,8 @@ int SubProcess::Communicate(const std::string* stdin_input, std::string* stdout_
     act.sa_handler = SIG_IGN;
     sigemptyset(&act.sa_mask);
     if (sigaction(SIGPIPE, &act, nullptr) < 0) {
-      LOG(ERROR) << "Communicate cannot ignore SIGPIPE: " << strerror(errno);
+      SPDLOG_LOGGER_ERROR(logger_, "Communicate cannot ignore SIGPIPE: {}",
+                          strerror(errno));
       return 1;
     }
   }
@@ -564,7 +592,7 @@ int SubProcess::Communicate(const std::string* stdin_input, std::string* stdout_
           // close the pipe to unblock the child, and skip the file descriptor.
           if (stdin_input == nullptr) {
             if (close(parent_pipe_[i]) < 0) {
-              LOG(ERROR) << "close() failed: " << strerror(errno);
+              SPDLOG_LOGGER_ERROR(logger_, "close() failed: {}", strerror(errno));
             }
             parent_pipe_[i] = -1;
             continue;
@@ -595,10 +623,10 @@ int SubProcess::Communicate(const std::string* stdin_input, std::string* stdout_
   while (fd_remain > 0) {
     int n = poll(fds, fd_count, -1);
     if ((n < 0) && !retry(errno)) {
-      LOG(ERROR) << "Communicate cannot poll(): " << strerror(errno);
+      SPDLOG_LOGGER_ERROR(logger_, "Communicate cannot poll(): {}", strerror(errno));
       fd_remain = 0;
     } else if (n == 0) {
-      LOG(ERROR) << "Communicate cannot poll(): timeout not possible";
+      SPDLOG_LOGGER_ERROR(logger_, "Communicate cannot poll(): timeout not possible");
       fd_remain = 0;
     } else if (n > 0) {
       // Handle the pipes ready for I/O.
@@ -628,7 +656,7 @@ int SubProcess::Communicate(const std::string* stdin_input, std::string* stdout_
               fd_remain--;
               // Close the child's stdin pipe to unblock the process.
               if (close(parent_pipe_[CHAN_STDIN]) < 0) {
-                LOG(ERROR) << "close() failed: " << strerror(errno);
+                SPDLOG_LOGGER_ERROR(logger_, "close() failed: {}", strerror(errno));
               }
               parent_pipe_[CHAN_STDIN] = -1;
             }
@@ -649,14 +677,6 @@ int SubProcess::Communicate(const std::string* stdin_input, std::string* stdout_
   // Wait for the child process to exit and return its status.
   int status;
   return WaitInternal(&status) ? status : -1;
-}
-
-std::unique_ptr<SubProcess> CreateSubProcess(const std::vector<std::string>& argv) {
-  std::unique_ptr<SubProcess> proc(new SubProcess());
-  proc->SetProgram(argv[0], argv);
-  proc->SetChannelAction(CHAN_STDERR, ACTION_DUPPARENT);
-  proc->SetChannelAction(CHAN_STDOUT, ACTION_DUPPARENT);
-  return proc;
 }
 
 }  // namespace heyp

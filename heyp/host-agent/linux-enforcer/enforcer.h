@@ -14,6 +14,7 @@
 #include "heyp/host-agent/simulated-wan-db.h"
 #include "heyp/proto/config.pb.h"
 #include "heyp/proto/heyp.pb.h"
+#include "spdlog/spdlog.h"
 
 namespace heyp {
 
@@ -24,8 +25,8 @@ struct MatchedHostFlows {
   Vec lopri;
 };
 
-using MatchHostFlowsFunc =
-    std::function<MatchedHostFlows(const FlowStateProvider&, const proto::FlowAlloc&)>;
+using MatchHostFlowsFunc = std::function<MatchedHostFlows(
+    const FlowStateProvider&, const proto::FlowAlloc&, spdlog::logger*)>;
 
 // ExpandDestIntoHostsSinglePri matches all traffic in an FG to *either* HIPRI or LOPRI.
 // It cannot be used with allocations that provide both HIPRI and LOPRI limits for a
@@ -34,7 +35,7 @@ using MatchHostFlowsFunc =
 // It uses the StaticDCMatcher to match any flow that could possibly belong to the FG.
 MatchedHostFlows ExpandDestIntoHostsSinglePri(
     const StaticDCMapper* dc_mapper, const FlowStateProvider& flow_state_provider,
-    const proto::FlowAlloc& flow_alloc);
+    const proto::FlowAlloc& flow_alloc, spdlog::logger* logger);
 
 struct FlowNetemConfig {
   proto::FlowMarker flow;

@@ -11,7 +11,7 @@
 
 #include "absl/cleanup/cleanup.h"
 #include "absl/strings/str_cat.h"
-#include "heyp/log/logging.h"
+#include "heyp/log/spdlog.h"
 #include "heyp/posix/strerror.h"
 
 namespace heyp {
@@ -52,7 +52,7 @@ void HostWorker::Serve() {
     if (connfd == -1) {
       break;
     }
-    LOG(INFO) << "new connection on fd " << connfd;
+    SPDLOG_LOGGER_INFO(&logger_, "new connection on fd {}", connfd);
     absl::MutexLock l(&mu_);
     worker_fds_.push_back(connfd);
     worker_threads_.push_back(std::thread(&HostWorker::RecvFlow, this,
@@ -61,7 +61,7 @@ void HostWorker::Serve() {
 }
 
 HostWorker::HostWorker(int serve_fd, int serve_port)
-    : serve_fd_(serve_fd), serve_port_(serve_port) {
+    : serve_fd_(serve_fd), serve_port_(serve_port), logger_(MakeLogger("host-worker")) {
   serve_thread_ = std::thread(&HostWorker::Serve, this);
 }
 
@@ -91,32 +91,32 @@ void HostWorker::RecvFlow(int fd) {
   char buf[kBufSize];
   // auto fd_closer = absl::MakeCleanup([fd] { close(fd); });
 
-  VLOG(2) << "fd " << fd << ": read name length";
+  SPDLOG_LOGGER_DEBUG(&logger_, "fd {}: read name length", fd);
   if (!ReadFull(fd, buf, 2)) {
     return;
   }
   int name_size = buf[0] + (buf[1] << 8);
-  VLOG(2) << "fd " << fd << ": read name";
+  SPDLOG_LOGGER_DEBUG(&logger_, "fd {}: read name", fd);
   if (!ReadFull(fd, buf, name_size)) {
     return;
   }
   std::string name(buf, name_size);
 
-  VLOG(2) << "fd " << fd << ": init counter";
+  SPDLOG_LOGGER_DEBUG(&logger_, "fd {}: init counter", fd);
   std::atomic<int64_t>* counter = nullptr;
   {
     absl::MutexLock l(&mu_);
     counter = GetCounter(name, /*recv=*/true);
   }
 
-  VLOG(2) << "fd " << fd << ": start read loop";
+  SPDLOG_LOGGER_DEBUG(&logger_, "fd {}: start read loop", fd);
   while (!shutting_down_.load()) {
     int ret = read(fd, buf, sizeof buf);
     if (ret > 0) {
       counter->fetch_add(ret);
     }
   }
-  VLOG(2) << "fd " << fd << ": exited read loop";
+  SPDLOG_LOGGER_DEBUG(&logger_, "fd {}: exited read loop", fd);
 }
 
 #ifdef __APPLE__
@@ -132,16 +132,16 @@ void HostWorker::SendFlow(int fd, std::string name, std::atomic<int64_t>* counte
   buf[1] = name.size() >> 8;
   memmove(buf + 2, name.data(), name.size());
   if (send(fd, buf, name.size() + 2, SEND_FLAGS) == name.size() + 2) {
-    VLOG(2) << "fd " << fd << ": waiting for go signal";
+    SPDLOG_LOGGER_DEBUG(&logger_, "fd {}: waiting for go signal", fd);
     go_.WaitForNotification();
-    VLOG(2) << "fd " << fd << ": start write loop";
+    SPDLOG_LOGGER_DEBUG(&logger_, "fd {}: start write loop", fd);
     while (!shutting_down_.load()) {
       int ret = send(fd, buf, kBufSize, SEND_FLAGS);
       if (ret > 0) {
         counter->fetch_add(ret);
       }
     }
-    VLOG(2) << "fd " << fd << ": exited write loop";
+    SPDLOG_LOGGER_DEBUG(&logger_, "fd {}: exited write loop", fd);
   }
 }
 
@@ -238,28 +238,28 @@ std::vector<proto::TestCompareMetrics::Metric> HostWorker::Finish() {
   shutting_down_.store(true);
 
   if (serve_fd_ != -1) {
-    LOG(INFO) << "tearing down serve loop";
+    SPDLOG_LOGGER_INFO(&logger_, "tearing down serve loop");
     shutdown(serve_fd_, SHUT_RDWR);
     close(serve_fd_);
   }
 
   absl::MutexLock l(&mu_);
-  LOG(INFO) << "tearing down " << worker_threads_.size() << " workers";
+  SPDLOG_LOGGER_INFO(&logger_, "tearing down {} workers", worker_threads_.size());
   for (int fd : worker_fds_) {
-    VLOG(2) << "close fd " << fd;
+    SPDLOG_LOGGER_DEBUG(&logger_, "close fd {}", fd);
     shutdown(fd, SHUT_RDWR);
     close(fd);
   }
   serve_thread_.join();
   for (size_t i = 0; i < worker_threads_.size(); ++i) {
-    VLOG(2) << "join worker " << i;
+    SPDLOG_LOGGER_DEBUG(&logger_, "join worker {}", i);
     if (!worker_threads_[i].joinable()) {
-      LOG(ERROR) << "worker thread " << i << " is bad";
+      SPDLOG_LOGGER_ERROR(&logger_, "worker thread {} is bad", i);
     }
     worker_threads_[i].join();
   }
 
-  LOG(INFO) << "accumulating results";
+  SPDLOG_LOGGER_INFO(&logger_, "accumulating results");
   std::vector<proto::TestCompareMetrics::Metric> results;
   for (const auto& key_val_pair : measurements_) {
     for (const auto& label_step_bps_pair : key_val_pair.second.step_bps) {

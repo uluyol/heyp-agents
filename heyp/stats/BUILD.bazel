@@ -27,7 +27,7 @@ cc_library(
     hdrs = ["hdrhistogram.h"],
     deps = [
         ":cdf",
-        "//heyp/log",
+        "//heyp/log:spdlog",
         "//heyp/posix:strerror",
         "//heyp/proto:stats_cc_proto",
         "@com_google_absl//absl/status",
@@ -41,7 +41,7 @@ cc_library(
     hdrs = ["recorder.h"],
     deps = [
         ":hdrhistogram",
-        "//heyp/log",
+        "//heyp/log:spdlog",
         "//heyp/posix:strerror",
         "//heyp/proto:ndjson-logger",
         "//heyp/proto:stats_cc_proto",

@@ -28,6 +28,7 @@ limitations under the License.
 #include "absl/base/macros.h"
 #include "absl/base/thread_annotations.h"
 #include "absl/synchronization/mutex.h"
+#include "spdlog/spdlog.h"
 
 namespace heyp {
 
@@ -57,7 +58,7 @@ class SubProcess {
  public:
   // SubProcess()
   //    nfds: The number of file descriptors to use.
-  explicit SubProcess(int nfds = 3);
+  explicit SubProcess(spdlog::logger* logger, int nfds = 3);
 
   // Virtual for backwards compatibility; do not create new subclasses.
   // It is illegal to delete the SubProcess within its exit callback.
@@ -134,6 +135,8 @@ class SubProcess {
   void FreeArgs() ABSL_EXCLUSIVE_LOCKS_REQUIRED(data_mu_);
   void ClosePipes() ABSL_EXCLUSIVE_LOCKS_REQUIRED(data_mu_);
   bool WaitInternal(int* status);
+
+  spdlog::logger* logger_;
 
   // The separation between proc_mu_ and data_mu_ mutexes allows Kill() to be
   // called by a thread while another thread is inside Wait() or Communicate().

@@ -7,6 +7,7 @@
 #include "absl/status/statusor.h"
 #include "absl/time/time.h"
 #include "heyp/cluster-agent/allocs.h"
+#include "heyp/log/spdlog.h"
 #include "heyp/proto/config.pb.h"
 #include "heyp/proto/heyp.pb.h"
 #include "heyp/proto/ndjson-logger.h"
@@ -33,6 +34,7 @@ class ClusterAllocator {
   ClusterAllocator(std::unique_ptr<PerAggAllocator> alloc, NdjsonLogger* alloc_recorder);
 
   std::unique_ptr<PerAggAllocator> alloc_;
+  spdlog::logger logger_;
   Executor exec_;
 
   std::unique_ptr<TaskGroup> group_;

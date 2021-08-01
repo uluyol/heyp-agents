@@ -8,7 +8,7 @@ heyp_cc_binary(
         "//heyp/encoding:binary",
         "//heyp/host-agent:urls",
         "//heyp/init",
-        "//heyp/log",
+        "//heyp/log:spdlog",
         "//heyp/proto:app_cc_proto",
         "//heyp/proto:fileio",
         "//heyp/stats:recorder",

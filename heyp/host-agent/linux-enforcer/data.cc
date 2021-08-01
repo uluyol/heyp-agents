@@ -5,14 +5,15 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
 #include "heyp/io/subprocess.h"
-#include "heyp/log/logging.h"
+#include "heyp/log/spdlog.h"
 #include "third_party/simdjson/simdjson.h"
 
 namespace heyp {
 
 absl::StatusOr<std::string> FindDeviceResponsibleFor(
-    const std::vector<std::string>& ip_addrs, const std::string& ip_bin_name) {
-  SubProcess subproc;
+    const std::vector<std::string>& ip_addrs, spdlog::logger* logger,
+    const std::string& ip_bin_name) {
+  SubProcess subproc(logger);
   subproc.SetProgram(ip_bin_name, {"-json", "addr"});
   subproc.SetChannelAction(CHAN_STDOUT, ACTION_PIPE);
   subproc.SetChannelAction(CHAN_STDERR, ACTION_PIPE);

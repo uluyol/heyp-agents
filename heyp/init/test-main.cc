@@ -1,7 +1,7 @@
 #include "absl/flags/flag.h"
 #include "gtest/gtest.h"
 #include "heyp/init/init.h"
-#include "heyp/log/logging.h"
+#include "ortools/base/logging.h"
 
 int main(int argc, char** argv) {
   testing::InitGoogleTest(&argc, argv);

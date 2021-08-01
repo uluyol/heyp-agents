@@ -6,13 +6,14 @@
 
 #include "absl/status/status.h"
 #include "absl/types/optional.h"
+#include "spdlog/spdlog.h"
 #include "third_party/simdjson/simdjson.h"
 
 namespace heyp {
 
 class TcCaller {
  public:
-  explicit TcCaller(const std::string& tc_name = "tc");
+  TcCaller(spdlog::logger* logger, const std::string& tc_name = "tc");
 
   // Execute a batch of updates. The input should have a line for each tc command.
   //
@@ -32,6 +33,7 @@ class TcCaller {
 
  private:
   const std::string tc_name_;
+  spdlog::logger* logger_;
   simdjson::dom::parser parser_;
   std::string buf_;
   absl::optional<simdjson::dom::element> result_;

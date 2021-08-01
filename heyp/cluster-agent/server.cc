@@ -3,7 +3,7 @@
 #include "absl/strings/str_format.h"
 #include "grpcpp/grpcpp.h"
 #include "heyp/cluster-agent/controller.h"
-#include "heyp/log/logging.h"
+#include "heyp/log/spdlog.h"
 
 namespace heyp {
 
@@ -11,14 +11,15 @@ ClusterAgentService::ClusterAgentService(std::unique_ptr<FlowAggregator> aggrega
                                          std::unique_ptr<ClusterAllocator> allocator,
                                          absl::Duration control_period)
     : control_period_(control_period),
-      controller_(std::move(aggregator), std::move(allocator)) {}
+      controller_(std::move(aggregator), std::move(allocator)),
+      logger_(MakeLogger("cluster-agent-svc")) {}
 
 grpc::Status ClusterAgentService::RegisterHost(
     grpc::ServerContext* context,
     grpc::ServerReaderWriter<proto::AllocBundle, proto::InfoBundle>* stream) {
   bool registered = false;
   ClusterController::Listener lis;
-  LOG(INFO) << absl::StrFormat("%s: called by %s", __func__, context->peer());
+  SPDLOG_LOGGER_INFO(&logger_, "{}: called by {}", __func__, context->peer());
 
   std::string peer = context->peer();
   while (true) {
@@ -26,14 +27,14 @@ grpc::Status ClusterAgentService::RegisterHost(
     if (!stream->Read(&info)) {
       break;
     }
-    LOG(INFO) << absl::StrFormat("got info from %s with %d FGs", peer,
-                                 info.flow_infos_size());
+    SPDLOG_LOGGER_INFO(&logger_, "got info from {} with {} FGs", peer,
+                       info.flow_infos_size());
 
     if (!registered) {
       lis = controller_.RegisterListener(
-          info.bundler().host_id(), [stream, peer](proto::AllocBundle alloc) {
-            LOG(INFO) << absl::StrFormat("sending allocs for %d FGs to %s",
-                                         alloc.flow_allocs_size(), peer);
+          info.bundler().host_id(), [stream, peer, this](proto::AllocBundle alloc) {
+            SPDLOG_LOGGER_INFO(&logger_, "sending allocs for {} FGs to {}",
+                               alloc.flow_allocs_size(), peer);
             stream->Write(alloc);
           });
     }
@@ -44,7 +45,7 @@ grpc::Status ClusterAgentService::RegisterHost(
 
 void ClusterAgentService::RunLoop(std::atomic<bool>* should_exit) {
   while (!should_exit->load()) {
-    LOG(INFO) << __func__ << ": compute new allocations";
+    SPDLOG_LOGGER_INFO(&logger_, "{}: compute new allocations", __func__);
     controller_.ComputeAndBroadcast();
     absl::SleepFor(control_period_);
   }

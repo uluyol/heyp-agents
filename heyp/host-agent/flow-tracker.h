@@ -13,6 +13,7 @@
 #include "heyp/alg/demand-predictor.h"
 #include "heyp/flows/state.h"
 #include "heyp/proto/alg.h"
+#include "spdlog/spdlog.h"
 
 namespace heyp {
 
@@ -76,6 +77,7 @@ class FlowTracker : public FlowStateProvider {
  private:
   const Config config_;
   const std::unique_ptr<DemandPredictor> demand_predictor_;
+  spdlog::logger logger_;
 
   mutable absl::Mutex mu_;
   uint64_t next_seqnum_ ABSL_GUARDED_BY(mu_);
@@ -113,6 +115,7 @@ class SSFlowStateReporter : public FlowStateReporter {
 
   struct Impl;
   std::unique_ptr<Impl> impl_;
+  spdlog::logger logger_;
 };
 
 }  // namespace heyp

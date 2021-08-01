@@ -5,6 +5,7 @@
 
 #include "heyp/cluster-agent/controller.h"
 #include "heyp/proto/heyp.grpc.pb.h"
+#include "spdlog/spdlog.h"
 
 namespace heyp {
 
@@ -23,6 +24,7 @@ class ClusterAgentService final : public proto::ClusterAgent::Service {
  private:
   const absl::Duration control_period_;
   ClusterController controller_;
+  spdlog::logger logger_;
 };
 
 }  // namespace heyp

@@ -10,6 +10,7 @@
 #include "absl/status/status.h"
 #include "absl/synchronization/mutex.h"
 #include "heyp/threads/waitgroup.h"
+#include "spdlog/spdlog.h"
 
 namespace heyp {
 

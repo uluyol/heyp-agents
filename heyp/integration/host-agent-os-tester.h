@@ -4,6 +4,7 @@
 #include "absl/status/statusor.h"
 #include "absl/time/time.h"
 #include "heyp/proto/integration.pb.h"
+#include "spdlog/spdlog.h"
 
 namespace heyp {
 namespace testing {
@@ -27,6 +28,7 @@ class HostAgentOSTester {
 
  private:
   const Config config_;
+  spdlog::logger logger_;
 };
 
 }  // namespace testing

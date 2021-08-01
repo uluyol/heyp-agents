@@ -2,7 +2,7 @@
 
 #include <algorithm>
 
-#include "heyp/log/logging.h"
+#include "heyp/log/spdlog.h"
 #include "heyp/proto/alg.h"
 #include "heyp/proto/constructors.h"
 
@@ -87,7 +87,8 @@ std::unique_ptr<FlowAggregator> NewHostToClusterAggregator(
 FlowAggregator::FlowAggregator(std::unique_ptr<DemandPredictor> agg_demand_predictor,
                                Config config)
     : config_(std::move(config)),
-      agg_demand_predictor_(std::move(agg_demand_predictor)) {}
+      agg_demand_predictor_(std::move(agg_demand_predictor)),
+      logger_(MakeLogger("flow-aggregator")) {}
 
 void FlowAggregator::Update(const proto::InfoBundle& bundle) {
   const absl::Time timestamp = FromProtoTimestamp(bundle.timestamp());
@@ -96,7 +97,8 @@ void FlowAggregator::Update(const proto::InfoBundle& bundle) {
   BundleState& bs = bundle_states_[bundle.bundler()];
   for (const proto::FlowInfo& fi : bundle.flow_infos()) {
     if (config_.is_valid_child != nullptr) {
-      CHECK(config_.is_valid_child(fi.flow())) << fi.flow().ShortDebugString();
+      H_SPDLOG_CHECK_MESG(&logger_, config_.is_valid_child(fi.flow()),
+                          fi.flow().ShortDebugString());
     }
 
     auto iter = bs.active.find(fi.flow());
@@ -162,8 +164,9 @@ void FlowAggregator::ForEachAgg(
     } else if (wip.newest_dead_time != absl::InfinitePast()) {
       time = wip.newest_dead_time;
     } else {
-      LOG(ERROR) << "AggWIP for " << wip.state.flow().ShortDebugString()
-                 << " has no oldest active or newest dead time";
+      SPDLOG_LOGGER_ERROR(&logger_,
+                          "AggWIP for {} has no oldest active or newest dead time",
+                          wip.state.flow().ShortDebugString());
     }
     wip.state.UpdateUsage(
         {

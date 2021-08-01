@@ -26,7 +26,7 @@ cc_library(
     hdrs = ["qos-downgrade.h"],
     deps = [
         ":debug",
-        "//heyp/log",
+        "//heyp/log:spdlog",
         "//heyp/proto:config_cc_proto",
         "//heyp/proto:heyp_cc_proto",
         "@com_google_absl//absl/strings:str_format",

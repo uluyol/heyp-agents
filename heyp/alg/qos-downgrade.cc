@@ -4,6 +4,7 @@
 
 #include "absl/strings/str_join.h"
 #include "heyp/alg/debug.h"
+#include "heyp/log/spdlog.h"
 #include "heyp/proto/config.pb.h"
 #include "heyp/proto/heyp.pb.h"
 #include "ortools/algorithms/knapsack_solver.h"
@@ -68,11 +69,12 @@ struct BitmapFormatter {
 };
 
 static std::vector<bool> HeypSigcomm20PickLOPRIChildren(const proto::AggInfo& agg_info,
-                                                        const double want_frac_lopri) {
+                                                        const double want_frac_lopri,
+                                                        spdlog::logger* logger) {
   const bool should_debug = DebugQosAndRateLimitSelection();
 
   if (should_debug) {
-    LOG(INFO) << "agg_info: " << agg_info.DebugString();
+    SPDLOG_LOGGER_INFO(logger, "agg_info: {}", agg_info.DebugString());
   }
 
   std::vector<bool> lopri_children(agg_info.children_size(), false);
@@ -91,7 +93,7 @@ static std::vector<bool> HeypSigcomm20PickLOPRIChildren(const proto::AggInfo& ag
 
   if (total_demand == 0) {
     if (should_debug) {
-      LOG(INFO) << "no demand";
+      SPDLOG_LOGGER_INFO(logger, "no demand");
     }
     // Don't use LOPRI if all demand is zero.
     return std::vector<bool>(agg_info.children_size(), false);
@@ -110,7 +112,7 @@ static std::vector<bool> HeypSigcomm20PickLOPRIChildren(const proto::AggInfo& ag
   if (static_cast<double>(lopri_demand) / static_cast<double>(total_demand) >
       want_frac_lopri) {
     if (should_debug) {
-      LOG(INFO) << "move from LOPRI to HIPRI";
+      SPDLOG_LOGGER_INFO(logger, "move from LOPRI to HIPRI");
     }
     int64_t hipri_demand = total_demand - lopri_demand;
     int64_t want_demand = (1 - want_frac_lopri) * total_demand;
@@ -124,7 +126,7 @@ static std::vector<bool> HeypSigcomm20PickLOPRIChildren(const proto::AggInfo& ag
         lopri_children, false);
   } else {
     if (should_debug) {
-      LOG(INFO) << "move from HIPRI to LOPRI";
+      SPDLOG_LOGGER_INFO(logger, "move from HIPRI to LOPRI");
     }
     int64_t want_demand = want_frac_lopri * total_demand;
     GreedyAssignToMinimizeGap<true>(
@@ -138,19 +140,20 @@ static std::vector<bool> HeypSigcomm20PickLOPRIChildren(const proto::AggInfo& ag
   }
 
   if (should_debug) {
-    LOG(INFO) << "picked LOPRI assignment: "
-              << absl::StrJoin(lopri_children, "", BitmapFormatter());
+    SPDLOG_LOGGER_INFO(logger, "picked LOPRI assignment: {}",
+                       absl::StrJoin(lopri_children, "", BitmapFormatter()));
   }
 
   return lopri_children;
 }
 
 static std::vector<bool> LargestFirstPickLOPRIChildren(const proto::AggInfo& agg_info,
-                                                       const double want_frac_lopri) {
+                                                       const double want_frac_lopri,
+                                                       spdlog::logger* logger) {
   const bool should_debug = DebugQosAndRateLimitSelection();
 
   if (should_debug) {
-    LOG(INFO) << "agg_info: " << agg_info.DebugString();
+    SPDLOG_LOGGER_INFO(logger, "agg_info: {}", agg_info.DebugString());
   }
 
   int64_t total_demand = 0;
@@ -163,7 +166,7 @@ static std::vector<bool> LargestFirstPickLOPRIChildren(const proto::AggInfo& agg
 
   if (total_demand == 0) {
     if (should_debug) {
-      LOG(INFO) << "no demand";
+      SPDLOG_LOGGER_INFO(logger, "no demand");
     }
     // Don't use LOPRI if all demand is zero.
     return std::vector<bool>(agg_info.children_size(), false);
@@ -182,7 +185,7 @@ static std::vector<bool> LargestFirstPickLOPRIChildren(const proto::AggInfo& agg
   std::vector<bool> lopri_children(agg_info.children_size(), false);
   int64_t lopri_demand = 0;
   if (should_debug) {
-    LOG(INFO) << "move from HIPRI to LOPRI";
+    SPDLOG_LOGGER_INFO(logger, "move from HIPRI to LOPRI");
   }
   int64_t want_demand = want_frac_lopri * total_demand;
   GreedyAssignToMinimizeGap<true>(
@@ -195,15 +198,16 @@ static std::vector<bool> LargestFirstPickLOPRIChildren(const proto::AggInfo& agg
       lopri_children, true);
 
   if (should_debug) {
-    LOG(INFO) << "picked LOPRI assignment: "
-              << absl::StrJoin(lopri_children, "", BitmapFormatter());
+    SPDLOG_LOGGER_INFO(logger, "picked LOPRI assignment: {}",
+                       absl::StrJoin(lopri_children, "", BitmapFormatter()));
   }
 
   return lopri_children;
 }
 
 std::vector<bool> KnapsackSolverPickLOPRIChildren(const proto::AggInfo& agg_info,
-                                                  const double want_frac_lopri) {
+                                                  const double want_frac_lopri,
+                                                  spdlog::logger* logger) {
   absl::optional<operations_research::KnapsackSolver> solver;
 
   if (agg_info.children_size() <= 64) {
@@ -235,24 +239,27 @@ std::vector<bool> KnapsackSolverPickLOPRIChildren(const proto::AggInfo& agg_info
     }
   }
 
-  CHECK_LE(got_total_demand, want_demand);
-  CHECK_EQ(double_check_total_demand, got_total_demand);
+  H_SPDLOG_CHECK_LE(logger, got_total_demand, want_demand);
+  H_SPDLOG_CHECK_EQ(logger, double_check_total_demand, got_total_demand);
 
   return lopri_children;
 }
 
 std::vector<bool> PickLOPRIChildren(const proto::AggInfo& agg_info,
                                     const double want_frac_lopri,
-                                    const proto::DowngradeSelector& selector) {
+                                    const proto::DowngradeSelector& selector,
+                                    spdlog::logger* logger) {
   switch (selector.type()) {
     case proto::DS_HEYP_SIGCOMM20:
-      return HeypSigcomm20PickLOPRIChildren(agg_info, want_frac_lopri);
+      return HeypSigcomm20PickLOPRIChildren(agg_info, want_frac_lopri, logger);
     case proto::DS_KNAPSACK_SOLVER:
-      return KnapsackSolverPickLOPRIChildren(agg_info, want_frac_lopri);
+      return KnapsackSolverPickLOPRIChildren(agg_info, want_frac_lopri, logger);
     case proto::DS_LARGEST_FIRST:
-      return LargestFirstPickLOPRIChildren(agg_info, want_frac_lopri);
+      return LargestFirstPickLOPRIChildren(agg_info, want_frac_lopri, logger);
   }
-  LOG(FATAL) << "unsupported DowngradeSelectorType: " << selector.type();
+  SPDLOG_LOGGER_CRITICAL(logger, "unsupported DowngradeSelectorType: {}",
+                         selector.type());
+  DumpStackTraceAndExit(5);
 }
 
 double FracAdmittedAtLOPRI(const proto::FlowInfo& parent,
@@ -273,38 +280,38 @@ double FracAdmittedAtLOPRI(const proto::FlowInfo& parent,
 double FracAdmittedAtLOPRIToProbe(const proto::AggInfo& agg_info,
                                   const int64_t hipri_rate_limit_bps,
                                   const int64_t lopri_rate_limit_bps,
-                                  const double demand_multiplier,
-                                  const double lopri_frac) {
+                                  const double demand_multiplier, const double lopri_frac,
+                                  spdlog::logger* logger) {
   const bool should_debug = DebugQosAndRateLimitSelection();
 
   if (should_debug) {
-    LOG(INFO) << "agg_info: " << agg_info.DebugString();
-    LOG(INFO) << "cur limits: (" << hipri_rate_limit_bps << ", " << lopri_rate_limit_bps
-              << ")";
-    LOG(INFO) << "demand_multiplier: " << demand_multiplier;
-    LOG(INFO) << "initial lopri_frac: " << lopri_frac;
+    SPDLOG_LOGGER_INFO(logger, "agg_info: {}", agg_info.DebugString());
+    SPDLOG_LOGGER_INFO(logger, "cur limits: ({}, {})", hipri_rate_limit_bps,
+                       lopri_rate_limit_bps);
+    SPDLOG_LOGGER_INFO(logger, "demand_multiplier: {}", demand_multiplier);
+    SPDLOG_LOGGER_INFO(logger, "initial lopri_frac: {}", lopri_frac);
   }
 
   if (agg_info.parent().predicted_demand_bps() < hipri_rate_limit_bps) {
     if (should_debug) {
-      LOG(INFO) << "predicted demand < hipri rate limit ("
-                << agg_info.parent().predicted_demand_bps() << " < "
-                << hipri_rate_limit_bps << ")";
+      SPDLOG_LOGGER_INFO(logger, "predicted demand < hipri rate limit ({} < {})",
+                         agg_info.parent().predicted_demand_bps(), hipri_rate_limit_bps);
     }
     return lopri_frac;
   }
   if (agg_info.parent().predicted_demand_bps() >
       demand_multiplier * hipri_rate_limit_bps) {
     if (should_debug) {
-      LOG(INFO) << "predicted demand > demand multipler * hipri rate limit ("
-                << agg_info.parent().predicted_demand_bps() << " > "
-                << demand_multiplier * hipri_rate_limit_bps << ")";
+      SPDLOG_LOGGER_INFO(
+          logger, "predicted demand > demand multipler * hipri rate limit ({} > {})",
+          agg_info.parent().predicted_demand_bps(),
+          demand_multiplier * hipri_rate_limit_bps);
     }
     return lopri_frac;
   }
   if (agg_info.children_size() == 0) {
     if (should_debug) {
-      LOG(INFO) << "no children";
+      SPDLOG_LOGGER_INFO(logger, "no children");
     }
     return lopri_frac;
   }
@@ -316,8 +323,8 @@ double FracAdmittedAtLOPRIToProbe(const proto::AggInfo& agg_info,
 
   if (smallest_child_demand_bps > lopri_rate_limit_bps) {
     if (should_debug) {
-      LOG(INFO) << "smallest child demand > lopri rate limit ("
-                << smallest_child_demand_bps << " > " << lopri_rate_limit_bps << ")";
+      SPDLOG_LOGGER_INFO(logger, "smallest child demand > lopri rate limit ({} > {})",
+                         smallest_child_demand_bps, lopri_rate_limit_bps);
     }
     return lopri_frac;
   }
@@ -327,12 +334,14 @@ double FracAdmittedAtLOPRIToProbe(const proto::AggInfo& agg_info,
                         static_cast<double>(agg_info.parent().predicted_demand_bps());
   if (revised_frac > lopri_frac) {
     if (should_debug) {
-      LOG(INFO) << "revised lopri frac from " << lopri_frac << " to " << revised_frac;
+      SPDLOG_LOGGER_INFO(logger, "revised lopri frac from {} to {}", lopri_frac,
+                         revised_frac);
     }
     return revised_frac;
   } else if (should_debug) {
-    LOG(INFO) << "existing lopri frac (" << lopri_frac
-              << ") is larger than needed for probing (" << revised_frac << ")";
+    SPDLOG_LOGGER_INFO(logger,
+                       "existing lopri frac ({}) is larger than needed for probing ({})",
+                       lopri_frac, revised_frac);
   }
   return lopri_frac;
 }

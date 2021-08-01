@@ -12,6 +12,7 @@
 #include "heyp/flows/state.h"
 #include "heyp/proto/alg.h"
 #include "heyp/proto/heyp.pb.h"
+#include "spdlog/spdlog.h"
 
 namespace heyp {
 
@@ -72,6 +73,7 @@ class FlowAggregator {
 
   const Config config_;
   const std::unique_ptr<DemandPredictor> agg_demand_predictor_;
+  spdlog::logger logger_;
 
   absl::Mutex mu_;
   FlowMap<AggWIP> agg_wips_ ABSL_GUARDED_BY(mu_);
