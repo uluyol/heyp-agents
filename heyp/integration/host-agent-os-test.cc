@@ -5,7 +5,7 @@
 #include "google/protobuf/text_format.h"
 #include "heyp/init/init.h"
 #include "heyp/integration/host-agent-os-tester.h"
-#include "heyp/log/logging.h"
+#include "heyp/log/spdlog.h"
 
 ABSL_FLAG(std::string, logdir, "", "directory to write debug log files to, if present");
 ABSL_FLAG(std::string, run_dur, "60s", "how much time the test should measure for");
@@ -17,7 +17,6 @@ ABSL_FLAG(bool, ignore_instantaneous_usage, false,
 
 int main(int argc, char** argv) {
   heyp::MainInit(&argc, &argv);
-  absl::SetFlag(&FLAGS_logtostderr, 1);
 
   absl::Duration run_dur;
   absl::Duration step_dur;
@@ -49,7 +48,8 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  LOG(INFO) << "run successful; printing metrics";
+  auto logger = heyp::MakeLogger("main");
+  logger.info("run successful; printing metrics");
 
   {
     google::protobuf::io::FileOutputStream out(1);

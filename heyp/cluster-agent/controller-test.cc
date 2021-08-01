@@ -8,6 +8,7 @@
 #include "heyp/alg/debug.h"
 #include "heyp/alg/demand-predictor.h"
 #include "heyp/cluster-agent/allocator.h"
+#include "heyp/log/spdlog.h"
 #include "heyp/proto/config.pb.h"
 #include "heyp/proto/parse-text.h"
 #include "heyp/proto/testing.h"
@@ -143,7 +144,7 @@ class SingleFGAllocBundleCollector {
     has_alloc_bundle_.resize(num_hosts_, false);
     for (int64_t i = 0; i < num_hosts_; ++i) {
       lis_.push_back(c->RegisterListener(i + 1, [this, i](proto::AllocBundle b) {
-        CHECK(!this->has_alloc_bundle_[i]);
+        H_ASSERT(!this->has_alloc_bundle_[i]);
         this->alloc_bundles_[i] = std::move(b);
         this->has_alloc_bundle_[i] = true;
       }));
@@ -188,7 +189,7 @@ class SingleFGAllocBundleCollector {
 
   const std::vector<proto::AllocBundle>& GetAllocs() const {
     for (bool filled : has_alloc_bundle_) {
-      CHECK(filled);
+      H_ASSERT(filled);
     }
     return alloc_bundles_;
   }
@@ -235,7 +236,8 @@ class FixedDemandHostSimulator {
  public:
   FixedDemandHostSimulator(std::vector<int64_t> host_demands_bps,
                            ClusterController* controller)
-      : true_demands_bps_(std::move(host_demands_bps)),
+      : logger_(MakeLogger("fix-demand-host-simulator")),
+        true_demands_bps_(std::move(host_demands_bps)),
         collector_(true_demands_bps_.size(), controller),
         controller_(controller),
         limits_bps_(true_demands_bps_.size(),
@@ -257,7 +259,7 @@ class FixedDemandHostSimulator {
                                     int64_t hipri_bottleneck_available_bps,
                                     int64_t lopri_bottleneck_available_bps) {
     if (DebugQosAndRateLimitSelection()) {
-      LOG(INFO) << "==== time = " << timestamp_sec << " ====";
+      SPDLOG_LOGGER_INFO(&logger_, "==== time = {} ====", timestamp_sec);
     }
 
     absl::Time now = absl::FromUnixSeconds(timestamp_sec);
@@ -286,10 +288,10 @@ class FixedDemandHostSimulator {
         routing_algos::SingleLinkMaxMinFairnessProblem().ComputeWaterlevel(
             lopri_bottleneck_available_bps, {per_host_lopri_send});
 
-    LOG(INFO) << "hipri_waterlevel: " << hipri_waterlevel << " across " << hipri_count
-              << " children";
-    LOG(INFO) << "lopri_waterlevel: " << lopri_waterlevel << " across " << lopri_count
-              << " children";
+    SPDLOG_LOGGER_INFO(&logger_, "hipri_waterlevel: {} across {} children",
+                       hipri_waterlevel, hipri_count);
+    SPDLOG_LOGGER_INFO(&logger_, "lopri_waterlevel: {} across {} children",
+                       lopri_waterlevel, lopri_count);
 
     for (int i = 0; i < true_demands_bps_.size(); ++i) {
       const int64_t saw_hipri = std::min(per_host_hipri_send[i], hipri_waterlevel);
@@ -352,6 +354,7 @@ class FixedDemandHostSimulator {
   const std::vector<bool>& currently_lopris() const { return currently_lopris_; }
 
  private:
+  spdlog::logger logger_;
   const std::vector<int64_t> true_demands_bps_;
   SingleFGAllocBundleCollector collector_;
   ClusterController* controller_;

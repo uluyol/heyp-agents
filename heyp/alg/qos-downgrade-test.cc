@@ -95,13 +95,18 @@ TEST(HeypSigcomm20PickLOPRIChildrenTest, Directionality) {
   constexpr bool t = true;
   constexpr bool f = false;
 
+  auto logger = MakeLogger("test");
   proto::DowngradeSelector selector;
   selector.set_type(proto::DS_HEYP_SIGCOMM20);
 
-  EXPECT_THAT(PickLOPRIChildren(info, 0.28, selector), testing::ElementsAre(t, f, f, f));
-  EXPECT_THAT(PickLOPRIChildren(info, 0.58, selector), testing::ElementsAre(t, t, f, t));
-  EXPECT_THAT(PickLOPRIChildren(info, 0.71, selector), testing::ElementsAre(t, t, f, t));
-  EXPECT_THAT(PickLOPRIChildren(info, 0.14, selector), testing::ElementsAre(f, f, f, t));
+  EXPECT_THAT(PickLOPRIChildren(info, 0.28, selector, &logger),
+              testing::ElementsAre(t, f, f, f));
+  EXPECT_THAT(PickLOPRIChildren(info, 0.58, selector, &logger),
+              testing::ElementsAre(t, t, f, t));
+  EXPECT_THAT(PickLOPRIChildren(info, 0.71, selector, &logger),
+              testing::ElementsAre(t, t, f, t));
+  EXPECT_THAT(PickLOPRIChildren(info, 0.14, selector, &logger),
+              testing::ElementsAre(f, f, f, t));
 }
 
 TEST(HeypSigcomm20PickLOPRIChildrenTest, FlipCompletely) {
@@ -115,11 +120,14 @@ TEST(HeypSigcomm20PickLOPRIChildrenTest, FlipCompletely) {
   constexpr bool t = true;
   constexpr bool f = false;
 
+  auto logger = MakeLogger("test");
   proto::DowngradeSelector selector;
   selector.set_type(proto::DS_HEYP_SIGCOMM20);
 
-  EXPECT_THAT(PickLOPRIChildren(info, 1, selector), testing::ElementsAre(t, t, t, t));
-  EXPECT_THAT(PickLOPRIChildren(info, 0, selector), testing::ElementsAre(f, f, f, f));
+  EXPECT_THAT(PickLOPRIChildren(info, 1, selector, &logger),
+              testing::ElementsAre(t, t, t, t));
+  EXPECT_THAT(PickLOPRIChildren(info, 0, selector, &logger),
+              testing::ElementsAre(f, f, f, f));
 }
 
 TEST(LargestFirstPickLOPRIChildrenTest, Directionality) {
@@ -133,13 +141,19 @@ TEST(LargestFirstPickLOPRIChildrenTest, Directionality) {
   constexpr bool t = true;
   constexpr bool f = false;
 
+  auto logger = MakeLogger("test");
+
   proto::DowngradeSelector selector;
   selector.set_type(proto::DS_LARGEST_FIRST);
 
-  EXPECT_THAT(PickLOPRIChildren(info, 0.28, selector), testing::ElementsAre(f, f, t, f));
-  EXPECT_THAT(PickLOPRIChildren(info, 0.58, selector), testing::ElementsAre(t, f, t, f));
-  EXPECT_THAT(PickLOPRIChildren(info, 0.71, selector), testing::ElementsAre(t, f, t, f));
-  EXPECT_THAT(PickLOPRIChildren(info, 0.14, selector), testing::ElementsAre(f, f, f, f));
+  EXPECT_THAT(PickLOPRIChildren(info, 0.28, selector, &logger),
+              testing::ElementsAre(f, f, t, f));
+  EXPECT_THAT(PickLOPRIChildren(info, 0.58, selector, &logger),
+              testing::ElementsAre(t, f, t, f));
+  EXPECT_THAT(PickLOPRIChildren(info, 0.71, selector, &logger),
+              testing::ElementsAre(t, f, t, f));
+  EXPECT_THAT(PickLOPRIChildren(info, 0.14, selector, &logger),
+              testing::ElementsAre(f, f, f, f));
 }
 
 TEST(LargestFirstPickLOPRIChildrenTest, FlipCompletely) {
@@ -153,11 +167,15 @@ TEST(LargestFirstPickLOPRIChildrenTest, FlipCompletely) {
   constexpr bool t = true;
   constexpr bool f = false;
 
+  auto logger = MakeLogger("test");
+
   proto::DowngradeSelector selector;
   selector.set_type(proto::DS_LARGEST_FIRST);
 
-  EXPECT_THAT(PickLOPRIChildren(info, 1, selector), testing::ElementsAre(t, t, t, t));
-  EXPECT_THAT(PickLOPRIChildren(info, 0, selector), testing::ElementsAre(f, f, f, f));
+  EXPECT_THAT(PickLOPRIChildren(info, 1, selector, &logger),
+              testing::ElementsAre(t, t, t, t));
+  EXPECT_THAT(PickLOPRIChildren(info, 0, selector, &logger),
+              testing::ElementsAre(f, f, f, f));
 }
 
 TEST(KnapsackSolverPickLOPRIChildrenTest, Directionality) {
@@ -171,21 +189,24 @@ TEST(KnapsackSolverPickLOPRIChildrenTest, Directionality) {
   constexpr bool t = true;
   constexpr bool f = false;
 
+  auto logger = MakeLogger("test");
+
   proto::DowngradeSelector selector;
   selector.set_type(proto::DS_KNAPSACK_SOLVER);
 
   EXPECT_THAT(
-      PickLOPRIChildren(info, 0.28, selector),
+      PickLOPRIChildren(info, 0.28, selector, &logger),
       testing::AnyOf(testing::ElementsAre(f, t, f, f), testing::ElementsAre(f, f, f, t)));
   EXPECT_THAT(
-      PickLOPRIChildren(info, 0.58, selector),
+      PickLOPRIChildren(info, 0.58, selector, &logger),
       testing::AnyOf(testing::ElementsAre(t, t, f, t), testing::ElementsAre(f, t, t, f),
                      testing::ElementsAre(f, f, t, t)));
   EXPECT_THAT(
-      PickLOPRIChildren(info, 0.71, selector),
+      PickLOPRIChildren(info, 0.71, selector, &logger),
       testing::AnyOf(testing::ElementsAre(t, t, f, t), testing::ElementsAre(f, t, t, f),
                      testing::ElementsAre(f, f, t, t)));
-  EXPECT_THAT(PickLOPRIChildren(info, 0.14, selector), testing::ElementsAre(f, f, f, f));
+  EXPECT_THAT(PickLOPRIChildren(info, 0.14, selector, &logger),
+              testing::ElementsAre(f, f, f, f));
 }
 
 TEST(KnapsackSolverPickLOPRIChildrenTest, FlipCompletely) {
@@ -199,11 +220,15 @@ TEST(KnapsackSolverPickLOPRIChildrenTest, FlipCompletely) {
   constexpr bool t = true;
   constexpr bool f = false;
 
+  auto logger = MakeLogger("test");
+
   proto::DowngradeSelector selector;
   selector.set_type(proto::DS_KNAPSACK_SOLVER);
 
-  EXPECT_THAT(PickLOPRIChildren(info, 1, selector), testing::ElementsAre(t, t, t, t));
-  EXPECT_THAT(PickLOPRIChildren(info, 0, selector), testing::ElementsAre(f, f, f, f));
+  EXPECT_THAT(PickLOPRIChildren(info, 1, selector, &logger),
+              testing::ElementsAre(t, t, t, t));
+  EXPECT_THAT(PickLOPRIChildren(info, 0, selector, &logger),
+              testing::ElementsAre(f, f, f, f));
 }
 
 TEST(FracAdmittedAtLOPRITest, Basic) {
@@ -247,19 +272,23 @@ TEST(FracAdmittedAtLOPRITest, ZeroDemand) {
 TEST(ShouldProbeLOPRITest, Basic) {
   proto::AggInfo info = ChildrenWithDemands({1000, 800, 600, 400, 200, 100});
   info.mutable_parent()->set_predicted_demand_bps(2499);
+  auto logger = MakeLogger("test");
 
-  ASSERT_EQ(FracAdmittedAtLOPRIToProbe(info, 2500, 600, 1.9, -1), -1);
+  ASSERT_EQ(FracAdmittedAtLOPRIToProbe(info, 2500, 600, 1.9, -1, &logger), -1);
 
   info.mutable_parent()->set_predicted_demand_bps(2500);
-  ASSERT_NEAR(FracAdmittedAtLOPRIToProbe(info, 2500, 600, 1.9, -1), 0.04, 0.00001);
+  ASSERT_NEAR(FracAdmittedAtLOPRIToProbe(info, 2500, 600, 1.9, -1, &logger), 0.04,
+              0.00001);
 
   info.mutable_parent()->set_predicted_demand_bps(3000);
-  ASSERT_NEAR(FracAdmittedAtLOPRIToProbe(info, 2500, 600, 1.9, 0.2), 0.2, 0.00001);
+  ASSERT_NEAR(FracAdmittedAtLOPRIToProbe(info, 2500, 600, 1.9, 0.2, &logger), 0.2,
+              0.00001);
 
   info.mutable_parent()->set_predicted_demand_bps(3000);
-  ASSERT_NEAR(FracAdmittedAtLOPRIToProbe(info, 2500, 600, 1.2, 0.2), 0.2, 0.00001);
+  ASSERT_NEAR(FracAdmittedAtLOPRIToProbe(info, 2500, 600, 1.2, 0.2, &logger), 0.2,
+              0.00001);
 
-  ASSERT_EQ(FracAdmittedAtLOPRIToProbe(info, 2500, 0, 1.9, 0), 0);
+  ASSERT_EQ(FracAdmittedAtLOPRIToProbe(info, 2500, 0, 1.9, 0, &logger), 0);
 }
 
 class HeypSigcomm20MaybeReviseLOPRIAdmissionTest : public testing::Test {
@@ -294,50 +323,57 @@ class HeypSigcomm20MaybeReviseLOPRIAdmissionTest : public testing::Test {
 };
 
 TEST_F(HeypSigcomm20MaybeReviseLOPRIAdmissionTest, Basic) {
+  auto logger = MakeLogger("test-basic");
   EXPECT_EQ(HeypSigcomm20MaybeReviseLOPRIAdmission(1.0, T(1), NewInfo(900, 300),
-                                                   NewState(0.25, 7200, 7200)),
+                                                   NewState(0.25, 7200, 7200), &logger),
             7200);
   EXPECT_EQ(HeypSigcomm20MaybeReviseLOPRIAdmission(0.9, T(1), NewInfo(900, 271),
-                                                   NewState(0.25, 7200, 7200)),
+                                                   NewState(0.25, 7200, 7200), &logger),
             7200);
   EXPECT_EQ(HeypSigcomm20MaybeReviseLOPRIAdmission(0.9, T(1), NewInfo(900, 269),
-                                                   NewState(0.25, 7200, 7200)),
+                                                   NewState(0.25, 7200, 7200), &logger),
             2152);
 }
 
 TEST_F(HeypSigcomm20MaybeReviseLOPRIAdmissionTest, AllLOPRI) {
+  auto logger = MakeLogger("test-all-lopri");
   EXPECT_EQ(HeypSigcomm20MaybeReviseLOPRIAdmission(1.0, T(1), NewInfo(10, 500),
-                                                   NewState(1.0, 0, 7200)),
+                                                   NewState(1.0, 0, 7200), &logger),
             7200);
 }
 
 TEST_F(HeypSigcomm20MaybeReviseLOPRIAdmissionTest, AllHIPRI) {
+  auto logger = MakeLogger("test-all-hipri");
   EXPECT_EQ(HeypSigcomm20MaybeReviseLOPRIAdmission(1.0, T(1), NewInfo(900, 10),
-                                                   NewState(0.0, 7200, 0)),
+                                                   NewState(0.0, 7200, 0), &logger),
             0);
 }
 
 TEST_F(HeypSigcomm20MaybeReviseLOPRIAdmissionTest, ZeroUsage) {
+  auto logger = MakeLogger("zero-usage");
   EXPECT_EQ(HeypSigcomm20MaybeReviseLOPRIAdmission(1.0, T(1), NewInfo(0, 0),
-                                                   NewState(1.0, 7200, 7200)),
+                                                   NewState(1.0, 7200, 7200), &logger),
             7200);
 }
 
 TEST_F(HeypSigcomm20MaybeReviseLOPRIAdmissionTest, ZeroLimit) {
+  auto logger = MakeLogger("zero-limit");
   EXPECT_EQ(HeypSigcomm20MaybeReviseLOPRIAdmission(1.0, T(1), NewInfo(10, 500),
-                                                   NewState(0.0, 0, 0)),
+                                                   NewState(0.0, 0, 0), &logger),
             0);
 }
 
 TEST_F(HeypSigcomm20MaybeReviseLOPRIAdmissionTest, AllHIPRIFailed) {
+  auto logger = MakeLogger("all-hipri-failed");
   EXPECT_EQ(HeypSigcomm20MaybeReviseLOPRIAdmission(1.0, T(1), NewInfo(0, 300),
-                                                   NewState(0.0, 7200, 7200)),
+                                                   NewState(0.0, 7200, 7200), &logger),
             7200);
 }
 
 TEST_F(HeypSigcomm20MaybeReviseLOPRIAdmissionTest, AllLOPRIFailed) {
+  auto logger = MakeLogger("all-lopri-failed");
   EXPECT_EQ(HeypSigcomm20MaybeReviseLOPRIAdmission(0.5, T(1), NewInfo(900, 0),
-                                                   NewState(0.5, 7200, 7200)),
+                                                   NewState(0.5, 7200, 7200), &logger),
             0);
 }
 

@@ -1,6 +1,6 @@
 #include "heyp/integration/flow-state-collector.h"
 
-#include "heyp/log/logging.h"
+#include "heyp/log/spdlog.h"
 
 namespace heyp {
 namespace testing {
@@ -8,11 +8,12 @@ namespace {
 
 void CollectPeriodicReport(absl::Duration period, absl::Notification* done,
                            SSFlowStateReporter* reporter) {
+  spdlog::logger logger = MakeLogger("collect-periodic-report");
   while (true) {
     absl::Status st =
         reporter->ReportState([](const proto::FlowMarker&) -> bool { return false; });
     if (!st.ok()) {
-      LOG(ERROR) << "failed to collect flow states: " << st;
+      SPDLOG_LOGGER_ERROR(&logger, "failed to collect flow states: {}", st);
     }
 
     if (done->WaitForNotificationWithTimeout(period)) {

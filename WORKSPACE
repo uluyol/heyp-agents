@@ -141,3 +141,19 @@ http_archive(
     sha256 = "033bf240298d3a1c92e8ddb7b452190e0af15df2dad7d24d0572f10ae8eec5aa",
     url = "https://github.com/google/or-tools/releases/download/v7.7/scip-7.0.1.tgz",
 )
+
+http_archive(
+    name = "com_github_fmtlib_fmt",
+    build_file = "fmtlib.BUILD",
+    sha256 = "decfdf9ad274070fa85f26407b816f5a4d82205ae86bac1990be658d0795ea4d",
+    strip_prefix = "fmt-7.0.3",
+    urls = ["https://github.com/fmtlib/fmt/releases/download/7.0.3/fmt-7.0.3.zip"],
+)
+
+http_archive(
+    name = "com_github_gabime_spdlog",
+    build_file = "spdlog.BUILD",
+    sha256 = "f0114a4d3c88be9e696762f37a7c379619443ce9d668546c61b21d41affe5b62",
+    strip_prefix = "spdlog-1.7.0",
+    urls = ["https://github.com/gabime/spdlog/archive/v1.7.0.tar.gz"],
+)

@@ -7,11 +7,12 @@ cc_library(
     srcs = ["init.cc"],
     hdrs = ["init.h"],
     deps = [
-        "//heyp/log",
+        "//heyp/log:spdlog",
         "@com_google_absl//absl/debugging:failure_signal_handler",
         "@com_google_absl//absl/debugging:leak_check",
         "@com_google_absl//absl/debugging:symbolize",
         "@com_google_absl//absl/flags:parse",
+        "@com_google_ortools//ortools/base",
     ],
 )
 
@@ -21,8 +22,9 @@ cc_library(
     srcs = ["test-main.cc"],
     deps = [
         ":init",
-        "//heyp/log",
+        "//heyp/log:spdlog",
         "@com_google_absl//absl/flags:parse",
+        "@com_google_ortools//ortools/base",
         "@gtest",
     ],
 )

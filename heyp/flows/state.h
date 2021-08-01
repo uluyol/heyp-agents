@@ -7,6 +7,7 @@
 #include "absl/time/time.h"
 #include "heyp/alg/demand-predictor.h"
 #include "heyp/proto/heyp.pb.h"
+#include "spdlog/spdlog.h"
 
 namespace heyp {
 
@@ -35,6 +36,7 @@ class AggState {
   absl::Time updated_time_ = absl::InfinitePast();
   proto::FlowInfo cur_;
   const bool smooth_usage_ = false;
+  spdlog::logger logger_;
   bool was_updated_ = false;
   bool have_bps_ = false;
 };
@@ -59,6 +61,7 @@ class LeafState {
 
  private:
   AggState impl_;
+  spdlog::logger logger_;
 };
 
 }  // namespace heyp

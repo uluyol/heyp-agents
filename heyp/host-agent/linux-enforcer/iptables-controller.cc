@@ -5,7 +5,7 @@
 
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
-#include "heyp/log/logging.h"
+#include "heyp/log/spdlog.h"
 #include "iptables.h"
 #include "small-string-set.h"
 
@@ -78,13 +78,14 @@ void ComputeDiff(SettingBatch& old_batch, SettingBatch& new_batch, SettingBatch*
 Controller::Controller(absl::string_view dev, SmallStringSet dscps_to_ignore_class_id)
     : dev_(dev),
       dscps_to_ignore_class_id_(std::move(dscps_to_ignore_class_id)),
+      logger_(MakeLogger("iptables-controller")),
       runner_(Runner::Create(IpFamily::kIpV4)) {}
 
 Runner& Controller::GetRunner() { return *runner_; }
 
 absl::Status Controller::Clear() {
   applied_.settings.clear();
-  LOG(INFO) << "flushing iptables 'mangle' table";
+  SPDLOG_LOGGER_INFO(&logger_, "flushing iptables 'mangle' table");
   absl::Status st = runner_->Restore(Table::kMangle, absl::Cord("*mangle\nCOMMIT\n"),
                                      {.flush_tables = true, .restore_counters = false});
   if (!st.ok()) {
@@ -122,9 +123,9 @@ absl::Status Controller::CommitChanges() {
   AddRuleLinesToAdd(dscps_to_ignore_class_id_, dev_, to_add_, mangle_table);
   mangle_table.Append("COMMIT\n");
 
-  LOG(INFO) << "updating rules for iptables 'mangle' table";
+  SPDLOG_LOGGER_INFO(&logger_, "fupdating rules for iptables 'mangle' table");
 
-  VLOG(3) << "restore input:\n" << mangle_table;
+  SPDLOG_LOGGER_DEBUG(&logger_, "frestore input:\n{}" mangle_table);
 
   absl::Status st = runner_->Restore(Table::kMangle, mangle_table,
                                      {.flush_tables = false, .restore_counters = false});

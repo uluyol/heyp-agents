@@ -13,7 +13,7 @@
 #include "heyp/host-agent/linux-enforcer/iptables.h"
 #include "heyp/host-agent/linux-enforcer/tc-caller.h"
 #include "heyp/io/debug-output-logger.h"
-#include "heyp/log/logging.h"
+#include "heyp/log/spdlog.h"
 #include "heyp/proto/alg.h"
 #include "heyp/proto/config.pb.h"
 #include "heyp/proto/heyp.pb.h"
@@ -23,20 +23,20 @@ namespace heyp {
 
 MatchedHostFlows ExpandDestIntoHostsSinglePri(
     const StaticDCMapper* dc_mapper, const FlowStateProvider& flow_state_provider,
-    const proto::FlowAlloc& flow_alloc) {
+    const proto::FlowAlloc& flow_alloc, spdlog::logger* logger) {
   MatchedHostFlows matched;
   MatchedHostFlows::Vec* expanded = &matched.hipri;
   if (flow_alloc.lopri_rate_limit_bps() > 0) {
-    CHECK_EQ(flow_alloc.hipri_rate_limit_bps(), 0)
-        << "ExpandDestIntoHostsSinglePri cannot accept both positive hipri and lopri "
-           "rate limits";
+    H_SPDLOG_CHECK_EQ_MESG(logger, flow_alloc.hipri_rate_limit_bps(), 0,
+                           "ExpandDestIntoHostsSinglePri cannot accept both positive "
+                           "hipri and lopri rate limits");
     expanded = &matched.lopri;
   }
   auto& flow = flow_alloc.flow();
   if (flow.dst_addr().empty()) {
     auto hosts_ptr = dc_mapper->HostsForDC(flow.dst_dc());
     if (hosts_ptr == nullptr) {
-      LOG(ERROR) << "no hosts match DC \"" << flow.dst_dc() << "\"";
+      SPDLOG_LOGGER_ERROR(logger, "no hosts match DC \"{}\"", flow.dst_dc());
     } else {
       expanded->reserve(hosts_ptr->size());
       for (const std::string& host : *hosts_ptr) {
@@ -114,11 +114,11 @@ std::vector<FlowNetemConfig> AllNetemConfigs(const StaticDCMapper& dc_mapper,
 
 namespace {
 
-uint16_t AssertValidPort(int32_t port32) {
+uint16_t AssertValidPort(int32_t port32, spdlog::logger* logger) {
   const int32_t kMaxPortNum = std::numeric_limits<uint16_t>::max();
 
-  CHECK(port32 >= 0);
-  CHECK(port32 <= kMaxPortNum);
+  H_SPDLOG_CHECK(logger, port32 >= 0);
+  H_SPDLOG_CHECK(logger, port32 <= kMaxPortNum);
 
   return static_cast<uint16_t>(port32);
 }
@@ -168,6 +168,7 @@ class LinuxHostEnforcerImpl : public LinuxHostEnforcer {
   const proto::HostEnforcerConfig config_;
   const std::string device_;
   const MatchHostFlowsFunc match_host_flows_fn_;
+  spdlog::logger logger_;
   absl::Mutex mu_;
   absl::Cord tc_batch_input_ ABSL_GUARDED_BY(mu_);
   TcCaller tc_caller_ ABSL_GUARDED_BY(mu_);
@@ -200,6 +201,8 @@ LinuxHostEnforcerImpl::LinuxHostEnforcerImpl(
     : config_(config),
       device_(device),
       match_host_flows_fn_(match_host_flows_fn),
+      logger_(MakeLogger("linux-host-enforcer")),
+      tc_caller_(&logger_),
       ipt_controller_(device, SmallStringSet({})),
       debug_logger_(config.debug_log_dir()),
       next_class_id_(2) {}
@@ -253,10 +256,11 @@ absl::Status LinuxHostEnforcerImpl::InitSimulatedWan(std::vector<FlowNetemConfig
     });
   }
 
-  LOG(INFO) << absl::StrFormat("creating %d rate limiters and netem qdiscs",
-                               num_created_classes);
+  SPDLOG_LOGGER_INFO(&logger_, "creating {} rate limiters and netem qdiscs",
+                     num_created_classes);
   if (num_updated_classes > 0) {
-    LOG(ERROR) << __func__ << ": impossible state: updating rate limiters";
+    SPDLOG_LOGGER_ERROR(&logger_, "{}: impossible state: updating rate limiters",
+                        __func__);
   }
   absl::Status st = tc_caller_.Batch(tc_batch_input_, /*force=*/true);
 
@@ -325,13 +329,14 @@ void LinuxHostEnforcerImpl::StageIptablesForFlow(
     return;
   }
 
-  CHECK(!class_id.empty()) << "class_id must be set; call UpdateTrafficControlForFlow "
-                              "before StageIptablesForFlow";
+  H_SPDLOG_CHECK_MESG(&logger_, !class_id.empty(),
+                      "class_id must be set; call UpdateTrafficControlForFlow "
+                      "before StageIptablesForFlow");
 
   for (auto f : matched_flows) {
     ipt_controller_.Stage({
-        .src_port = AssertValidPort(f.src_port()),
-        .dst_port = AssertValidPort(f.dst_port()),
+        .src_port = AssertValidPort(f.src_port(), &logger_),
+        .dst_port = AssertValidPort(f.dst_port(), &logger_),
         .dst_addr = f.dst_addr(),
         .class_id = class_id,
         .dscp = dscp,
@@ -423,7 +428,7 @@ void LinuxHostEnforcerImpl::EnforceAllocs(const FlowStateProvider& flow_state_pr
       sys_info_[flow_alloc.flow()] = absl::make_unique<FlowSys>();
     }
     FlowSys* sys = sys_info_[flow_alloc.flow()].get();
-    sys->matched = match_host_flows_fn_(flow_state_provider, flow_alloc);
+    sys->matched = match_host_flows_fn_(flow_state_provider, flow_alloc, &logger_);
 
     // Early update for traffic control (HIPRI)
     bool must_create = sys->hipri.class_id.empty() && !sys->matched.hipri.empty();
@@ -468,11 +473,12 @@ void LinuxHostEnforcerImpl::EnforceAllocs(const FlowStateProvider& flow_state_pr
     sys->lopri.cur_rate_limit_bps = flow_alloc.lopri_rate_limit_bps();
   }
 
-  LOG(INFO) << absl::StrFormat("creating %d rate limiters and increasing %d rate limits",
-                               create_count, update_count);
+  SPDLOG_LOGGER_INFO(&logger_, "creating {} rate limiters and increasing {} rate limits",
+                     create_count, update_count);
   absl::Status st = tc_caller_.Batch(tc_batch_input_, /*force=*/true);
   if (!st.ok()) {
-    LOG(ERROR) << "failed to init or increase rate limits for some flows: " << st;
+    SPDLOG_LOGGER_ERROR(&logger_,
+                        "failed to init or increase rate limits for some flows: {}", st);
     // Find out which classes have not been created
     st = tc_caller_.Call({"class", "show", "dev", device_}, false);
 
@@ -508,18 +514,20 @@ void LinuxHostEnforcerImpl::EnforceAllocs(const FlowStateProvider& flow_state_pr
     FlowSys* sys = sys_info_[flow_alloc.flow()].get();
 
     if (!sys->matched.hipri.empty() && !sys->hipri.did_create_class) {
-      LOG(ERROR) << "failed to create rate limiter for flow (HIPRI): alloc = "
-                 << flow_alloc.ShortDebugString();
-      LOG(WARNING) << "will not change iptables config for flow";
+      SPDLOG_LOGGER_ERROR(&logger_,
+                          "failed to create rate limiter for flow (HIPRI): alloc = {}",
+                          flow_alloc.ShortDebugString());
+      SPDLOG_LOGGER_WARN(&logger_, "will not change iptables config for flow");
       continue;
     } else {
       StageIptablesForFlow(sys->matched.hipri, kDscpHipri, sys->hipri.class_id);
     }
 
     if (!sys->matched.lopri.empty() && !sys->lopri.did_create_class) {
-      LOG(ERROR) << "failed to create rate limiter for flow (LOPRI): alloc = "
-                 << flow_alloc.ShortDebugString();
-      LOG(WARNING) << "will not change iptables config for flow";
+      SPDLOG_LOGGER_ERROR(&logger_,
+                          "failed to create rate limiter for flow (LOPRI): alloc = {}",
+                          flow_alloc.ShortDebugString());
+      SPDLOG_LOGGER_WARN(&logger_, "will not change iptables config for flow");
       continue;
     } else {
       StageIptablesForFlow(sys->matched.lopri, kDscpLopri, sys->lopri.class_id);
@@ -528,8 +536,8 @@ void LinuxHostEnforcerImpl::EnforceAllocs(const FlowStateProvider& flow_state_pr
 
   st = ipt_controller_.CommitChanges();
   if (!st.ok()) {
-    LOG(ERROR) << "failed to commit iptables config: " << st;
-    LOG(WARNING) << "will not decrease rate limits";
+    SPDLOG_LOGGER_ERROR(&logger_, "failed to commit iptables config: ", st);
+    SPDLOG_LOGGER_WARN(&logger_, "will not decrease rate limits");
   } else {
     // ==== Stage 3: Decrease any rate limits ====
 
@@ -564,10 +572,11 @@ void LinuxHostEnforcerImpl::EnforceAllocs(const FlowStateProvider& flow_state_pr
         });
       }
     }
-    LOG(INFO) << absl::StrFormat("decreasing %d rate limits", update_count);
+    SPDLOG_LOGGER_INFO(&logger_, "decreasing {} rate limits", update_count);
     st = tc_caller_.Batch(tc_batch_input_, /*force=*/true);
     if (!st.ok()) {
-      LOG(ERROR) << "failed to decrease rate limits for some flows: " << st;
+      SPDLOG_LOGGER_ERROR(&logger_, "failed to decrease rate limits for some flows: {}",
+                          st);
     }
   }
 

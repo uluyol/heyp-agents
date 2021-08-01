@@ -42,7 +42,7 @@ cc_library(
     hdrs = ["subprocess.h"],
     deps = [
         ":look-path",
-        "//heyp/log",
+        "//heyp/log:spdlog",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/synchronization",

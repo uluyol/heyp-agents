@@ -21,7 +21,7 @@
 #include "absl/strings/str_join.h"
 #include "absl/synchronization/mutex.h"
 #include "heyp/io/subprocess.h"
-#include "heyp/log/logging.h"
+#include "heyp/log/spdlog.h"
 
 namespace heyp {
 namespace iptables {
@@ -106,7 +106,8 @@ Operation ToOp(RulePosition p) {
     case RulePosition::kAppend:
       return Operation::kRulePositionAppend;
   }
-  LOG(FATAL) << "unknown rule position";
+  std::cerr << "unknown rule position\n";
+  exit(12);
 }
 
 namespace {
@@ -135,6 +136,7 @@ Runner::Runner(IpFamily family, absl::string_view iptables_cmd,
       iptables_save_cmd_(iptables_save_cmd),
       iptables_restore_cmd_(iptables_restore_cmd),
       has_check_(true),  // assume recent-enough iptables
+      logger_(MakeLogger("iptables")),
       wait_flag_(std::move(wait_flag)),
       restore_wait_flag_(std::move(restore_wait_flag)) {}
 
@@ -192,7 +194,7 @@ absl::StatusOr<std::string> Runner::Run(Operation op,
     full_args.push_back(arg);
   }
 
-  SubProcess subproc;
+  SubProcess subproc(&logger_);
   subproc.SetProgram(iptables_cmd_, full_args);
   subproc.SetChannelAction(CHAN_STDOUT, ACTION_PIPE);
   subproc.SetChannelAction(CHAN_STDERR, ACTION_PIPE);
@@ -259,7 +261,8 @@ absl::StatusOr<bool> Runner::CheckRule(Table table, Chain chain,
   if (has_check_) {
     return CheckRuleUsingCheck(MakeFullArgs(table, chain, args));
   }
-  LOG(FATAL) << "CheckRunWithoutCheck is not implemented";
+  SPDLOG_LOGGER_CRITICAL(&logger_, "CheckRunWithoutCheck is not implemented");
+  exit(13);
 }
 
 // Executes the rule check using the "-C" flag
@@ -320,7 +323,7 @@ absl::Status Runner::SaveInto(Table table, absl::Cord& buffer) {
   std::vector<std::string> args{"-t", std::string(ToString(table))};
 
   absl::MutexLock lock(&mu_);
-  SubProcess subproc;
+  SubProcess subproc(&logger_);
   subproc.SetProgram(iptables_save_cmd_, args);
   subproc.SetChannelAction(CHAN_STDOUT, ACTION_PIPE);
   subproc.SetChannelAction(CHAN_STDERR, ACTION_PIPE);
@@ -363,10 +366,13 @@ absl::Status Runner::RestoreInternal(std::vector<std::string> args,
 
   absl::MutexLock lock(&mu_);
 
-  CHECK(!restore_wait_flag_.empty())
-      << "support for older iptables-restore not implemented";
+  if (restore_wait_flag_.empty()) {
+    SPDLOG_LOGGER_CRITICAL(&logger_,
+                           "support for older iptables-restore not implemented");
+    return absl::UnavailableError("iptables-restore is too old");
+  }
 
-  SubProcess subproc;
+  SubProcess subproc(&logger_);
   subproc.SetProgram(iptables_restore_cmd_, full_args);
   subproc.SetChannelAction(CHAN_STDIN, ACTION_PIPE);
   subproc.SetChannelAction(CHAN_STDOUT, ACTION_PIPE);

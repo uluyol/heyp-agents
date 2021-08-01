@@ -14,14 +14,15 @@
 #include "heyp/host-agent/linux-enforcer/enforcer.h"
 #include "heyp/integration/flow-state-collector.h"
 #include "heyp/integration/step-worker.h"
-#include "heyp/log/logging.h"
+#include "heyp/log/spdlog.h"
 #include "heyp/posix/os.h"
 #include "heyp/proto/config.pb.h"
 
 namespace heyp {
 namespace testing {
 
-HostAgentOSTester::HostAgentOSTester(Config config) : config_(config) {}
+HostAgentOSTester::HostAgentOSTester(Config config)
+    : config_(config), logger_(MakeLogger("host-agent-os-tester")) {}
 
 namespace {
 
@@ -73,7 +74,8 @@ class InfiniteDemandProvider : public FlowStateProvider {
 
 MatchedHostFlows WithFlowPriority(const bool use_hipri,
                                   const FlowStateProvider& flow_state_provider,
-                                  const proto::FlowAlloc& flow_alloc) {
+                                  const proto::FlowAlloc& flow_alloc,
+                                  spdlog::logger* logger) {
   if (use_hipri) {
     return MatchedHostFlows{.hipri = {flow_alloc.flow()}};
   } else {
@@ -86,7 +88,7 @@ class EasyEnforcer {
   explicit EasyEnforcer(absl::string_view device, bool use_hipri,
                         const std::vector<HostWorker::Flow>& all_flows,
                         absl::string_view log_dir)
-      : demand_provider_(all_flows) {
+      : demand_provider_(all_flows), logger_(MakeLogger("easy-enforcer")) {
     if (kHostIsLinux) {
       proto::HostEnforcerConfig enforcer_config;
       enforcer_config.set_debug_log_dir(std::string(log_dir));
@@ -95,11 +97,12 @@ class EasyEnforcer {
           device, absl::bind_front(WithFlowPriority, use_hipri), enforcer_config);
       auto st = e->ResetDeviceConfig();
       if (!st.ok()) {
-        LOG(ERROR) << "failed to reset config of device '" << device << "': " << st;
+        SPDLOG_LOGGER_ERROR(&logger_, "failed to reset config of device '{}': {}'",
+                            device, st);
       }
       enforcer_ = std::move(e);
     } else {
-      LOG(WARNING) << "using nop enforcer";
+      SPDLOG_LOGGER_WARN(&logger_, "using nop enforcer");
       enforcer_ = absl::make_unique<NopHostEnforcer>();
     }
   }
@@ -122,6 +125,7 @@ class EasyEnforcer {
  private:
   InfiniteDemandProvider demand_provider_;
   std::unique_ptr<HostEnforcer> enforcer_;
+  spdlog::logger logger_;
 };
 
 class RateLimitPicker {
@@ -163,7 +167,7 @@ struct FlowFormatter {
 absl::StatusOr<proto::TestCompareMetrics> HostAgentOSTester::Run() {
   std::vector<std::unique_ptr<HostWorker>> workers;
 
-  LOG(INFO) << "creating " << config_.num_hosts << " hosts";
+  SPDLOG_LOGGER_INFO(&logger_, "creating {} hosts", config_.num_hosts);
   // Populate workers
   for (int i = 0; i < config_.num_hosts; ++i) {
     auto worker_or = HostWorker::Create();
@@ -173,7 +177,7 @@ absl::StatusOr<proto::TestCompareMetrics> HostAgentOSTester::Run() {
     workers.push_back(std::move(worker_or.value()));
   }
 
-  LOG(INFO) << "initializing flows";
+  SPDLOG_LOGGER_INFO(&logger_, "initializing flows");
   // Initialize all flows
   absl::Status status = absl::OkStatus();
   std::vector<HostWorker::Flow> all_flows;
@@ -201,7 +205,8 @@ absl::StatusOr<proto::TestCompareMetrics> HostAgentOSTester::Run() {
   proto::TestCompareMetrics metrics;
   std::unique_ptr<FlowStateCollector> collector;
   if (status.ok()) {
-    LOG(INFO) << "initalized flows:\n" << absl::StrJoin(all_flows, "\n", FlowFormatter());
+    SPDLOG_LOGGER_INFO(&logger_, "initalized flows:\n{}",
+                       absl::StrJoin(all_flows, "\n", FlowFormatter()));
     EasyEnforcer enforcer(config_.device, config_.use_hipri, all_flows, config_.log_dir);
     RateLimitPicker limit_picker(config_.max_rate_limit_bps);
     std::vector<std::pair<HostWorker::Flow, int64_t>> all_flows_limits;
@@ -229,8 +234,8 @@ absl::StatusOr<proto::TestCompareMetrics> HostAgentOSTester::Run() {
 
     int step = 0;
     while (absl::Now() - start < config_.run_dur) {
-      LOG(INFO) << "step " << step
-                << ": dur = " << absl::FormatDuration(config_.step_dur);
+      SPDLOG_LOGGER_INFO(&logger_, "step {}: dur = {}", step,
+                         absl::FormatDuration(config_.step_dur));
       absl::SleepFor(config_.step_dur);
       std::string label(absl::StrCat("step = ", step));
       for (auto& w : workers) {
@@ -244,19 +249,20 @@ absl::StatusOr<proto::TestCompareMetrics> HostAgentOSTester::Run() {
       enforcer.UpdateLimits(all_flows_limits, absl::StrCat("step = ", step), &metrics);
     }
   } else {
-    LOG(FATAL) << "failed to initialize flows: " << status;
+    SPDLOG_LOGGER_CRITICAL(&logger_, "failed to initialize flows: {}", status);
+    DumpStackTraceAndExit(3);
   }
 
-  LOG(INFO) << "collecting metrics";
+  SPDLOG_LOGGER_INFO(&logger_, "collecting metrics");
   for (size_t i = 0; i < workers.size(); ++i) {
-    LOG(INFO) << "collecting metrics from worker " << i;
+    SPDLOG_LOGGER_INFO(&logger_, "collecting metrics from worker {}", i);
     for (auto m : workers[i]->Finish()) {
       *metrics.add_metrics() = m;
     }
   }
 
   if (collector != nullptr) {
-    LOG(INFO) << "collecting metrics from FlowStateCollector";
+    SPDLOG_LOGGER_INFO(&logger_, "collecting metrics from FlowStateCollector");
     for (auto m : collector->Finish()) {
       *metrics.add_metrics() = m;
     }

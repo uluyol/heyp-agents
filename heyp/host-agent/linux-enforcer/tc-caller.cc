@@ -7,12 +7,13 @@
 #include "absl/strings/ascii.h"
 #include "absl/strings/str_cat.h"
 #include "heyp/io/subprocess.h"
-#include "heyp/log/logging.h"
+#include "heyp/log/spdlog.h"
 #include "third_party/simdjson/simdjson.h"
 
 namespace heyp {
 
-TcCaller::TcCaller(const std::string& tc_name) : tc_name_(tc_name) {}
+TcCaller::TcCaller(spdlog::logger* logger, const std::string& tc_name)
+    : tc_name_(tc_name), logger_(logger) {}
 
 absl::Status TcCaller::Batch(const absl::Cord& input, bool force) {
   std::vector<std::string> args{"-batch", "-", "-force"};
@@ -20,7 +21,7 @@ absl::Status TcCaller::Batch(const absl::Cord& input, bool force) {
     args.resize(1);
   }
 
-  SubProcess subproc;
+  SubProcess subproc(logger_);
   subproc.SetProgram(tc_name_, args);
   subproc.SetChannelAction(CHAN_STDIN, ACTION_PIPE);
   subproc.SetChannelAction(CHAN_STDOUT, ACTION_PIPE);
@@ -41,7 +42,7 @@ absl::Status TcCaller::Batch(const absl::Cord& input, bool force) {
 
 absl::Status TcCaller::Call(const std::vector<std::string>& tc_args,
                             bool parse_into_json) {
-  SubProcess subproc;
+  SubProcess subproc(logger_);
   subproc.SetProgram(tc_name_, tc_args);
   subproc.SetChannelAction(CHAN_STDOUT, ACTION_PIPE);
   subproc.SetChannelAction(CHAN_STDERR, ACTION_PIPE);

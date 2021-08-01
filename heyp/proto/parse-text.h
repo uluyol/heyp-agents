@@ -4,14 +4,14 @@
 #include <string>
 
 #include "google/protobuf/text_format.h"
-#include "heyp/log/logging.h"
+#include "heyp/log/spdlog.h"
 
 namespace heyp {
 
 template <typename ProtoT>
 ProtoT ParseTextProto(const std::string& str) {
   ProtoT mesg;
-  CHECK(google::protobuf::TextFormat::ParseFromString(str, &mesg));
+  H_ASSERT(google::protobuf::TextFormat::ParseFromString(str, &mesg));
   return mesg;
 }
 

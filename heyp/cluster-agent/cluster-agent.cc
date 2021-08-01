@@ -12,7 +12,7 @@
 #include "heyp/cluster-agent/server.h"
 #include "heyp/flows/aggregator.h"
 #include "heyp/init/init.h"
-#include "heyp/log/logging.h"
+#include "heyp/log/spdlog.h"
 #include "heyp/proto/fileio.h"
 #include "heyp/proto/ndjson-logger.h"
 
@@ -70,7 +70,8 @@ absl::Status Run(const proto::ClusterAgentConfig& c, const proto::AllocBundle& a
           .AddListeningPort(c.server().address(), grpc::InsecureServerCredentials())
           .RegisterService(&service)
           .BuildAndStart());
-  LOG(INFO) << "Server listening on " << c.server().address();
+  auto logger = MakeLogger("main");
+  SPDLOG_LOGGER_INFO(&logger, "Server listening on {}", c.server().address());
 
   service.RunLoop(&should_exit_flag);
   if (alloc_recorder != nullptr) {

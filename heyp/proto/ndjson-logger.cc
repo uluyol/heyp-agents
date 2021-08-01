@@ -4,22 +4,21 @@
 
 #include "absl/memory/memory.h"
 #include "absl/strings/str_cat.h"
-#include "heyp/log/logging.h"
 #include "heyp/posix/strerror.h"
 
 namespace heyp {
 
-NdjsonLogger::NdjsonLogger(int fd) : fd_(fd) {}
+NdjsonLogger::NdjsonLogger(int fd) : fd_(fd), logger_(MakeLogger("ndjson-logger")) {}
 
 NdjsonLogger::~NdjsonLogger() {
   if (fd_ != -1) {
-    LOG(WARNING) << "NdjsonLogger: should call close";
+    SPDLOG_LOGGER_WARN(&logger_, "should call close");
     int ret;
     do {
       ret = close(fd_);
     } while (ret != 0 && errno == EINTR);
     if (ret != 0) {
-      LOG(WARNING) << "NdjsonLogger: failed to close output file: " << StrError(errno);
+      SPDLOG_LOGGER_WARN(&logger_, "failed to close output file: {}", StrError(errno));
     }
   }
 }

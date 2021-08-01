@@ -3,7 +3,7 @@
 #include <hdr_histogram.h>
 #include <hdr_histogram_log.h>
 
-#include "heyp/log/logging.h"
+#include "heyp/log/spdlog.h"
 #include "heyp/posix/strerror.h"
 
 extern "C" {
@@ -37,7 +37,7 @@ HdrHistogram::HdrHistogram(proto::HdrHistogram::Config config)
   int init_result =
       hdr_init(config_.lowest_discernible_value(), config_.highest_trackable_value(),
                config_.significant_figures(), &h_);
-  CHECK_EQ(init_result, 0) << config.DebugString();
+  H_ASSERT_EQ_MESG(init_result, 0, config.DebugString());
 }
 
 HdrHistogram::~HdrHistogram() {
@@ -65,7 +65,7 @@ HdrHistogram::HdrHistogram(const HdrHistogram& other) {
   int init_result =
       hdr_init(config_.lowest_discernible_value(), config_.highest_trackable_value(),
                config_.significant_figures(), &h_);
-  CHECK_EQ(init_result, 0);
+  H_ASSERT_EQ(init_result, 0);
 
   hdr_add(h_, other.h_);
 }
@@ -80,7 +80,7 @@ HdrHistogram& HdrHistogram::operator=(const HdrHistogram& other) {
   int init_result =
       hdr_init(config_.lowest_discernible_value(), config_.highest_trackable_value(),
                config_.significant_figures(), &h_);
-  CHECK_EQ(init_result, 0);
+  H_ASSERT_EQ(init_result, 0);
 
   hdr_add(h_, other.h_);
   return *this;
@@ -137,7 +137,7 @@ int64_t HdrHistogram::ValueAtPercentile(double percentile) const {
 std::vector<int64_t> HdrHistogram::ValuesAtPercentiles(
     const std::vector<double>& percentiles) const {
   std::vector<int64_t> values(percentiles.size() + 1, 0);
-  CHECK_EQ(
+  H_ASSERT_EQ(
       hdr_value_at_percentiles(h_, percentiles.data(), values.data(), percentiles.size()),
       0);
   values.resize(percentiles.size());

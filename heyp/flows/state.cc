@@ -3,12 +3,12 @@
 #include <algorithm>
 
 #include "absl/strings/substitute.h"
-#include "heyp/log/logging.h"
+#include "heyp/log/spdlog.h"
 
 namespace heyp {
 
 AggState::AggState(const proto::FlowMarker& flow, bool smooth_usage)
-    : smooth_usage_(smooth_usage) {
+    : smooth_usage_(smooth_usage), logger_(MakeLogger("leaf-state")) {
   *cur_.mutable_flow() = flow;
 }
 
@@ -23,15 +23,15 @@ void AggState::UpdateUsage(const Update u, absl::Duration usage_history_window,
                         (u.cum_lopri_usage_bytes > cur_.cum_lopri_usage_bytes());
 
   if (u.time < updated_time_) {
-    LOG(WARNING) << absl::Substitute(
-        "got update ($0, $1) older than last update ($2, $3)",
-        absl::FormatTime(u.time, absl::UTCTimeZone()), cum_usage_bytes,
-        absl::FormatTime(updated_time_, absl::UTCTimeZone()), cur_.cum_usage_bytes());
+    SPDLOG_LOGGER_WARN(&logger_, "got update ({}, {}) older than last update ({}, {})",
+                       absl::FormatTime(u.time, absl::UTCTimeZone()), cum_usage_bytes,
+                       absl::FormatTime(updated_time_, absl::UTCTimeZone()),
+                       cur_.cum_usage_bytes());
     return;
   }
 
-  CHECK_GE(u.cum_hipri_usage_bytes, cur_.cum_hipri_usage_bytes());
-  CHECK_GE(u.cum_lopri_usage_bytes, cur_.cum_lopri_usage_bytes());
+  H_SPDLOG_CHECK_GE(&logger_, u.cum_hipri_usage_bytes, cur_.cum_hipri_usage_bytes());
+  H_SPDLOG_CHECK_GE(&logger_, u.cum_lopri_usage_bytes, cur_.cum_lopri_usage_bytes());
 
   double measured_usage_bps = u.sum_child_usage_bps;
 
@@ -92,7 +92,8 @@ void AggState::UpdateUsage(const Update u, absl::Duration usage_history_window,
   cur_.set_predicted_demand_bps(demand_predictor.FromUsage(u.time, usage_history_));
 }
 
-LeafState::LeafState(const proto::FlowMarker& flow) : impl_(flow, true) {}
+LeafState::LeafState(const proto::FlowMarker& flow)
+    : impl_(flow, true), logger_(MakeLogger("leaf-state")) {}
 
 const proto::FlowMarker& LeafState::flow() const { return impl_.flow(); }
 absl::Time LeafState::updated_time() const { return impl_.updated_time(); }
@@ -106,7 +107,8 @@ void LeafState::UpdateUsage(const Update u, absl::Duration usage_history_window,
   if (c.cum_usage_bytes() > update_usage_bytes) {
     update_usage_bytes = c.cum_usage_bytes();
     if (u.cum_usage_bytes != 0) {
-      LOG(WARNING) << "got bad usage counter with value " << u.cum_usage_bytes;
+      SPDLOG_LOGGER_WARN(&logger_, "got bad usage counter with value {}",
+                         u.cum_usage_bytes);
     }
   }
 

@@ -4,7 +4,7 @@
 #include "heyp/alg/debug.h"
 #include "heyp/cluster-agent/allocator.h"
 #include "heyp/cluster-agent/allocs.h"
-#include "heyp/log/logging.h"
+#include "heyp/log/spdlog.h"
 
 namespace heyp {
 
@@ -12,6 +12,7 @@ ClusterController::ClusterController(std::unique_ptr<FlowAggregator> aggregator,
                                      std::unique_ptr<ClusterAllocator> allocator)
     : aggregator_(std::move(aggregator)),
       allocator_(std::move(allocator)),
+      logger_(MakeLogger("cluster-ctlr")),
       next_lis_id_(1) {}
 
 ClusterController::Listener::Listener() : host_id_(0), lis_id_(0), controller_(nullptr) {}
@@ -69,9 +70,9 @@ void ClusterController::ComputeAndBroadcast() {
   {
     ClusterAllocator* alloc = allocator_.get();
     aggregator_->ForEachAgg(
-        [alloc, should_debug](absl::Time time, const proto::AggInfo& info) {
+        [alloc, should_debug, this](absl::Time time, const proto::AggInfo& info) {
           if (should_debug) {
-            LOG(INFO) << "got info: " << info.DebugString();
+            SPDLOG_LOGGER_INFO(&logger_, "got info: {}", info.DebugString());
           }
           alloc->AddInfo(time, info);
         });
@@ -79,7 +80,7 @@ void ClusterController::ComputeAndBroadcast() {
   AllocSet allocs = allocator_->GetAllocs();
   state_mu_.Unlock();
   if (should_debug) {
-    LOG(INFO) << "got allocs: " << allocs;
+    SPDLOG_LOGGER_INFO(&logger_, "got allocs: {}", allocs);
   }
 
   absl::flat_hash_map<int64_t, proto::AllocBundle> alloc_bundles =

@@ -10,14 +10,17 @@
 #include "boost/process/pipe.hpp"
 #include "boost/process/search_path.hpp"
 #include "heyp/host-agent/urls.h"
-#include "heyp/log/logging.h"
+#include "heyp/log/spdlog.h"
 
 namespace bp = boost::process;
 
 namespace heyp {
 
 FlowTracker::FlowTracker(std::unique_ptr<DemandPredictor> demand_predictor, Config config)
-    : config_(config), demand_predictor_(std::move(demand_predictor)), next_seqnum_(0) {}
+    : config_(config),
+      demand_predictor_(std::move(demand_predictor)),
+      logger_(MakeLogger("flow-tracker")),
+      next_seqnum_(0) {}
 
 void FlowTracker::ForEachActiveFlow(
     absl::FunctionRef<void(absl::Time, const proto::FlowInfo&)> func) const {
@@ -63,8 +66,9 @@ void FlowTracker::UpdateFlows(absl::Time timestamp,
       active_flows_.erase(u.flow);
       // Rerun on this flow so we add a new state
     } else {
-      CHECK(u.used_priority != FlowPri::kUnset);
-      CHECK(u.used_priority == FlowPri::kHi || u.used_priority == FlowPri::kLo);
+      H_SPDLOG_CHECK_NE(&logger_, u.used_priority, FlowPri::kUnset);
+      H_SPDLOG_CHECK(&logger_,
+                     u.used_priority == FlowPri::kHi || u.used_priority == FlowPri::kLo);
       bool is_lopri = u.used_priority == FlowPri::kLo;
       LeafState::Update flow_update{
           .time = timestamp,
@@ -139,7 +143,7 @@ namespace {
 
 absl::Status ParseLine(uint64_t host_id, absl::string_view line,
                        proto::FlowMarker& parsed, int64_t& usage_bps,
-                       int64_t& cum_usage_bytes) {
+                       int64_t& cum_usage_bytes, spdlog::logger* logger) {
   parsed.Clear();
 
   std::vector<absl::string_view> fields =
@@ -204,10 +208,10 @@ absl::Status ParseLine(uint64_t host_id, absl::string_view line,
   }
 
   if (!found_cum_usage_bytes && !is_estab) {
-    LOG(WARNING) << "no 'bytes_sent' field: " << line;
+    SPDLOG_LOGGER_WARN(logger, "no 'bytes_sent' field: {}", line);
   }
   if (!found_usage_bps && !is_unconn) {
-    LOG(WARNING) << "no 'send' bps field: " << line;
+    SPDLOG_LOGGER_WARN(logger, "no 'send' bps field: {}", line);
   }
 
   return absl::OkStatus();
@@ -236,10 +240,10 @@ bool SSFlowStateReporter::IgnoreFlow(const proto::FlowMarker& f) {
 }
 
 void SSFlowStateReporter::MonitorDone() {
-  LOG(INFO) << "SSFlowStateReporter::MonitorDone: entered loop";
-  absl::Cleanup loop_done = [] {
-    LOG(INFO) << "SSFlowStateReporter::MonitorDone: exited loop";
-  };
+  auto logger = MakeLogger("ss-flow-state-reporter:monitor-done");
+
+  SPDLOG_LOGGER_INFO(&logger, "entered loop");
+  absl::Cleanup loop_done = [&logger] { SPDLOG_LOGGER_INFO(&logger, "exited loop"); };
 
   std::string line;
   while (true) {
@@ -248,16 +252,17 @@ void SSFlowStateReporter::MonitorDone() {
       proto::FlowMarker f;
       int64_t usage_bps = 0;
       int64_t cum_usage_bytes = 0;
-      auto status = ParseLine(impl_->config.host_id, line, f, usage_bps, cum_usage_bytes);
+      auto status =
+          ParseLine(impl_->config.host_id, line, f, usage_bps, cum_usage_bytes, &logger);
       if (!status.ok()) {
-        VLOG(2) << "failed to parse done line: " << status << " on " << line;
+        SPDLOG_LOGGER_DEBUG(&logger, "failed to parse done line: {} on {}", status, line);
         continue;
       }
       if (IgnoreFlow(f)) {
-        VLOG(2) << "ignoring done flow: " << f.ShortDebugString();
+        SPDLOG_LOGGER_DEBUG(&logger, "ignoring done flow: {}", f.ShortDebugString());
         continue;
       }
-      VLOG(2) << "counting done flow: " << f.ShortDebugString();
+      SPDLOG_LOGGER_DEBUG(&logger, "counting done flow: {}", f.ShortDebugString());
 
       impl_->flow_tracker->FinalizeFlows(
           now, {{f, usage_bps, cum_usage_bytes, FlowPri::kUnset}});
@@ -265,7 +270,7 @@ void SSFlowStateReporter::MonitorDone() {
     if (impl_->is_dying) {
       break;
     } else {
-      LOG(WARNING) << "restarting ss to monitor done flows";
+      SPDLOG_LOGGER_WARN(&logger, "restarting ss to monitor done flows");
       if (!StartDoneMonitor(impl_->config.ss_binary_name, &impl_->monitor_done_out,
                             &impl_->monitor_done_proc, &impl_->monitor_done_proc_mu)
                .ok()) {
@@ -289,16 +294,17 @@ absl::Status SSFlowStateReporter::ReportState(
       proto::FlowMarker f;
       int64_t usage_bps = 0;
       int64_t cum_usage_bytes = 0;
-      auto status = ParseLine(impl_->config.host_id, line, f, usage_bps, cum_usage_bytes);
+      auto status =
+          ParseLine(impl_->config.host_id, line, f, usage_bps, cum_usage_bytes, &logger_);
       if (!status.ok()) {
-        VLOG(2) << "failed to parse line: " << status << " on " << line;
+        SPDLOG_LOGGER_DEBUG(&logger_, "failed to parse line: {} on {}", status, line);
         continue;
       }
       if (IgnoreFlow(f)) {
-        VLOG(2) << "ignoring flow: " << f.ShortDebugString();
+        SPDLOG_LOGGER_DEBUG(&logger_, "ignoring flow: ", f.ShortDebugString());
         continue;
       }
-      VLOG(2) << "counting flow: " << f.ShortDebugString();
+      SPDLOG_LOGGER_DEBUG(&logger_, "counting flow: ", f.ShortDebugString());
       FlowPri pri = FlowPri::kHi;
       if (is_lopri(f)) {
         pri = FlowPri::kLo;
@@ -318,7 +324,8 @@ SSFlowStateReporter::SSFlowStateReporter(Config config, FlowTracker* flow_tracke
           .config = config,
           .flow_tracker = flow_tracker,
           .is_dying = false,
-      })) {}
+      })),
+      logger_(MakeLogger("ss-flow-state-reporter")) {}
 
 absl::StatusOr<std::unique_ptr<SSFlowStateReporter>> SSFlowStateReporter::Create(
     Config config, FlowTracker* flow_tracker) {

@@ -1,5 +1,6 @@
 #include <csignal>
 
+#include "absl/flags/flag.h"
 #include "absl/functional/bind_front.h"
 #include "absl/random/distributions.h"
 #include "absl/random/random.h"
@@ -18,7 +19,7 @@
 #include "heyp/host-agent/linux-enforcer/data.h"
 #include "heyp/host-agent/linux-enforcer/enforcer.h"
 #include "heyp/init/init.h"
-#include "heyp/log/logging.h"
+#include "heyp/log/spdlog.h"
 #include "heyp/posix/os.h"
 #include "heyp/posix/pidfile.h"
 #include "heyp/proto/config.pb.h"
@@ -41,6 +42,8 @@ uint64_t GetUUID() {
 }
 
 absl::Status Run(const proto::HostAgentConfig& c) {
+  auto logger = MakeLogger("main");
+
   std::unique_ptr<DemandPredictor> socket_demand_predictor;
   absl::Duration socket_demand_window;
   {
@@ -82,19 +85,19 @@ absl::Status Run(const proto::HostAgentConfig& c) {
   }
 
   const uint64_t host_id = GetUUID();
-  LOG(INFO) << "host assigned id: " << host_id;
+  SPDLOG_LOGGER_INFO(&logger, "host assigned id: {}", host_id);
 
-  LOG(INFO) << "creating flow tracker";
+  SPDLOG_LOGGER_INFO(&logger, "creating flow tracker");
   FlowTracker flow_tracker(
       std::move(socket_demand_predictor),
       {
           .usage_history_window = 2 * socket_demand_window,
           .ignore_instantaneous_usage = c.flow_tracker().ignore_instantaneous_usage(),
       });
-  LOG(INFO) << "creating flow aggregator";
+  SPDLOG_LOGGER_INFO(&logger, "creating flow aggregator");
   std::unique_ptr<FlowAggregator> flow_aggregator =
       NewConnToHostAggregator(std::move(host_demand_predictor), 2 * host_demand_window);
-  LOG(INFO) << "creating flow state reporter";
+  SPDLOG_LOGGER_INFO(&logger, "creating flow state reporter");
   auto flow_state_reporter_or = SSFlowStateReporter::Create(
       {
           .host_id = host_id,
@@ -107,13 +110,13 @@ absl::Status Run(const proto::HostAgentConfig& c) {
   }
   std::unique_ptr<FlowStateReporter> flow_state_reporter =
       std::move(*flow_state_reporter_or);
-  LOG(INFO) << "creating dc mapper";
+  SPDLOG_LOGGER_INFO(&logger, "creating dc mapper");
   StaticDCMapper dc_mapper(c.dc_mapper());
-  LOG(INFO) << "creating host enforcer";
+  SPDLOG_LOGGER_INFO(&logger, "creating host enforcer");
   std::unique_ptr<HostEnforcer> enforcer;
   if (kHostIsLinux) {
     auto device_or = FindDeviceResponsibleFor(
-        {c.this_host_addrs().begin(), c.this_host_addrs().end()});
+        {c.this_host_addrs().begin(), c.this_host_addrs().end()}, &logger);
     if (!device_or.ok()) {
       return absl::InternalError(
           absl::StrCat("failed to find device: ", device_or.status().message()));
@@ -124,8 +127,8 @@ absl::Status Run(const proto::HostAgentConfig& c) {
         c.enforcer());
     absl::Status st = e->ResetDeviceConfig();
     if (!st.ok()) {
-      LOG(ERROR) << "failed to reset config of device '" << device_or.value()
-                 << "': " << st;
+      SPDLOG_LOGGER_ERROR(&logger, "failed to reset config of device '{}': {}",
+                          device_or.value(), st);
     }
 
     std::string my_dc;
@@ -141,15 +144,16 @@ absl::Status Run(const proto::HostAgentConfig& c) {
         AllNetemConfigs(dc_mapper, SimulatedWanDB(c.simulated_wan()), my_dc, host_id),
         /*contains_all_flows=*/true);
     if (!st.ok()) {
-      LOG(ERROR) << "failed to init simulated WAN: " << st;
+      SPDLOG_LOGGER_ERROR(&logger, "failed to init simulated WAN: {}", st);
     }
 
     enforcer = std::move(e);
   } else {
-    LOG(WARNING) << "not on Linux: using nop enforcer and no WAN network emulation";
+    SPDLOG_LOGGER_WARN(&logger,
+                       "not on Linux: using nop enforcer and no WAN network emulation");
     enforcer = absl::make_unique<NopHostEnforcer>();
   }
-  LOG(INFO) << "connecting to cluster agent";
+  SPDLOG_LOGGER_INFO(&logger, "connecting to cluster agent");
   std::shared_ptr<grpc::Channel> channel = grpc::CreateChannel(
       c.daemon().cluster_agent_addr(), grpc::InsecureChannelCredentials());
   bool is_connected = channel->WaitForConnected(
@@ -160,7 +164,7 @@ absl::Status Run(const proto::HostAgentConfig& c) {
   if (!is_connected) {
     return absl::DeadlineExceededError("failed to connect to cluster agent");
   }
-  LOG(INFO) << "creating daemon";
+  SPDLOG_LOGGER_INFO(&logger, "creating daemon");
   HostDaemon daemon(channel,
                     {
                         .host_id = host_id,
@@ -170,9 +174,9 @@ absl::Status Run(const proto::HostAgentConfig& c) {
                     },
                     &dc_mapper, &flow_tracker, std::move(flow_aggregator),
                     flow_state_reporter.get(), enforcer.get());
-  LOG(INFO) << "running daemon main loop";
+  SPDLOG_LOGGER_INFO(&logger, "running daemon main loop");
   daemon.Run(&should_exit_flag);
-  LOG(INFO) << "exited daemon main loop";
+  SPDLOG_LOGGER_INFO(&logger, "exited daemon main loop");
   return absl::OkStatus();
 }
 

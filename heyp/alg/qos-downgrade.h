@@ -6,7 +6,7 @@
 
 #include "absl/strings/str_format.h"
 #include "absl/time/time.h"
-#include "heyp/log/logging.h"
+#include "heyp/log/spdlog.h"
 #include "heyp/proto/config.pb.h"
 #include "heyp/proto/heyp.pb.h"
 
@@ -17,7 +17,8 @@ namespace heyp {
 // The total demand marked is aimed to be close to want_frac_lopri.
 std::vector<bool> PickLOPRIChildren(const proto::AggInfo& agg_info,
                                     const double want_frac_lopri,
-                                    const proto::DowngradeSelector& selector);
+                                    const proto::DowngradeSelector& selector,
+                                    spdlog::logger* logger);
 
 // FracAdmittedAtLOPRI returns the fraction of traffic that should ideally be sent at
 // LOPRI.
@@ -38,8 +39,8 @@ double FracAdmittedAtLOPRI(const proto::FlowInfo& parent,
 double FracAdmittedAtLOPRIToProbe(const proto::AggInfo& agg_info,
                                   const int64_t hipri_rate_limit_bps,
                                   const int64_t lopri_rate_limit_bps,
-                                  const double demand_multiplier,
-                                  const double lopri_frac);
+                                  const double demand_multiplier, const double lopri_frac,
+                                  spdlog::logger* logger);
 
 // --- Following are mainly exposed for unit testing ---
 
@@ -77,10 +78,11 @@ void GreedyAssignToMinimizeGap(GreedyAssignToMinimizeGapArgs args,
 template <typename SingleAggState>
 int64_t HeypSigcomm20MaybeReviseLOPRIAdmission(
     double acceptable_measured_ratio_over_intended_ratio, absl::Time time,
-    const proto::FlowInfo& parent, const SingleAggState& cur_state) {
+    const proto::FlowInfo& parent, const SingleAggState& cur_state,
+    spdlog::logger* logger) {
   if (time <= cur_state.last_time) {
-    LOG(WARNING) << "cur time (" << time << ") needs to be after last time ("
-                 << cur_state.last_time << ")";
+    SPDLOG_LOGGER_WARN(logger, "cur time ({}) needs to be after last time ({})", time,
+                       cur_state.last_time);
   } else if (cur_state.alloc.hipri_rate_limit_bps() > 0 && cur_state.frac_lopri > 0) {
     const double hipri_usage_bytes =
         parent.cum_hipri_usage_bytes() - cur_state.last_cum_hipri_usage_bytes;
@@ -88,8 +90,8 @@ int64_t HeypSigcomm20MaybeReviseLOPRIAdmission(
         parent.cum_lopri_usage_bytes() - cur_state.last_cum_lopri_usage_bytes;
 
     if (hipri_usage_bytes == 0) {
-      LOG(INFO) << absl::StrFormat("flow: %s: no HIPRI usage",
-                                   parent.flow().ShortDebugString());
+      SPDLOG_LOGGER_INFO(logger, "flow: {}: no HIPRI usage",
+                         parent.flow().ShortDebugString());
     } else {
       // Now, if we try to send X Gbps as LOPRI, but only succeed at sending
       // 0.8 * X Gbps as LOPRI, this indicates that we have some congestion on
@@ -120,13 +122,14 @@ int64_t HeypSigcomm20MaybeReviseLOPRIAdmission(
 
         auto to_mbps = [](auto bps) { return static_cast<double>(bps) / (1024 * 1024); };
 
-        LOG(INFO) << absl::StrFormat(
-            "flow: %s: inferred congestion (ratio = %f): sent %f Mbps as HIPRI "
-            "but only %f Mbps as LOPRI (lopri_frac = %f)",
+        SPDLOG_LOGGER_INFO(
+            logger,
+            "flow: {}: inferred congestion (ratio = {}): sent {} Mbps as HIPRI "
+            "but only {} Mbps as LOPRI (lopri_frac = {})",
             parent.flow().ShortDebugString(), measured_ratio_over_intended_ratio,
             to_mbps(hipri_usage_bps), to_mbps(lopri_usage_bps), cur_state.frac_lopri);
-        LOG(INFO) << absl::StrFormat(
-            "flow: %s: old LOPRI limit: %f Mbps new LOPRI limit: %f Mbps",
+        SPDLOG_LOGGER_INFO(
+            logger, "flow: {}: old LOPRI limit: {} Mbps new LOPRI limit: {} Mbps",
             parent.flow().ShortDebugString(),
             to_mbps(cur_state.alloc.lopri_rate_limit_bps()), to_mbps(new_lopri_limit));
 

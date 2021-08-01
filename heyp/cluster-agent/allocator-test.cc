@@ -867,7 +867,8 @@ class LOPRICongestionInfoGenerator {
       case 8:
         return 5000;
     }
-    LOG(FATAL) << "unreachable";
+    std::cerr << "unreachable\n";
+    DumpStackTraceAndExit(11);
     return 0;
   }
 

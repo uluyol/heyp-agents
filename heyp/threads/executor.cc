@@ -1,7 +1,7 @@
 #include "heyp/threads/executor.h"
 
 #include "absl/memory/memory.h"
-#include "heyp/log/logging.h"
+#include "heyp/log/spdlog.h"
 
 namespace heyp {
 
@@ -52,8 +52,8 @@ std::unique_ptr<TaskGroup> Executor::NewTaskGroup() {
 }
 
 TaskGroup::~TaskGroup() {
-  CHECK_EQ(exec_, static_cast<Executor*>(nullptr))
-      << "must call WaitAll on TaskGroup before destroying";
+  H_ASSERT_EQ_MESG(exec_, static_cast<Executor*>(nullptr),
+                   "must call WaitAll on TaskGroup before destroying");
 }
 
 absl::Status TaskGroup::WaitAll() {
@@ -69,8 +69,8 @@ absl::Status TaskGroup::WaitAll() {
 
 void TaskGroup::WaitAllNoStatus() {
   auto st = WaitAll();
-  CHECK(st.ok())
-      << "got non-OK status in WaitAllNoStatus; consider using WaitAll instead";
+  H_ASSERT_MESG(st.ok(),
+                "got non-OK status in WaitAllNoStatus; consider using WaitAll instead");
 }
 
 void TaskGroup::AddTask(const std::function<absl::Status()>& fn) {
