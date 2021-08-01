@@ -417,9 +417,9 @@ def Gbps(x):
     return x * 1024 * 1024 * 1024
 
 def GenConfigs():
-    ALL_X = [2]  # [2, 4, 6, 8]
-    ALL_Y = [float("2.5")]  # [2.5, 5]
-    ALL_C = [float("1.5")]  # [1.25, 1.5]
+    ALL_X = [8]  # [2, 4, 6, 8]
+    ALL_Y = [5]  # [2.5, 5]
+    ALL_C = [float("2")]  # [1.25, 1.5]
     D = float("1.0")
     configs = {}
     for x in ALL_X:
