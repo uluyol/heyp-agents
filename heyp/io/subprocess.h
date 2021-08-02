@@ -28,6 +28,7 @@ limitations under the License.
 #include "absl/base/macros.h"
 #include "absl/base/thread_annotations.h"
 #include "absl/synchronization/mutex.h"
+#include "absl/synchronization/notification.h"
 #include "spdlog/spdlog.h"
 
 namespace heyp {
@@ -101,6 +102,11 @@ class SubProcess {
   // Virtual for backwards compatibility; do not create new subclasses.
   virtual bool Start();
 
+  // KillAfter()
+  //    Set a timeout for the process (after calling Start()).
+  //    It will be sent SIGTERM.
+  virtual void KillAfter(absl::Duration timeout);
+
   // Kill()
   //    Send the given signal to the process.
   //    Return true normally, or false if we couldn't send the signal - likely
@@ -143,6 +149,8 @@ class SubProcess {
   mutable absl::Mutex proc_mu_;
   bool running_ ABSL_GUARDED_BY(proc_mu_);
   pid_t pid_ ABSL_GUARDED_BY(proc_mu_);
+  absl::Notification* notify_done_ = nullptr;
+  std::thread timeout_thread_;
 
   mutable absl::Mutex data_mu_ ABSL_ACQUIRED_AFTER(proc_mu_);
   char* exec_path_ ABSL_GUARDED_BY(data_mu_);

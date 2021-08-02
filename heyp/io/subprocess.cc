@@ -25,10 +25,13 @@ limitations under the License.
 #include <sys/types.h>
 #include <sys/wait.h>
 
+#include <atomic>
 #include <memory>
+#include <thread>
 #include <vector>
 
 #include "absl/strings/str_join.h"
+#include "absl/time/clock.h"
 #include "heyp/io/look-path.h"
 #include "heyp/log/spdlog.h"
 
@@ -101,6 +104,13 @@ SubProcess::~SubProcess() {
   absl::MutexLock dataLock(&data_mu_);
   pid_ = -1;
   running_ = false;
+  if (notify_done_ != nullptr) {
+    notify_done_->Notify();
+    notify_done_ = nullptr;
+  }
+  if (timeout_thread_.joinable()) {
+    timeout_thread_.join();
+  }
   FreeArgs();
   ClosePipes();
 }
@@ -522,10 +532,39 @@ bool SubProcess::WaitInternal(int* status) {
   proc_mu_.Lock();
   if ((running_ == running) && (pid_ == pid)) {
     running_ = false;
+    if (notify_done_ != nullptr) {
+      notify_done_->Notify();
+      notify_done_ = nullptr;
+    }
     pid_ = -1;
   }
   proc_mu_.Unlock();
   return ret;
+}
+
+void SubProcess::KillAfter(absl::Duration timeout) {
+  proc_mu_.Lock();
+  notify_done_ = new absl::Notification();
+  timeout_thread_ = std::thread([this, timeout, raw_notify_done = notify_done_]() {
+    std::unique_ptr<absl::Notification> notify_done(raw_notify_done);
+    while (!notify_done->WaitForNotificationWithTimeout(timeout)) {
+      proc_mu_.Lock();
+      bool running = running_;
+      pid_t pid = pid_;
+      proc_mu_.Unlock();
+
+      if (!(running && pid > 1)) {
+        continue;
+      }
+
+      SPDLOG_LOGGER_INFO(logger_, "killing subprocess PID {}", pid);
+      if (kill(pid, SIGTERM) != 0) {
+        SPDLOG_LOGGER_ERROR(logger_, "failed to kill subprocess PID {}", pid);
+      }
+    }
+    // Finally dead
+  });
+  proc_mu_.Unlock();
 }
 
 bool SubProcess::Kill(int signal) {
