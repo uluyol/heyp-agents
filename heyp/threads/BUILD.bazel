@@ -19,6 +19,17 @@ cc_library(
 )
 
 cc_library(
+    name = "mutex-helpers",
+    hdrs = ["mutex-helpers.h"],
+    deps = [
+        "//heyp/log:spdlog",
+        "@com_google_absl//absl/base",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/time",
+    ],
+)
+
+cc_library(
     name = "waitgroup",
     srcs = ["waitgroup.cc"],
     hdrs = ["waitgroup.h"],
