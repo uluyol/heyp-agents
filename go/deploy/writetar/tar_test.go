@@ -8,16 +8,24 @@ import (
 	"testing"
 )
 
-func TestXZWriter(t *testing.T) {
-	name, err := ioutil.TempDir("", "xzwriter-test")
+type ArchiveWriter interface {
+	Add(Input)
+	AddAll([]Input)
+	Close() error
+}
+
+func testArchive(t *testing.T, outname string, mkWriter func(string) (ArchiveWriter, error), untarArgs string) {
+	t.Helper()
+
+	name, err := ioutil.TempDir("", "archivewriter-test")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(name)
 
-	tarPath := filepath.Join(name, "data.tar.xz")
+	tarPath := filepath.Join(name, outname)
 
-	w, err := NewXZWriter(tarPath)
+	w, err := mkWriter(tarPath)
 	if err != nil {
 		t.Fatalf("failed to create writer: %v", err)
 	}
@@ -45,7 +53,7 @@ func TestXZWriter(t *testing.T) {
 		t.Fatalf("failure writing %s: %v", tarPath, err)
 	}
 
-	cmd := exec.Command("tar", "xJf", tarPath)
+	cmd := exec.Command("tar", untarArgs, tarPath)
 	cmd.Dir = name
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("failed to extract %s: %v. output:\n%s", tarPath, err, out)
@@ -66,4 +74,18 @@ func TestXZWriter(t *testing.T) {
 	check("data/a", "ab\n")
 	check("data/b", "Z\n")
 	check("code", "FFF\n")
+}
+
+func TestXZWriter(t *testing.T) {
+	testArchive(t, "data.tar.xz", func(p string) (ArchiveWriter, error) {
+		w, e := NewXZWriter(p)
+		return w, e
+	}, "xJf")
+}
+
+func TestGzipWriter(t *testing.T) {
+	testArchive(t, "data.tar.gz", func(p string) (ArchiveWriter, error) {
+		w, e := NewGzipWriter(p)
+		return w, e
+	}, "xzf")
 }

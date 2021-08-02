@@ -19,7 +19,7 @@ import (
 )
 
 func MakeCodeBundle(binDir, auxBinDir, tarballPath string) error {
-	w, err := writetar.NewXZWriter(tarballPath)
+	w, err := writetar.NewGzipWriter(tarballPath)
 	if err != nil {
 		return err
 	}
@@ -78,7 +78,7 @@ func InstallCodeBundle(c *pb.DeploymentConfig, localTarball, remoteTopdir string
 					"rm -rf '%[1]s/configs' '%[1]s/logs'; "+
 						"mkdir -p '%[1]s/logs'; "+
 						"mkdir -p '%[1]s/configs'; "+
-						"cd '%[1]s' && tar xJf -",
+						"cd '%[1]s' && tar xzf -",
 					remoteTopdir))
 			cmd.SetStdin(localTarball, bytes.NewReader(bundle))
 			err := cmd.Run()
@@ -228,11 +228,10 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string, startConfig HE
 					fmt.Sprintf(
 						"tar xf - -C %[1]s/configs;"+
 							"mkdir -p %[1]s/logs;"+
-							"mkdir -p %[1]s/logs/cluster-agent-%[2]s-logs;"+
 							"sudo chown $USER:$(groups $USER | cut -d: -f2 | awk '{print $1}') %[1]s/logs;"+
 							"sudo chmod 777 %[1]s/logs;"+
 							"tmux kill-session -t heyp-cluster-agent-%[2]s;"+
-							"tmux new-session -d -s heyp-cluster-agent-%[2]s '(date -u; env ASAN_OPTIONS=detect_container_overflow=0 TSAN_OPTIONS=report_atomic_races=0 %[1]s/heyp/cluster-agent/cluster-agent -alloc_logs \"%[3]s\" -log_dir %[1]s/logs/cluster-agent-%[2]s-logs %[1]s/configs/cluster-agent-config-%[2]s.textproto %[1]s/configs/cluster-limits-%[2]s.textproto 2>&1; echo cluster agent exit status $?; date -u) | tee %[1]s/logs/cluster-agent-%[2]s.log; sleep 100000'", remoteTopdir, n.Cluster.GetName(), allocLogsPath))
+							"tmux new-session -d -s heyp-cluster-agent-%[2]s '(date -u; env ASAN_OPTIONS=detect_container_overflow=0 TSAN_OPTIONS=report_atomic_races=0 %[1]s/heyp/cluster-agent/cluster-agent -alloc_logs \"%[3]s\" %[1]s/configs/cluster-agent-config-%[2]s.textproto %[1]s/configs/cluster-limits-%[2]s.textproto 2>&1; echo cluster agent exit status $?; date -u) | tee %[1]s/logs/cluster-agent-%[2]s.log; sleep 100000'", remoteTopdir, n.Cluster.GetName(), allocLogsPath))
 				cmd.SetStdin("config.tar", bytes.NewReader(configTar))
 				err = cmd.Run()
 				if err != nil {
@@ -280,12 +279,11 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string, startConfig HE
 					fmt.Sprintf(
 						"cat >%[1]s/configs/host-agent-config.textproto;"+
 							"mkdir -p %[1]s/logs;"+
-							"mkdir -p %[1]s/logs/host-agent-logs;"+
 							"sudo chown $USER:$(groups $USER | cut -d: -f2 | awk '{print $1}') %[1]s/logs;"+
 							"sudo chmod 777 %[1]s/logs;"+
 							"tmux kill-session -t heyp-host-agent;"+
 							"rm -rf %[1]s/logs/host-enforcer-debug;"+
-							"tmux new-session -d -s heyp-host-agent '(date -u; sudo env ASAN_OPTIONS=detect_container_overflow=0 TSAN_OPTIONS=report_atomic_races=0 %[1]s/heyp/host-agent/host-agent %[2]s -pidfile %[1]s/logs/host-agent.pid -log_dir %[1]s/logs/host-agent-logs %[1]s/configs/host-agent-config.textproto 2>&1; echo host agent exit status $?; date -u) | tee %[1]s/logs/host-agent.log; sleep 100000'", remoteTopdir, vlogArg))
+							"tmux new-session -d -s heyp-host-agent '(date -u; sudo env ASAN_OPTIONS=detect_container_overflow=0 TSAN_OPTIONS=report_atomic_races=0 %[1]s/heyp/host-agent/host-agent %[2]s -pidfile %[1]s/logs/host-agent.pid %[1]s/configs/host-agent-config.textproto 2>&1; echo host agent exit status $?; date -u) | tee %[1]s/logs/host-agent.log; sleep 100000'", remoteTopdir, vlogArg))
 				cmd.SetStdin("host-agent-config.textproto", bytes.NewReader(hostConfigBytes))
 				err = cmd.Run()
 				if err != nil {
@@ -452,16 +450,16 @@ func FetchData(c *pb.DeploymentConfig, remoteTopdir, outdirPath string) error {
 				"ssh", n.GetExternalAddr(),
 				fmt.Sprintf(
 					"cd '%[1]s';"+
-						"tar --warning=no-file-changed -cJf - configs logs; [[ $? -le 1 ]]",
+						"tar --warning=no-file-changed -czf - configs logs; [[ $? -le 1 ]]",
 					remoteTopdir))
-			rc, err := cmd.StdoutPipe("data.tar.xz")
+			rc, err := cmd.StdoutPipe("data.tar.gz")
 			if err != nil {
 				return fmt.Errorf("failed to create stdout pipe: %w", err)
 			}
 			cmd.Stderr = os.Stderr
 			unTarCmd := TracingCommand(
 				LogWithPrefix("fetch-data: "),
-				"tar", "xJf", "-")
+				"tar", "xzf", "-")
 			unTarCmd.Dir = filepath.Join(outdir, n.GetName())
 			unTarCmd.SetStdin("data.tar.gz", rc)
 			if err := unTarCmd.Start(); err != nil {

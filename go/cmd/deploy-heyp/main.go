@@ -556,8 +556,8 @@ func parseConfig(s string) *pb.DeploymentConfig {
 }
 
 func bundleVar(v *string, fs *flag.FlagSet) {
-	fs.StringVar(v, "bundle", "heyp-bundle.tar.xz",
-		"path to xz'd output tarball")
+	fs.StringVar(v, "bundle", "heyp-bundle.tar.gz",
+		"path to gzip'd output tarball")
 }
 
 func remdirVar(v *string, fs *flag.FlagSet) {

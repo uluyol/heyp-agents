@@ -3,6 +3,7 @@ package writetar
 import (
 	"archive/tar"
 	"bytes"
+	"compress/gzip"
 	"fmt"
 	"io"
 	"os"
@@ -38,6 +39,81 @@ func ConcatInMem(files ...FileToTar) []byte {
 		panic("failed to close tar writer")
 	}
 	return buf.Bytes()
+}
+
+type GzipWriter struct {
+	fout *os.File
+	zw   *gzip.Writer
+	w    *tar.Writer
+	err  error
+}
+
+func NewGzipWriter(destPath string) (*GzipWriter, error) {
+	w := new(GzipWriter)
+	var err error
+	w.fout, err = os.Create(destPath)
+	if err != nil {
+		return nil, err
+	}
+	w.zw, err = gzip.NewWriterLevel(w.fout, gzip.BestSpeed)
+	if err != nil {
+		return nil, err
+	}
+	w.w = tar.NewWriter(w.zw)
+	return w, nil
+}
+
+func (w *GzipWriter) Add(input Input) {
+	if w.err != nil {
+		return
+	}
+
+	f, err := os.Open(input.InputPath)
+	if err != nil {
+		w.err = fmt.Errorf("failed to open input file %s: %w", input.InputPath, err)
+		return
+	}
+	defer f.Close()
+
+	fi, err := f.Stat()
+	if err != nil {
+		w.err = fmt.Errorf("failed to stat input file %s: %w", input.InputPath, err)
+		return
+	}
+
+	w.w.WriteHeader(&tar.Header{
+		Name: input.Dest,
+		Mode: input.Mode,
+		Size: fi.Size(),
+	})
+
+	_, err = io.Copy(w.w, f)
+	if err != nil {
+		w.err = fmt.Errorf("error while compressing %s: %w", input.Dest, err)
+		return
+	}
+}
+
+func (w *GzipWriter) AddAll(inputs []Input) {
+	for _, input := range inputs {
+		w.Add(input)
+	}
+}
+
+func (w *GzipWriter) Close() error {
+	e := w.w.Close()
+	if e != nil && w.err == nil {
+		w.err = fmt.Errorf("failed to close tar writer: %w", e)
+	}
+	e = w.zw.Close()
+	if e != nil && w.err == nil {
+		w.err = fmt.Errorf("failed to close gzip writer: %w", e)
+	}
+	e = w.fout.Close()
+	if e != nil && w.err == nil {
+		w.err = fmt.Errorf("failed to close output file: %w", e)
+	}
+	return w.err
 }
 
 type XZWriter struct {
