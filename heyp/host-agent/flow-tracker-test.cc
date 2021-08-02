@@ -87,9 +87,10 @@ TEST(SSFlowStateReporterTest, CollectsExpectedOutput) {
 
   std::unique_ptr<SSFlowStateReporter> reporter = std::move(*reporter_or);
   int i = 0;
-  ASSERT_THAT(
-      reporter->ReportState([&i](const proto::FlowMarker&) { return (++i % 2) == 0; }),
-      testing::Property(&absl::Status::ok, testing::IsTrue()));
+  ASSERT_THAT(reporter->ReportState([&i](const proto::FlowMarker&, spdlog::logger*) {
+    return (++i % 2) == 0;
+  }),
+              testing::Property(&absl::Status::ok, testing::IsTrue()));
 
   constexpr absl::Duration kMaxWaitDur = absl::Seconds(2);
   absl::Time start = absl::Now();

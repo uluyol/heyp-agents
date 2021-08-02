@@ -80,8 +80,10 @@ class MockFlowStateProvider : public FlowStateProvider {
 
 class MockFlowStateReporter : public FlowStateReporter {
  public:
-  MOCK_METHOD(absl::Status, ReportState,
-              (absl::FunctionRef<bool(const proto::FlowMarker&)> is_lopri), (override));
+  MOCK_METHOD(
+      absl::Status, ReportState,
+      (absl::FunctionRef<bool(const proto::FlowMarker&, spdlog::logger*)> is_lopri),
+      (override));
 };
 
 class MockHostEnforcer : public HostEnforcer {
@@ -91,7 +93,8 @@ class MockHostEnforcer : public HostEnforcer {
                const proto::AllocBundle& bundle),
               (override));
 
-  MOCK_METHOD(bool, IsLopri, (const proto::FlowMarker& flow), (override));
+  MOCK_METHOD(bool, IsLopri, (const proto::FlowMarker& flow, spdlog::logger* logger),
+              (override));
 };
 
 std::unique_ptr<FlowAggregator> MakeFlowAggregator() {

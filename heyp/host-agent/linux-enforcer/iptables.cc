@@ -170,6 +170,8 @@ std::unique_ptr<Runner> Runner::CreateWithIptablesCommands(
 
 namespace {
 
+constexpr absl::Duration kIptablesTimeout = absl::Seconds(2);
+
 std::vector<std::string> MakeFullArgs(Table table, Chain chain,
                                       const std::vector<std::string>& args = {}) {
   std::vector<std::string> result{
@@ -201,6 +203,7 @@ absl::StatusOr<std::string> Runner::Run(Operation op,
   if (!subproc.Start()) {
     return absl::UnknownError("failed to run iptables");
   }
+  subproc.KillAfter(kIptablesTimeout);
   std::string got_stdout;
   std::string got_stderr;
   *exit_status = subproc.Communicate(nullptr, &got_stdout, &got_stderr);
@@ -330,6 +333,7 @@ absl::Status Runner::SaveInto(Table table, absl::Cord& buffer) {
   if (!subproc.Start()) {
     return absl::UnknownError("failed to run iptables save");
   }
+  subproc.KillAfter(kIptablesTimeout);
   std::string got_stdout;
   std::string got_stderr;
   int exit_status = subproc.Communicate(nullptr, &got_stdout, &got_stderr);
@@ -380,6 +384,7 @@ absl::Status Runner::RestoreInternal(std::vector<std::string> args,
   if (!subproc.Start()) {
     return absl::UnknownError("failed to run iptables restore");
   }
+  subproc.KillAfter(kIptablesTimeout);
   std::string for_stdin(data);
   std::string got_stdout;
   std::string got_stderr;

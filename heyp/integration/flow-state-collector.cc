@@ -10,8 +10,8 @@ void CollectPeriodicReport(absl::Duration period, absl::Notification* done,
                            SSFlowStateReporter* reporter) {
   spdlog::logger logger = MakeLogger("collect-periodic-report");
   while (true) {
-    absl::Status st =
-        reporter->ReportState([](const proto::FlowMarker&) -> bool { return false; });
+    absl::Status st = reporter->ReportState(
+        [](const proto::FlowMarker&, spdlog::logger*) -> bool { return false; });
     if (!st.ok()) {
       SPDLOG_LOGGER_ERROR(&logger, "failed to collect flow states: {}", st);
     }

@@ -15,7 +15,7 @@ class HostEnforcer {
   virtual void EnforceAllocs(const FlowStateProvider& flow_state_provider,
                              const proto::AllocBundle& bundle) = 0;
 
-  virtual bool IsLopri(const proto::FlowMarker& flow) = 0;
+  virtual bool IsLopri(const proto::FlowMarker& flow, spdlog::logger* logger) = 0;
 };
 
 class NopHostEnforcer : public HostEnforcer {
@@ -25,7 +25,7 @@ class NopHostEnforcer : public HostEnforcer {
   void EnforceAllocs(const FlowStateProvider& flow_state_provider,
                      const proto::AllocBundle& bundle) override;
 
-  bool IsLopri(const proto::FlowMarker& flow) override;
+  bool IsLopri(const proto::FlowMarker& flow, spdlog::logger* logger) override;
 
  private:
   spdlog::logger logger_;

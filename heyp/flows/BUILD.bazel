@@ -13,6 +13,7 @@ cc_library(
         "//heyp/proto:alg",
         "//heyp/proto:constructors",
         "//heyp/proto:heyp_cc_proto",
+        "//heyp/threads:mutex-helpers",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/time",
     ],

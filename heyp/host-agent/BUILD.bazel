@@ -88,6 +88,7 @@ cc_library(
         "//heyp/flows:state",
         "//heyp/log:spdlog",
         "//heyp/proto:alg",
+        "//heyp/threads:mutex-helpers",
         "@boost//:process",
         "@com_google_absl//absl/cleanup",
         "@com_google_absl//absl/container:flat_hash_map",

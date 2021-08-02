@@ -11,6 +11,8 @@ void NopHostEnforcer::EnforceAllocs(const FlowStateProvider& flow_state_provider
   SPDLOG_LOGGER_INFO(&logger_, "got alloc to enforce (ignored)");
 }
 
-bool NopHostEnforcer::IsLopri(const proto::FlowMarker& flow) { return false; }
+bool NopHostEnforcer::IsLopri(const proto::FlowMarker& flow, spdlog::logger* logger) {
+  return false;
+}
 
 }  // namespace heyp

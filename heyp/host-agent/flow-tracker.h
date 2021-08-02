@@ -2,17 +2,18 @@
 #define HEYP_HOST_AGENT_FLOW_TRACKER_H_
 
 #include <memory>
+#include <mutex>
 #include <vector>
 
 #include "absl/base/thread_annotations.h"
 #include "absl/container/flat_hash_map.h"
 #include "absl/functional/function_ref.h"
 #include "absl/status/statusor.h"
-#include "absl/synchronization/mutex.h"
 #include "absl/types/span.h"
 #include "heyp/alg/demand-predictor.h"
 #include "heyp/flows/state.h"
 #include "heyp/proto/alg.h"
+#include "heyp/threads/mutex-helpers.h"
 #include "spdlog/spdlog.h"
 
 namespace heyp {
@@ -39,7 +40,7 @@ class FlowStateReporter {
   virtual ~FlowStateReporter() = default;
 
   virtual absl::Status ReportState(
-      absl::FunctionRef<bool(const proto::FlowMarker&)> is_lopri) = 0;
+      absl::FunctionRef<bool(const proto::FlowMarker&, spdlog::logger*)> is_lopri) = 0;
 };
 
 class FlowTracker : public FlowStateProvider {
@@ -77,9 +78,9 @@ class FlowTracker : public FlowStateProvider {
  private:
   const Config config_;
   const std::unique_ptr<DemandPredictor> demand_predictor_;
-  spdlog::logger logger_;
+  mutable spdlog::logger logger_;  // loggers are thread safe
 
-  mutable absl::Mutex mu_;
+  mutable TimedMutex mu_;
   uint64_t next_seqnum_ ABSL_GUARDED_BY(mu_);
   absl::flat_hash_map<proto::FlowMarker, LeafState, HashHostFlowNoId,
                       EqHostFlowNoId>
@@ -105,7 +106,8 @@ class SSFlowStateReporter : public FlowStateReporter {
       Config config, FlowTracker* flow_tracker);
 
   absl::Status ReportState(
-      absl::FunctionRef<bool(const proto::FlowMarker&)> is_lopri) override;
+      absl::FunctionRef<bool(const proto::FlowMarker&, spdlog::logger*)> is_lopri)
+      override;
 
  private:
   bool IgnoreFlow(const proto::FlowMarker& f);

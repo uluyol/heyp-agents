@@ -5,6 +5,7 @@
 #include "heyp/log/spdlog.h"
 #include "heyp/proto/alg.h"
 #include "heyp/proto/constructors.h"
+#include "heyp/threads/mutex-helpers.h"
 
 namespace heyp {
 namespace {
@@ -93,7 +94,7 @@ FlowAggregator::FlowAggregator(std::unique_ptr<DemandPredictor> agg_demand_predi
 void FlowAggregator::Update(const proto::InfoBundle& bundle) {
   const absl::Time timestamp = FromProtoTimestamp(bundle.timestamp());
 
-  absl::MutexLock l(&mu_);
+  MutexLockWarnLong l(&mu_, absl::Seconds(1), &logger_, "mu_");
   BundleState& bs = bundle_states_[bundle.bundler()];
   for (const proto::FlowInfo& fi : bundle.flow_infos()) {
     if (config_.is_valid_child != nullptr) {
@@ -124,7 +125,7 @@ void FlowAggregator::Update(const proto::InfoBundle& bundle) {
 
 void FlowAggregator::ForEachAgg(
     absl::FunctionRef<void(absl::Time, const proto::AggInfo&)> func) {
-  absl::MutexLock l(&mu_);
+  MutexLockWarnLong l(&mu_, absl::Seconds(1), &logger_, "mu_");
 
   for (auto& p : agg_wips_) {
     AggWIP& wip = p.second;

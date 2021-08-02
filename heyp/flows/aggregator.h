@@ -1,6 +1,7 @@
 #ifndef HEYP_FLOWS_AGGREGATOR_H_
 #define HEYP_FLOWS_AGGREGATOR_H_
 
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -12,6 +13,7 @@
 #include "heyp/flows/state.h"
 #include "heyp/proto/alg.h"
 #include "heyp/proto/heyp.pb.h"
+#include "heyp/threads/mutex-helpers.h"
 #include "spdlog/spdlog.h"
 
 namespace heyp {
@@ -75,7 +77,7 @@ class FlowAggregator {
   const std::unique_ptr<DemandPredictor> agg_demand_predictor_;
   spdlog::logger logger_;
 
-  absl::Mutex mu_;
+  TimedMutex mu_;
   FlowMap<AggWIP> agg_wips_ ABSL_GUARDED_BY(mu_);
   FlowMap<BundleState> bundle_states_ ABSL_GUARDED_BY(mu_);
 };

@@ -11,6 +11,7 @@
 #include "boost/process/search_path.hpp"
 #include "heyp/host-agent/urls.h"
 #include "heyp/log/spdlog.h"
+#include "heyp/threads/mutex-helpers.h"
 
 namespace bp = boost::process;
 
@@ -24,7 +25,7 @@ FlowTracker::FlowTracker(std::unique_ptr<DemandPredictor> demand_predictor, Conf
 
 void FlowTracker::ForEachActiveFlow(
     absl::FunctionRef<void(absl::Time, const proto::FlowInfo&)> func) const {
-  absl::MutexLock l(&mu_);
+  MutexLockWarnLong l(&mu_, absl::Seconds(1), &logger_, "mu_");
   for (const auto& fs : active_flows_) {
     func(fs.second.updated_time(), fs.second.cur());
   }
@@ -32,7 +33,7 @@ void FlowTracker::ForEachActiveFlow(
 
 void FlowTracker::ForEachFlow(
     absl::FunctionRef<void(absl::Time, const proto::FlowInfo&)> func) const {
-  absl::MutexLock l(&mu_);
+  MutexLockWarnLong l(&mu_, absl::Seconds(1), &logger_, "mu_");
   for (const auto& fs : active_flows_) {
     func(fs.second.updated_time(), fs.second.cur());
   }
@@ -53,7 +54,7 @@ LeafState CreateLeafState(const proto::FlowMarker& f, uint64_t seqnum) {
 
 void FlowTracker::UpdateFlows(absl::Time timestamp,
                               absl::Span<const Update> flow_update_batch) {
-  absl::MutexLock lock(&mu_);
+  MutexLockWarnLong l(&mu_, absl::Seconds(1), &logger_, "mu_");
   for (size_t i = 0; i < flow_update_batch.size();) {
     const Update& u = flow_update_batch[i];
     if (!active_flows_.contains(u.flow)) {
@@ -88,7 +89,7 @@ void FlowTracker::UpdateFlows(absl::Time timestamp,
 
 void FlowTracker::FinalizeFlows(absl::Time timestamp,
                                 absl::Span<const Update> flow_update_batch) {
-  absl::MutexLock lock(&mu_);
+  MutexLockWarnLong l(&mu_, absl::Seconds(1), &logger_, "mu_");
   for (const Update& u : flow_update_batch) {
     if (!active_flows_.contains(u.flow)) {
       active_flows_.emplace(u.flow, CreateLeafState(u.flow, ++next_seqnum_));
@@ -281,7 +282,7 @@ void SSFlowStateReporter::MonitorDone() {
 }
 
 absl::Status SSFlowStateReporter::ReportState(
-    absl::FunctionRef<bool(const proto::FlowMarker&)> is_lopri) {
+    absl::FunctionRef<bool(const proto::FlowMarker&, spdlog::logger*)> is_lopri) {
   try {
     bp::ipstream out;
     bp::child c(bp::search_path(impl_->config.ss_binary_name), "-i", "-t", "-n", "-H",
@@ -306,7 +307,7 @@ absl::Status SSFlowStateReporter::ReportState(
       }
       SPDLOG_LOGGER_DEBUG(&logger_, "counting flow: ", f.ShortDebugString());
       FlowPri pri = FlowPri::kHi;
-      if (is_lopri(f)) {
+      if (is_lopri(f, &logger_)) {
         pri = FlowPri::kLo;
       }
       flow_updates.push_back({f, usage_bps, cum_usage_bytes, pri});

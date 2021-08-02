@@ -11,6 +11,9 @@
 #include "third_party/simdjson/simdjson.h"
 
 namespace heyp {
+namespace {
+constexpr absl::Duration kTcTimeout = absl::Seconds(2);
+}
 
 TcCaller::TcCaller(spdlog::logger* logger, const std::string& tc_name)
     : tc_name_(tc_name), logger_(logger) {}
@@ -29,6 +32,7 @@ absl::Status TcCaller::Batch(const absl::Cord& input, bool force) {
   if (!subproc.Start()) {
     return absl::UnknownError("failed to run tc -batch");
   }
+  subproc.KillAfter(kTcTimeout);
   std::string for_stdin(input);
   std::string got_stdout;
   std::string got_stderr;
@@ -49,6 +53,7 @@ absl::Status TcCaller::Call(const std::vector<std::string>& tc_args,
   if (!subproc.Start()) {
     return absl::UnknownError("failed to run tc");
   }
+  subproc.KillAfter(kTcTimeout);
   buf_.clear();
   std::string got_stderr;
   int exit_status = subproc.Communicate(nullptr, &buf_, &got_stderr);

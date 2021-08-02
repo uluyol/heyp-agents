@@ -1,5 +1,9 @@
 #include "heyp/host-agent/linux-enforcer/enforcer.h"
 
+#include <signal.h>
+#include <sys/prctl.h>
+#include <unistd.h>
+
 #include <algorithm>
 #include <limits>
 
@@ -13,10 +17,12 @@
 #include "heyp/host-agent/linux-enforcer/iptables.h"
 #include "heyp/host-agent/linux-enforcer/tc-caller.h"
 #include "heyp/io/debug-output-logger.h"
+#include "heyp/io/subprocess.h"
 #include "heyp/log/spdlog.h"
 #include "heyp/proto/alg.h"
 #include "heyp/proto/config.pb.h"
 #include "heyp/proto/heyp.pb.h"
+#include "heyp/threads/mutex-helpers.h"
 #include "small-string-set.h"
 
 namespace heyp {
@@ -139,7 +145,7 @@ class LinuxHostEnforcerImpl : public LinuxHostEnforcer {
   void EnforceAllocs(const FlowStateProvider& flow_state_provider,
                      const proto::AllocBundle& bundle) override;
 
-  bool IsLopri(const proto::FlowMarker& flow) override;
+  bool IsLopri(const proto::FlowMarker& flow, spdlog::logger* logger) override;
 
  private:
   struct FlowSys {
@@ -169,7 +175,7 @@ class LinuxHostEnforcerImpl : public LinuxHostEnforcer {
   const std::string device_;
   const MatchHostFlowsFunc match_host_flows_fn_;
   spdlog::logger logger_;
-  absl::Mutex mu_;
+  TimedMutex mu_;
   absl::Cord tc_batch_input_ ABSL_GUARDED_BY(mu_);
   TcCaller tc_caller_ ABSL_GUARDED_BY(mu_);
   iptables::Controller ipt_controller_ ABSL_GUARDED_BY(mu_);
@@ -208,7 +214,7 @@ LinuxHostEnforcerImpl::LinuxHostEnforcerImpl(
       next_class_id_(2) {}
 
 absl::Status LinuxHostEnforcerImpl::ResetDeviceConfig() {
-  absl::MutexLock l(&mu_);
+  MutexLockWarnLong l(&mu_, absl::Seconds(1), &logger_, "mu_");
 
   auto st = ResetTrafficControl();
   if (!st.ok()) {
@@ -225,7 +231,7 @@ absl::Status LinuxHostEnforcerImpl::ResetDeviceConfig() {
 
 absl::Status LinuxHostEnforcerImpl::InitSimulatedWan(std::vector<FlowNetemConfig> configs,
                                                      bool contains_all_flows) {
-  absl::MutexLock l(&mu_);
+  MutexLockWarnLong l(&mu_, absl::Seconds(1), &logger_, "mu_");
 
   int num_created_classes = 0;
   int num_updated_classes = 0;
@@ -416,7 +422,7 @@ void LinuxHostEnforcerImpl::StageTrafficControlForFlow(
 //
 void LinuxHostEnforcerImpl::EnforceAllocs(const FlowStateProvider& flow_state_provider,
                                           const proto::AllocBundle& bundle) {
-  absl::MutexLock l(&mu_);
+  MutexLockWarnLong l(&mu_, absl::Seconds(1), &logger_, "mu_");
   // ==== Stage 1: Initialize qdiscs and increase any rate limits ====
 
   std::vector<FlowSys::Priority*> classes_to_create;
@@ -581,16 +587,19 @@ void LinuxHostEnforcerImpl::EnforceAllocs(const FlowStateProvider& flow_state_pr
   }
 
   if (debug_logger_.should_log()) {
+    SPDLOG_LOGGER_INFO(&logger_, "debug logging: gather iptables state");
     absl::Cord mangle_table;
     ipt_controller_.GetRunner()
         .SaveInto(iptables::Table::kMangle, mangle_table)
         .IgnoreError();
+    SPDLOG_LOGGER_INFO(&logger_, "debug logging: gather tc qdisc state");
     bool have_qdisc_output = false;
     absl::Cord qdisc_output;
     if (tc_caller_.Call({"qdisc"}, false).ok()) {
       qdisc_output.Append(tc_caller_.RawOut());
       have_qdisc_output = true;
     }
+    SPDLOG_LOGGER_INFO(&logger_, "debug logging: gather tc class state");
     bool have_class_output = false;
     absl::Cord class_output;
     if (tc_caller_.Call({"class", "show", "dev", device_}, false).ok()) {
@@ -598,19 +607,63 @@ void LinuxHostEnforcerImpl::EnforceAllocs(const FlowStateProvider& flow_state_pr
       have_class_output = true;
     }
 
+    SPDLOG_LOGGER_INFO(&logger_, "debug logging: write iptables state");
     absl::Time timestamp = absl::Now();
     debug_logger_.Write("iptables:mangle", mangle_table, timestamp);
     if (have_qdisc_output) {
+      SPDLOG_LOGGER_INFO(&logger_, "debug logging: write tc qdisc state");
       debug_logger_.Write("tc:qdisc", qdisc_output, timestamp);
+    } else {
+      SPDLOG_LOGGER_INFO(&logger_, "debug logging: missing tc qdisc state");
     }
     if (have_class_output) {
+      SPDLOG_LOGGER_INFO(&logger_, "debug logging: write tc class state");
       debug_logger_.Write("tc:class", class_output, timestamp);
+    } else {
+      SPDLOG_LOGGER_INFO(&logger_, "debug logging: missing tc class state");
     }
   }
 }
 
-bool LinuxHostEnforcerImpl::IsLopri(const proto::FlowMarker& flow) {
-  absl::MutexLock l(&mu_);
+// Dump all stack traces using GDB (best effort).
+// Based on https://stackoverflow.com/a/4732119
+void GdbPrintAllStacks(spdlog::logger* logger) {
+  std::string pid = std::to_string(getpid());
+  char name_buf[1024];
+  name_buf[readlink("/proc/self/exe", name_buf, 1023)] = 0;
+  prctl(PR_SET_PTRACER, PR_SET_PTRACER_ANY, 0, 0, 0);
+
+  SubProcess subproc(logger);
+  subproc.SetProgram("gdb", {name_buf, "--batch", "-n", "-ex", "attach " + pid, "-ex",
+                             "thread apply all bt"});
+  subproc.SetChannelAction(CHAN_STDOUT, ACTION_DUPPARENT);
+  subproc.SetChannelAction(CHAN_STDERR, ACTION_DUPPARENT);
+  if (subproc.Start()) {
+    subproc.Wait();
+  }
+}
+
+bool LinuxHostEnforcerImpl::IsLopri(const proto::FlowMarker& flow,
+                                    spdlog::logger* logger) {
+  MutexLockWarnLong l(
+      &mu_, absl::Seconds(1), logger, "LinuxHostEnforcerImpl.mu_", [logger](int count) {
+        SubProcess subproc(logger);
+        subproc.SetProgram("ps", {"ax"});
+        subproc.SetChannelAction(CHAN_STDOUT, ACTION_PIPE);
+        if (subproc.Start()) {
+          std::string got_stdout;
+          int exit_status = subproc.Communicate(nullptr, &got_stdout, nullptr);
+          if (exit_status == 0) {
+            SPDLOG_LOGGER_WARN(logger, "ps ax output:\n{}", got_stdout);
+          }
+        }
+
+        if (count > 10) {
+          SPDLOG_LOGGER_CRITICAL(
+              logger, "waiting for >10s to acquire lock, dumping all stacks...");
+          GdbPrintAllStacks(logger);
+        }
+      });
   return ipt_controller_.DscpFor(flow.src_port(), flow.dst_port(), flow.dst_addr(),
                                  kDscpHipri) == kDscpLopri;
 }

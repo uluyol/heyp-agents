@@ -96,6 +96,7 @@ void CollectStats(absl::Duration period, bool force_run,
     // Step 2: collect a bundle of all socket-level flows while annotating them
     //         with src / dst DC.
     proto::InfoBundle bundle;
+    SPDLOG_LOGGER_INFO(&logger, "collect bundle");
     bundle.mutable_bundler()->set_host_id(host_id);
     *bundle.mutable_timestamp() = ToProtoTimestamp(absl::Now());
     flow_state_provider->ForEachActiveFlow(
@@ -107,6 +108,7 @@ void CollectStats(absl::Duration period, bool force_run,
         });
 
     // Step 3: aggregate socket-level flows to host-level.
+    SPDLOG_LOGGER_INFO(&logger, "aggregate info to host-level");
     socket_to_host_aggregator->Update(bundle);
 
     // Step 3.5: log all src/dst DC-level flows on the flows, if requested.
