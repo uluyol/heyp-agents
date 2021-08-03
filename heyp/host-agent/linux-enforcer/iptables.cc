@@ -17,6 +17,8 @@
 
 #include "heyp/host-agent/linux-enforcer/iptables.h"
 
+#include <sys/wait.h>
+
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
 #include "absl/synchronization/mutex.h"
@@ -206,11 +208,16 @@ absl::StatusOr<std::string> Runner::Run(Operation op,
   subproc.KillAfter(kIptablesTimeout);
   std::string got_stdout;
   std::string got_stderr;
-  *exit_status = subproc.Communicate(nullptr, &got_stdout, &got_stderr);
+  ExitStatus got = subproc.Communicate(nullptr, &got_stdout, &got_stderr);
+  int wait_status = got.wait_status();
+  if (exit_status != nullptr) {
+    *exit_status = WIFEXITED(wait_status) ? WEXITSTATUS(wait_status) : -1;
+  }
 
-  if (*exit_status != 0) {
-    return absl::UnknownError(
-        absl::StrCat("iptables: exit status ", *exit_status, "; stderr:\n", got_stderr));
+  if (!got.ok()) {
+    return absl::UnknownError(absl::StrCat("iptables: wait return: ", wait_status,
+                                           " exit status: ", got.exit_status(),
+                                           "; stderr:\n", got_stderr));
   }
   return got_stdout;
 }
@@ -336,11 +343,12 @@ absl::Status Runner::SaveInto(Table table, absl::Cord& buffer) {
   subproc.KillAfter(kIptablesTimeout);
   std::string got_stdout;
   std::string got_stderr;
-  int exit_status = subproc.Communicate(nullptr, &got_stdout, &got_stderr);
+  ExitStatus got = subproc.Communicate(nullptr, &got_stdout, &got_stderr);
 
-  if (exit_status != 0) {
-    return absl::UnknownError(absl::StrCat("iptables save: exit status ", exit_status,
-                                           "; stderr:\n", got_stderr));
+  if (!got.ok()) {
+    return absl::UnknownError(
+        absl::StrCat("iptables save: wait return: ", got.wait_status(),
+                     " exit status: ", got.exit_status(), "; stderr:\n", got_stderr));
   }
   buffer = got_stdout;
   return absl::OkStatus();
@@ -388,11 +396,12 @@ absl::Status Runner::RestoreInternal(std::vector<std::string> args,
   std::string for_stdin(data);
   std::string got_stdout;
   std::string got_stderr;
-  int exit_status = subproc.Communicate(&for_stdin, &got_stdout, &got_stderr);
+  ExitStatus got = subproc.Communicate(&for_stdin, &got_stdout, &got_stderr);
 
-  if (exit_status != 0) {
-    return absl::UnknownError(absl::StrCat("iptables restore: exit status ", exit_status,
-                                           "; stderr:\n", got_stderr));
+  if (!got.ok()) {
+    return absl::UnknownError(
+        absl::StrCat("iptables restore: wait status ", got.wait_status(),
+                     " exit status: ", got.exit_status(), "; stderr:\n", got_stderr));
   }
   return absl::OkStatus();
 }

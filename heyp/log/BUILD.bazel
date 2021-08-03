@@ -1,4 +1,5 @@
-load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
+load("@rules_cc//cc:defs.bzl", "cc_library")
+load("//bazel:cc_defs.bzl", "heyp_cc_binary")
 
 cc_library(
     name = "spdlog",
@@ -13,7 +14,7 @@ cc_library(
     ],
 )
 
-cc_binary(
+heyp_cc_binary(
     name = "example_check_main",
     srcs = ["example_check_main.cc"],
     deps = [

@@ -36,10 +36,11 @@ absl::Status TcCaller::Batch(const absl::Cord& input, bool force) {
   std::string for_stdin(input);
   std::string got_stdout;
   std::string got_stderr;
-  int exit_status = subproc.Communicate(&for_stdin, &got_stdout, &got_stderr);
-  if (exit_status != 0) {
-    return absl::UnknownError(
-        absl::StrCat("tc -batch: exit status ", exit_status, "; stderr:\n", got_stderr));
+  ExitStatus got = subproc.Communicate(&for_stdin, &got_stdout, &got_stderr);
+  if (!got.ok()) {
+    return absl::UnknownError(absl::StrCat("tc -batch: wait status: ", got.wait_status(),
+                                           " exit status: ", got.exit_status(),
+                                           "; stderr:\n", got_stderr));
   }
   return absl::OkStatus();
 }
@@ -56,11 +57,12 @@ absl::Status TcCaller::Call(const std::vector<std::string>& tc_args,
   subproc.KillAfter(kTcTimeout);
   buf_.clear();
   std::string got_stderr;
-  int exit_status = subproc.Communicate(nullptr, &buf_, &got_stderr);
+  ExitStatus got = subproc.Communicate(nullptr, &buf_, &got_stderr);
 
-  if (exit_status != 0) {
-    return absl::UnknownError(
-        absl::StrCat("tc: exit status ", exit_status, "; stderr:\n", got_stderr));
+  if (!got.ok()) {
+    return absl::UnknownError(absl::StrCat("tc: wait status: ", got.wait_status(),
+                                           " exit status: ", got.exit_status(),
+                                           "; stderr:\n", got_stderr));
   }
 
   if (absl::StripAsciiWhitespace(buf_).empty() || !parse_into_json) {

@@ -1,4 +1,4 @@
-load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
 
 package(
     default_visibility = ["//heyp:__subpackages__"],
@@ -54,5 +54,21 @@ cc_test(
     srcs = ["look-path-test.cc"],
     deps = [
         ":look-path",
+    ],
+)
+
+cc_test(
+    name = "subprocess-test",
+    srcs = ["subprocess-test.cc"],
+    data = [
+        "//heyp/io/testdata:test_echo",
+        "//heyp/io/testdata:test_echo_argv_1",
+        "//heyp/io/testdata:test_noop",
+        "//heyp/io/testdata:test_stderr",
+    ],
+    deps = [
+        ":subprocess",
+        "//heyp/init:test-main",
+        "@com_google_absl//absl/strings",
     ],
 )

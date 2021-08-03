@@ -22,11 +22,12 @@ absl::StatusOr<std::string> FindDeviceResponsibleFor(
   }
   std::string got_stdout;
   std::string got_stderr;
-  int exit_status = subproc.Communicate(nullptr, &got_stdout, &got_stderr);
+  ExitStatus got = subproc.Communicate(nullptr, &got_stdout, &got_stderr);
 
-  if (exit_status != 0) {
-    return absl::UnknownError(
-        absl::StrCat("ip: exit status ", exit_status, "; stderr:\n", got_stderr));
+  if (!got.ok()) {
+    return absl::UnknownError(absl::StrCat("ip: wait status: ", got.wait_status(),
+                                           " exit status: ", got.exit_status(),
+                                           "; stderr:\n", got_stderr));
   }
 
   if (absl::StripAsciiWhitespace(got_stdout).empty()) {

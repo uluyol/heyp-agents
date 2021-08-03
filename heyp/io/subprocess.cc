@@ -24,6 +24,7 @@ limitations under the License.
 #include <string.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <unistd.h>
 
 #include <atomic>
 #include <memory>
@@ -84,10 +85,14 @@ extern char** environ;
 
 namespace heyp {
 
+bool ExitStatus::ok() const { return WIFEXITED(val_) && (WEXITSTATUS(val_) == 0); }
+int ExitStatus::exit_status() const { return WEXITSTATUS(val_); }
+
 SubProcess::SubProcess(spdlog::logger* logger, int nfds)
     : logger_(logger),
       running_(false),
       pid_(-1),
+      notify_done_(nullptr),
       exec_path_(nullptr),
       exec_argv_(nullptr) {
   // The input 'nfds' parameter is currently ignored and the internal constant
@@ -97,6 +102,8 @@ SubProcess::SubProcess(spdlog::logger* logger, int nfds)
     parent_pipe_[i] = -1;
     child_pipe_[i] = -1;
   }
+  timeout_pipe_[0] = -1;
+  timeout_pipe_[1] = -1;
 }
 
 SubProcess::~SubProcess() {
@@ -113,6 +120,14 @@ SubProcess::~SubProcess() {
   }
   FreeArgs();
   ClosePipes();
+  for (int i = 0; i < 2; i++) {
+    if (timeout_pipe_[i] >= 0) {
+      if (close(timeout_pipe_[i]) < 0) {
+        SPDLOG_LOGGER_ERROR(logger_, "close() failed: {}", strerror(errno));
+      }
+      timeout_pipe_[i] = -1;
+    }
+  }
 }
 
 void SubProcess::FreeArgs() {
@@ -522,7 +537,7 @@ bool SubProcess::WaitInternal(int* status) {
       if ((cpid < 0) && !retry(errno)) {
         done = true;
       } else if ((cpid == pid) && (WIFEXITED(cstat) || WIFSIGNALED(cstat))) {
-        *status = WEXITSTATUS(cstat);
+        *status = cstat;
         ret = true;
         done = true;
       }
@@ -558,7 +573,26 @@ void SubProcess::KillAfter(absl::Duration timeout) {
       }
 
       SPDLOG_LOGGER_INFO(logger_, "killing subprocess PID {}", pid);
-      if (kill(pid, SIGTERM) != 0) {
+      if (kill(pid, SIGTERM) == 0) {
+        proc_mu_.Lock();
+        if (timeout_pipe_[0] != -1) {
+          char data[1];
+          data[0] = 0;
+          SPDLOG_LOGGER_INFO(logger_, "signal timeout to Communicate");
+          if (write(timeout_pipe_[0], data, 1) == 1) {
+            SPDLOG_LOGGER_INFO(logger_, "close timeout pipe");
+            if (close(timeout_pipe_[0]) != 0) {
+              SPDLOG_LOGGER_ERROR(logger_, "failed to close timeout pipe: {}",
+                                  strerror(errno));
+            }
+            timeout_pipe_[0] = -1;
+          } else {
+            SPDLOG_LOGGER_ERROR(logger_, "failed to write to timeout pipe: {}",
+                                strerror(errno));
+          }
+        }
+        proc_mu_.Unlock();
+      } else {
         SPDLOG_LOGGER_ERROR(logger_, "failed to kill subprocess PID {}", pid);
       }
     }
@@ -580,15 +614,25 @@ bool SubProcess::Kill(int signal) {
   return ret;
 }
 
-int SubProcess::Communicate(const std::string* stdin_input, std::string* stdout_output,
-                            std::string* stderr_output) {
-  struct pollfd fds[kNFds];
+ExitStatus SubProcess::Communicate(const std::string* stdin_input,
+                                   std::string* stdout_output,
+                                   std::string* stderr_output) {
+  struct pollfd fds[kNFds + 1];
   size_t nbytes[kNFds];
   std::string* iobufs[kNFds];
   int fd_count = 0;
 
   proc_mu_.Lock();
   bool running = running_;
+  int timeout_read_fd = -1;
+  {
+    int pipe_fds[2];
+    if (pipe(pipe_fds) == 0) {
+      timeout_pipe_[0] = pipe_fds[1];
+      timeout_pipe_[1] = pipe_fds[0];
+      timeout_read_fd = pipe_fds[1];
+    }
+  }
   proc_mu_.Unlock();
   if (!running) {
     SPDLOG_LOGGER_ERROR(logger_, "Communicate called without a running process.");
@@ -656,11 +700,19 @@ int SubProcess::Communicate(const std::string* stdin_input, std::string* stdout_
     }
   }
 
+  int fd_count_with_notify = fd_count;
+  if (timeout_read_fd != -1) {
+    fds[fd_count].fd = timeout_read_fd;
+    fds[fd_count].events = POLLIN;
+    fds[fd_count].revents = 0;
+    fd_count_with_notify++;
+  }
+
   // Loop communicating with the child process.
   int fd_remain = fd_count;
   char buf[4096];
   while (fd_remain > 0) {
-    int n = poll(fds, fd_count, -1);
+    int n = poll(fds, fd_count_with_notify, -1);
     if ((n < 0) && !retry(errno)) {
       SPDLOG_LOGGER_ERROR(logger_, "Communicate cannot poll(): {}", strerror(errno));
       fd_remain = 0;
@@ -668,6 +720,20 @@ int SubProcess::Communicate(const std::string* stdin_input, std::string* stdout_
       SPDLOG_LOGGER_ERROR(logger_, "Communicate cannot poll(): timeout not possible");
       fd_remain = 0;
     } else if (n > 0) {
+      // Check if we've been notified of a timeout
+      if (fd_count_with_notify != fd_count) {
+        int i = fd_count_with_notify - 1;
+        if ((fds[i].revents & (POLLIN | POLLHUP)) != 0) {
+          // Timed out
+          if (parent_pipe_[CHAN_STDIN] != -1 && close(parent_pipe_[CHAN_STDIN]) < 0) {
+            SPDLOG_LOGGER_ERROR(logger_, "close() failed: {}", strerror(errno));
+          }
+          parent_pipe_[CHAN_STDIN] = -1;
+          fd_remain--;
+          break;
+        }
+      }
+
       // Handle the pipes ready for I/O.
       for (int i = 0; i < fd_count; i++) {
         if ((fds[i].revents & (POLLIN | POLLHUP)) != 0) {
@@ -715,7 +781,8 @@ int SubProcess::Communicate(const std::string* stdin_input, std::string* stdout_
 
   // Wait for the child process to exit and return its status.
   int status;
-  return WaitInternal(&status) ? status : -1;
+  status = WaitInternal(&status) ? status : -1;
+  return ExitStatus(status);
 }
 
 }  // namespace heyp

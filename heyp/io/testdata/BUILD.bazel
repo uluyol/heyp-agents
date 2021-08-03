@@ -1,0 +1,32 @@
+load("//bazel:cc_defs.bzl", "heyp_cc_binary")
+
+# Test helper binaries to use in tests.
+#   These are provided to avoid linux-only binaries in tests.
+#   Thus helping write cross platform tests.
+
+package(
+    default_visibility = [
+        "//heyp/io:__pkg__",
+    ],
+    licenses = ["notice"],
+)
+
+heyp_cc_binary(
+    name = "test_echo",
+    srcs = ["test_echo.cc"],
+)
+
+heyp_cc_binary(
+    name = "test_noop",
+    srcs = ["test_noop.cc"],
+)
+
+heyp_cc_binary(
+    name = "test_echo_argv_1",
+    srcs = ["test_echo_argv_1.cc"],
+)
+
+heyp_cc_binary(
+    name = "test_stderr",
+    srcs = ["test_stderr.cc"],
+)

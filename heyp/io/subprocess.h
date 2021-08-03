@@ -22,6 +22,7 @@ limitations under the License.
 #include <errno.h>
 #include <unistd.h>
 
+#include <cstdlib>
 #include <string>
 #include <vector>
 
@@ -53,6 +54,20 @@ enum ChannelAction {
   // Duplicate the parent's file descriptor. Useful if stdout/stderr should
   // go to the same place that the parent writes it.
   ACTION_DUPPARENT,
+};
+
+// ExitStatus is a wrapper around an exit status to ensure that callers don't forget to
+// check WIFEXITED.
+class ExitStatus {
+ public:
+  ExitStatus(int val) : val_(val) {}
+
+  int wait_status() const { return val_; }
+  int exit_status() const;
+  bool ok() const;
+
+ private:
+  int val_;
 };
 
 class SubProcess {
@@ -129,8 +144,8 @@ class SubProcess {
   //    If this process is not configured to take stdin from a pipe, stdin_input
   //     will be ignored.
   //    Returns the command's exit status.
-  virtual int Communicate(const std::string* stdin_input, std::string* stdout_output,
-                          std::string* stderr_output);
+  virtual ExitStatus Communicate(const std::string* stdin_input,
+                                 std::string* stdout_output, std::string* stderr_output);
 
  private:
   static constexpr int kNFds = 3;
@@ -149,7 +164,8 @@ class SubProcess {
   mutable absl::Mutex proc_mu_;
   bool running_ ABSL_GUARDED_BY(proc_mu_);
   pid_t pid_ ABSL_GUARDED_BY(proc_mu_);
-  absl::Notification* notify_done_ = nullptr;
+  int timeout_pipe_[2] ABSL_GUARDED_BY(proc_mu_);
+  absl::Notification* notify_done_;
   std::thread timeout_thread_;
 
   mutable absl::Mutex data_mu_ ABSL_ACQUIRED_AFTER(proc_mu_);

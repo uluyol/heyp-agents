@@ -652,8 +652,8 @@ bool LinuxHostEnforcerImpl::IsLopri(const proto::FlowMarker& flow,
         subproc.SetChannelAction(CHAN_STDOUT, ACTION_PIPE);
         if (subproc.Start()) {
           std::string got_stdout;
-          int exit_status = subproc.Communicate(nullptr, &got_stdout, nullptr);
-          if (exit_status == 0) {
+          ExitStatus got = subproc.Communicate(nullptr, &got_stdout, nullptr);
+          if (got.ok()) {
             SPDLOG_LOGGER_WARN(logger, "ps ax output:\n{}", got_stdout);
           }
         }
