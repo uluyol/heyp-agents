@@ -123,9 +123,9 @@ absl::Status Controller::CommitChanges() {
   AddRuleLinesToAdd(dscps_to_ignore_class_id_, dev_, to_add_, mangle_table);
   mangle_table.Append("COMMIT\n");
 
-  SPDLOG_LOGGER_INFO(&logger_, "fupdating rules for iptables 'mangle' table");
+  SPDLOG_LOGGER_INFO(&logger_, "updating rules for iptables 'mangle' table");
 
-  SPDLOG_LOGGER_DEBUG(&logger_, "frestore input:\n{}" mangle_table);
+  SPDLOG_LOGGER_DEBUG(&logger_, "restore input:\n{}" mangle_table);
 
   absl::Status st = runner_->Restore(Table::kMangle, mangle_table,
                                      {.flush_tables = false, .restore_counters = false});
