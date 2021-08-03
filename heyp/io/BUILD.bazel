@@ -63,6 +63,7 @@ cc_test(
     data = [
         "//heyp/io/testdata:test_echo",
         "//heyp/io/testdata:test_echo_argv_1",
+        "//heyp/io/testdata:test_echo_some_and_die_after",
         "//heyp/io/testdata:test_noop",
         "//heyp/io/testdata:test_stderr",
     ],

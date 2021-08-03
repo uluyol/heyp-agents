@@ -35,6 +35,9 @@ static spdlog::logger* TestLogger() {
 }
 
 std::string EchoProgram() { return "heyp/io/testdata/test_echo"; }
+std::string EchoSomeAndDieAfterProgram() {
+  return "heyp/io/testdata/test_echo_some_and_die_after";
+}
 std::string EchoArgv1Program() { return "heyp/io/testdata/test_echo_argv_1"; }
 std::string NoopProgram() { return "heyp/io/testdata/test_noop"; }
 std::string StdErrProgram() { return "heyp/io/testdata/test_stderr"; }
@@ -202,6 +205,31 @@ TEST(SubProcessTest, KillProc) {
   EXPECT_TRUE(proc.Wait());
 
   EXPECT_FALSE(proc.Kill(SIGKILL));
+}
+
+TEST(SubProcessTest, PipesOpenWhenChildClosed) {
+  SubProcess proc(TestLogger());
+  proc.SetProgram(EchoSomeAndDieAfterProgram(),
+                  {absl::FormatDuration(absl::Milliseconds(500))});
+  proc.SetChannelAction(CHAN_STDIN, ACTION_PIPE);
+  proc.SetChannelAction(CHAN_STDOUT, ACTION_PIPE);
+  proc.SetChannelAction(CHAN_STDERR, ACTION_PIPE);
+  EXPECT_TRUE(proc.Start());
+
+  // Verify that the parent handles multiplexed reading/writing to the child
+  // process.  The string is large enough to exceed the buffering of the pipes.
+  std::string in;
+  in.reserve(1000000);
+  for (int i = 0; i < 100000; i++) {
+    in += "hello xyz\n";
+  }
+
+  proc.KillAfter(absl::Seconds(1));
+
+  std::string out;
+  std::string err;
+  int status = proc.Communicate(&in, &out, &err).wait_status();
+  EXPECT_TRUE(WIFSIGNALED(status));
 }
 
 }  // namespace

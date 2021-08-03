@@ -17,6 +17,14 @@ heyp_cc_binary(
 )
 
 heyp_cc_binary(
+    name = "test_echo_some_and_die_after",
+    srcs = ["test_echo_some_and_die_after.cc"],
+    deps = [
+        "@com_google_absl//absl/time",
+    ],
+)
+
+heyp_cc_binary(
     name = "test_noop",
     srcs = ["test_noop.cc"],
 )

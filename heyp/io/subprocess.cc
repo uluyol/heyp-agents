@@ -31,6 +31,7 @@ limitations under the License.
 #include <thread>
 #include <vector>
 
+#include "absl/strings/str_cat.h"
 #include "absl/strings/str_join.h"
 #include "absl/time/clock.h"
 #include "heyp/io/look-path.h"
@@ -84,6 +85,11 @@ extern char** environ;
 }  // extern "C"
 
 namespace heyp {
+namespace {
+
+constexpr bool kDebugSubprocess = false;
+
+}
 
 bool ExitStatus::ok() const { return WIFEXITED(val_) && (WEXITSTATUS(val_) == 0); }
 int ExitStatus::exit_status() const { return WEXITSTATUS(val_); }
@@ -575,17 +581,17 @@ void SubProcess::KillAfter(absl::Duration timeout) {
       SPDLOG_LOGGER_INFO(logger_, "killing subprocess PID {}", pid);
       if (kill(pid, SIGTERM) == 0) {
         proc_mu_.Lock();
-        if (timeout_pipe_[0] != -1) {
+        if (timeout_pipe_[1] != -1) {
           char data[1];
           data[0] = 0;
           SPDLOG_LOGGER_INFO(logger_, "signal timeout to Communicate");
-          if (write(timeout_pipe_[0], data, 1) == 1) {
+          if (write(timeout_pipe_[1], data, 1) == 1) {
             SPDLOG_LOGGER_INFO(logger_, "close timeout pipe");
-            if (close(timeout_pipe_[0]) != 0) {
+            if (close(timeout_pipe_[1]) != 0) {
               SPDLOG_LOGGER_ERROR(logger_, "failed to close timeout pipe: {}",
                                   strerror(errno));
             }
-            timeout_pipe_[0] = -1;
+            timeout_pipe_[1] = -1;
           } else {
             SPDLOG_LOGGER_ERROR(logger_, "failed to write to timeout pipe: {}",
                                 strerror(errno));
@@ -625,12 +631,12 @@ ExitStatus SubProcess::Communicate(const std::string* stdin_input,
   proc_mu_.Lock();
   bool running = running_;
   int timeout_read_fd = -1;
-  {
+  if (notify_done_ != nullptr) {
     int pipe_fds[2];
     if (pipe(pipe_fds) == 0) {
-      timeout_pipe_[0] = pipe_fds[1];
-      timeout_pipe_[1] = pipe_fds[0];
-      timeout_read_fd = pipe_fds[1];
+      timeout_pipe_[0] = pipe_fds[0];
+      timeout_pipe_[1] = pipe_fds[1];
+      timeout_read_fd = pipe_fds[0];
     }
   }
   proc_mu_.Unlock();
@@ -708,11 +714,29 @@ ExitStatus SubProcess::Communicate(const std::string* stdin_input,
     fd_count_with_notify++;
   }
 
+  if (kDebugSubprocess) {
+    SPDLOG_LOGGER_INFO(logger_, "fd_count: {} fd_count_with_notify: {}", fd_count,
+                       fd_count_with_notify);
+
+    std::vector<std::string> pollfds_str;
+    for (int i = 0; i < fd_count_with_notify; i++) {
+      pollfds_str.push_back(absl::StrCat("{fd = ", fds[i].fd,
+                                         ", events = ", fds[i].events,
+                                         ", revents = ", fds[i].revents, "}"));
+    }
+
+    SPDLOG_LOGGER_INFO(logger_, "poll fds: [\n\t{}\n]",
+                       absl::StrJoin(pollfds_str, "\n\t"));
+  }
+
   // Loop communicating with the child process.
   int fd_remain = fd_count;
   char buf[4096];
   while (fd_remain > 0) {
     int n = poll(fds, fd_count_with_notify, -1);
+    if (kDebugSubprocess) {
+      SPDLOG_LOGGER_INFO(logger_, "poll() returned ", n);
+    }
     if ((n < 0) && !retry(errno)) {
       SPDLOG_LOGGER_ERROR(logger_, "Communicate cannot poll(): {}", strerror(errno));
       fd_remain = 0;
@@ -724,7 +748,7 @@ ExitStatus SubProcess::Communicate(const std::string* stdin_input,
       if (fd_count_with_notify != fd_count) {
         int i = fd_count_with_notify - 1;
         if ((fds[i].revents & (POLLIN | POLLHUP)) != 0) {
-          // Timed out
+          SPDLOG_LOGGER_INFO(logger_, "subprocess timed out");
           if (parent_pipe_[CHAN_STDIN] != -1 && close(parent_pipe_[CHAN_STDIN]) < 0) {
             SPDLOG_LOGGER_ERROR(logger_, "close() failed: {}", strerror(errno));
           }
@@ -737,6 +761,9 @@ ExitStatus SubProcess::Communicate(const std::string* stdin_input,
       // Handle the pipes ready for I/O.
       for (int i = 0; i < fd_count; i++) {
         if ((fds[i].revents & (POLLIN | POLLHUP)) != 0) {
+          if (kDebugSubprocess) {
+            SPDLOG_LOGGER_INFO(logger_, "subprocess read from fd {}", fds[i].fd);
+          }
           // Read from one of the child's outputs.
           ssize_t n = read(fds[i].fd, buf, sizeof(buf));
           if (n > 0) {
@@ -749,6 +776,9 @@ ExitStatus SubProcess::Communicate(const std::string* stdin_input,
             fd_remain--;
           }
         } else if ((fds[i].revents & POLLOUT) != 0) {
+          if (kDebugSubprocess) {
+            SPDLOG_LOGGER_INFO(logger_, "subprocess write to fd {}", fds[i].fd);
+          }
           // Write to the child's stdin.
           ssize_t n = iobufs[i]->size() - nbytes[i];
           if (n > 0) {
