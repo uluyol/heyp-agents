@@ -6,6 +6,7 @@
 #include "gtest/gtest.h"
 #include "heyp/alg/demand-predictor.h"
 #include "heyp/flows/aggregator.h"
+#include "heyp/proto/heyp.pb.h"
 #include "heyp/proto/parse-text.h"
 #include "heyp/proto/testing.h"
 
@@ -93,8 +94,9 @@ class MockHostEnforcer : public HostEnforcer {
                const proto::AllocBundle& bundle),
               (override));
 
-  MOCK_METHOD(bool, IsLopri, (const proto::FlowMarker& flow, spdlog::logger* logger),
-              (override));
+  IsLopriFunc GetIsLopriFunc() const override {
+    return [](const proto::FlowMarker&, spdlog::logger*) { return false; };
+  }
 };
 
 std::unique_ptr<FlowAggregator> MakeFlowAggregator() {

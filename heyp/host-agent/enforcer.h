@@ -1,12 +1,17 @@
 #ifndef HEYP_HOST_AGENT_ENFORCER_H_
 #define HEYP_HOST_AGENT_ENFORCER_H_
 
+#include <functional>
+
 #include "absl/types/span.h"
 #include "heyp/host-agent/flow-tracker.h"
 #include "heyp/proto/heyp.pb.h"
 #include "spdlog/spdlog.h"
 
 namespace heyp {
+
+using IsLopriFunc =
+    std::function<bool(const proto::FlowMarker& flow, spdlog::logger* logger)>;
 
 class HostEnforcer {
  public:
@@ -15,7 +20,7 @@ class HostEnforcer {
   virtual void EnforceAllocs(const FlowStateProvider& flow_state_provider,
                              const proto::AllocBundle& bundle) = 0;
 
-  virtual bool IsLopri(const proto::FlowMarker& flow, spdlog::logger* logger) = 0;
+  virtual IsLopriFunc GetIsLopriFunc() const = 0;
 };
 
 class NopHostEnforcer : public HostEnforcer {
@@ -25,7 +30,7 @@ class NopHostEnforcer : public HostEnforcer {
   void EnforceAllocs(const FlowStateProvider& flow_state_provider,
                      const proto::AllocBundle& bundle) override;
 
-  bool IsLopri(const proto::FlowMarker& flow, spdlog::logger* logger) override;
+  IsLopriFunc GetIsLopriFunc() const override;
 
  private:
   spdlog::logger logger_;

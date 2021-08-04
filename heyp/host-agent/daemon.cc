@@ -86,8 +86,8 @@ void CollectStats(absl::Duration period, bool force_run,
 
     force_run = false;
     // Step 1: refresh stats on all socket-level flows.
-    absl::Status report_status = flow_state_reporter->ReportState(
-        absl::bind_front(&HostEnforcer::IsLopri, enforcer));
+    IsLopriFunc is_lopri = enforcer->GetIsLopriFunc();
+    absl::Status report_status = flow_state_reporter->ReportState(is_lopri);
     if (!report_status.ok()) {
       SPDLOG_LOGGER_ERROR(&logger, "failed to report flow state: {}", report_status);
       continue;

@@ -58,6 +58,7 @@ void FlowTracker::UpdateFlows(absl::Time timestamp,
   for (size_t i = 0; i < flow_update_batch.size();) {
     const Update& u = flow_update_batch[i];
     if (!active_flows_.contains(u.flow)) {
+      SPDLOG_LOGGER_INFO(&logger_, "new active flow: {}", u.flow.ShortDebugString());
       active_flows_.emplace(u.flow, CreateLeafState(u.flow, ++next_seqnum_));
     }
     LeafState& state = active_flows_.at(u.flow);
@@ -92,6 +93,7 @@ void FlowTracker::FinalizeFlows(absl::Time timestamp,
   MutexLockWarnLong l(&mu_, absl::Seconds(1), &logger_, "mu_");
   for (const Update& u : flow_update_batch) {
     if (!active_flows_.contains(u.flow)) {
+      SPDLOG_LOGGER_INFO(&logger_, "missing active flow: {}", u.flow.ShortDebugString());
       active_flows_.emplace(u.flow, CreateLeafState(u.flow, ++next_seqnum_));
     }
     LeafState& state = active_flows_.at(u.flow);
@@ -109,6 +111,8 @@ void FlowTracker::FinalizeFlows(absl::Time timestamp,
       flow_update.instantaneous_usage_bps = 0;
     }
     state.UpdateUsage(flow_update, config_.usage_history_window, *demand_predictor_);
+    SPDLOG_LOGGER_INFO(&logger_, "moving flow from active to done: {}",
+                       u.flow.ShortDebugString());
     done_flows_.push_back(state);
     active_flows_.erase(u.flow);
   }

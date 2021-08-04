@@ -145,7 +145,7 @@ class LinuxHostEnforcerImpl : public LinuxHostEnforcer {
   void EnforceAllocs(const FlowStateProvider& flow_state_provider,
                      const proto::AllocBundle& bundle) override;
 
-  bool IsLopri(const proto::FlowMarker& flow, spdlog::logger* logger) override;
+  IsLopriFunc GetIsLopriFunc() const override;
 
  private:
   struct FlowSys {
@@ -185,6 +185,9 @@ class LinuxHostEnforcerImpl : public LinuxHostEnforcer {
   absl::flat_hash_map<proto::FlowMarker, std::unique_ptr<FlowSys>, HashFlow, EqFlow>
       sys_info_ ABSL_GUARDED_BY(
           mu_);  // entries are never deleted, values are pointer for stability
+
+  mutable absl::Mutex snapshot_mu_;
+  iptables::SettingBatch ipt_snapshot_ ABSL_GUARDED_BY(snapshot_mu_);
 
   absl::Status ResetIptables() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mu_);
   absl::Status ResetTrafficControl() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mu_);
@@ -306,6 +309,10 @@ absl::Status LinuxHostEnforcerImpl::InitSimulatedWan(std::vector<FlowNetemConfig
           st.code(), absl::StrCat("multiple errors:\n\t", absl::StrJoin(errors, "\n\t")));
     }
   }
+
+  snapshot_mu_.Lock();
+  ipt_snapshot_ = ipt_controller_.AppliedSettings();
+  snapshot_mu_.Unlock();
 
   if (!errors.empty()) {
     if (errors.size() == 1) {
@@ -545,6 +552,10 @@ void LinuxHostEnforcerImpl::EnforceAllocs(const FlowStateProvider& flow_state_pr
     SPDLOG_LOGGER_ERROR(&logger_, "failed to commit iptables config: ", st);
     SPDLOG_LOGGER_WARN(&logger_, "will not decrease rate limits");
   } else {
+    snapshot_mu_.Lock();
+    ipt_snapshot_ = ipt_controller_.AppliedSettings();
+    snapshot_mu_.Unlock();
+
     // ==== Stage 3: Decrease any rate limits ====
 
     tc_batch_input_.Clear();
@@ -643,29 +654,14 @@ void GdbPrintAllStacks(spdlog::logger* logger) {
   }
 }
 
-bool LinuxHostEnforcerImpl::IsLopri(const proto::FlowMarker& flow,
-                                    spdlog::logger* logger) {
-  MutexLockWarnLong l(
-      &mu_, absl::Seconds(1), logger, "LinuxHostEnforcerImpl.mu_", [logger](int count) {
-        SubProcess subproc(logger);
-        subproc.SetProgram("ps", {"ax"});
-        subproc.SetChannelAction(CHAN_STDOUT, ACTION_PIPE);
-        if (subproc.Start()) {
-          std::string got_stdout;
-          ExitStatus got = subproc.Communicate(nullptr, &got_stdout, nullptr);
-          if (got.ok()) {
-            SPDLOG_LOGGER_WARN(logger, "ps ax output:\n{}", got_stdout);
-          }
-        }
-
-        if (count > 10) {
-          SPDLOG_LOGGER_CRITICAL(
-              logger, "waiting for >10s to acquire lock, dumping all stacks...");
-          GdbPrintAllStacks(logger);
-        }
-      });
-  return ipt_controller_.DscpFor(flow.src_port(), flow.dst_port(), flow.dst_addr(),
-                                 kDscpHipri) == kDscpLopri;
+IsLopriFunc LinuxHostEnforcerImpl::GetIsLopriFunc() const {
+  snapshot_mu_.Lock();
+  iptables::SettingBatch settings = ipt_snapshot_;
+  snapshot_mu_.Unlock();
+  return [settings](const proto::FlowMarker& flow, spdlog::logger* logger) {
+    return iptables::SettingsFindDscp(settings, flow.src_port(), flow.dst_port(),
+                                      flow.dst_addr(), kDscpHipri) == kDscpLopri;
+  };
 }
 
 }  // namespace

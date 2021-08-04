@@ -26,6 +26,12 @@ struct SettingBatch {
   std::vector<Setting> settings;
 };
 
+// SettingsFindDscp returns the dscp iptables will use for the requested flow,
+// or default_dscp otherwise.
+absl::string_view SettingsFindDscp(const SettingBatch& batch, uint16_t src_port,
+                                   uint16_t dst_port, absl::string_view dst_addr,
+                                   absl::string_view default_dscp);
+
 std::ostream& operator<<(std::ostream& os, const SettingBatch::Setting& s);
 
 bool operator==(const SettingBatch::Setting& lhs, const SettingBatch::Setting& rhs);
@@ -49,8 +55,7 @@ class Controller {
   void Stage(SettingBatch::Setting setting);
   absl::Status CommitChanges();
 
-  absl::string_view DscpFor(uint16_t src_port, uint16_t dst_port,
-                            absl::string_view dst_addr, absl::string_view default_dscp);
+  const SettingBatch& AppliedSettings() const;
 
  private:
   const std::string dev_;
@@ -72,10 +77,6 @@ void AddRuleLinesToDelete(absl::string_view dev, const SettingBatch& batch,
 void AddRuleLinesToAdd(const SmallStringSet& dscp_to_ignore_class_id,
                        absl::string_view dev, const SettingBatch& batch,
                        absl::Cord& lines);
-
-absl::string_view SettingsFindDscp(const SettingBatch& batch, uint16_t src_port,
-                                   uint16_t dst_port, absl::string_view dst_addr,
-                                   absl::string_view default_dscp);
 
 }  // namespace iptables
 }  // namespace heyp

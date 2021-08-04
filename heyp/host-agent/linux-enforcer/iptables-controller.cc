@@ -150,11 +150,7 @@ absl::Status Controller::CommitChanges() {
   return absl::OkStatus();
 }
 
-absl::string_view Controller::DscpFor(uint16_t src_port, uint16_t dst_port,
-                                      absl::string_view dst_addr,
-                                      absl::string_view default_dscp) {
-  return SettingsFindDscp(applied_, src_port, dst_port, dst_addr, default_dscp);
-}
+const SettingBatch& Controller::AppliedSettings() const { return applied_; }
 
 void AddRuleLinesToDelete(absl::string_view dev, const SettingBatch& batch,
                           absl::Cord& lines) {
