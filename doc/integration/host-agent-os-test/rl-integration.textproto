@@ -1,0 +1,3648 @@
+metrics {
+  name: "0->1/step = 0/recv"
+  value: 323983559.22990531
+}
+metrics {
+  name: "0->1/step = 0/send"
+  value: 336698756.1959672
+}
+metrics {
+  name: "0->1/step = 0/ss-demand"
+  value: 354038194
+}
+metrics {
+  name: "0->1/step = 0/ss-usage"
+  value: 321852904
+}
+metrics {
+  name: "0->1/step = 0/want"
+  value: 340000000
+}
+metrics {
+  name: "0->1/step = 1/recv"
+  value: 124636399.13756011
+}
+metrics {
+  name: "0->1/step = 1/send"
+  value: 126203810.33279453
+}
+metrics {
+  name: "0->1/step = 1/ss-demand"
+  value: 354038194
+}
+metrics {
+  name: "0->1/step = 1/ss-usage"
+  value: 188237675
+}
+metrics {
+  name: "0->1/step = 1/want"
+  value: 130000000
+}
+metrics {
+  name: "0->1/step = 10/recv"
+  value: 477948489.37147385
+}
+metrics {
+  name: "0->1/step = 10/send"
+  value: 475858785.36300594
+}
+metrics {
+  name: "0->1/step = 10/ss-demand"
+  value: 487258417
+}
+metrics {
+  name: "0->1/step = 10/ss-usage"
+  value: 431780029
+}
+metrics {
+  name: "0->1/step = 10/want"
+  value: 502000000
+}
+metrics {
+  name: "0->1/step = 11/recv"
+  value: 211688914.91248292
+}
+metrics {
+  name: "0->1/step = 11/send"
+  value: 211954087.64732826
+}
+metrics {
+  name: "0->1/step = 11/ss-demand"
+  value: 487258417
+}
+metrics {
+  name: "0->1/step = 11/ss-usage"
+  value: 293662383
+}
+metrics {
+  name: "0->1/step = 11/want"
+  value: 221000000
+}
+metrics {
+  name: "0->1/step = 12/recv"
+  value: 330226045.29796809
+}
+metrics {
+  name: "0->1/step = 12/send"
+  value: 333361685.30249721
+}
+metrics {
+  name: "0->1/step = 12/ss-demand"
+  value: 487258417
+}
+metrics {
+  name: "0->1/step = 12/ss-usage"
+  value: 309012766
+}
+metrics {
+  name: "0->1/step = 12/want"
+  value: 347000000
+}
+metrics {
+  name: "0->1/step = 13/recv"
+  value: 137986981.94834387
+}
+metrics {
+  name: "0->1/step = 13/send"
+  value: 137704439.12189421
+}
+metrics {
+  name: "0->1/step = 13/ss-demand"
+  value: 487258417
+}
+metrics {
+  name: "0->1/step = 13/ss-usage"
+  value: 195196530
+}
+metrics {
+  name: "0->1/step = 13/want"
+  value: 144000000
+}
+metrics {
+  name: "0->1/step = 14/recv"
+  value: 496882499.35773432
+}
+metrics {
+  name: "0->1/step = 14/send"
+  value: 494561835.8440851
+}
+metrics {
+  name: "0->1/step = 14/ss-demand"
+  value: 487258417
+}
+metrics {
+  name: "0->1/step = 14/ss-usage"
+  value: 400708996
+}
+metrics {
+  name: "0->1/step = 14/want"
+  value: 523000000
+}
+metrics {
+  name: "0->1/step = 15/want"
+  value: 466000000
+}
+metrics {
+  name: "0->1/step = 2/recv"
+  value: 113438335.2353864
+}
+metrics {
+  name: "0->1/step = 2/send"
+  value: 114745771.58404273
+}
+metrics {
+  name: "0->1/step = 2/ss-demand"
+  value: 354038194
+}
+metrics {
+  name: "0->1/step = 2/ss-usage"
+  value: 132056410
+}
+metrics {
+  name: "0->1/step = 2/want"
+  value: 119000000
+}
+metrics {
+  name: "0->1/step = 3/recv"
+  value: 243578949.93487829
+}
+metrics {
+  name: "0->1/step = 3/send"
+  value: 240951188.51687253
+}
+metrics {
+  name: "0->1/step = 3/ss-demand"
+  value: 354038194
+}
+metrics {
+  name: "0->1/step = 3/ss-usage"
+  value: 210604467
+}
+metrics {
+  name: "0->1/step = 3/want"
+  value: 256000000
+}
+metrics {
+  name: "0->1/step = 4/recv"
+  value: 344553359.09138566
+}
+metrics {
+  name: "0->1/step = 4/send"
+  value: 344316554.85748208
+}
+metrics {
+  name: "0->1/step = 4/ss-demand"
+  value: 354038194
+}
+metrics {
+  name: "0->1/step = 4/ss-usage"
+  value: 309213515
+}
+metrics {
+  name: "0->1/step = 4/want"
+  value: 362000000
+}
+metrics {
+  name: "0->1/step = 5/recv"
+  value: 488563513.20450407
+}
+metrics {
+  name: "0->1/step = 5/send"
+  value: 487241118.91679174
+}
+metrics {
+  name: "0->1/step = 5/ss-demand"
+  value: 465859798
+}
+metrics {
+  name: "0->1/step = 5/ss-usage"
+  value: 423508908
+}
+metrics {
+  name: "0->1/step = 5/want"
+  value: 513000000
+}
+metrics {
+  name: "0->1/step = 6/recv"
+  value: 261876124.00786936
+}
+metrics {
+  name: "0->1/step = 6/send"
+  value: 264498348.536659
+}
+metrics {
+  name: "0->1/step = 6/ss-demand"
+  value: 487258417
+}
+metrics {
+  name: "0->1/step = 6/ss-usage"
+  value: 324209636
+}
+metrics {
+  name: "0->1/step = 6/want"
+  value: 274000000
+}
+metrics {
+  name: "0->1/step = 7/recv"
+  value: 57132326.053866714
+}
+metrics {
+  name: "0->1/step = 7/send"
+  value: 57378934.868993215
+}
+metrics {
+  name: "0->1/step = 7/ss-demand"
+  value: 487258417
+}
+metrics {
+  name: "0->1/step = 7/ss-usage"
+  value: 138447274
+}
+metrics {
+  name: "0->1/step = 7/want"
+  value: 59000000
+}
+metrics {
+  name: "0->1/step = 8/recv"
+  value: 167197514.66819048
+}
+metrics {
+  name: "0->1/step = 8/send"
+  value: 166409448.60683459
+}
+metrics {
+  name: "0->1/step = 8/ss-demand"
+  value: 487258417
+}
+metrics {
+  name: "0->1/step = 8/ss-usage"
+  value: 152721573
+}
+metrics {
+  name: "0->1/step = 8/want"
+  value: 176000000
+}
+metrics {
+  name: "0->1/step = 9/recv"
+  value: 361566944.3126719
+}
+metrics {
+  name: "0->1/step = 9/send"
+  value: 361579137.61346203
+}
+metrics {
+  name: "0->1/step = 9/ss-demand"
+  value: 487258417
+}
+metrics {
+  name: "0->1/step = 9/ss-usage"
+  value: 301346028
+}
+metrics {
+  name: "0->1/step = 9/want"
+  value: 380000000
+}
+metrics {
+  name: "0->2/step = 0/recv"
+  value: 174545923.84018728
+}
+metrics {
+  name: "0->2/step = 0/send"
+  value: 188308903.45099661
+}
+metrics {
+  name: "0->2/step = 0/ss-demand"
+  value: 190348987
+}
+metrics {
+  name: "0->2/step = 0/ss-usage"
+  value: 173044534
+}
+metrics {
+  name: "0->2/step = 0/want"
+  value: 183000000
+}
+metrics {
+  name: "0->2/step = 1/recv"
+  value: 200778846.77507752
+}
+metrics {
+  name: "0->2/step = 1/send"
+  value: 200765601.72481337
+}
+metrics {
+  name: "0->2/step = 1/ss-demand"
+  value: 211406101
+}
+metrics {
+  name: "0->2/step = 1/ss-usage"
+  value: 192187365
+}
+metrics {
+  name: "0->2/step = 1/want"
+  value: 211000000
+}
+metrics {
+  name: "0->2/step = 10/recv"
+  value: 163746210.13859862
+}
+metrics {
+  name: "0->2/step = 10/send"
+  value: 164250424.1870141
+}
+metrics {
+  name: "0->2/step = 10/ss-demand"
+  value: 407601631
+}
+metrics {
+  name: "0->2/step = 10/ss-usage"
+  value: 202418654
+}
+metrics {
+  name: "0->2/step = 10/want"
+  value: 171000000
+}
+metrics {
+  name: "0->2/step = 11/recv"
+  value: 417127674.08764029
+}
+metrics {
+  name: "0->2/step = 11/send"
+  value: 418170975.23364305
+}
+metrics {
+  name: "0->2/step = 11/ss-demand"
+  value: 407601631
+}
+metrics {
+  name: "0->2/step = 11/ss-usage"
+  value: 337302005
+}
+metrics {
+  name: "0->2/step = 11/want"
+  value: 439000000
+}
+metrics {
+  name: "0->2/step = 12/recv"
+  value: 471594995.12288654
+}
+metrics {
+  name: "0->2/step = 12/send"
+  value: 472130702.60506517
+}
+metrics {
+  name: "0->2/step = 12/ss-demand"
+  value: 477098891
+}
+metrics {
+  name: "0->2/step = 12/ss-usage"
+  value: 433726265
+}
+metrics {
+  name: "0->2/step = 12/want"
+  value: 495000000
+}
+metrics {
+  name: "0->2/step = 13/recv"
+  value: 466916525.6840924
+}
+metrics {
+  name: "0->2/step = 13/send"
+  value: 464808918.28193468
+}
+metrics {
+  name: "0->2/step = 13/ss-demand"
+  value: 505108474
+}
+metrics {
+  name: "0->2/step = 13/ss-usage"
+  value: 459189522
+}
+metrics {
+  name: "0->2/step = 13/want"
+  value: 490000000
+}
+metrics {
+  name: "0->2/step = 14/recv"
+  value: 192651857.50264674
+}
+metrics {
+  name: "0->2/step = 14/send"
+  value: 195102967.32242534
+}
+metrics {
+  name: "0->2/step = 14/ss-demand"
+  value: 505108474
+}
+metrics {
+  name: "0->2/step = 14/ss-usage"
+  value: 274699690
+}
+metrics {
+  name: "0->2/step = 14/want"
+  value: 201000000
+}
+metrics {
+  name: "0->2/step = 15/want"
+  value: 253000000
+}
+metrics {
+  name: "0->2/step = 2/recv"
+  value: 45536555.296214387
+}
+metrics {
+  name: "0->2/step = 2/send"
+  value: 45878964.024752118
+}
+metrics {
+  name: "0->2/step = 2/ss-demand"
+  value: 211406101
+}
+metrics {
+  name: "0->2/step = 2/ss-usage"
+  value: 90660498
+}
+metrics {
+  name: "0->2/step = 2/want"
+  value: 47000000
+}
+metrics {
+  name: "0->2/step = 3/recv"
+  value: 112762810.29045121
+}
+metrics {
+  name: "0->2/step = 3/send"
+  value: 114752479.58404246
+}
+metrics {
+  name: "0->2/step = 3/ss-demand"
+  value: 211406101
+}
+metrics {
+  name: "0->2/step = 3/ss-usage"
+  value: 104278222
+}
+metrics {
+  name: "0->2/step = 3/want"
+  value: 119000000
+}
+metrics {
+  name: "0->2/step = 4/recv"
+  value: 469476085.18813586
+}
+metrics {
+  name: "0->2/step = 4/send"
+  value: 466892861.40550953
+}
+metrics {
+  name: "0->2/step = 4/ss-demand"
+  value: 407601631
+}
+metrics {
+  name: "0->2/step = 4/ss-usage"
+  value: 370546938
+}
+metrics {
+  name: "0->2/step = 4/want"
+  value: 495000000
+}
+metrics {
+  name: "0->2/step = 5/recv"
+  value: 271413183.83128333
+}
+metrics {
+  name: "0->2/step = 5/send"
+  value: 270241616.02506548
+}
+metrics {
+  name: "0->2/step = 5/ss-demand"
+  value: 407601631
+}
+metrics {
+  name: "0->2/step = 5/ss-usage"
+  value: 310141348
+}
+metrics {
+  name: "0->2/step = 5/want"
+  value: 284000000
+}
+metrics {
+  name: "0->2/step = 6/recv"
+  value: 390340798.38299435
+}
+metrics {
+  name: "0->2/step = 6/send"
+  value: 393845200.03392059
+}
+metrics {
+  name: "0->2/step = 6/ss-demand"
+  value: 407601631
+}
+metrics {
+  name: "0->2/step = 6/ss-usage"
+  value: 358766260
+}
+metrics {
+  name: "0->2/step = 6/want"
+  value: 410000000
+}
+metrics {
+  name: "0->2/step = 7/recv"
+  value: 236875308.12355369
+}
+metrics {
+  name: "0->2/step = 7/send"
+  value: 235837420.88930771
+}
+metrics {
+  name: "0->2/step = 7/ss-demand"
+  value: 407601631
+}
+metrics {
+  name: "0->2/step = 7/ss-usage"
+  value: 279271458
+}
+metrics {
+  name: "0->2/step = 7/want"
+  value: 248000000
+}
+metrics {
+  name: "0->2/step = 8/recv"
+  value: 188844106.61729738
+}
+metrics {
+  name: "0->2/step = 8/send"
+  value: 189371372.52312651
+}
+metrics {
+  name: "0->2/step = 8/ss-demand"
+  value: 407601631
+}
+metrics {
+  name: "0->2/step = 8/ss-usage"
+  value: 213809188
+}
+metrics {
+  name: "0->2/step = 8/want"
+  value: 198000000
+}
+metrics {
+  name: "0->2/step = 9/recv"
+  value: 337575052.47555709
+}
+metrics {
+  name: "0->2/step = 9/send"
+  value: 334971092.96703386
+}
+metrics {
+  name: "0->2/step = 9/ss-demand"
+  value: 407601631
+}
+metrics {
+  name: "0->2/step = 9/ss-usage"
+  value: 300238436
+}
+metrics {
+  name: "0->2/step = 9/want"
+  value: 355000000
+}
+metrics {
+  name: "0->3/step = 0/recv"
+  value: 403000992.50343055
+}
+metrics {
+  name: "0->3/step = 0/send"
+  value: 415671143.25535846
+}
+metrics {
+  name: "0->3/step = 0/ss-demand"
+  value: 442655622
+}
+metrics {
+  name: "0->3/step = 0/ss-usage"
+  value: 402414202
+}
+metrics {
+  name: "0->3/step = 0/want"
+  value: 423000000
+}
+metrics {
+  name: "0->3/step = 1/recv"
+  value: 359491401.0343864
+}
+metrics {
+  name: "0->3/step = 1/send"
+  value: 360462581.64528948
+}
+metrics {
+  name: "0->3/step = 1/ss-demand"
+  value: 442655622
+}
+metrics {
+  name: "0->3/step = 1/ss-usage"
+  value: 373210812
+}
+metrics {
+  name: "0->3/step = 1/want"
+  value: 377000000
+}
+metrics {
+  name: "0->3/step = 10/recv"
+  value: 492812011.3787061
+}
+metrics {
+  name: "0->3/step = 10/send"
+  value: 495394753.38210905
+}
+metrics {
+  name: "0->3/step = 10/ss-demand"
+  value: 482902651
+}
+metrics {
+  name: "0->3/step = 10/ss-usage"
+  value: 421343529
+}
+metrics {
+  name: "0->3/step = 10/want"
+  value: 518000000
+}
+metrics {
+  name: "0->3/step = 11/recv"
+  value: 486736206.4158898
+}
+metrics {
+  name: "0->3/step = 11/send"
+  value: 488048782.71834618
+}
+metrics {
+  name: "0->3/step = 11/ss-demand"
+  value: 510853468
+}
+metrics {
+  name: "0->3/step = 11/ss-usage"
+  value: 464412244
+}
+metrics {
+  name: "0->3/step = 11/want"
+  value: 511000000
+}
+metrics {
+  name: "0->3/step = 12/recv"
+  value: 47473731.577657208
+}
+metrics {
+  name: "0->3/step = 12/send"
+  value: 45890846.298292883
+}
+metrics {
+  name: "0->3/step = 12/ss-demand"
+  value: 518276053
+}
+metrics {
+  name: "0->3/step = 12/ss-usage"
+  value: 192773907
+}
+metrics {
+  name: "0->3/step = 12/want"
+  value: 48000000
+}
+metrics {
+  name: "0->3/step = 13/recv"
+  value: 69645544.100095868
+}
+metrics {
+  name: "0->3/step = 13/send"
+  value: 68884468.844113812
+}
+metrics {
+  name: "0->3/step = 13/ss-demand"
+  value: 518276053
+}
+metrics {
+  name: "0->3/step = 13/ss-usage"
+  value: 97129500
+}
+metrics {
+  name: "0->3/step = 13/want"
+  value: 73000000
+}
+metrics {
+  name: "0->3/step = 14/recv"
+  value: 38341947.483832434
+}
+metrics {
+  name: "0->3/step = 14/send"
+  value: 40149288.316763557
+}
+metrics {
+  name: "0->3/step = 14/ss-demand"
+  value: 518276053
+}
+metrics {
+  name: "0->3/step = 14/ss-usage"
+  value: 54493873
+}
+metrics {
+  name: "0->3/step = 14/want"
+  value: 40000000
+}
+metrics {
+  name: "0->3/step = 15/want"
+  value: 165000000
+}
+metrics {
+  name: "0->3/step = 2/recv"
+  value: 469391303.51414025
+}
+metrics {
+  name: "0->3/step = 2/send"
+  value: 467172304.08900785
+}
+metrics {
+  name: "0->3/step = 2/ss-demand"
+  value: 482902651
+}
+metrics {
+  name: "0->3/step = 2/ss-usage"
+  value: 439002410
+}
+metrics {
+  name: "0->3/step = 2/want"
+  value: 493000000
+}
+metrics {
+  name: "0->3/step = 3/recv"
+  value: 132748278.71604426
+}
+metrics {
+  name: "0->3/step = 3/send"
+  value: 132486074.34976973
+}
+metrics {
+  name: "0->3/step = 3/ss-demand"
+  value: 482902651
+}
+metrics {
+  name: "0->3/step = 3/ss-usage"
+  value: 222587389
+}
+metrics {
+  name: "0->3/step = 3/want"
+  value: 138000000
+}
+metrics {
+  name: "0->3/step = 4/recv"
+  value: 76679615.660593092
+}
+metrics {
+  name: "0->3/step = 4/send"
+  value: 80330854.935842261
+}
+metrics {
+  name: "0->3/step = 4/ss-demand"
+  value: 482902651
+}
+metrics {
+  name: "0->3/step = 4/ss-usage"
+  value: 113387232
+}
+metrics {
+  name: "0->3/step = 4/want"
+  value: 80000000
+}
+metrics {
+  name: "0->3/step = 5/recv"
+  value: 388280280.738607
+}
+metrics {
+  name: "0->3/step = 5/send"
+  value: 387109828.01490289
+}
+metrics {
+  name: "0->3/step = 5/ss-demand"
+  value: 482902651
+}
+metrics {
+  name: "0->3/step = 5/ss-usage"
+  value: 286647427
+}
+metrics {
+  name: "0->3/step = 5/want"
+  value: 413000000
+}
+metrics {
+  name: "0->3/step = 6/recv"
+  value: 192367800.07247582
+}
+metrics {
+  name: "0->3/step = 6/send"
+  value: 191940279.25996032
+}
+metrics {
+  name: "0->3/step = 6/ss-demand"
+  value: 482902651
+}
+metrics {
+  name: "0->3/step = 6/ss-usage"
+  value: 235740402
+}
+metrics {
+  name: "0->3/step = 6/want"
+  value: 201000000
+}
+metrics {
+  name: "0->3/step = 7/recv"
+  value: 153395031.72501114
+}
+metrics {
+  name: "0->3/step = 7/send"
+  value: 154977955.05649939
+}
+metrics {
+  name: "0->3/step = 7/ss-demand"
+  value: 482902651
+}
+metrics {
+  name: "0->3/step = 7/ss-usage"
+  value: 176445676
+}
+metrics {
+  name: "0->3/step = 7/want"
+  value: 161000000
+}
+metrics {
+  name: "0->3/step = 8/recv"
+  value: 232398025.10193571
+}
+metrics {
+  name: "0->3/step = 8/send"
+  value: 229554739.37663734
+}
+metrics {
+  name: "0->3/step = 8/ss-demand"
+  value: 482902651
+}
+metrics {
+  name: "0->3/step = 8/ss-usage"
+  value: 213552767
+}
+metrics {
+  name: "0->3/step = 8/want"
+  value: 244000000
+}
+metrics {
+  name: "0->3/step = 9/recv"
+  value: 237132162.64402905
+}
+metrics {
+  name: "0->3/step = 9/send"
+  value: 236343940.81094012
+}
+metrics {
+  name: "0->3/step = 9/ss-demand"
+  value: 482902651
+}
+metrics {
+  name: "0->3/step = 9/ss-usage"
+  value: 231343592
+}
+metrics {
+  name: "0->3/step = 9/want"
+  value: 249000000
+}
+metrics {
+  name: "1->0/step = 0/recv"
+  value: 31586173.822537605
+}
+metrics {
+  name: "1->0/step = 0/send"
+  value: 43762630.895855524
+}
+metrics {
+  name: "1->0/step = 0/ss-demand"
+  value: 35452934
+}
+metrics {
+  name: "1->0/step = 0/ss-usage"
+  value: 31913026
+}
+metrics {
+  name: "1->0/step = 0/want"
+  value: 33000000
+}
+metrics {
+  name: "1->0/step = 1/recv"
+  value: 396577420.07739961
+}
+metrics {
+  name: "1->0/step = 1/send"
+  value: 397357204.74483895
+}
+metrics {
+  name: "1->0/step = 1/ss-demand"
+  value: 309745530
+}
+metrics {
+  name: "1->0/step = 1/ss-usage"
+  value: 281586846
+}
+metrics {
+  name: "1->0/step = 1/want"
+  value: 426000000
+}
+metrics {
+  name: "1->0/step = 10/recv"
+  value: 466410198.59210789
+}
+metrics {
+  name: "1->0/step = 10/send"
+  value: 467539606.60900831
+}
+metrics {
+  name: "1->0/step = 10/ss-demand"
+  value: 471162411
+}
+metrics {
+  name: "1->0/step = 10/ss-usage"
+  value: 428329465
+}
+metrics {
+  name: "1->0/step = 10/want"
+  value: 490000000
+}
+metrics {
+  name: "1->0/step = 11/recv"
+  value: 395546504.06607217
+}
+metrics {
+  name: "1->0/step = 11/send"
+  value: 395225839.9638409
+}
+metrics {
+  name: "1->0/step = 11/ss-demand"
+  value: 471162411
+}
+metrics {
+  name: "1->0/step = 11/ss-usage"
+  value: 408606688
+}
+metrics {
+  name: "1->0/step = 11/want"
+  value: 415000000
+}
+metrics {
+  name: "1->0/step = 12/recv"
+  value: 247540034.64534214
+}
+metrics {
+  name: "1->0/step = 12/send"
+  value: 246738972.37351075
+}
+metrics {
+  name: "1->0/step = 12/ss-demand"
+  value: 471162411
+}
+metrics {
+  name: "1->0/step = 12/ss-usage"
+  value: 301395230
+}
+metrics {
+  name: "1->0/step = 12/want"
+  value: 259000000
+}
+metrics {
+  name: "1->0/step = 13/recv"
+  value: 182067972.71556488
+}
+metrics {
+  name: "1->0/step = 13/send"
+  value: 183629240.69591391
+}
+metrics {
+  name: "1->0/step = 13/ss-demand"
+  value: 471162411
+}
+metrics {
+  name: "1->0/step = 13/ss-usage"
+  value: 216197493
+}
+metrics {
+  name: "1->0/step = 13/want"
+  value: 191000000
+}
+metrics {
+  name: "1->0/step = 14/recv"
+  value: 398556523.91995329
+}
+metrics {
+  name: "1->0/step = 14/send"
+  value: 394004129.247298
+}
+metrics {
+  name: "1->0/step = 14/ss-demand"
+  value: 471162411
+}
+metrics {
+  name: "1->0/step = 14/ss-usage"
+  value: 340463801
+}
+metrics {
+  name: "1->0/step = 14/want"
+  value: 419000000
+}
+metrics {
+  name: "1->0/step = 15/want"
+  value: 372000000
+}
+metrics {
+  name: "1->0/step = 2/recv"
+  value: 107961053.03733943
+}
+metrics {
+  name: "1->0/step = 2/send"
+  value: 109007828.91774814
+}
+metrics {
+  name: "1->0/step = 2/ss-demand"
+  value: 316915516
+}
+metrics {
+  name: "1->0/step = 2/ss-usage"
+  value: 168955069
+}
+metrics {
+  name: "1->0/step = 2/want"
+  value: 112000000
+}
+metrics {
+  name: "1->0/step = 3/recv"
+  value: 92580711.0235497
+}
+metrics {
+  name: "1->0/step = 3/send"
+  value: 91795687.032709926
+}
+metrics {
+  name: "1->0/step = 3/ss-demand"
+  value: 316915516
+}
+metrics {
+  name: "1->0/step = 3/ss-usage"
+  value: 111406742
+}
+metrics {
+  name: "1->0/step = 3/want"
+  value: 97000000
+}
+metrics {
+  name: "1->0/step = 4/recv"
+  value: 180759014.27045888
+}
+metrics {
+  name: "1->0/step = 4/send"
+  value: 183649322.63349363
+}
+metrics {
+  name: "1->0/step = 4/ss-demand"
+  value: 316915516
+}
+metrics {
+  name: "1->0/step = 4/ss-usage"
+  value: 161205234
+}
+metrics {
+  name: "1->0/step = 4/want"
+  value: 190000000
+}
+metrics {
+  name: "1->0/step = 5/recv"
+  value: 113463332.72572321
+}
+metrics {
+  name: "1->0/step = 5/send"
+  value: 109003861.85186531
+}
+metrics {
+  name: "1->0/step = 5/ss-demand"
+  value: 316915516
+}
+metrics {
+  name: "1->0/step = 5/ss-usage"
+  value: 131570269
+}
+metrics {
+  name: "1->0/step = 5/want"
+  value: 119000000
+}
+metrics {
+  name: "1->0/step = 6/recv"
+  value: 327605291.13747549
+}
+metrics {
+  name: "1->0/step = 6/send"
+  value: 329704567.92121816
+}
+metrics {
+  name: "1->0/step = 6/ss-demand"
+  value: 316915516
+}
+metrics {
+  name: "1->0/step = 6/ss-usage"
+  value: 258350062
+}
+metrics {
+  name: "1->0/step = 6/want"
+  value: 345000000
+}
+metrics {
+  name: "1->0/step = 7/recv"
+  value: 98089483.380566031
+}
+metrics {
+  name: "1->0/step = 7/send"
+  value: 97567483.127979562
+}
+metrics {
+  name: "1->0/step = 7/ss-demand"
+  value: 316915516
+}
+metrics {
+  name: "1->0/step = 7/ss-usage"
+  value: 156237476
+}
+metrics {
+  name: "1->0/step = 7/want"
+  value: 102000000
+}
+metrics {
+  name: "1->0/step = 8/recv"
+  value: 413964667.40187472
+}
+metrics {
+  name: "1->0/step = 8/send"
+  value: 414751970.46773618
+}
+metrics {
+  name: "1->0/step = 8/ss-demand"
+  value: 363702612
+}
+metrics {
+  name: "1->0/step = 8/ss-usage"
+  value: 330638739
+}
+metrics {
+  name: "1->0/step = 8/want"
+  value: 437000000
+}
+metrics {
+  name: "1->0/step = 9/recv"
+  value: 320604019.663784
+}
+metrics {
+  name: "1->0/step = 9/send"
+  value: 321366896.91966057
+}
+metrics {
+  name: "1->0/step = 9/ss-demand"
+  value: 376947022
+}
+metrics {
+  name: "1->0/step = 9/ss-usage"
+  value: 327930097
+}
+metrics {
+  name: "1->0/step = 9/want"
+  value: 336000000
+}
+metrics {
+  name: "1->2/step = 0/recv"
+  value: 266757678.42026839
+}
+metrics {
+  name: "1->2/step = 0/send"
+  value: 279984656.12711084
+}
+metrics {
+  name: "1->2/step = 0/ss-demand"
+  value: 289529212
+}
+metrics {
+  name: "1->2/step = 0/ss-usage"
+  value: 263208375
+}
+metrics {
+  name: "1->2/step = 0/want"
+  value: 280000000
+}
+metrics {
+  name: "1->2/step = 1/recv"
+  value: 143674213.73125678
+}
+metrics {
+  name: "1->2/step = 1/send"
+  value: 143391598.79158232
+}
+metrics {
+  name: "1->2/step = 1/ss-demand"
+  value: 289529212
+}
+metrics {
+  name: "1->2/step = 1/ss-usage"
+  value: 182216678
+}
+metrics {
+  name: "1->2/step = 1/want"
+  value: 150000000
+}
+metrics {
+  name: "1->2/step = 10/recv"
+  value: 272215037.23677862
+}
+metrics {
+  name: "1->2/step = 10/send"
+  value: 269633956.40058923
+}
+metrics {
+  name: "1->2/step = 10/ss-demand"
+  value: 488887308
+}
+metrics {
+  name: "1->2/step = 10/ss-usage"
+  value: 265375583
+}
+metrics {
+  name: "1->2/step = 10/want"
+  value: 286000000
+}
+metrics {
+  name: "1->2/step = 11/recv"
+  value: 214820752.15513474
+}
+metrics {
+  name: "1->2/step = 11/send"
+  value: 217951160.48242477
+}
+metrics {
+  name: "1->2/step = 11/ss-demand"
+  value: 488887308
+}
+metrics {
+  name: "1->2/step = 11/ss-usage"
+  value: 233471468
+}
+metrics {
+  name: "1->2/step = 11/want"
+  value: 225000000
+}
+metrics {
+  name: "1->2/step = 12/recv"
+  value: 310397148.33862555
+}
+metrics {
+  name: "1->2/step = 12/send"
+  value: 306206579.88321584
+}
+metrics {
+  name: "1->2/step = 12/ss-demand"
+  value: 488887308
+}
+metrics {
+  name: "1->2/step = 12/ss-usage"
+  value: 282138508
+}
+metrics {
+  name: "1->2/step = 12/want"
+  value: 326000000
+}
+metrics {
+  name: "1->2/step = 13/recv"
+  value: 41996402.589463063
+}
+metrics {
+  name: "1->2/step = 13/send"
+  value: 45923434.975585073
+}
+metrics {
+  name: "1->2/step = 13/ss-demand"
+  value: 488887308
+}
+metrics {
+  name: "1->2/step = 13/ss-usage"
+  value: 122389308
+}
+metrics {
+  name: "1->2/step = 13/want"
+  value: 43000000
+}
+metrics {
+  name: "1->2/step = 14/recv"
+  value: 22952811.097483084
+}
+metrics {
+  name: "1->2/step = 14/send"
+  value: 22960463.252911784
+}
+metrics {
+  name: "1->2/step = 14/ss-demand"
+  value: 488887308
+}
+metrics {
+  name: "1->2/step = 14/ss-usage"
+  value: 48118165
+}
+metrics {
+  name: "1->2/step = 14/want"
+  value: 24000000
+}
+metrics {
+  name: "1->2/step = 15/want"
+  value: 345000000
+}
+metrics {
+  name: "1->2/step = 2/recv"
+  value: 214098628.31426686
+}
+metrics {
+  name: "1->2/step = 2/send"
+  value: 212276706.77150363
+}
+metrics {
+  name: "1->2/step = 2/ss-demand"
+  value: 289529212
+}
+metrics {
+  name: "1->2/step = 2/ss-usage"
+  value: 201745553
+}
+metrics {
+  name: "1->2/step = 2/want"
+  value: 225000000
+}
+metrics {
+  name: "1->2/step = 3/recv"
+  value: 339815259.46340072
+}
+metrics {
+  name: "1->2/step = 3/send"
+  value: 344258008.58737051
+}
+metrics {
+  name: "1->2/step = 3/ss-demand"
+  value: 330450395
+}
+metrics {
+  name: "1->2/step = 3/ss-usage"
+  value: 300409450
+}
+metrics {
+  name: "1->2/step = 3/want"
+  value: 357000000
+}
+metrics {
+  name: "1->2/step = 4/recv"
+  value: 496862190.15744376
+}
+metrics {
+  name: "1->2/step = 4/send"
+  value: 494772880.97729462
+}
+metrics {
+  name: "1->2/step = 4/ss-demand"
+  value: 488887308
+}
+metrics {
+  name: "1->2/step = 4/ss-usage"
+  value: 444443008
+}
+metrics {
+  name: "1->2/step = 4/want"
+  value: 522000000
+}
+metrics {
+  name: "1->2/step = 5/recv"
+  value: 291369646.37422258
+}
+metrics {
+  name: "1->2/step = 5/send"
+  value: 289537476.83610851
+}
+metrics {
+  name: "1->2/step = 5/ss-demand"
+  value: 488887308
+}
+metrics {
+  name: "1->2/step = 5/ss-usage"
+  value: 348932690
+}
+metrics {
+  name: "1->2/step = 5/want"
+  value: 305000000
+}
+metrics {
+  name: "1->2/step = 6/recv"
+  value: 395164819.361637
+}
+metrics {
+  name: "1->2/step = 6/send"
+  value: 395426194.42977083
+}
+metrics {
+  name: "1->2/step = 6/ss-demand"
+  value: 488887308
+}
+metrics {
+  name: "1->2/step = 6/ss-usage"
+  value: 373186057
+}
+metrics {
+  name: "1->2/step = 6/want"
+  value: 415000000
+}
+metrics {
+  name: "1->2/step = 7/recv"
+  value: 8348028.48012524
+}
+metrics {
+  name: "1->2/step = 7/send"
+  value: 11998381.396234181
+}
+metrics {
+  name: "1->2/step = 7/ss-demand"
+  value: 488887308
+}
+metrics {
+  name: "1->2/step = 7/ss-usage"
+  value: 128672474
+}
+metrics {
+  name: "1->2/step = 7/want"
+  value: 7000000
+}
+metrics {
+  name: "1->2/step = 8/recv"
+  value: 449417673.62099916
+}
+metrics {
+  name: "1->2/step = 8/send"
+  value: 449451692.12416136
+}
+metrics {
+  name: "1->2/step = 8/ss-demand"
+  value: 488887308
+}
+metrics {
+  name: "1->2/step = 8/ss-usage"
+  value: 346363638
+}
+metrics {
+  name: "1->2/step = 8/want"
+  value: 489000000
+}
+metrics {
+  name: "1->2/step = 9/recv"
+  value: 206875592.43672085
+}
+metrics {
+  name: "1->2/step = 9/send"
+  value: 206579182.53416556
+}
+metrics {
+  name: "1->2/step = 9/ss-demand"
+  value: 488887308
+}
+metrics {
+  name: "1->2/step = 9/ss-usage"
+  value: 253478650
+}
+metrics {
+  name: "1->2/step = 9/want"
+  value: 216000000
+}
+metrics {
+  name: "1->3/step = 0/recv"
+  value: 220073740.50445721
+}
+metrics {
+  name: "1->3/step = 0/send"
+  value: 233785424.53668755
+}
+metrics {
+  name: "1->3/step = 0/ss-demand"
+  value: 239524290
+}
+metrics {
+  name: "1->3/step = 0/ss-usage"
+  value: 217749355
+}
+metrics {
+  name: "1->3/step = 0/want"
+  value: 231000000
+}
+metrics {
+  name: "1->3/step = 1/recv"
+  value: 52380532.314111792
+}
+metrics {
+  name: "1->3/step = 1/send"
+  value: 51644186.435277626
+}
+metrics {
+  name: "1->3/step = 1/ss-demand"
+  value: 239524290
+}
+metrics {
+  name: "1->3/step = 1/ss-usage"
+  value: 105593286
+}
+metrics {
+  name: "1->3/step = 1/want"
+  value: 54000000
+}
+metrics {
+  name: "1->3/step = 10/recv"
+  value: 312114273.87318051
+}
+metrics {
+  name: "1->3/step = 10/send"
+  value: 316023633.97835678
+}
+metrics {
+  name: "1->3/step = 10/ss-demand"
+  value: 429811353
+}
+metrics {
+  name: "1->3/step = 10/ss-usage"
+  value: 317300785
+}
+metrics {
+  name: "1->3/step = 10/want"
+  value: 327000000
+}
+metrics {
+  name: "1->3/step = 11/recv"
+  value: 53705226.846102461
+}
+metrics {
+  name: "1->3/step = 11/send"
+  value: 51635279.368950672
+}
+metrics {
+  name: "1->3/step = 11/ss-demand"
+  value: 429811353
+}
+metrics {
+  name: "1->3/step = 11/ss-usage"
+  value: 150346311
+}
+metrics {
+  name: "1->3/step = 11/want"
+  value: 55000000
+}
+metrics {
+  name: "1->3/step = 12/recv"
+  value: 158854409.50985295
+}
+metrics {
+  name: "1->3/step = 12/send"
+  value: 160665737.85973474
+}
+metrics {
+  name: "1->3/step = 12/ss-demand"
+  value: 429811353
+}
+metrics {
+  name: "1->3/step = 12/ss-usage"
+  value: 146062233
+}
+metrics {
+  name: "1->3/step = 12/want"
+  value: 168000000
+}
+metrics {
+  name: "1->3/step = 13/recv"
+  value: 361756548.98819304
+}
+metrics {
+  name: "1->3/step = 13/send"
+  value: 362066295.27450395
+}
+metrics {
+  name: "1->3/step = 13/ss-demand"
+  value: 429811353
+}
+metrics {
+  name: "1->3/step = 13/ss-usage"
+  value: 292633148
+}
+metrics {
+  name: "1->3/step = 13/want"
+  value: 380000000
+}
+metrics {
+  name: "1->3/step = 14/recv"
+  value: 404775252.26386613
+}
+metrics {
+  name: "1->3/step = 14/send"
+  value: 403227011.95843953
+}
+metrics {
+  name: "1->3/step = 14/ss-demand"
+  value: 429811353
+}
+metrics {
+  name: "1->3/step = 14/ss-usage"
+  value: 375063093
+}
+metrics {
+  name: "1->3/step = 14/want"
+  value: 425000000
+}
+metrics {
+  name: "1->3/step = 15/want"
+  value: 104000000
+}
+metrics {
+  name: "1->3/step = 2/recv"
+  value: 487906182.70830917
+}
+metrics {
+  name: "1->3/step = 2/send"
+  value: 489713077.0280025
+}
+metrics {
+  name: "1->3/step = 2/ss-demand"
+  value: 406167075
+}
+metrics {
+  name: "1->3/step = 2/ss-usage"
+  value: 369242796
+}
+metrics {
+  name: "1->3/step = 2/want"
+  value: 519000000
+}
+metrics {
+  name: "1->3/step = 3/recv"
+  value: 334087514.8040328
+}
+metrics {
+  name: "1->3/step = 3/send"
+  value: 330683725.39777762
+}
+metrics {
+  name: "1->3/step = 3/ss-demand"
+  value: 420698818
+}
+metrics {
+  name: "1->3/step = 3/ss-usage"
+  value: 350248132
+}
+metrics {
+  name: "1->3/step = 3/want"
+  value: 350000000
+}
+metrics {
+  name: "1->3/step = 4/recv"
+  value: 125712839.28029208
+}
+metrics {
+  name: "1->3/step = 4/send"
+  value: 126764791.44376883
+}
+metrics {
+  name: "1->3/step = 4/ss-demand"
+  value: 420698818
+}
+metrics {
+  name: "1->3/step = 4/ss-usage"
+  value: 186241811
+}
+metrics {
+  name: "1->3/step = 4/want"
+  value: 131000000
+}
+metrics {
+  name: "1->3/step = 5/recv"
+  value: 462233914.00976455
+}
+metrics {
+  name: "1->3/step = 5/send"
+  value: 463782407.48274404
+}
+metrics {
+  name: "1->3/step = 5/ss-demand"
+  value: 420698818
+}
+metrics {
+  name: "1->3/step = 5/ss-usage"
+  value: 359646387
+}
+metrics {
+  name: "1->3/step = 5/want"
+  value: 487000000
+}
+metrics {
+  name: "1->3/step = 6/recv"
+  value: 166934889.05311558
+}
+metrics {
+  name: "1->3/step = 6/send"
+  value: 166432440.82955858
+}
+metrics {
+  name: "1->3/step = 6/ss-demand"
+  value: 429811353
+}
+metrics {
+  name: "1->3/step = 6/ss-usage"
+  value: 243776847
+}
+metrics {
+  name: "1->3/step = 6/want"
+  value: 174000000
+}
+metrics {
+  name: "1->3/step = 7/recv"
+  value: 59740582.083380185
+}
+metrics {
+  name: "1->3/step = 7/send"
+  value: 57379356.1932812
+}
+metrics {
+  name: "1->3/step = 7/ss-demand"
+  value: 429811353
+}
+metrics {
+  name: "1->3/step = 7/ss-usage"
+  value: 112859102
+}
+metrics {
+  name: "1->3/step = 7/want"
+  value: 62000000
+}
+metrics {
+  name: "1->3/step = 8/recv"
+  value: 8868162.574035706
+}
+metrics {
+  name: "1->3/step = 8/send"
+  value: 11480577.053612789
+}
+metrics {
+  name: "1->3/step = 8/ss-demand"
+  value: 429811353
+}
+metrics {
+  name: "1->3/step = 8/ss-usage"
+  value: 37325866
+}
+metrics {
+  name: "1->3/step = 8/want"
+  value: 9000000
+}
+metrics {
+  name: "1->3/step = 9/recv"
+  value: 410089944.63851887
+}
+metrics {
+  name: "1->3/step = 9/send"
+  value: 407481872.30861014
+}
+metrics {
+  name: "1->3/step = 9/ss-demand"
+  value: 429811353
+}
+metrics {
+  name: "1->3/step = 9/ss-usage"
+  value: 313516890
+}
+metrics {
+  name: "1->3/step = 9/want"
+  value: 477000000
+}
+metrics {
+  name: "2->0/step = 0/recv"
+  value: 26788285.331178524
+}
+metrics {
+  name: "2->0/step = 0/send"
+  value: 38182375.853600487
+}
+metrics {
+  name: "2->0/step = 0/ss-demand"
+  value: 29961982
+}
+metrics {
+  name: "2->0/step = 0/ss-usage"
+  value: 27238166
+}
+metrics {
+  name: "2->0/step = 0/want"
+  value: 28000000
+}
+metrics {
+  name: "2->0/step = 1/recv"
+  value: 204155239.92150158
+}
+metrics {
+  name: "2->0/step = 1/send"
+  value: 206517137.32390392
+}
+metrics {
+  name: "2->0/step = 1/ss-demand"
+  value: 163334321
+}
+metrics {
+  name: "2->0/step = 1/ss-usage"
+  value: 148485747
+}
+metrics {
+  name: "2->0/step = 1/want"
+  value: 219000000
+}
+metrics {
+  name: "2->0/step = 10/recv"
+  value: 314722396.65076882
+}
+metrics {
+  name: "2->0/step = 10/send"
+  value: 316018529.46800637
+}
+metrics {
+  name: "2->0/step = 10/ss-demand"
+  value: 436797257
+}
+metrics {
+  name: "2->0/step = 10/ss-usage"
+  value: 266219637
+}
+metrics {
+  name: "2->0/step = 10/want"
+  value: 336000000
+}
+metrics {
+  name: "2->0/step = 11/recv"
+  value: 313359256.37962633
+}
+metrics {
+  name: "2->0/step = 11/send"
+  value: 316488703.28550452
+}
+metrics {
+  name: "2->0/step = 11/ss-demand"
+  value: 436797257
+}
+metrics {
+  name: "2->0/step = 11/ss-usage"
+  value: 297300175
+}
+metrics {
+  name: "2->0/step = 11/want"
+  value: 329000000
+}
+metrics {
+  name: "2->0/step = 12/recv"
+  value: 468474080.31931978
+}
+metrics {
+  name: "2->0/step = 12/send"
+  value: 466897195.60138631
+}
+metrics {
+  name: "2->0/step = 12/ss-demand"
+  value: 452677765
+}
+metrics {
+  name: "2->0/step = 12/ss-usage"
+  value: 411525241
+}
+metrics {
+  name: "2->0/step = 12/want"
+  value: 492000000
+}
+metrics {
+  name: "2->0/step = 13/recv"
+  value: 91033986.357782438
+}
+metrics {
+  name: "2->0/step = 13/send"
+  value: 91815417.472833455
+}
+metrics {
+  name: "2->0/step = 13/ss-demand"
+  value: 452677765
+}
+metrics {
+  name: "2->0/step = 13/ss-usage"
+  value: 199939265
+}
+metrics {
+  name: "2->0/step = 13/want"
+  value: 94000000
+}
+metrics {
+  name: "2->0/step = 14/recv"
+  value: 23475187.927222382
+}
+metrics {
+  name: "2->0/step = 14/send"
+  value: 22960171.924461797
+}
+metrics {
+  name: "2->0/step = 14/ss-demand"
+  value: 452677765
+}
+metrics {
+  name: "2->0/step = 14/ss-usage"
+  value: 69833918
+}
+metrics {
+  name: "2->0/step = 14/want"
+  value: 24000000
+}
+metrics {
+  name: "2->0/step = 15/want"
+  value: 405000000
+}
+metrics {
+  name: "2->0/step = 2/recv"
+  value: 295980181.63618422
+}
+metrics {
+  name: "2->0/step = 2/send"
+  value: 293105735.83277696
+}
+metrics {
+  name: "2->0/step = 2/ss-demand"
+  value: 280425550
+}
+metrics {
+  name: "2->0/step = 2/ss-usage"
+  value: 254932319
+}
+metrics {
+  name: "2->0/step = 2/want"
+  value: 311000000
+}
+metrics {
+  name: "2->0/step = 3/recv"
+  value: 322076558.06784195
+}
+metrics {
+  name: "2->0/step = 3/send"
+  value: 322852838.67310756
+}
+metrics {
+  name: "2->0/step = 3/ss-demand"
+  value: 334970438
+}
+metrics {
+  name: "2->0/step = 3/ss-usage"
+  value: 304518580
+}
+metrics {
+  name: "2->0/step = 3/want"
+  value: 338000000
+}
+metrics {
+  name: "2->0/step = 4/recv"
+  value: 401686698.37879747
+}
+metrics {
+  name: "2->0/step = 4/send"
+  value: 403790968.18618214
+}
+metrics {
+  name: "2->0/step = 4/ss-demand"
+  value: 413492896
+}
+metrics {
+  name: "2->0/step = 4/ss-usage"
+  value: 375902633
+}
+metrics {
+  name: "2->0/step = 4/want"
+  value: 422000000
+}
+metrics {
+  name: "2->0/step = 5/recv"
+  value: 249358496.74894571
+}
+metrics {
+  name: "2->0/step = 5/send"
+  value: 249358921.49552271
+}
+metrics {
+  name: "2->0/step = 5/ss-demand"
+  value: 413492896
+}
+metrics {
+  name: "2->0/step = 5/ss-usage"
+  value: 296333746
+}
+metrics {
+  name: "2->0/step = 5/want"
+  value: 261000000
+}
+metrics {
+  name: "2->0/step = 6/recv"
+  value: 409506613.9218443
+}
+metrics {
+  name: "2->0/step = 6/send"
+  value: 407393474.62324321
+}
+metrics {
+  name: "2->0/step = 6/ss-demand"
+  value: 413492896
+}
+metrics {
+  name: "2->0/step = 6/ss-usage"
+  value: 365704310
+}
+metrics {
+  name: "2->0/step = 6/want"
+  value: 430000000
+}
+metrics {
+  name: "2->0/step = 7/recv"
+  value: 186787420.48001403
+}
+metrics {
+  name: "2->0/step = 7/send"
+  value: 189940435.67067418
+}
+metrics {
+  name: "2->0/step = 7/ss-demand"
+  value: 413492896
+}
+metrics {
+  name: "2->0/step = 7/ss-usage"
+  value: 248532847
+}
+metrics {
+  name: "2->0/step = 7/want"
+  value: 195000000
+}
+metrics {
+  name: "2->0/step = 8/recv"
+  value: 469525142.610822
+}
+metrics {
+  name: "2->0/step = 8/send"
+  value: 468438780.26215166
+}
+metrics {
+  name: "2->0/step = 8/ss-demand"
+  value: 436797257
+}
+metrics {
+  name: "2->0/step = 8/ss-usage"
+  value: 397088416
+}
+metrics {
+  name: "2->0/step = 8/want"
+  value: 494000000
+}
+metrics {
+  name: "2->0/step = 9/recv"
+  value: 37042937.992072687
+}
+metrics {
+  name: "2->0/step = 9/send"
+  value: 34446829.2256767
+}
+metrics {
+  name: "2->0/step = 9/ss-demand"
+  value: 436797257
+}
+metrics {
+  name: "2->0/step = 9/ss-usage"
+  value: 145325921
+}
+metrics {
+  name: "2->0/step = 9/want"
+  value: 37000000
+}
+metrics {
+  name: "2->1/step = 0/recv"
+  value: 430720732.56866223
+}
+metrics {
+  name: "2->1/step = 0/send"
+  value: 445204578.90759861
+}
+metrics {
+  name: "2->1/step = 0/ss-demand"
+  value: 472157879
+}
+metrics {
+  name: "2->1/step = 0/ss-usage"
+  value: 429234436
+}
+metrics {
+  name: "2->1/step = 0/want"
+  value: 452000000
+}
+metrics {
+  name: "2->1/step = 1/recv"
+  value: 278737051.62772334
+}
+metrics {
+  name: "2->1/step = 1/send"
+  value: 276409293.69577771
+}
+metrics {
+  name: "2->1/step = 1/ss-demand"
+  value: 472157879
+}
+metrics {
+  name: "2->1/step = 1/ss-usage"
+  value: 327155612
+}
+metrics {
+  name: "2->1/step = 1/want"
+  value: 292000000
+}
+metrics {
+  name: "2->1/step = 10/recv"
+  value: 174700211.60877657
+}
+metrics {
+  name: "2->1/step = 10/send"
+  value: 178882670.61287028
+}
+metrics {
+  name: "2->1/step = 10/ss-demand"
+  value: 472157879
+}
+metrics {
+  name: "2->1/step = 10/ss-usage"
+  value: 236709687
+}
+metrics {
+  name: "2->1/step = 10/want"
+  value: 182000000
+}
+metrics {
+  name: "2->1/step = 11/recv"
+  value: 225766749.15543127
+}
+metrics {
+  name: "2->1/step = 11/send"
+  value: 223691985.0087994
+}
+metrics {
+  name: "2->1/step = 11/ss-demand"
+  value: 472157879
+}
+metrics {
+  name: "2->1/step = 11/ss-usage"
+  value: 227918481
+}
+metrics {
+  name: "2->1/step = 11/want"
+  value: 237000000
+}
+metrics {
+  name: "2->1/step = 12/recv"
+  value: 229541010.94961447
+}
+metrics {
+  name: "2->1/step = 12/send"
+  value: 229546500.77984998
+}
+metrics {
+  name: "2->1/step = 12/ss-demand"
+  value: 472157879
+}
+metrics {
+  name: "2->1/step = 12/ss-usage"
+  value: 228758987
+}
+metrics {
+  name: "2->1/step = 12/want"
+  value: 241000000
+}
+metrics {
+  name: "2->1/step = 13/recv"
+  value: 14085627.646900885
+}
+metrics {
+  name: "2->1/step = 13/send"
+  value: 11448708.536303433
+}
+metrics {
+  name: "2->1/step = 13/ss-demand"
+  value: 472157879
+}
+metrics {
+  name: "2->1/step = 13/ss-usage"
+  value: 84030314
+}
+metrics {
+  name: "2->1/step = 13/want"
+  value: 14000000
+}
+metrics {
+  name: "2->1/step = 14/recv"
+  value: 22692271.62421149
+}
+metrics {
+  name: "2->1/step = 14/send"
+  value: 22960171.924461797
+}
+metrics {
+  name: "2->1/step = 14/ss-demand"
+  value: 472157879
+}
+metrics {
+  name: "2->1/step = 14/ss-usage"
+  value: 36849717
+}
+metrics {
+  name: "2->1/step = 14/want"
+  value: 24000000
+}
+metrics {
+  name: "2->1/step = 15/want"
+  value: 391000000
+}
+metrics {
+  name: "2->1/step = 2/recv"
+  value: 33379556.115240134
+}
+metrics {
+  name: "2->1/step = 2/send"
+  value: 34401476.199931033
+}
+metrics {
+  name: "2->1/step = 2/ss-demand"
+  value: 472157879
+}
+metrics {
+  name: "2->1/step = 2/ss-usage"
+  value: 119871219
+}
+metrics {
+  name: "2->1/step = 2/want"
+  value: 34000000
+}
+metrics {
+  name: "2->1/step = 3/recv"
+  value: 11735602.5129224
+}
+metrics {
+  name: "2->1/step = 3/send"
+  value: 11478638.826288454
+}
+metrics {
+  name: "2->1/step = 3/ss-demand"
+  value: 472157879
+}
+metrics {
+  name: "2->1/step = 3/ss-usage"
+  value: 38510947
+}
+metrics {
+  name: "2->1/step = 3/want"
+  value: 12000000
+}
+metrics {
+  name: "2->1/step = 4/recv"
+  value: 226659249.84891304
+}
+metrics {
+  name: "2->1/step = 4/send"
+  value: 229788726.98408672
+}
+metrics {
+  name: "2->1/step = 4/ss-demand"
+  value: 472157879
+}
+metrics {
+  name: "2->1/step = 4/ss-usage"
+  value: 179999307
+}
+metrics {
+  name: "2->1/step = 4/want"
+  value: 256000000
+}
+metrics {
+  name: "2->1/step = 5/recv"
+  value: 319796512.1135729
+}
+metrics {
+  name: "2->1/step = 5/send"
+  value: 317181194.11645961
+}
+metrics {
+  name: "2->1/step = 5/ss-demand"
+  value: 472157879
+}
+metrics {
+  name: "2->1/step = 5/ss-usage"
+  value: 269986534
+}
+metrics {
+  name: "2->1/step = 5/want"
+  value: 336000000
+}
+metrics {
+  name: "2->1/step = 6/recv"
+  value: 401943333.76108235
+}
+metrics {
+  name: "2->1/step = 6/send"
+  value: 400137594.64301443
+}
+metrics {
+  name: "2->1/step = 6/ss-demand"
+  value: 472157879
+}
+metrics {
+  name: "2->1/step = 6/ss-usage"
+  value: 361752164
+}
+metrics {
+  name: "2->1/step = 6/want"
+  value: 422000000
+}
+metrics {
+  name: "2->1/step = 7/recv"
+  value: 304183982.55163741
+}
+metrics {
+  name: "2->1/step = 7/send"
+  value: 304698131.39427048
+}
+metrics {
+  name: "2->1/step = 7/ss-demand"
+  value: 472157879
+}
+metrics {
+  name: "2->1/step = 7/ss-usage"
+  value: 326385816
+}
+metrics {
+  name: "2->1/step = 7/want"
+  value: 319000000
+}
+metrics {
+  name: "2->1/step = 8/recv"
+  value: 245188243.03915608
+}
+metrics {
+  name: "2->1/step = 8/send"
+  value: 246763978.1471833
+}
+metrics {
+  name: "2->1/step = 8/ss-demand"
+  value: 472157879
+}
+metrics {
+  name: "2->1/step = 8/ss-usage"
+  value: 268555020
+}
+metrics {
+  name: "2->1/step = 8/want"
+  value: 257000000
+}
+metrics {
+  name: "2->1/step = 9/recv"
+  value: 447915182.8173576
+}
+metrics {
+  name: "2->1/step = 9/send"
+  value: 445551028.95458615
+}
+metrics {
+  name: "2->1/step = 9/ss-demand"
+  value: 472157879
+}
+metrics {
+  name: "2->1/step = 9/ss-usage"
+  value: 394529702
+}
+metrics {
+  name: "2->1/step = 9/want"
+  value: 471000000
+}
+metrics {
+  name: "2->3/step = 0/recv"
+  value: 86809401.598782316
+}
+metrics {
+  name: "2->3/step = 0/send"
+  value: 101050250.78971346
+}
+metrics {
+  name: "2->3/step = 0/ss-demand"
+  value: 94137888
+}
+metrics {
+  name: "2->3/step = 0/ss-usage"
+  value: 85579899
+}
+metrics {
+  name: "2->3/step = 0/want"
+  value: 91000000
+}
+metrics {
+  name: "2->3/step = 1/recv"
+  value: 471714942.786753
+}
+metrics {
+  name: "2->3/step = 1/send"
+  value: 469870008.81921625
+}
+metrics {
+  name: "2->3/step = 1/ss-demand"
+  value: 383085608
+}
+metrics {
+  name: "2->3/step = 1/ss-usage"
+  value: 348259644
+}
+metrics {
+  name: "2->3/step = 1/want"
+  value: 499000000
+}
+metrics {
+  name: "2->3/step = 10/recv"
+  value: 424921053.91447276
+}
+metrics {
+  name: "2->3/step = 10/send"
+  value: 427074719.81966215
+}
+metrics {
+  name: "2->3/step = 10/ss-demand"
+  value: 479467645
+}
+metrics {
+  name: "2->3/step = 10/ss-usage"
+  value: 411147278
+}
+metrics {
+  name: "2->3/step = 10/want"
+  value: 446000000
+}
+metrics {
+  name: "2->3/step = 11/recv"
+  value: 42755617.489130117
+}
+metrics {
+  name: "2->3/step = 11/send"
+  value: 40161414.023193665
+}
+metrics {
+  name: "2->3/step = 11/ss-demand"
+  value: 479467645
+}
+metrics {
+  name: "2->3/step = 11/ss-usage"
+  value: 178398749
+}
+metrics {
+  name: "2->3/step = 11/want"
+  value: 43000000
+}
+metrics {
+  name: "2->3/step = 12/recv"
+  value: 256671164.13414663
+}
+metrics {
+  name: "2->3/step = 12/send"
+  value: 258215626.82554913
+}
+metrics {
+  name: "2->3/step = 12/ss-demand"
+  value: 479467645
+}
+metrics {
+  name: "2->3/step = 12/ss-usage"
+  value: 216016628
+}
+metrics {
+  name: "2->3/step = 12/want"
+  value: 273000000
+}
+metrics {
+  name: "2->3/step = 13/recv"
+  value: 309361855.06634343
+}
+metrics {
+  name: "2->3/step = 13/send"
+  value: 310921123.93944055
+}
+metrics {
+  name: "2->3/step = 13/ss-demand"
+  value: 479467645
+}
+metrics {
+  name: "2->3/step = 13/ss-usage"
+  value: 282930194
+}
+metrics {
+  name: "2->3/step = 13/want"
+  value: 325000000
+}
+metrics {
+  name: "2->3/step = 14/recv"
+  value: 128588980.33693464
+}
+metrics {
+  name: "2->3/step = 14/send"
+  value: 126248698.1520617
+}
+metrics {
+  name: "2->3/step = 14/ss-demand"
+  value: 479467645
+}
+metrics {
+  name: "2->3/step = 14/ss-usage"
+  value: 177461693
+}
+metrics {
+  name: "2->3/step = 14/want"
+  value: 134000000
+}
+metrics {
+  name: "2->3/step = 15/want"
+  value: 452000000
+}
+metrics {
+  name: "2->3/step = 2/recv"
+  value: 450615651.37357467
+}
+metrics {
+  name: "2->3/step = 2/send"
+  value: 450120908.36667025
+}
+metrics {
+  name: "2->3/step = 2/ss-demand"
+  value: 470321666
+}
+metrics {
+  name: "2->3/step = 2/ss-usage"
+  value: 427565151
+}
+metrics {
+  name: "2->3/step = 2/want"
+  value: 473000000
+}
+metrics {
+  name: "2->3/step = 3/recv"
+  value: 19038554.707802027
+}
+metrics {
+  name: "2->3/step = 3/send"
+  value: 23473171.532410096
+}
+metrics {
+  name: "2->3/step = 3/ss-demand"
+  value: 470321666
+}
+metrics {
+  name: "2->3/step = 3/ss-usage"
+  value: 137807142
+}
+metrics {
+  name: "2->3/step = 3/want"
+  value: 18000000
+}
+metrics {
+  name: "2->3/step = 4/recv"
+  value: 193785559.30551246
+}
+metrics {
+  name: "2->3/step = 4/send"
+  value: 189351586.42303637
+}
+metrics {
+  name: "2->3/step = 4/ss-demand"
+  value: 470321666
+}
+metrics {
+  name: "2->3/step = 4/ss-usage"
+  value: 177134326
+}
+metrics {
+  name: "2->3/step = 4/want"
+  value: 212000000
+}
+metrics {
+  name: "2->3/step = 5/recv"
+  value: 251463596.56061682
+}
+metrics {
+  name: "2->3/step = 5/send"
+  value: 253035449.8259016
+}
+metrics {
+  name: "2->3/step = 5/ss-demand"
+  value: 470321666
+}
+metrics {
+  name: "2->3/step = 5/ss-usage"
+  value: 224883162
+}
+metrics {
+  name: "2->3/step = 5/want"
+  value: 264000000
+}
+metrics {
+  name: "2->3/step = 6/recv"
+  value: 463505152.88654125
+}
+metrics {
+  name: "2->3/step = 6/send"
+  value: 466375716.77363592
+}
+metrics {
+  name: "2->3/step = 6/ss-demand"
+  value: 470321666
+}
+metrics {
+  name: "2->3/step = 6/ss-usage"
+  value: 384470359
+}
+metrics {
+  name: "2->3/step = 6/want"
+  value: 487000000
+}
+metrics {
+  name: "2->3/step = 7/recv"
+  value: 450726207.29289168
+}
+metrics {
+  name: "2->3/step = 7/send"
+  value: 448677432.60566282
+}
+metrics {
+  name: "2->3/step = 7/ss-demand"
+  value: 479467645
+}
+metrics {
+  name: "2->3/step = 7/ss-usage"
+  value: 435879678
+}
+metrics {
+  name: "2->3/step = 7/want"
+  value: 473000000
+}
+metrics {
+  name: "2->3/step = 8/recv"
+  value: 393657264.34006208
+}
+metrics {
+  name: "2->3/step = 8/send"
+  value: 393364741.95495844
+}
+metrics {
+  name: "2->3/step = 8/ss-demand"
+  value: 479467645
+}
+metrics {
+  name: "2->3/step = 8/ss-usage"
+  value: 407632164
+}
+metrics {
+  name: "2->3/step = 8/want"
+  value: 413000000
+}
+metrics {
+  name: "2->3/step = 9/recv"
+  value: 364012453.78898275
+}
+metrics {
+  name: "2->3/step = 9/send"
+  value: 363143118.21338391
+}
+metrics {
+  name: "2->3/step = 9/ss-demand"
+  value: 479467645
+}
+metrics {
+  name: "2->3/step = 9/ss-usage"
+  value: 376176897
+}
+metrics {
+  name: "2->3/step = 9/want"
+  value: 382000000
+}
+metrics {
+  name: "3->0/step = 0/recv"
+  value: 23935549.171995375
+}
+metrics {
+  name: "3->0/step = 0/send"
+  value: 38180440.741419196
+}
+metrics {
+  name: "3->0/step = 0/ss-demand"
+  value: 26951642
+}
+metrics {
+  name: "3->0/step = 0/ss-usage"
+  value: 24501493
+}
+metrics {
+  name: "3->0/step = 0/want"
+  value: 25000000
+}
+metrics {
+  name: "3->0/step = 1/recv"
+  value: 448985087.03042877
+}
+metrics {
+  name: "3->0/step = 1/send"
+  value: 445899083.91773105
+}
+metrics {
+  name: "3->0/step = 1/ss-demand"
+  value: 347747132
+}
+metrics {
+  name: "3->0/step = 1/ss-usage"
+  value: 316133757
+}
+metrics {
+  name: "3->0/step = 1/want"
+  value: 487000000
+}
+metrics {
+  name: "3->0/step = 10/recv"
+  value: 394183103.42039043
+}
+metrics {
+  name: "3->0/step = 10/send"
+  value: 394232439.12789023
+}
+metrics {
+  name: "3->0/step = 10/ss-demand"
+  value: 407850259
+}
+metrics {
+  name: "3->0/step = 10/ss-usage"
+  value: 333995524
+}
+metrics {
+  name: "3->0/step = 10/want"
+  value: 415000000
+}
+metrics {
+  name: "3->0/step = 11/recv"
+  value: 280578590.53577662
+}
+metrics {
+  name: "3->0/step = 11/send"
+  value: 281581353.47558922
+}
+metrics {
+  name: "3->0/step = 11/ss-demand"
+  value: 407850259
+}
+metrics {
+  name: "3->0/step = 11/ss-usage"
+  value: 301820951
+}
+metrics {
+  name: "3->0/step = 11/want"
+  value: 294000000
+}
+metrics {
+  name: "3->0/step = 12/recv"
+  value: 72253519.069293752
+}
+metrics {
+  name: "3->0/step = 12/send"
+  value: 68852829.630519122
+}
+metrics {
+  name: "3->0/step = 12/ss-demand"
+  value: 407850259
+}
+metrics {
+  name: "3->0/step = 12/ss-usage"
+  value: 148868270
+}
+metrics {
+  name: "3->0/step = 12/want"
+  value: 75000000
+}
+metrics {
+  name: "3->0/step = 13/recv"
+  value: 56341951.442065917
+}
+metrics {
+  name: "3->0/step = 13/send"
+  value: 57371995.295354128
+}
+metrics {
+  name: "3->0/step = 13/ss-demand"
+  value: 407850259
+}
+metrics {
+  name: "3->0/step = 13/ss-usage"
+  value: 79699239
+}
+metrics {
+  name: "3->0/step = 13/want"
+  value: 59000000
+}
+metrics {
+  name: "3->0/step = 14/recv"
+  value: 340911895.7875517
+}
+metrics {
+  name: "3->0/step = 14/send"
+  value: 339600544.43349111
+}
+metrics {
+  name: "3->0/step = 14/ss-demand"
+  value: 407850259
+}
+metrics {
+  name: "3->0/step = 14/ss-usage"
+  value: 259784801
+}
+metrics {
+  name: "3->0/step = 14/want"
+  value: 361000000
+}
+metrics {
+  name: "3->0/step = 15/want"
+  value: 213000000
+}
+metrics {
+  name: "3->0/step = 2/recv"
+  value: 214357453.13210875
+}
+metrics {
+  name: "3->0/step = 2/send"
+  value: 218527466.24867651
+}
+metrics {
+  name: "3->0/step = 2/ss-demand"
+  value: 368292292
+}
+metrics {
+  name: "3->0/step = 2/ss-usage"
+  value: 255083067
+}
+metrics {
+  name: "3->0/step = 2/want"
+  value: 224000000
+}
+metrics {
+  name: "3->0/step = 3/recv"
+  value: 303821206.59840959
+}
+metrics {
+  name: "3->0/step = 3/send"
+  value: 301484270.79982793
+}
+metrics {
+  name: "3->0/step = 3/ss-demand"
+  value: 368292292
+}
+metrics {
+  name: "3->0/step = 3/ss-usage"
+  value: 287488583
+}
+metrics {
+  name: "3->0/step = 3/want"
+  value: 319000000
+}
+metrics {
+  name: "3->0/step = 4/recv"
+  value: 136938647.17459005
+}
+metrics {
+  name: "3->0/step = 4/send"
+  value: 137722247.12971869
+}
+metrics {
+  name: "3->0/step = 4/ss-demand"
+  value: 368292292
+}
+metrics {
+  name: "3->0/step = 4/ss-usage"
+  value: 178505499
+}
+metrics {
+  name: "3->0/step = 4/want"
+  value: 143000000
+}
+metrics {
+  name: "3->0/step = 5/recv"
+  value: 437420710.30123633
+}
+metrics {
+  name: "3->0/step = 5/send"
+  value: 435611082.78258687
+}
+metrics {
+  name: "3->0/step = 5/ss-demand"
+  value: 375583759
+}
+metrics {
+  name: "3->0/step = 5/ss-usage"
+  value: 341439781
+}
+metrics {
+  name: "3->0/step = 5/want"
+  value: 461000000
+}
+metrics {
+  name: "3->0/step = 6/recv"
+  value: 259006412.49961236
+}
+metrics {
+  name: "3->0/step = 6/send"
+  value: 259793647.93275392
+}
+metrics {
+  name: "3->0/step = 6/ss-demand"
+  value: 407850259
+}
+metrics {
+  name: "3->0/step = 6/ss-usage"
+  value: 297271743
+}
+metrics {
+  name: "3->0/step = 6/want"
+  value: 271000000
+}
+metrics {
+  name: "3->0/step = 7/recv"
+  value: 402532108.660142
+}
+metrics {
+  name: "3->0/step = 7/send"
+  value: 404070964.24368763
+}
+metrics {
+  name: "3->0/step = 7/ss-demand"
+  value: 407850259
+}
+metrics {
+  name: "3->0/step = 7/ss-usage"
+  value: 365003311
+}
+metrics {
+  name: "3->0/step = 7/want"
+  value: 423000000
+}
+metrics {
+  name: "3->0/step = 8/recv"
+  value: 272063735.4128263
+}
+metrics {
+  name: "3->0/step = 8/send"
+  value: 272588500.03165156
+}
+metrics {
+  name: "3->0/step = 8/ss-demand"
+  value: 407850259
+}
+metrics {
+  name: "3->0/step = 8/ss-usage"
+  value: 303370769
+}
+metrics {
+  name: "3->0/step = 8/want"
+  value: 285000000
+}
+metrics {
+  name: "3->0/step = 9/recv"
+  value: 131998074.81682239
+}
+metrics {
+  name: "3->0/step = 9/send"
+  value: 132011040.84907869
+}
+metrics {
+  name: "3->0/step = 9/ss-demand"
+  value: 407850259
+}
+metrics {
+  name: "3->0/step = 9/ss-usage"
+  value: 180349732
+}
+metrics {
+  name: "3->0/step = 9/want"
+  value: 138000000
+}
+metrics {
+  name: "3->1/step = 0/recv"
+  value: 151511164.43845963
+}
+metrics {
+  name: "3->1/step = 0/send"
+  value: 164454795.13306507
+}
+metrics {
+  name: "3->1/step = 0/ss-demand"
+  value: 165062850
+}
+metrics {
+  name: "3->1/step = 0/ss-usage"
+  value: 150057137
+}
+metrics {
+  name: "3->1/step = 0/want"
+  value: 159000000
+}
+metrics {
+  name: "3->1/step = 1/recv"
+  value: 478207439.3687976
+}
+metrics {
+  name: "3->1/step = 1/send"
+  value: 480556123.55416811
+}
+metrics {
+  name: "3->1/step = 1/ss-demand"
+  value: 410011981
+}
+metrics {
+  name: "3->1/step = 1/ss-usage"
+  value: 372738165
+}
+metrics {
+  name: "3->1/step = 1/want"
+  value: 503000000
+}
+metrics {
+  name: "3->1/step = 10/recv"
+  value: 356962074.1677838
+}
+metrics {
+  name: "3->1/step = 10/send"
+  value: 355676384.07866651
+}
+metrics {
+  name: "3->1/step = 10/ss-demand"
+  value: 503915141
+}
+metrics {
+  name: "3->1/step = 10/ss-usage"
+  value: 289378209
+}
+metrics {
+  name: "3->1/step = 10/want"
+  value: 380000000
+}
+metrics {
+  name: "3->1/step = 11/recv"
+  value: 427549039.97102457
+}
+metrics {
+  name: "3->1/step = 11/send"
+  value: 431203679.80728394
+}
+metrics {
+  name: "3->1/step = 11/ss-demand"
+  value: 503915141
+}
+metrics {
+  name: "3->1/step = 11/ss-usage"
+  value: 378490442
+}
+metrics {
+  name: "3->1/step = 11/want"
+  value: 449000000
+}
+metrics {
+  name: "3->1/step = 12/recv"
+  value: 398566664.46705788
+}
+metrics {
+  name: "3->1/step = 12/send"
+  value: 398056429.10046726
+}
+metrics {
+  name: "3->1/step = 12/ss-demand"
+  value: 503915141
+}
+metrics {
+  name: "3->1/step = 12/ss-usage"
+  value: 396560444
+}
+metrics {
+  name: "3->1/step = 12/want"
+  value: 418000000
+}
+metrics {
+  name: "3->1/step = 13/recv"
+  value: 406657287.06515706
+}
+metrics {
+  name: "3->1/step = 13/send"
+  value: 404828924.64450836
+}
+metrics {
+  name: "3->1/step = 13/ss-demand"
+  value: 503915141
+}
+metrics {
+  name: "3->1/step = 13/ss-usage"
+  value: 403460774
+}
+metrics {
+  name: "3->1/step = 13/want"
+  value: 427000000
+}
+metrics {
+  name: "3->1/step = 14/recv"
+  value: 370866171.42031908
+}
+metrics {
+  name: "3->1/step = 14/send"
+  value: 371815998.22601396
+}
+metrics {
+  name: "3->1/step = 14/ss-demand"
+  value: 503915141
+}
+metrics {
+  name: "3->1/step = 14/ss-usage"
+  value: 381071122
+}
+metrics {
+  name: "3->1/step = 14/want"
+  value: 389000000
+}
+metrics {
+  name: "3->1/step = 15/want"
+  value: 166000000
+}
+metrics {
+  name: "3->1/step = 2/recv"
+  value: 485829008.14603418
+}
+metrics {
+  name: "3->1/step = 2/send"
+  value: 486866814.37315786
+}
+metrics {
+  name: "3->1/step = 2/ss-demand"
+  value: 503915141
+}
+metrics {
+  name: "3->1/step = 2/ss-usage"
+  value: 458104674
+}
+metrics {
+  name: "3->1/step = 2/want"
+  value: 510000000
+}
+metrics {
+  name: "3->1/step = 3/recv"
+  value: 222194074.24466413
+}
+metrics {
+  name: "3->1/step = 3/send"
+  value: 218036004.18699855
+}
+metrics {
+  name: "3->1/step = 3/ss-demand"
+  value: 503915141
+}
+metrics {
+  name: "3->1/step = 3/ss-usage"
+  value: 291590111
+}
+metrics {
+  name: "3->1/step = 3/want"
+  value: 232000000
+}
+metrics {
+  name: "3->1/step = 4/recv"
+  value: 39124151.297280736
+}
+metrics {
+  name: "3->1/step = 4/send"
+  value: 40178393.800896622
+}
+metrics {
+  name: "3->1/step = 4/ss-demand"
+  value: 503915141
+}
+metrics {
+  name: "3->1/step = 4/ss-usage"
+  value: 105571317
+}
+metrics {
+  name: "3->1/step = 4/want"
+  value: 40000000
+}
+metrics {
+  name: "3->1/step = 5/recv"
+  value: 396745917.55688775
+}
+metrics {
+  name: "3->1/step = 5/send"
+  value: 394394605.11943841
+}
+metrics {
+  name: "3->1/step = 5/ss-demand"
+  value: 503915141
+}
+metrics {
+  name: "3->1/step = 5/ss-usage"
+  value: 288783885
+}
+metrics {
+  name: "3->1/step = 5/want"
+  value: 424000000
+}
+metrics {
+  name: "3->1/step = 6/recv"
+  value: 382999284.18211508
+}
+metrics {
+  name: "3->1/step = 6/send"
+  value: 384466220.28975821
+}
+metrics {
+  name: "3->1/step = 6/ss-demand"
+  value: 503915141
+}
+metrics {
+  name: "3->1/step = 6/ss-usage"
+  value: 362515938
+}
+metrics {
+  name: "3->1/step = 6/want"
+  value: 402000000
+}
+metrics {
+  name: "3->1/step = 7/recv"
+  value: 127733557.42772007
+}
+metrics {
+  name: "3->1/step = 7/send"
+  value: 126272176.32615238
+}
+metrics {
+  name: "3->1/step = 7/ss-demand"
+  value: 503915141
+}
+metrics {
+  name: "3->1/step = 7/ss-usage"
+  value: 205651373
+}
+metrics {
+  name: "3->1/step = 7/want"
+  value: 133000000
+}
+metrics {
+  name: "3->1/step = 8/recv"
+  value: 222756127.18663755
+}
+metrics {
+  name: "3->1/step = 8/send"
+  value: 223797964.06242302
+}
+metrics {
+  name: "3->1/step = 8/ss-demand"
+  value: 503915141
+}
+metrics {
+  name: "3->1/step = 8/ss-usage"
+  value: 212140308
+}
+metrics {
+  name: "3->1/step = 8/want"
+  value: 234000000
+}
+metrics {
+  name: "3->1/step = 9/recv"
+  value: 67304669.287640214
+}
+metrics {
+  name: "3->1/step = 9/send"
+  value: 68859900.369602486
+}
+metrics {
+  name: "3->1/step = 9/ss-demand"
+  value: 503915141
+}
+metrics {
+  name: "3->1/step = 9/ss-usage"
+  value: 110120220
+}
+metrics {
+  name: "3->1/step = 9/want"
+  value: 70000000
+}
+metrics {
+  name: "3->2/step = 0/recv"
+  value: 187837117.15795156
+}
+metrics {
+  name: "3->2/step = 0/send"
+  value: 199205087.12609479
+}
+metrics {
+  name: "3->2/step = 0/ss-demand"
+  value: 204801559
+}
+metrics {
+  name: "3->2/step = 0/ss-usage"
+  value: 186183236
+}
+metrics {
+  name: "3->2/step = 0/want"
+  value: 197000000
+}
+metrics {
+  name: "3->2/step = 1/recv"
+  value: 446928497.88634139
+}
+metrics {
+  name: "3->2/step = 1/send"
+  value: 446962974.4368031
+}
+metrics {
+  name: "3->2/step = 1/ss-demand"
+  value: 399425244
+}
+metrics {
+  name: "3->2/step = 1/ss-usage"
+  value: 363113859
+}
+metrics {
+  name: "3->2/step = 1/want"
+  value: 470000000
+}
+metrics {
+  name: "3->2/step = 10/recv"
+  value: 281080277.91307217
+}
+metrics {
+  name: "3->2/step = 10/send"
+  value: 281626836.8812862
+}
+metrics {
+  name: "3->2/step = 10/ss-demand"
+  value: 481867415
+}
+metrics {
+  name: "3->2/step = 10/ss-usage"
+  value: 288368227
+}
+metrics {
+  name: "3->2/step = 10/want"
+  value: 295000000
+}
+metrics {
+  name: "3->2/step = 11/recv"
+  value: 273479331.32370919
+}
+metrics {
+  name: "3->2/step = 11/send"
+  value: 271653805.75689858
+}
+metrics {
+  name: "3->2/step = 11/ss-demand"
+  value: 481867415
+}
+metrics {
+  name: "3->2/step = 11/ss-usage"
+  value: 278929083
+}
+metrics {
+  name: "3->2/step = 11/want"
+  value: 287000000
+}
+metrics {
+  name: "3->2/step = 12/recv"
+  value: 29735525.134960767
+}
+metrics {
+  name: "3->2/step = 12/send"
+  value: 28669866.764183372
+}
+metrics {
+  name: "3->2/step = 12/ss-demand"
+  value: 481867415
+}
+metrics {
+  name: "3->2/step = 12/ss-usage"
+  value: 114519910
+}
+metrics {
+  name: "3->2/step = 12/want"
+  value: 30000000
+}
+metrics {
+  name: "3->2/step = 13/recv"
+  value: 409008442.61042285
+}
+metrics {
+  name: "3->2/step = 13/send"
+  value: 409085868.64618725
+}
+metrics {
+  name: "3->2/step = 13/ss-demand"
+  value: 481867415
+}
+metrics {
+  name: "3->2/step = 13/ss-usage"
+  value: 309159977
+}
+metrics {
+  name: "3->2/step = 13/want"
+  value: 442000000
+}
+metrics {
+  name: "3->2/step = 14/recv"
+  value: 423844523.10693192
+}
+metrics {
+  name: "3->2/step = 14/send"
+  value: 426121127.54193825
+}
+metrics {
+  name: "3->2/step = 14/ss-demand"
+  value: 481867415
+}
+metrics {
+  name: "3->2/step = 14/ss-usage"
+  value: 396073653
+}
+metrics {
+  name: "3->2/step = 14/want"
+  value: 445000000
+}
+metrics {
+  name: "3->2/step = 15/want"
+  value: 364000000
+}
+metrics {
+  name: "3->2/step = 2/recv"
+  value: 354657898.30377942
+}
+metrics {
+  name: "3->2/step = 2/send"
+  value: 358290901.80311924
+}
+metrics {
+  name: "3->2/step = 2/ss-demand"
+  value: 417019970
+}
+metrics {
+  name: "3->2/step = 2/ss-usage"
+  value: 362764943
+}
+metrics {
+  name: "3->2/step = 2/want"
+  value: 372000000
+}
+metrics {
+  name: "3->2/step = 3/recv"
+  value: 337468108.78406793
+}
+metrics {
+  name: "3->2/step = 3/send"
+  value: 336437099.62838554
+}
+metrics {
+  name: "3->2/step = 3/ss-demand"
+  value: 417019970
+}
+metrics {
+  name: "3->2/step = 3/ss-usage"
+  value: 344412842
+}
+metrics {
+  name: "3->2/step = 3/want"
+  value: 354000000
+}
+metrics {
+  name: "3->2/step = 4/recv"
+  value: 103806378.83604337
+}
+metrics {
+  name: "3->2/step = 4/send"
+  value: 103283623.87180729
+}
+metrics {
+  name: "3->2/step = 4/ss-demand"
+  value: 417019970
+}
+metrics {
+  name: "3->2/step = 4/ss-usage"
+  value: 169025805
+}
+metrics {
+  name: "3->2/step = 4/want"
+  value: 108000000
+}
+metrics {
+  name: "3->2/step = 5/recv"
+  value: 329453772.04175746
+}
+metrics {
+  name: "3->2/step = 5/send"
+  value: 327635521.580536
+}
+metrics {
+  name: "3->2/step = 5/ss-demand"
+  value: 417019970
+}
+metrics {
+  name: "3->2/step = 5/ss-usage"
+  value: 268970138
+}
+metrics {
+  name: "3->2/step = 5/want"
+  value: 347000000
+}
+metrics {
+  name: "3->2/step = 6/recv"
+  value: 375341369.67748892
+}
+metrics {
+  name: "3->2/step = 6/send"
+  value: 375597891.9405145
+}
+metrics {
+  name: "3->2/step = 6/ss-demand"
+  value: 417019970
+}
+metrics {
+  name: "3->2/step = 6/ss-usage"
+  value: 345144737
+}
+metrics {
+  name: "3->2/step = 6/want"
+  value: 394000000
+}
+metrics {
+  name: "3->2/step = 7/recv"
+  value: 478968134.04718566
+}
+metrics {
+  name: "3->2/step = 7/send"
+  value: 480318071.4812417
+}
+metrics {
+  name: "3->2/step = 7/ss-demand"
+  value: 481867415
+}
+metrics {
+  name: "3->2/step = 7/ss-usage"
+  value: 438061287
+}
+metrics {
+  name: "3->2/step = 7/want"
+  value: 503000000
+}
+metrics {
+  name: "3->2/step = 8/recv"
+  value: 188844106.61729738
+}
+metrics {
+  name: "3->2/step = 8/send"
+  value: 187487228.10647368
+}
+metrics {
+  name: "3->2/step = 8/ss-demand"
+  value: 481867415
+}
+metrics {
+  name: "3->2/step = 8/ss-usage"
+  value: 268591664
+}
+metrics {
+  name: "3->2/step = 8/want"
+  value: 197000000
+}
+metrics {
+  name: "3->2/step = 9/recv"
+  value: 325574702.85123283
+}
+metrics {
+  name: "3->2/step = 9/send"
+  value: 328173061.48042405
+}
+metrics {
+  name: "3->2/step = 9/ss-demand"
+  value: 481867415
+}
+metrics {
+  name: "3->2/step = 9/ss-usage"
+  value: 304676945
+}
+metrics {
+  name: "3->2/step = 9/want"
+  value: 342000000
+}

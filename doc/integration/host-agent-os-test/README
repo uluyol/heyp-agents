@@ -1,0 +1,8 @@
+textprotos were converted to CSVs using
+  mk-want-vs-have-csv -header -ignore_bad INPUT > OUTPUT
+
+All results were collected on a Cloudlab xl170 machine.
+
+rl-integration:
+  sudo ./host-agent-os-test -run_dur 30s -max_rate_limit_mbps 500 -ignore_instantaneous_usage > rl-integration4.textproto
+  (Clearly using the instantaneous usage data requires care, probably best to avoid)
