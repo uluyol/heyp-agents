@@ -22,6 +22,41 @@ SumClientGoodput <- function(subset) {
         data=subset)
 }
 
+PlotRetransmitsAggTo <- function(subset, output) {
+    subset$Sys <- factor(subset$Sys, levels=c("RateLimit", "HSC20", "QD+LimitLO", "QD", "NoLimit"))
+
+    pdf(output, height=2.5, width=5)
+    p <- ggplot(data=subset, aes(x=RetransSegs, color=Sys, linetype=Sys)) +
+        stat_ecdf(size=1, pad=FALSE) +
+        xlab("TCP retransmits / sec") +
+        ylab("CDF across time") +
+        coord_cartesian(ylim=c(0, 1)) +
+        scale_y_continuous(breaks=seq(0, 1, by=0.2)) +
+        theme_bw() +
+        guides(color=guide_legend(ncol=3), linetype=guide_legend(ncol=3)) +
+        theme(
+            legend.title=element_blank(),
+            legend.position="top",
+            legend.margin=margin(0, 0, 0, 0),
+            legend.box.margin=margin(-4, -4, -8, 0),
+            legend.background=element_rect(color="black", fill="white", linetype="blank", size=0),
+            legend.direction="horizontal",
+            legend.key=element_blank(),
+            legend.key.height=unit(11, "points"),
+            legend.key.width=unit(25, "points"),
+            legend.spacing.x=unit(1, "points"),
+            legend.spacing.y=unit(0, "points"),
+            legend.text=element_text(size=11, margin=margin(r=10)),
+            strip.background=element_rect(color="white", fill="white"),
+            strip.text=element_text(size=12),
+            plot.margin=unit(c(5.5, 8.5, 5.5, 5.5), "points"),
+            axis.text=element_text(color="black", size=11),
+            axis.title.y=element_text(size=12, margin=margin(0, 3, 0, 0)),
+            axis.title.x=element_text(size=12, margin=margin(3, 0, 0, 0)))
+    print(p)
+    .junk <- dev.off()
+}
+
 PlotGoodputTo <- function(subset, output) {
     subset$Sys <- factor(subset$Sys, levels=c("RateLimit", "HSC20", "QD+LimitLO", "QD", "NoLimit"))
 
@@ -226,6 +261,7 @@ for (cfgGroup in cfgGroups) {
     shortage <- data.frame()
     overage <- data.frame()
     goodput <- data.frame()
+    retransmits.agg <- data.frame()
 
     for (procdir in procdirs) {
         sys_name <- SYS_LONG[[gsub(".*-", "", procdir)]]
@@ -234,6 +270,7 @@ for (cfgGroup in cfgGroups) {
         client.ts <- read.csv(file.path(procdir, "ts.csv"), header=TRUE, stringsAsFactors=FALSE)
         usage.ts <- read.csv(file.path(procdir, "host-fg-usage-ts.csv"), header=TRUE, stringsAsFactors=FALSE)
         truedemand.ts <- read.csv(file.path(procdir, "true-app-demand.csv"), header=TRUE, stringsAsFactors=FALSE)
+        host.ts <- read.csv(file.path(procdir, "global-host-ts.csv"), header=TRUE, stringsAsFactors=FALSE)
         startend <- read.csv(file.path(procdir, "wl-start-end.csv"), header=TRUE, stringsAsFactors=FALSE)
         #approvals$FG <- paste0(approvals$SrcDC, "_TO_", approvals$DstDC)
 
@@ -243,6 +280,7 @@ for (cfgGroup in cfgGroups) {
         client.ts <- Trim(client.ts, "Timestamp", startUnix, endUnix)
         usage.ts <- Trim(usage.ts, "UnixTime", startUnix, endUnix)
         truedemand.ts <- Trim(truedemand.ts, "UnixTime", startUnix, endUnix)
+        host.ts <- Trim(host.ts, "UnixTime", startUnix, endUnix)
 
         goodput.summed <- SumClientGoodput(client.ts)
         goodput <- rbind(
@@ -340,15 +378,22 @@ for (cfgGroup in cfgGroups) {
         shortage.this$Sys <- rep.int(sys_name, nrow(shortage.this))
         shortage.this <- shortage.this[,c("Sys", "FG", "QoS", "ShortageGbps", "ShortageFrac")]
         shortage <- rbind(shortage, shortage.this)
+
+        retransmits.agg.this <- aggregate(RetransSegs ~ UnixTime, data=host.ts, FUN=sum)
+        retransmits.agg.this$Sys <- rep.int(sys_name, nrow(retransmits.agg.this))
+        retransmits.agg <- rbind(retransmits.agg, retransmits.agg.this)
     }
 
     write.csv(goodput, file.path(summarydir, paste0(cfgGroup, "-goodput.csv")), quote=FALSE, row.names=FALSE)
     write.csv(overage, file.path(summarydir, paste0(cfgGroup, "-overage.csv")), quote=FALSE, row.names=FALSE)
     write.csv(shortage, file.path(summarydir, paste0(cfgGroup, "-shortage.csv")), quote=FALSE, row.names=FALSE)
+    write.csv(retransmits.agg, file.path(summarydir, paste0(cfgGroup, "-retransmits_agg.csv")), quote=FALSE, row.names=FALSE)
 
     for (kind in unique(goodput$Kind)) {
         PlotGoodputTo(goodput[goodput$Kind == kind,], file.path(summarydir, paste0(cfgGroup, "-goodput-", gsub("/", "_", kind), ".pdf")))
     }
+
+    PlotRetransmitsAggTo(retransmits.agg, file.path(summarydir, paste0(cfgGroup, "-retransmits_agg.pdf")))
 
     for (fg in unique(overage$FG)) {
         fgsubset <- overage[overage$FG == fg,]
