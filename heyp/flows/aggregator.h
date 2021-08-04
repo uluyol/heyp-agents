@@ -80,6 +80,9 @@ class FlowAggregator {
   TimedMutex mu_;
   FlowMap<AggWIP> agg_wips_ ABSL_GUARDED_BY(mu_);
   FlowMap<BundleState> bundle_states_ ABSL_GUARDED_BY(mu_);
+  // For debugging
+  FlowMap<AggWIP> prev_agg_wips_ ABSL_GUARDED_BY(mu_);
+  FlowMap<BundleState> prev_bundle_states_ ABSL_GUARDED_BY(mu_);
 };
 
 }  // namespace heyp

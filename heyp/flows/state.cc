@@ -6,9 +6,12 @@
 #include "heyp/log/spdlog.h"
 
 namespace heyp {
+namespace {
+constexpr bool kDebugFlowUsage = false;
+}
 
 AggState::AggState(const proto::FlowMarker& flow, bool smooth_usage)
-    : smooth_usage_(smooth_usage), logger_(MakeLogger("leaf-state")) {
+    : smooth_usage_(smooth_usage), logger_(MakeLogger("flow-state")) {
   *cur_.mutable_flow() = flow;
 }
 
@@ -55,6 +58,8 @@ void AggState::UpdateUsage(const Update u, absl::Duration usage_history_window,
     }
   }
 
+  auto old_ewma_usage_bps = cur_.ewma_usage_bps();
+
   if (!have_bps_ || !smooth_usage_) {
     cur_.set_ewma_usage_bps(measured_usage_bps);
     have_bps_ = true;
@@ -62,6 +67,14 @@ void AggState::UpdateUsage(const Update u, absl::Duration usage_history_window,
     constexpr double alpha = 0.3;
     cur_.set_ewma_usage_bps(alpha * (measured_usage_bps) +
                             (1 - alpha) * cur_.ewma_usage_bps());
+  }
+
+  if (kDebugFlowUsage && cur_.ewma_usage_bps() > 1.1 * old_ewma_usage_bps) {
+    SPDLOG_LOGGER_INFO(&logger_, "ewma_usage_bps grew by {}%: from {} to {} for flow {}",
+                       100 * static_cast<double>(cur_.ewma_usage_bps()) /
+                           static_cast<double>(old_ewma_usage_bps),
+                       old_ewma_usage_bps, cur_.ewma_usage_bps(),
+                       cur_.flow().ShortDebugString());
   }
 
   updated_time_ = u.time;

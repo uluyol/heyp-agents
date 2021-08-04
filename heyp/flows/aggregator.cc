@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+#include "absl/strings/str_join.h"
 #include "heyp/log/spdlog.h"
 #include "heyp/proto/alg.h"
 #include "heyp/proto/constructors.h"
@@ -123,6 +124,8 @@ void FlowAggregator::Update(const proto::InfoBundle& bundle) {
   }
 }
 
+constexpr bool kDebugSpikes = false;
+
 void FlowAggregator::ForEachAgg(
     absl::FunctionRef<void(absl::Time, const proto::AggInfo&)> func) {
   MutexLockWarnLong l(&mu_, absl::Seconds(1), &logger_, "mu_");
@@ -139,6 +142,7 @@ void FlowAggregator::ForEachAgg(
 
   for (const auto& bundle_pair : bundle_states_) {
     const BundleState& bs = bundle_pair.second;
+
     for (const auto& flow_time_info : bs.active) {
       AggWIP& wip = GetAggWIP(flow_time_info.first);
       wip.oldest_active_time =
@@ -156,6 +160,33 @@ void FlowAggregator::ForEachAgg(
       wip.cum_lopri_usage_bytes += flow_time_info.second.second.cum_lopri_usage_bytes();
     }
   }
+
+  auto bundle_state_to_string = [this](
+                                    const FlowMap<BundleState>& states,
+                                    const proto::FlowMarker& wanted_agg) -> std::string {
+    std::vector<std::string> lines;
+    lines.push_back("active: [");
+    for (auto& bundler_bundle : states) {
+      for (auto& flow_time_info : bundler_bundle.second.active) {
+        if (IsSameFlow(config_.get_agg_flow_fn(flow_time_info.second.second.flow()),
+                       wanted_agg)) {
+          lines.push_back("\t" + flow_time_info.second.second.ShortDebugString());
+        }
+      }
+    }
+    lines.push_back("]");
+    lines.push_back("dead: [");
+    for (auto& bundler_bundle : states) {
+      for (auto& flow_time_info : bundler_bundle.second.dead) {
+        if (IsSameFlow(config_.get_agg_flow_fn(flow_time_info.second.second.flow()),
+                       wanted_agg)) {
+          lines.push_back("\t" + flow_time_info.second.second.ShortDebugString());
+        }
+      }
+    }
+    lines.push_back("]");
+    return absl::StrJoin(lines, "\n");
+  };
 
   for (auto& p : agg_wips_) {
     AggWIP& wip = p.second;
@@ -183,6 +214,32 @@ void FlowAggregator::ForEachAgg(
     *agg_info.mutable_children() = {wip.children.begin(), wip.children.end()};
 
     func(time, agg_info);
+
+    if (kDebugSpikes && prev_agg_wips_.find(p.first) != prev_agg_wips_.end()) {
+      const AggWIP& last = prev_agg_wips_.at(p.first);
+      if (last.sum_ewma_usage_bps * 1.1 < wip.sum_ewma_usage_bps ||
+          (wip.cum_hipri_usage_bytes + wip.cum_lopri_usage_bytes) >
+              ((3 << 30) / 8 +
+               (last.cum_hipri_usage_bytes + last.cum_lopri_usage_bytes))) {
+        SPDLOG_LOGGER_INFO(&logger_,
+                           "flow agg {} usage increased by {}%: from {} to {}; "
+                           "cum_usage_bytes from {} to {}\nold "
+                           "bundle states:{}\ncur bundle states:{}",
+                           p.first.ShortDebugString(),
+                           100 * static_cast<double>(wip.sum_ewma_usage_bps) /
+                               static_cast<double>(last.sum_ewma_usage_bps),
+                           last.sum_ewma_usage_bps, wip.sum_ewma_usage_bps,
+                           last.cum_hipri_usage_bytes + last.cum_lopri_usage_bytes,
+                           wip.cum_hipri_usage_bytes + wip.cum_lopri_usage_bytes,
+                           bundle_state_to_string(prev_bundle_states_, p.first),
+                           bundle_state_to_string(bundle_states_, p.first));
+      }
+    }
+  }
+
+  if (kDebugSpikes) {
+    prev_agg_wips_ = agg_wips_;
+    prev_bundle_states_ = bundle_states_;
   }
 }
 
@@ -190,7 +247,7 @@ FlowAggregator::AggWIP& FlowAggregator::GetAggWIP(const proto::FlowMarker& child
   proto::FlowMarker m = config_.get_agg_flow_fn(child);
   auto iter = agg_wips_.find(m);
   if (iter == agg_wips_.end()) {
-    iter = agg_wips_.insert({m, AggWIP{.state = AggState(m)}}).first;
+    iter = agg_wips_.insert({m, AggWIP{.state = AggState(m, false)}}).first;
   }
   return iter->second;
 }
