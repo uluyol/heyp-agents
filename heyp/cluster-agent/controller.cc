@@ -50,9 +50,9 @@ ClusterController::Listener ClusterController::RegisterListener(
     int64_t host_id, const std::function<void(proto::AllocBundle)>& on_new_bundle_func) {
   ClusterController::Listener lis;
   lis.host_id_ = host_id;
-  lis.lis_id_ = next_lis_id_;
   lis.controller_ = this;
   absl::MutexLock l(&broadcasting_mu_);
+  lis.lis_id_ = next_lis_id_;
   on_new_bundle_funcs_[host_id][next_lis_id_] = on_new_bundle_func;
   next_lis_id_++;
   return lis;
@@ -91,7 +91,7 @@ void ClusterController::ComputeAndBroadcast() {
     auto iter = on_new_bundle_funcs_.find(host);
     if (iter != on_new_bundle_funcs_.end()) {
       for (auto& [id, func] : iter->second) {
-        func(std::move(bundle));
+        func(bundle);
       }
     }
   }

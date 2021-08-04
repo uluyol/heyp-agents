@@ -50,7 +50,7 @@ class ClusterController {
   spdlog::logger logger_;
 
   absl::Mutex broadcasting_mu_;
-  uint64_t next_lis_id_;
+  uint64_t next_lis_id_ ABSL_GUARDED_BY(broadcasting_mu_);
   absl::flat_hash_map<
       int64_t, absl::flat_hash_map<uint64_t, std::function<void(proto::AllocBundle)>>>
       on_new_bundle_funcs_ ABSL_GUARDED_BY(broadcasting_mu_);
