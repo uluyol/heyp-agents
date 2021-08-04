@@ -139,7 +139,7 @@ PlotFracOverageTo <- function(subset, output) {
         stat_ecdf(size=1, pad=FALSE) +
         xlab("Overage / limit") +
         ylab("CDF across time") +
-        coord_cartesian(xlim=c(0, 1), ylim=c(0, 1), expand=FALSE) +
+        coord_cartesian(xlim=c(-0.05, 1.05), ylim=c(-0.05, 1.05), expand=FALSE) +
         scale_x_continuous(breaks=seq(0, 1, by=0.2)) +
         scale_y_continuous(breaks=seq(0, 1, by=0.2)) +
         theme_bw() +
@@ -176,7 +176,7 @@ PlotFracShortageTo <- function(subset, output) {
         stat_ecdf(size=1, pad=FALSE) +
         xlab("Shortage / min(demand, limit)") +
         ylab("CDF across time") +
-        coord_cartesian(xlim=c(0, 1), ylim=c(0, 1), expand=FALSE) +
+        coord_cartesian(xlim=c(-0.05, 1.05), ylim=c(-0.05, 1.05), expand=FALSE) +
         scale_x_continuous(breaks=seq(0, 1, by=0.2)) +
         scale_y_continuous(breaks=seq(0, 1, by=0.2)) +
         theme_bw() +
@@ -204,6 +204,13 @@ PlotFracShortageTo <- function(subset, output) {
     .junk <- dev.off()
 }
 
+START_END_TRIM_SEC = 15
+
+Trim <- function(df, timecol, startUnix, endUnix) {
+    df[df[[timecol]] >= (startUnix + START_END_TRIM_SEC) &
+       df[[timecol]] <= (endUnix - START_END_TRIM_SEC),]
+}
+
 outdir <- args[1]
 
 summarydir <- file.path(outdir, "proc-summary-bw-cdfs")
@@ -227,7 +234,15 @@ for (cfgGroup in cfgGroups) {
         client.ts <- read.csv(file.path(procdir, "ts.csv"), header=TRUE, stringsAsFactors=FALSE)
         usage.ts <- read.csv(file.path(procdir, "host-fg-usage-ts.csv"), header=TRUE, stringsAsFactors=FALSE)
         truedemand.ts <- read.csv(file.path(procdir, "true-app-demand.csv"), header=TRUE, stringsAsFactors=FALSE)
+        startend <- read.csv(file.path(procdir, "wl-start-end.csv"), header=TRUE, stringsAsFactors=FALSE)
         #approvals$FG <- paste0(approvals$SrcDC, "_TO_", approvals$DstDC)
+
+        startUnix <- startend$UnixTime[startend$Kind == "Start"]
+        endUnix <- startend$UnixTime[startend$Kind == "End"]
+
+        client.ts <- Trim(client.ts, "Timestamp", startUnix, endUnix)
+        usage.ts <- Trim(usage.ts, "UnixTime", startUnix, endUnix)
+        truedemand.ts <- Trim(truedemand.ts, "UnixTime", startUnix, endUnix)
 
         goodput.summed <- SumClientGoodput(client.ts)
         goodput <- rbind(
@@ -288,7 +303,7 @@ for (cfgGroup in cfgGroups) {
                 FG=usage.summed$FG,
                 QoS=usage.summed$QoS,
                 OverageGbps=usage.summed$Overage,
-                OverageFrac=usage.summed$Overage))
+                OverageFrac=usage.summed$OverageFrac))
 
         truedemand.ts$TrueDemandGbps <- truedemand.ts$Demand / (2^30)
 

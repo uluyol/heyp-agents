@@ -20,6 +20,7 @@ mkdir -p "$procdir/cluster-alloc"
 ./bin/proc-heyp fortio-mk-latency-cdfs -trimdur 15s -level per-instance "$outdir" > "$procdir/cdf-per-instance.csv" &
 ./bin/proc-heyp cluster-alloc-bw-stats -workload fortio -out "$procdir/cluster-alloc-bw-stats.csv" "$outdir" &
 ./bin/proc-heyp fortio-demand-trace -deploy-config "$config" -prec 1s -out "$procdir/true-app-demand.csv" "$outdir" &
+./bin/proc-heyp wl-start-end -workload fortio -out "$procdir/wl-start-end.csv" "$outdir" &
 (
   ./bin/proc-heyp align-cluster-alloc-logs -workload fortio -prec 1s -out "$procdir/cluster-alloc-logs.json" "$outdir" && \
   echo UnixTime,FG,Burstiness,HIPRIBonus,LOPRIBonus,HIPRIRateLimitBps,LOPRIRateLimitBps,FracLOPRIInitial,FracLOPRIWithProbing,FracLOPRIPostPartition,FracLOPRIFinal > "$procdir/cluster-alloc-debug-state.csv" && \
@@ -106,7 +107,7 @@ mkdir -p "$procdir/cluster-alloc"
       .data |
       to_entries[] |
       .key as $key |
-      "\($time),\($key),\(.value.Global.RetransSegs // 0),\(.value.MainDev.RX.Bytes * 8),\(.value.MainDev.TX.Bytes * 8)"' \
+      "\($time),\($key),\(.value.Global.TCP.RetransSegs // 0),\(.value.MainDev.RX.Bytes * 8),\(.value.MainDev.TX.Bytes * 8)"' \
     "$procdir/global-host-stats.json" \
     >> "$procdir/global-host-ts.csv"
 ) &
@@ -154,6 +155,8 @@ done
   "$procdir/fg-" &
 ./code/plot-global-host-usage-ts.R "$procdir/global-host-ts.csv" \
   "$procdir/global-host-ts-" &
+./code/plot-global-host-loss-ts.R "$procdir/global-host-ts.csv" \
+  "$procdir/global-host-loss-ts-" &
 ./code/plot-cluster-alloc-bw.R "$procdir/cluster-alloc-bw-stats.csv" \
   "$procdir/cluster-alloc/" &
 ./code/plot-installed-limits-ts.R "$procdir/host-enforcer-limits.csv" \
