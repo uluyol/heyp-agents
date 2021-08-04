@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"flag"
 	"fmt"
@@ -65,3 +66,41 @@ func (c *approvalsCmd) Execute(ctx context.Context, fs *flag.FlagSet, args ...in
 }
 
 var _ subcommands.Command = new(approvalsCmd)
+
+type wlStartEndCmd struct {
+	workload startEndWorkloadFlag
+	output   string
+}
+
+func (*wlStartEndCmd) Name() string     { return "wl-start-end" }
+func (*wlStartEndCmd) Synopsis() string { return "" }
+func (*wlStartEndCmd) Usage() string    { return "" }
+
+func (c *wlStartEndCmd) SetFlags(fs *flag.FlagSet) {
+	wlFlag(&c.workload, fs)
+	fs.StringVar(&c.output, "out", "wl-start-end.csv", "file to write start/end time to")
+}
+
+func (c *wlStartEndCmd) Execute(ctx context.Context, fs *flag.FlagSet, args ...interface{}) subcommands.ExitStatus {
+	logsDir := mustLogsArg(fs)
+	fsys := os.DirFS(logsDir)
+	start, end, err := getStartEnd(c.workload, fsys)
+	if err != nil {
+		log.Fatalf("failed to get start/end for workload %q: %v", c.workload, err)
+	}
+	startUnix := unixSec(start)
+	endUnix := unixSec(end)
+
+	var buf bytes.Buffer
+	buf.WriteString("Kind,UnixTime\n")
+	fmt.Fprintf(&buf, "Start,%f\n", startUnix)
+	fmt.Fprintf(&buf, "End,%f\n", endUnix)
+
+	if err := os.WriteFile(c.output, buf.Bytes(), 0o644); err != nil {
+		log.Fatalf("failed to write output file: %v", err)
+	}
+
+	return subcommands.ExitSuccess
+}
+
+var _ subcommands.Command = new(wlStartEndCmd)
