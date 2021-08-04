@@ -89,7 +89,8 @@ def GenConfig(
         be1_stages = None,
         be1_shards = None,
         be2_stages = None,
-        be2_shards = None):
+        be2_shards = None,
+        shard_key = ""):
     nodes = []
     clusters = {
         "EDGE": {
@@ -149,6 +150,7 @@ def GenConfig(
     else:
         fail("got ca_limits_to_apply = ", ca_limits_to_apply, "must be \"H\"/\"HL\"/\"\"")
 
+    shard_index = 0
     for idx in range(16):
         i = idx + 1
         name = "n" + str(i)
@@ -176,9 +178,10 @@ def GenConfig(
             ]
             clusters["CLIENT"]["node_names"].append(name)
         experiment_ip = "192.168.1." + str(i)
+        external_ip, shard_index = ext_addr_for_ip(experiment_ip, shard_key)
         nodes.append({
             "name": name,
-            "external_addr": ext_addr_for_ip[experiment_ip],
+            "external_addr": external_ip,
             "experiment_addr": experiment_ip,
             "roles": roles,
         })
@@ -192,7 +195,7 @@ def GenConfig(
         "weight": 100,
     }]
 
-    return deploy_pb.DeploymentConfig(
+    return (shard_index, deploy_pb.DeploymentConfig(
         nodes = nodes,
         clusters = [c for c in clusters.values()],
         cluster_agent_config = {
@@ -319,7 +322,7 @@ def GenConfig(
                 },
             },
         ],
-    )
+    ))
 
 OVERSUB_FACTOR = float("1.25")
 
@@ -417,33 +420,37 @@ def Gbps(x):
     return x * 1024 * 1024 * 1024
 
 def GenConfigs():
-    ALL_X = [8]  # [2, 4, 6, 8]
-    ALL_Y = [5]  # [2.5, 5]
-    ALL_C = [float("2")]  # [1.25, 1.5]
-    D = float("1.0")
+    ALL_X = [9, 10]  # [2, 4, 6, 8]
+    ALL_Y = [6, 7, 8]  # [2.5, 5]
+    ALL_C = [float("2.0")]  # [1.25, 1.5]
+    ALL_LOPRI_CAP = [20, 19]
     configs = {}
     for x in ALL_X:
         for y in ALL_Y:
             for c in ALL_C:
-                kwargs = dict({
-                    "be1_approved_bps": int(Gbps(x)),
-                    "be1_surplus_bps": int(Gbps(c * x - x)),
-                    "be2_approved_bps": int(Gbps(y)),
-                }, **GenWorkloadStagesStatic(
-                    be1_bps = int(D * c * Gbps(x)),
-                    be2_bps = int(Gbps(y)),
-                ))
-                # }, **GenWorkloadStagesOscillating(
-                #     be1_bps_min = int(Gbps(x) // 2),
-                #     be1_bps_max = int(3 * Gbps(x) // 2),
-                #     be2_bps = int(Gbps(y)),
-                # ))
+                for lopri_cap in ALL_LOPRI_CAP:
+                    kwargs = dict({
+                        "be1_approved_bps": int(Gbps(x)),
+                        "be1_surplus_bps": int(Gbps(lopri_cap - x - y)),
+                        "be2_approved_bps": int(Gbps(y)),
+                        "shard_key": str("x{0}-y{1}-c{2}-lcap{3}".format(x, y, c, lopri_cap)),
+                    }, **GenWorkloadStagesStatic(
+                        be1_bps = int(c * Gbps(x)),
+                        be2_bps = int(Gbps(y)),
+                    ))
+                    # }, **GenWorkloadStagesOscillating(
+                    #     be1_bps_min = int(Gbps(x) // 2),
+                    #     be1_bps_max = int(3 * Gbps(x) // 2),
+                    #     be2_bps = int(Gbps(y)),
+                    # ))
 
-                configs["X-{0}-C-{1}-Y-{2}-hsc".format(x, c, y)] = HSC20Config(**kwargs)
-                configs["X-{0}-C-{1}-Y-{2}-nl".format(x, c, y)] = NoLimitConfig(**kwargs)
-                configs["X-{0}-C-{1}-Y-{2}-qd".format(x, c, y)] = QoSDowngradeConfig(**kwargs)
-                configs["X-{0}-C-{1}-Y-{2}-qdlrl".format(x, c, y)] = QoSDowngradeAndLimitLOPRIConfig(**kwargs)
-                configs["X-{0}-C-{1}-Y-{2}-rl".format(x, c, y)] = RateLimitConfig(**kwargs)
+                    prefix = "AH-{0}-A-{1}-B-{2}-LCAP-{3}".format(x, c * x, y, lopri_cap)
+
+                    configs[prefix + "-hsc"] = HSC20Config(**kwargs)
+                    configs[prefix + "-nl"] = NoLimitConfig(**kwargs)
+                    configs[prefix + "-qd"] = QoSDowngradeConfig(**kwargs)
+                    configs[prefix + "-qdlrl"] = QoSDowngradeAndLimitLOPRIConfig(**kwargs)
+                    configs[prefix + "-rl"] = RateLimitConfig(**kwargs)
     return configs
 
 configs = GenConfigs()

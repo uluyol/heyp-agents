@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/google/subcommands"
+	"github.com/uluyol/heyp-agents/go/cmd/flagtypes"
 	"github.com/uluyol/heyp-agents/go/deploy/actions"
 	"github.com/uluyol/heyp-agents/go/deploy/configgen"
 	"github.com/uluyol/heyp-agents/go/pb"
@@ -446,10 +447,11 @@ func (l substList) Apply(data []byte) []byte {
 }
 
 type genConfigsCmd struct {
-	rspecPath string
-	sshUser   string
-	outdir    string
-	input     string
+	rspecPaths   flagtypes.StringList
+	sshUser      string
+	outdir       string
+	outdirShards string
+	input        string
 }
 
 func (*genConfigsCmd) Name() string     { return "gen-configs" }
@@ -457,25 +459,40 @@ func (*genConfigsCmd) Synopsis() string { return "execute starlark file to gener
 func (*genConfigsCmd) Usage() string    { return "" }
 
 func (c *genConfigsCmd) SetFlags(fs *flag.FlagSet) {
-	fs.StringVar(&c.rspecPath, "rspec", "", "cloudlab manifest")
+	c.rspecPaths.Sep = ";"
+	fs.Var(&c.rspecPaths, "rspec", "cloudlab manifest files (joined together with ;)")
 	fs.StringVar(&c.sshUser, "ssh-user", "uluyol", "ssh username to connect with")
 	fs.StringVar(&c.input, "i", "config.star", "input starlark file")
 	fs.StringVar(&c.outdir, "o", "configs", "output directory for configs")
+	fs.StringVar(&c.outdirShards, "oshard", "shards", "output directory for shard listings")
 }
 
 func (c *genConfigsCmd) Execute(ctx context.Context, fs *flag.FlagSet,
 	args ...interface{}) subcommands.ExitStatus {
-	extAddrs, err := configgen.ReadExternalAddrsMap(c.rspecPath, c.sshUser)
-	if err != nil {
-		log.Fatal(err)
+	if len(c.rspecPaths.Vals) == 0 {
+		log.Fatal("must specify -rspec")
 	}
 
-	cfgs, err := configgen.GenDeploymentConfigs(c.input, extAddrs)
+	var extAddrs []map[string]string
+	for _, rspecPath := range c.rspecPaths.Vals {
+		m, err := configgen.ReadExternalAddrsMap(rspecPath, c.sshUser)
+		if err != nil {
+			log.Fatal(err)
+		}
+		extAddrs = append(extAddrs, m)
+	}
+
+	cfgs, shardCfgs, err := configgen.GenDeploymentConfigs(c.input, extAddrs)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	err = configgen.WriteConfigsTo(cfgs, c.outdir)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = configgen.WriteShardConfigsTo(shardCfgs, c.outdirShards)
 	if err != nil {
 		log.Fatal(err)
 	}

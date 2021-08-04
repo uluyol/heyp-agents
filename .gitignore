@@ -7,4 +7,4 @@ compile_commands.json
 /experiments/*/bin
 /experiments/*/heyp-bundle.tar.*
 /experiments/*/results
-/experiments/*/rspec.xml
+/experiments/*/rspec*.xml

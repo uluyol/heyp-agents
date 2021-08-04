@@ -1,11 +1,14 @@
 package configgen
 
 import (
+	"bytes"
 	"encoding/xml"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
 
 	"github.com/uluyol/heyp-agents/go/pb"
 	starlarkmath "go.starlark.net/lib/math"
@@ -54,11 +57,29 @@ func ReadExternalAddrsMap(rspecPath, sshUser string) (map[string]string, error) 
 	return externalAddrForIP, nil
 }
 
-func GenDeploymentConfigs(filename string, externalAddrForIP map[string]string) (map[string]*pb.DeploymentConfig, error) {
-	starExternalAddrForIP := starlark.NewDict(len(externalAddrForIP))
-	for k, v := range externalAddrForIP {
-		starExternalAddrForIP.SetKey(starlark.String(k), starlark.String(v))
-	}
+func GenDeploymentConfigs(filename string, externalAddrForIP []map[string]string) (configs map[string]*pb.DeploymentConfig, shardConfigs [][]string, err error) {
+	// starExternalAddrForIP := starlark.NewDict(len(externalAddrForIP))
+	// for k, v := range externalAddrForIP {
+	// 	starExternalAddrForIP.SetKey(starlark.String(k), starlark.String(v))
+	// }
+
+	nextShard := 0
+	knownShards := make(map[string]int)
+	starExternalAddrForIP := starlark.NewBuiltin("ext_addr_for_ip", func(thread *starlark.Thread, fn *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+		var expIP, shardKey starlark.String
+		err := starlark.UnpackPositionalArgs(fn.Name(), args, kwargs, 2, &expIP, &shardKey)
+		if err != nil {
+			return nil, err
+		}
+		shardIndex, known := knownShards[shardKey.GoString()]
+		if !known {
+			shardIndex = nextShard % len(externalAddrForIP)
+			nextShard++
+			knownShards[shardKey.GoString()] = shardIndex
+		}
+		addrMap := externalAddrForIP[shardIndex]
+		return starlark.Tuple([]starlark.Value{starlark.String(addrMap[expIP.GoString()]), starlark.MakeInt(shardIndex)}), nil
+	})
 
 	starDivide := starlark.NewBuiltin("fdiv", func(thread *starlark.Thread, fn *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 		var x, y starlark.Float
@@ -88,44 +109,61 @@ func GenDeploymentConfigs(filename string, externalAddrForIP map[string]string) 
 	globals, err := starlark.ExecFile(thread, filename, nil, predeclared)
 	if err != nil {
 		if evalErr, ok := err.(*starlark.EvalError); ok {
-			return nil, fmt.Errorf("failed to generate configs: %v", evalErr.Backtrace())
+			return nil, nil, fmt.Errorf("failed to generate configs: %v", evalErr.Backtrace())
 		} else {
-			return nil, fmt.Errorf("failed to generate configs: %v", err)
+			return nil, nil, fmt.Errorf("failed to generate configs: %v", err)
 		}
 	}
 
-	configs := make(map[string]*pb.DeploymentConfig)
+	configs = make(map[string]*pb.DeploymentConfig)
+	shardConfigs = make([][]string, len(externalAddrForIP))
 
 	configsRaw := globals["configs"]
 	if configsRaw == nil {
-		return configs, nil
+		return configs, shardConfigs, nil
 	}
 
 	configsMap, ok := configsRaw.(*starlark.Dict)
 	if !ok {
-		return nil, fmt.Errorf("configs var needs to be of type dict, got %v", configsRaw)
+		return nil, nil, fmt.Errorf("configs var needs to be of type dict, got %v", configsRaw)
 	}
 
 	for _, kv := range configsMap.Items() {
 		name, ok := starlark.AsString(kv[0])
 		if !ok {
-			return nil, fmt.Errorf("config key (name) must be string")
+			return nil, nil, fmt.Errorf("config key (name) must be string")
 		}
 		val := kv[1]
 		if val == nil {
-			return nil, fmt.Errorf("got nil config for entry %s", name)
+			return nil, nil, fmt.Errorf("got nil config for entry %s", name)
 		}
-		msg, ok := val.(*starlarkproto.Message)
+		shardMesg, ok := val.(starlark.Tuple)
 		if !ok {
-			return nil, fmt.Errorf("config type must be a DeploymentConfig, got %v", val)
+			return nil, nil, fmt.Errorf("config value must be a (int, pb.DeploymentConfig) pair, got %v", val)
+		}
+		if shardMesg.Len() != 2 {
+			return nil, nil, fmt.Errorf("config value must be a (int, pb.DeploymentConfig) pair, got %v", shardMesg)
+		}
+		shard, err := starlark.AsInt32(shardMesg.Index(0))
+		if err != nil {
+			return nil, nil, fmt.Errorf("config value must be a (int, pb.DeploymentConfig) pair, got %v", shardMesg)
+		}
+		shardConfigs[shard] = append(shardConfigs[shard], name)
+		msg, ok := shardMesg.Index(1).(*starlarkproto.Message)
+		if !ok {
+			return nil, nil, fmt.Errorf("config type must be a DeploymentConfig, got %v", val)
 		}
 		configs[name], ok = msg.Message().(*pb.DeploymentConfig)
 		if !ok {
-			return nil, fmt.Errorf("config type must be a DeploymentConfig, got %v", val)
+			return nil, nil, fmt.Errorf("config type must be a DeploymentConfig, got %v", val)
 		}
 	}
 
-	return configs, nil
+	for _, cs := range shardConfigs {
+		sort.Strings(cs)
+	}
+
+	return configs, shardConfigs, nil
 }
 
 func WriteConfigsTo(configs map[string]*pb.DeploymentConfig, outdir string) error {
@@ -140,6 +178,24 @@ func WriteConfigsTo(configs map[string]*pb.DeploymentConfig, outdir string) erro
 
 		p := filepath.Join(outdir, name+".textproto")
 		os.WriteFile(p, b, 0o664)
+		if err != nil {
+			return fmt.Errorf("failed to write file %s: %v", p, err)
+		}
+	}
+	return nil
+}
+
+func WriteShardConfigsTo(shardConfigs [][]string, outdir string) error {
+	os.MkdirAll(outdir, 0o775)
+	for shard, configs := range shardConfigs {
+		var buf bytes.Buffer
+		for _, c := range configs {
+			buf.WriteString(c)
+			buf.WriteString("\n")
+		}
+
+		p := filepath.Join(outdir, strconv.Itoa(shard))
+		err := os.WriteFile(p, buf.Bytes(), 0o664)
 		if err != nil {
 			return fmt.Errorf("failed to write file %s: %v", p, err)
 		}
