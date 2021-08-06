@@ -15,6 +15,49 @@ SYS_LONG[["qd"]] <- "QD"
 SYS_LONG[["qdlrl"]] <- "QD+LimitLO"
 SYS_LONG[["rl"]] <- "RateLimit"
 
+# Derived from https://github.com/tidyverse/ggplot2/issues/1467#issuecomment-169763396
+stat_myecdf <- function(mapping = NULL, data = NULL, geom = "step",
+                      position = "identity", n = NULL, na.rm = FALSE,
+                      show.legend = NA, inherit.aes = TRUE, direction="vh", ...) {
+  layer(
+    data = data,
+    mapping = mapping,
+    stat = StatMyecdf,
+    geom = geom,
+    position = position,
+    show.legend = show.legend,
+    inherit.aes = inherit.aes,
+    params = list(
+      n = n,
+      na.rm = na.rm,
+      direction=direction,
+      ...
+    )
+  )
+}
+
+StatMyecdf <- ggproto("StatMyecdf", Stat,
+                    compute_group = function(data, scales, n = NULL) {
+
+                      # If n is NULL, use raw values; otherwise interpolate
+                      if (is.null(n)) {
+                      # Dont understand why but this version needs to sort the values
+                        xvals <- sort(unique(data$x))
+                      } else {
+                        xvals <- seq(min(data$x), max(data$x), length.out = n)
+                      }
+
+                      y <- ecdf(data$x)(xvals)
+                      x1 <- max(xvals)
+                      y0 <- 0                      
+                      data.frame(x = c(xvals, x1), y = c(y0, y))
+                    },
+
+                    default_aes = aes(y = ..y..),
+
+                    required_aes = c("x")
+)
+
 SumClientGoodput <- function(subset) {
     subset$Timestamp <- round(subset$Timestamp)
     aggregate(MeanBps ~ Timestamp + Group + Instance,
@@ -27,8 +70,45 @@ PlotRetransmitsAggTo <- function(subset, output) {
 
     pdf(output, height=2.5, width=5)
     p <- ggplot(data=subset, aes(x=RetransSegs, color=Sys, linetype=Sys)) +
-        stat_ecdf(size=1, pad=FALSE) +
+        stat_myecdf(size=1) +
         xlab("TCP retransmits / sec") +
+        ylab("CDF across time") +
+        coord_cartesian(ylim=c(0, 1)) +
+        scale_y_continuous(breaks=seq(0, 1, by=0.2)) +
+        theme_bw() +
+        guides(color=guide_legend(ncol=3), linetype=guide_legend(ncol=3)) +
+        theme(
+            legend.title=element_blank(),
+            legend.position="top",
+            legend.margin=margin(0, 0, 0, 0),
+            legend.box.margin=margin(-4, -4, -8, 0),
+            legend.background=element_rect(color="black", fill="white", linetype="blank", size=0),
+            legend.direction="horizontal",
+            legend.key=element_blank(),
+            legend.key.height=unit(11, "points"),
+            legend.key.width=unit(25, "points"),
+            legend.spacing.x=unit(1, "points"),
+            legend.spacing.y=unit(0, "points"),
+            legend.text=element_text(size=11, margin=margin(r=10)),
+            strip.background=element_rect(color="white", fill="white"),
+            strip.text=element_text(size=12),
+            plot.margin=unit(c(5.5, 8.5, 5.5, 5.5), "points"),
+            axis.text=element_text(color="black", size=11),
+            axis.title.y=element_text(size=12, margin=margin(0, 3, 0, 0)),
+            axis.title.x=element_text(size=12, margin=margin(3, 0, 0, 0)))
+    print(p)
+    .junk <- dev.off()
+}
+
+PlotEgressMinuxIngressAggTo <- function(subset, output) {
+    subset$Sys <- factor(subset$Sys, levels=c("RateLimit", "HSC20", "QD+LimitLO", "QD", "NoLimit"))
+
+    subset$X <- (subset$EgressBps - subset$IngressBps) / (2 ^ 30)
+
+    pdf(output, height=2.5, width=5)
+    p <- ggplot(data=subset, aes(x=X, color=Sys, linetype=Sys)) +
+        stat_myecdf(size=1) +
+        xlab("Egress - Ingress (Gbps)") +
         ylab("CDF across time") +
         coord_cartesian(ylim=c(0, 1)) +
         scale_y_continuous(breaks=seq(0, 1, by=0.2)) +
@@ -62,7 +142,7 @@ PlotGoodputTo <- function(subset, output) {
 
     pdf(output, height=2.5, width=5)
     p <- ggplot(data=subset, aes(x=GoodputGbps, color=Sys, linetype=Sys)) +
-        stat_ecdf(size=1, pad=FALSE) +
+        stat_myecdf(size=1) +
         xlab("Goodput (Gbps)") +
         ylab("CDF across time") +
         coord_cartesian(xlim=c(0, 10), ylim=c(0, 1), expand=FALSE) +
@@ -99,7 +179,7 @@ PlotOverageTo <- function(subset, output) {
 
     pdf(output, height=2.5, width=5)
     p <- ggplot(data=subset, aes(x=OverageGbps, color=Sys, linetype=Sys)) +
-        stat_ecdf(size=1, pad=FALSE) +
+        stat_myecdf(size=1) +
         xlab("Overage (Gbps)") +
         ylab("CDF across time") +
         coord_cartesian(xlim=c(0, 5), ylim=c(0, 1), expand=FALSE) +
@@ -135,7 +215,7 @@ PlotShortageTo <- function(subset, output) {
 
     pdf(output, height=2.5, width=5)
     p <- ggplot(data=subset, aes(x=ShortageGbps, color=Sys, linetype=Sys)) +
-        stat_ecdf(size=1, pad=FALSE) +
+        stat_myecdf(size=1) +
         xlab("Shortage (Gbps)") +
         ylab("CDF across time") +
         coord_cartesian(xlim=c(0, 5), ylim=c(0, 1), expand=FALSE) +
@@ -171,7 +251,7 @@ PlotFracOverageTo <- function(subset, output) {
 
     pdf(output, height=2.5, width=5)
     p <- ggplot(data=subset, aes(x=OverageFrac, color=Sys, linetype=Sys)) +
-        stat_ecdf(size=1, pad=FALSE) +
+        stat_myecdf(size=1) +
         xlab("Overage / limit") +
         ylab("CDF across time") +
         coord_cartesian(xlim=c(-0.05, 1.05), ylim=c(-0.05, 1.05), expand=FALSE) +
@@ -208,7 +288,7 @@ PlotFracShortageTo <- function(subset, output) {
 
     pdf(output, height=2.5, width=5)
     p <- ggplot(data=subset, aes(x=ShortageFrac, color=Sys, linetype=Sys)) +
-        stat_ecdf(size=1, pad=FALSE) +
+        stat_myecdf(size=1) +
         xlab("Shortage / min(demand, limit)") +
         ylab("CDF across time") +
         coord_cartesian(xlim=c(-0.05, 1.05), ylim=c(-0.05, 1.05), expand=FALSE) +
@@ -379,7 +459,7 @@ for (cfgGroup in cfgGroups) {
         shortage.this <- shortage.this[,c("Sys", "FG", "QoS", "ShortageGbps", "ShortageFrac")]
         shortage <- rbind(shortage, shortage.this)
 
-        retransmits.agg.this <- aggregate(RetransSegs ~ UnixTime, data=host.ts, FUN=sum)
+        retransmits.agg.this <- aggregate(cbind(RetransSegs, IngressBps, EgressBps) ~ UnixTime, data=host.ts, FUN=sum)
         retransmits.agg.this$Sys <- rep.int(sys_name, nrow(retransmits.agg.this))
         retransmits.agg <- rbind(retransmits.agg, retransmits.agg.this)
     }
@@ -394,6 +474,7 @@ for (cfgGroup in cfgGroups) {
     }
 
     PlotRetransmitsAggTo(retransmits.agg, file.path(summarydir, paste0(cfgGroup, "-retransmits_agg.pdf")))
+    PlotEgressMinuxIngressAggTo(retransmits.agg, file.path(summarydir, paste0(cfgGroup, "-egress_minus_ingress_agg.pdf")))
 
     for (fg in unique(overage$FG)) {
         fgsubset <- overage[overage$FG == fg,]
