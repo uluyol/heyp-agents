@@ -39,14 +39,48 @@ def GenWorkloadStagesStatic(
     return {
         "be1_stages": [{
             "target_average_bps": be1_bps,
-            "run_dur": "60s",
+            "run_dur": "90s",
         }],
         "be2_stages": [{
             "target_average_bps": be2_bps,
-            "run_dur": "60s",
+            "run_dur": "90s",
         }],
         "be1_shards": NumShards(be1_bps),
         "be2_shards": NumShards(be2_bps),
+    }
+
+def GenWorkloadStagesIncreasing(
+        be1_bps = None,
+        be2_bps_min = None,
+        be2_bps_max = None):
+    be1_stages = [{
+        "target_average_bps": be1_bps,
+        "run_dur": "150s",
+    }]
+
+    tick_bps = (be2_bps_max - be2_bps_min) // 60
+    be2_stages = [{
+        "target_average_bps": be2_bps_min,
+        "run_dur": "15s",
+    }]
+
+    for tick in range(60):
+        bps = be2_bps_min + tick_bps * tick
+        be2_stages.append({
+            "target_average_bps": bps,
+            "run_dur": "2s",
+        })
+
+    be2_stages.append({
+        "target_average_bps": be2_bps_max,
+        "run_dur": "15s",
+    })
+
+    return {
+        "be1_stages": be1_stages,
+        "be2_stages": be2_stages,
+        "be1_shards": NumShards(be1_bps),
+        "be2_shards": NumShards(be2_bps_max),
     }
 
 def GenWorkloadStagesOscillating(
@@ -420,10 +454,10 @@ def Gbps(x):
     return x * 1024 * 1024 * 1024
 
 def GenConfigs():
-    ALL_X = [9, 10]  # [2, 4, 6, 8]
-    ALL_Y = [6, 7, 8]  # [2.5, 5]
+    ALL_X = [8, 9]  # [2, 4, 6, 8]
+    ALL_Y = [7, 8]  # [2.5, 5]
     ALL_C = [float("2.0")]  # [1.25, 1.5]
-    ALL_LOPRI_CAP = [20, 19]
+    ALL_LOPRI_CAP = [19]
     configs = {}
     for x in ALL_X:
         for y in ALL_Y:
@@ -431,7 +465,7 @@ def GenConfigs():
                 for lopri_cap in ALL_LOPRI_CAP:
                     kwargs = dict({
                         "be1_approved_bps": int(Gbps(x)),
-                        "be1_surplus_bps": int(Gbps(lopri_cap - x - y)),
+                        "be1_surplus_bps": int(Gbps(2 + lopri_cap - x - y)),
                         "be2_approved_bps": int(Gbps(y)),
                         "shard_key": str("x{0}-y{1}-c{2}-lcap{3}".format(x, y, c, lopri_cap)),
                     }, **GenWorkloadStagesStatic(
@@ -451,6 +485,35 @@ def GenConfigs():
                     configs[prefix + "-qd"] = QoSDowngradeConfig(**kwargs)
                     configs[prefix + "-qdlrl"] = QoSDowngradeAndLimitLOPRIConfig(**kwargs)
                     configs[prefix + "-rl"] = RateLimitConfig(**kwargs)
+
+    kwargs = dict({
+        "be1_approved_bps": int(Gbps(4)),
+        "be1_surplus_bps": int(Gbps(10)),
+        "be2_approved_bps": int(Gbps(9)),
+        "shard_key": "inc",
+    }, **GenWorkloadStagesIncreasing(
+        be1_bps = int(Gbps(18)),
+        be2_bps_min = int(Gbps(2)),
+        be2_bps_max = int(Gbps(9)),
+    ))
+    # kwargs = dict({
+    #     "be1_approved_bps": int(Gbps(8)),
+    #     "be1_surplus_bps": int(Gbps(10)),
+    #     "be2_approved_bps": int(Gbps(6)),
+    #     "shard_key": "inc",
+    # }, **GenWorkloadStagesIncreasing(
+    #     be1_bps = int(Gbps(18)),
+    #     be2_bps_min = int(Gbps(2)),
+    #     be2_bps_max = int(Gbps(6)),
+    # ))
+
+    prefix = "inc"
+    configs[prefix + "-hsc"] = HSC20Config(**kwargs)
+    configs[prefix + "-nl"] = NoLimitConfig(**kwargs)
+    configs[prefix + "-qd"] = QoSDowngradeConfig(**kwargs)
+    configs[prefix + "-qdlrl"] = QoSDowngradeAndLimitLOPRIConfig(**kwargs)
+    configs[prefix + "-rl"] = RateLimitConfig(**kwargs)
+
     return configs
 
 configs = GenConfigs()
