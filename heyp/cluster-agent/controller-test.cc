@@ -76,6 +76,98 @@ TEST(ClusterControllerTest, MoveListener) {
   ClusterController::Listener new_new_lis2(std::move(new_lis2));
 }
 
+TEST(ClusterControllerTest, RemoveListener) {
+  auto controller = MakeClusterController();
+
+  int num_broadcast_1 = 0;
+  int num_broadcast_1_1 = 0;
+  int num_broadcast_2 = 0;
+  int num_broadcast_3 = 0;
+
+  auto lis1 = absl::make_unique<ClusterController::Listener>(controller.RegisterListener(
+      1, [&](const proto::AllocBundle&) { ++num_broadcast_1; }));
+  auto lis1_1 =
+      absl::make_unique<ClusterController::Listener>(controller.RegisterListener(
+          1, [&](const proto::AllocBundle&) { ++num_broadcast_1_1; }));
+  auto lis2 = absl::make_unique<ClusterController::Listener>(controller.RegisterListener(
+      2, [&](const proto::AllocBundle&) { ++num_broadcast_2; }));
+  auto lis3 = absl::make_unique<ClusterController::Listener>(controller.RegisterListener(
+      3, [&](const proto::AllocBundle&) { ++num_broadcast_3; }));
+
+  // Update some infos
+
+  controller.UpdateInfo(ParseTextProto<proto::InfoBundle>(R"(
+    bundler { host_id: 1 }
+    timestamp { seconds: 1 }
+    flow_infos {
+      flow { src_dc: "chicago" dst_dc: "detroit" host_id: 1 }
+      predicted_demand_bps: 1000
+      ewma_usage_bps: 1000
+      currently_lopri: true
+    }
+    flow_infos {
+      flow { src_dc: "chicago" dst_dc: "new_york" host_id: 1 }
+      predicted_demand_bps: 1000
+      ewma_usage_bps: 1000
+    }
+  )"));
+  controller.UpdateInfo(ParseTextProto<proto::InfoBundle>(R"(
+    bundler { host_id: 2 }
+    timestamp { seconds: 1 }
+    flow_infos {
+      flow { src_dc: "chicago" dst_dc: "detroit" host_id: 2 }
+      predicted_demand_bps: 1000
+      ewma_usage_bps: 1000
+    }
+  )"));
+
+  controller.ComputeAndBroadcast();
+
+  EXPECT_EQ(num_broadcast_1, 1);
+  EXPECT_EQ(num_broadcast_1_1, 1);
+  EXPECT_EQ(num_broadcast_2, 1);
+  EXPECT_EQ(num_broadcast_3, 0);
+
+  // Now delete some of the listeners
+
+  lis1 = nullptr;
+  lis2 = nullptr;
+
+  // Update infos again
+
+  controller.UpdateInfo(ParseTextProto<proto::InfoBundle>(R"(
+    bundler { host_id: 1 }
+    timestamp { seconds: 1 }
+    flow_infos {
+      flow { src_dc: "chicago" dst_dc: "detroit" host_id: 1 }
+      predicted_demand_bps: 1000
+      ewma_usage_bps: 1000
+      currently_lopri: true
+    }
+    flow_infos {
+      flow { src_dc: "chicago" dst_dc: "new_york" host_id: 1 }
+      predicted_demand_bps: 1000
+      ewma_usage_bps: 1000
+    }
+  )"));
+  controller.UpdateInfo(ParseTextProto<proto::InfoBundle>(R"(
+    bundler { host_id: 2 }
+    timestamp { seconds: 1 }
+    flow_infos {
+      flow { src_dc: "chicago" dst_dc: "detroit" host_id: 2 }
+      predicted_demand_bps: 1000
+      ewma_usage_bps: 1000
+    }
+  )"));
+
+  controller.ComputeAndBroadcast();
+
+  EXPECT_EQ(num_broadcast_1, 1);
+  EXPECT_EQ(num_broadcast_1_1, 2);
+  EXPECT_EQ(num_broadcast_2, 1);
+  EXPECT_EQ(num_broadcast_3, 0);
+}
+
 TEST(ClusterControllerTest, PlumbsDataCompletely) {
   auto controller = MakeClusterController();
 
