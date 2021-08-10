@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/google/renameio"
 	"github.com/uluyol/heyp-agents/go/deploy/writetar"
 	"github.com/uluyol/heyp-agents/go/multierrgroup"
 	"github.com/uluyol/heyp-agents/go/pb"
@@ -423,10 +424,10 @@ func ConfigureSys(c *pb.DeploymentConfig, sysConfig *SysConfig) error {
 	return eg.Wait()
 }
 
-func FetchData(c *pb.DeploymentConfig, remoteTopdir, outdirPath string) error {
-	os.MkdirAll(outdirPath, 0755)
+func FetchData(c *pb.DeploymentConfig, remoteTopdir, outdir string) error {
+	os.MkdirAll(outdir, 0755)
 
-	outdir, err := filepath.Abs(outdirPath)
+	outdir, err := filepath.Abs(outdir)
 	if err != nil {
 		return fmt.Errorf("failed to get absolute path for %s: %w", outdir, err)
 	}
@@ -440,36 +441,31 @@ func FetchData(c *pb.DeploymentConfig, remoteTopdir, outdirPath string) error {
 	var eg errgroup.Group
 	for _, n := range c.Nodes {
 		n := n
-		if err := os.MkdirAll(filepath.Join(outdir, n.GetName()), 0755); err != nil {
-			return fmt.Errorf("failed to make output directory for %s: %w",
-				n.GetName(), err)
-		}
 		eg.Go(func() error {
+			zipf, err := renameio.TempFile(outdir, filepath.Join(outdir, n.GetName()+".zip"))
+			if err != nil {
+				return fmt.Errorf("%s: failed to create output zip: %w", n.GetName(), err)
+			}
+			if err := zipf.Chmod(0o644); err != nil {
+				return fmt.Errorf("%s: failed to chmod output zip: %w", n.GetName(), err)
+			}
+			defer zipf.Cleanup()
 			cmd := TracingCommand(
 				LogWithPrefix("fetch-data: "),
 				"ssh", n.GetExternalAddr(),
 				fmt.Sprintf(
 					"cd '%[1]s';"+
-						"tar --warning=no-file-changed -czf - configs logs; [[ $? -le 1 ]]",
+						"zip -qr - configs logs; [[ $? -le 1 ]]",
 					remoteTopdir))
-			rc, err := cmd.StdoutPipe("data.tar.gz")
-			if err != nil {
-				return fmt.Errorf("failed to create stdout pipe: %w", err)
-			}
+			cmd.Stdout = zipf
 			cmd.Stderr = os.Stderr
-			unTarCmd := TracingCommand(
-				LogWithPrefix("fetch-data: "),
-				"tar", "xzf", "-")
-			unTarCmd.Dir = filepath.Join(outdir, n.GetName())
-			unTarCmd.SetStdin("data.tar.gz", rc)
-			if err := unTarCmd.Start(); err != nil {
-				return fmt.Errorf("failed to start decompressing data: %w", err)
-			}
 			if err := cmd.Run(); err != nil {
-				return fmt.Errorf("failed to compress data: %w", err)
+				return fmt.Errorf("%s: failed to archive data: %w", n.GetName(), err)
 			}
-			rc.Close()
-			return unTarCmd.Wait()
+			if err := zipf.CloseAtomicallyReplace(); err != nil {
+				return fmt.Errorf("%s: failed to close output zip: %w", n.GetName(), err)
+			}
+			return nil
 		})
 	}
 	return eg.Wait()

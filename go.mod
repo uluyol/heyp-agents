@@ -5,6 +5,7 @@ go 1.16
 require (
 	fortio.org/fortio v1.16.1
 	github.com/HdrHistogram/hdrhistogram-go v1.1.0
+	github.com/google/renameio v1.0.1
 	github.com/google/subcommands v1.2.0
 	github.com/google/uuid v1.2.0
 	go.starlark.net v0.0.0-20210602144842-1cdb82c9e17a
