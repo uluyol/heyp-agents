@@ -27,7 +27,7 @@ run_one() {
     return 0
   fi
 
-  echo kill existing daemons
+  echo $HEYP_RUN_NAME: kill existing daemons
   local dpids=""
   bin/deploy-heyp kill-fortio -c $c &
   dpids="$dpids $!"
@@ -37,19 +37,19 @@ run_one() {
   dpids="$dpids $!"
   wait_all $dpids || return 1
 
-  echo delete remote logs
+  echo $HEYP_RUN_NAME: delete remote logs
   bin/deploy-heyp delete-logs -c $c || return 1
 
-  echo start HEYP agents
+  echo $HEYP_RUN_NAME: start HEYP agents
   bin/deploy-heyp start-heyp-agents -c $c || return 1
-  echo start fortio servers
+  echo $HEYP_RUN_NAME: start fortio servers
   bin/deploy-heyp fortio-start-servers -c $c || return 1
   sleep 10
-  echo start collecting host stats
+  echo $HEYP_RUN_NAME: start collecting host stats
   bin/deploy-heyp collect-host-stats -c $c || return 1
-  echo run fortio clients
+  echo $HEYP_RUN_NAME: run fortio clients
   bin/deploy-heyp fortio-run-clients -c $c || return 1
-  echo stop heyp agents and host stat collection
+  echo $HEYP_RUN_NAME: stop heyp agents and host stat collection
   dpids=""
   bin/deploy-heyp collect-host-stats -c $c -stop &
   dpids="$dpids $!"
@@ -63,7 +63,7 @@ run_one() {
   local did_fetch=0
   local try=1
   while (( did_fetch == 0 )); do
-    echo "fetch data (try = $try)"
+    echo "$HEYP_RUN_NAME: fetch data (try = $try)"
     if bin/deploy-heyp fetch-data -c $c -o $o; then
       did_fetch=1
     fi
@@ -85,9 +85,8 @@ for shard in "$outdir"/shards/*; do
   (
     all_good=1
     first=1
-    for name in $(sort -r $shard); do
+    for name in $(sort $shard); do
       c="$outdir/configs/$name.textproto"
-      echo starting $name =====
       o="$outdir/data/$name"
       if (( first == 1 )); then
         echo check nodes
@@ -99,9 +98,13 @@ for shard in "$outdir"/shards/*; do
         first=0
       fi
 
+      echo starting $name =====
+      export HEYP_RUN_NAME=$name
       if ! run_one "$c" "$o"; then
-        echo "error when running $c"
+        echo "error running $name !!!!"
         all_good=0
+      else
+        echo finished $name =====
       fi
     done
     if (( all_good != 1 )); then

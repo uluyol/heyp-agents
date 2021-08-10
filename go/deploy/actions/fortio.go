@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/uluyol/heyp-agents/go/deploy/configgen"
+	"github.com/uluyol/heyp-agents/go/deploy/periodic"
 	"github.com/uluyol/heyp-agents/go/deploy/writetar"
 	"github.com/uluyol/heyp-agents/go/multierrgroup"
 	"github.com/uluyol/heyp-agents/go/pb"
@@ -251,6 +252,11 @@ func FortioRunClients(c *pb.DeploymentConfig, remoteTopdir string, showOut bool,
 	startTime := time.Now().Add(10 * time.Second)
 	startTimestamp := startTime.Format(time.RFC3339Nano)
 	log.Printf("will start runs at %s (in %s)", startTimestamp, time.Until(startTime))
+	var p *periodic.Printer
+	if !showOut {
+		p = periodic.NewPrinter("running fortio", 5*time.Second)
+	}
+	defer p.Stop()
 	var eg multierrgroup.Group
 	for _, group := range groups {
 		group := group

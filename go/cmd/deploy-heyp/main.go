@@ -310,7 +310,7 @@ func (*fortioRunClientsCmd) Usage() string      { return "" }
 func (c *fortioRunClientsCmd) SetFlags(fs *flag.FlagSet) {
 	configVar(&c.configPath, fs)
 	remdirVar(&c.remDir, fs)
-	fs.BoolVar(&c.showOut, "verbose", true, "show command output")
+	fs.BoolVar(&c.showOut, "verbose", false, "show command output")
 	fs.BoolVar(&c.directDebug, "direct-dbg", false, "directly contact fortio servers (debug mode)")
 }
 
@@ -588,6 +588,9 @@ func configVar(v *string, fs *flag.FlagSet) {
 }
 
 func main() {
+	var runName = flag.String("runname", os.Getenv("HEYP_RUN_NAME"),
+		"name of the run that should be added to log lines")
+
 	subcommands.Register(subcommands.HelpCommand(), "")
 	subcommands.Register(subcommands.FlagsCommand(), "")
 	subcommands.Register(subcommands.CommandsCommand(), "")
@@ -615,6 +618,9 @@ func main() {
 
 	log.SetFlags(0)
 	log.SetPrefix("deploy-heyp: ")
+	if *runName != "" {
+		log.SetPrefix("deploy-heyp: [" + *runName + "] ")
+	}
 
 	ctx := context.Background()
 	os.Exit(int(subcommands.Execute(ctx)))
