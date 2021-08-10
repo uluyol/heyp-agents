@@ -619,7 +619,7 @@ func main() {
 	log.SetFlags(0)
 	log.SetPrefix("deploy-heyp: ")
 	if *runName != "" {
-		log.SetPrefix("deploy-heyp: [" + *runName + "] ")
+		log.SetPrefix("[" + *runName + "] deploy-heyp: ")
 	}
 
 	ctx := context.Background()
