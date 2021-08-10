@@ -33,30 +33,66 @@ def NumConnsPerShard(stages, size_dist, num_shards, prop_delay_ms):
 
     return int(math.ceil(num_conns_per_shard * float(5)))
 
+A_FORTIO_STARTING_PORT = 6000
+B_FORTIO_STARTING_PORT = 6100
+
+A_PROP_DELAY_MS = 30
+B_PROP_DELAY_MS = 50
+
 def GenWorkloadStagesStatic(
         be1_bps = None,
         be2_bps = None):
-    return {
-        "be1_stages": [{
+    A_instances, A_client_roles, A_server_roles_for = BackendOnEachHost(
+        num_backends = 1,
+        workload_stages_per_backend = [{
             "target_average_bps": be1_bps,
             "run_dur": "90s",
         }],
-        "be2_stages": [{
+        num_shards_per_backend = NumShards(be1_bps),
+        num_servers_per_backend_host = 2,
+        name_prefix = "A_",
+        starting_port = A_FORTIO_STARTING_PORT,
+        prop_delay_ms = A_PROP_DELAY_MS,
+    )
+
+    B_instances, B_client_roles, B_server_roles_for = BackendOnEachHost(
+        num_backends = 1,
+        workload_stages_per_backend = [{
             "target_average_bps": be2_bps,
             "run_dur": "90s",
         }],
-        "be1_shards": NumShards(be1_bps),
-        "be2_shards": NumShards(be2_bps),
+        num_shards_per_backend = NumShards(be2_bps),
+        num_servers_per_backend_host = 4,
+        name_prefix = "B_",
+        starting_port = B_FORTIO_STARTING_PORT,
+        prop_delay_ms = B_PROP_DELAY_MS,
+    )
+
+    return {
+        "A_fortio_instances": A_instances,
+        "A_client_roles": A_client_roles,
+        "A_server_roles_for": A_server_roles_for,
+        "B_fortio_instances": B_instances,
+        "B_client_roles": B_client_roles,
+        "B_server_roles_for": B_server_roles_for,
     }
 
 def GenWorkloadStagesIncreasing(
         be1_bps = None,
         be2_bps_min = None,
         be2_bps_max = None):
-    be1_stages = [{
-        "target_average_bps": be1_bps,
-        "run_dur": "150s",
-    }]
+    A_instances, A_client_roles, A_server_roles_for = BackendOnEachHost(
+        num_backends = 1,
+        workload_stages_per_backend = [{
+            "target_average_bps": be1_bps,
+            "run_dur": "150s",
+        }],
+        num_shards_per_backend = NumShards(be1_bps),
+        num_servers_per_backend_host = 2,
+        name_prefix = "A_",
+        starting_port = A_FORTIO_STARTING_PORT,
+        prop_delay_ms = A_PROP_DELAY_MS,
+    )
 
     tick_bps = (be2_bps_max - be2_bps_min) // 60
     be2_stages = [{
@@ -76,22 +112,29 @@ def GenWorkloadStagesIncreasing(
         "run_dur": "15s",
     })
 
+    B_instances, B_client_roles, B_server_roles_for = BackendOnEachHost(
+        num_backends = 1,
+        workload_stages_per_backend = be2_stages,
+        num_shards_per_backend = NumShards(be2_bps_max),
+        num_servers_per_backend_host = 4,
+        name_prefix = "B_",
+        starting_port = B_FORTIO_STARTING_PORT,
+        prop_delay_ms = B_PROP_DELAY_MS,
+    )
+
     return {
-        "be1_stages": be1_stages,
-        "be2_stages": be2_stages,
-        "be1_shards": NumShards(be1_bps),
-        "be2_shards": NumShards(be2_bps_max),
+        "A_fortio_instances": A_instances,
+        "A_client_roles": A_client_roles,
+        "A_server_roles_for": A_server_roles_for,
+        "B_fortio_instances": B_instances,
+        "B_client_roles": B_client_roles,
+        "B_server_roles_for": B_server_roles_for,
     }
 
 def GenWorkloadStagesOscillating(
         be1_bps_min = None,
         be1_bps_max = None,
         be2_bps = None):
-    be2_stages = [{
-        "target_average_bps": be2_bps,
-        "run_dur": "240s",
-    }]
-
     half_be1_bps_range = (be1_bps_max - be1_bps_min) // 2
     be1_stages = []
 
@@ -105,11 +148,36 @@ def GenWorkloadStagesOscillating(
             })
             #print(tick, bps)
 
+    A_instances, A_client_roles, A_server_roles_for = BackendOnEachHost(
+        num_backends = 1,
+        workload_stages_per_backend = be1_stages,
+        num_shards_per_backend = NumShards(be1_bps_max),
+        num_servers_per_backend_host = 2,
+        name_prefix = "A_",
+        starting_port = A_FORTIO_STARTING_PORT,
+        prop_delay_ms = A_PROP_DELAY_MS,
+    )
+
+    B_instances, B_client_roles, B_server_roles_for = BackendOnEachHost(
+        num_backends = 1,
+        workload_stages_per_backend = [{
+            "target_average_bps": be2_bps,
+            "run_dur": "240s",
+        }],
+        num_shards_per_backend = NumShards(be2_bps),
+        num_servers_per_backend_host = 4,
+        name_prefix = "B_",
+        starting_port = B_FORTIO_STARTING_PORT,
+        prop_delay_ms = B_PROP_DELAY_MS,
+    )
+
     return {
-        "be1_stages": be1_stages,
-        "be2_stages": be2_stages,
-        "be1_shards": NumShards(be1_bps_max),
-        "be2_shards": NumShards(be2_bps),
+        "A_fortio_instances": A_instances,
+        "A_client_roles": A_client_roles,
+        "A_server_roles_for": A_server_roles_for,
+        "B_fortio_instances": B_instances,
+        "B_client_roles": B_client_roles,
+        "B_server_roles_for": B_server_roles_for,
     }
 
 def GenConfig(
@@ -117,13 +185,15 @@ def GenConfig(
         ca_limits_to_apply = None,
         limit_hipri = None,
         limit_lopri = None,
-        be1_approved_bps = None,
-        be1_surplus_bps = None,
-        be2_approved_bps = None,
-        be1_stages = None,
-        be1_shards = None,
-        be2_stages = None,
-        be2_shards = None,
+        A_approved_bps = None,
+        A_surplus_bps = None,
+        A_server_roles_for = None,
+        A_client_roles = None,
+        A_fortio_instances = None,
+        B_approved_bps = None,
+        B_server_roles_for = None,
+        B_client_roles = None,
+        B_fortio_instances = None,
         shard_key = ""):
     nodes = []
     clusters = {
@@ -142,8 +212,8 @@ def GenConfig(
                             "src_dc": "A",
                             "dst_dc": "EDGE",
                         },
-                        "hipri_rate_limit_bps": be1_approved_bps,
-                        "lopri_rate_limit_bps": be1_surplus_bps,
+                        "hipri_rate_limit_bps": A_approved_bps,
+                        "lopri_rate_limit_bps": A_surplus_bps,
                     },
                 ],
             },
@@ -159,7 +229,7 @@ def GenConfig(
                             "src_dc": "B",
                             "dst_dc": "EDGE",
                         },
-                        "hipri_rate_limit_bps": be2_approved_bps,
+                        "hipri_rate_limit_bps": B_approved_bps,
                         "lopri_rate_limit_bps": 0,
                     },
                 ],
@@ -199,17 +269,13 @@ def GenConfig(
             roles = ["host-agent", "fortio-G-envoy-proxy"]
             clusters["EDGE"]["node_names"].append(name)
         elif i <= 12:
-            roles = ["host-agent", "fortio-G-BE1-server"]
+            roles = ["host-agent"] + A_server_roles_for(i - 4, 9)
             clusters["A"]["node_names"].append(name)
         elif i <= 14:
-            roles = ["host-agent", "fortio-G-BE2-server"]
+            roles = ["host-agent"] + B_server_roles_for(i - 13, 2)
             clusters["B"]["node_names"].append(name)
         else:
-            roles = [
-                "host-agent",
-                "fortio-G-BE1-client",
-                "fortio-G-BE2-client",
-            ]
+            roles = ["host-agent"] + A_client_roles + B_client_roles
             clusters["CLIENT"]["node_names"].append(name)
         experiment_ip = "192.168.1." + str(i)
         external_ip, shard_index = ext_addr_for_ip(experiment_ip, shard_key)
@@ -219,15 +285,6 @@ def GenConfig(
             "experiment_addr": experiment_ip,
             "roles": roles,
         })
-
-    be1_size_dist = [{
-        "resp_size_bytes": 51200,
-        "weight": 100,
-    }]
-    be2_size_dist = [{
-        "resp_size_bytes": 51200,
-        "weight": 100,
-    }]
 
     return (shard_index, deploy_pb.DeploymentConfig(
         nodes = nodes,
@@ -328,37 +385,51 @@ def GenConfig(
             "envoy_admin_port": 5001,
             "envoy_num_threads": 10,
         }],
-        fortio_instances = [
-            {
-                "group": "G",
-                "name": "BE1",
-                "serve_ports": [6000, 6001],
-                "lb_policy": "LEAST_REQUEST",
-                "client": {
-                    "num_shards": be1_shards,
-                    "num_conns": NumConnsPerShard(be1_stages, be1_size_dist, be1_shards, 30),
-                    "workload_stages": be1_stages,
-                    "size_dist": be1_size_dist,
-                    "jitter_on": False,
-                },
-            },
-            {
-                "group": "G",
-                "name": "BE2",
-                "serve_ports": [6100, 6101, 6102, 6103],
-                "lb_policy": "LEAST_REQUEST",
-                "client": {
-                    "num_shards": be2_shards,
-                    "num_conns": NumConnsPerShard(be2_stages, be2_size_dist, be2_shards, 50),
-                    "workload_stages": be2_stages,
-                    "size_dist": be2_size_dist,
-                    "jitter_on": False,
-                },
-            },
-        ],
+        fortio_instances = A_fortio_instances + B_fortio_instances,
     ))
 
 OVERSUB_FACTOR = float("1.25")
+
+def BackendOnEachHost(
+        num_backends = None,
+        workload_stages_per_backend = None,
+        num_shards_per_backend = None,
+        num_servers_per_backend_host = None,
+        name_prefix = None,
+        starting_port = None,
+        prop_delay_ms = None):
+    size_dist = [{
+        "resp_size_bytes": 51200,
+        "weight": 100,
+    }]
+
+    server_roles = []
+    client_roles = []
+    instances = []
+    cur_port = starting_port
+    for i in range(num_backends):
+        be_name = name_prefix + str(i)
+        client_roles.append("fortio-G-" + be_name + "-client")
+        server_roles.append("fortio-G-" + be_name + "-server")
+        instances.append({
+            "group": "G",
+            "name": be_name,
+            "serve_ports": [cur_port + porti for porti in range(num_servers_per_backend_host)],
+            "lb_policy": "LEAST_REQUEST",
+            "client": {
+                "num_shards": num_shards_per_backend,
+                "num_conns": NumConnsPerShard(workload_stages_per_backend, size_dist, num_shards_per_backend, prop_delay_ms),
+                "workload_stages": workload_stages_per_backend,
+                "size_dist": size_dist,
+                "jitter_on": False,
+            },
+        })
+        cur_port += num_servers_per_backend_host
+
+    def ServerRolesFor(server_index, num_servers):
+        return server_roles
+
+    return instances, client_roles, ServerRolesFor
 
 def NoLimitConfig(**kwargs):
     # Basically does nothing
@@ -454,7 +525,7 @@ def Gbps(x):
     return x * 1024 * 1024 * 1024
 
 def GenConfigs():
-    ALL_X = [8, 9]  # [2, 4, 6, 8]
+    ALL_X = [2]  # [8, 9]  # [2, 4, 6, 8]
     ALL_Y = [7, 8]  # [2.5, 5]
     ALL_C = [float("2.0")]  # [1.25, 1.5]
     ALL_LOPRI_CAP = [19]
@@ -464,9 +535,9 @@ def GenConfigs():
             for c in ALL_C:
                 for lopri_cap in ALL_LOPRI_CAP:
                     kwargs = dict({
-                        "be1_approved_bps": int(Gbps(x)),
-                        "be1_surplus_bps": int(Gbps(2 + lopri_cap - x - y)),
-                        "be2_approved_bps": int(Gbps(y)),
+                        "A_approved_bps": int(Gbps(x)),
+                        "A_surplus_bps": int(Gbps(2 + lopri_cap - x - y)),
+                        "B_approved_bps": int(Gbps(y)),
                         "shard_key": str("x{0}-y{1}-c{2}-lcap{3}".format(x, y, c, lopri_cap)),
                     }, **GenWorkloadStagesStatic(
                         be1_bps = int(c * Gbps(x)),
@@ -487,19 +558,19 @@ def GenConfigs():
                     configs[prefix + "-rl"] = RateLimitConfig(**kwargs)
 
     kwargs = dict({
-        "be1_approved_bps": int(Gbps(4)),
-        "be1_surplus_bps": int(Gbps(10)),
-        "be2_approved_bps": int(Gbps(9)),
+        "A_approved_bps": int(Gbps(2)),
+        "A_surplus_bps": int(Gbps(10)),
+        "B_approved_bps": int(Gbps(12)),
         "shard_key": "inc",
     }, **GenWorkloadStagesIncreasing(
-        be1_bps = int(Gbps(18)),
-        be2_bps_min = int(Gbps(2)),
-        be2_bps_max = int(Gbps(9)),
+        be1_bps = int(Gbps(16)),
+        be2_bps_min = int(Gbps(4)),
+        be2_bps_max = int(Gbps(12)),
     ))
     # kwargs = dict({
-    #     "be1_approved_bps": int(Gbps(8)),
-    #     "be1_surplus_bps": int(Gbps(10)),
-    #     "be2_approved_bps": int(Gbps(6)),
+    #     "A_approved_bps": int(Gbps(8)),
+    #     "A_surplus_bps": int(Gbps(10)),
+    #     "B_approved_bps": int(Gbps(6)),
     #     "shard_key": "inc",
     # }, **GenWorkloadStagesIncreasing(
     #     be1_bps = int(Gbps(18)),
