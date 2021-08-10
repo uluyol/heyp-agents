@@ -2,8 +2,11 @@ package actions
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -68,6 +71,9 @@ func InstallCodeBundle(c *pb.DeploymentConfig, localTarball, remoteTopdir string
 	if err != nil {
 		return fmt.Errorf("failed to read bundle: %v", err)
 	}
+	log.Printf("compute checksum")
+	checksum := sha256.Sum256(bundle)
+	bundleChecksum := hex.EncodeToString(checksum[:])
 	var eg multierrgroup.Group
 	for _, n := range c.Nodes {
 		n := n
@@ -75,16 +81,42 @@ func InstallCodeBundle(c *pb.DeploymentConfig, localTarball, remoteTopdir string
 			cmd := TracingCommand(
 				LogWithPrefix("install-bundle: "),
 				"ssh", n.GetExternalAddr(),
+				fmt.Sprintf("sha256sum %[1]s/heyp-bundle.tar.gz", remoteTopdir))
+			out, err := cmd.Output()
+			matchMesg := "no remote checksum"
+			if err == nil {
+				fs := bytes.Fields(out)
+				if len(fs) == 2 {
+					if string(fs[0]) == bundleChecksum {
+						matchMesg = "matched"
+					} else {
+						matchMesg = "local and remote checksums differ"
+					}
+				}
+			}
+
+			catToLocal := "cat >%[1]s/heyp-bundle.tar.gz && "
+			if matchMesg == "matched" {
+				log.Printf("%s: up to date, just re-extract bundle", n.GetName())
+				catToLocal = ""
+			} else {
+				log.Printf("%s: resend bundle: %s", n.GetName(), matchMesg)
+			}
+
+			cmd = TracingCommand(
+				LogWithPrefix("install-bundle: "),
+				"ssh", n.GetExternalAddr(),
 				fmt.Sprintf(
 					"rm -rf '%[1]s/configs' '%[1]s/logs'; "+
 						"mkdir -p '%[1]s/logs'; "+
 						"mkdir -p '%[1]s/configs'; "+
-						"cd '%[1]s' && tar xzf -",
+						catToLocal+
+						"cd '%[1]s' && tar xzf heyp-bundle.tar.gz",
 					remoteTopdir))
 			cmd.SetStdin(localTarball, bytes.NewReader(bundle))
-			err := cmd.Run()
+			err = cmd.Run()
 			if err != nil {
-				return fmt.Errorf("failed to install on Node %q: %v", n.GetName(), err)
+				return fmt.Errorf("%s: failed to install: %v", n.GetName(), err)
 			}
 			return nil
 		})
