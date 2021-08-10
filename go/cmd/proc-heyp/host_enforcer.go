@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"log"
-	"os"
 	"time"
 
 	"github.com/google/subcommands"
@@ -37,16 +36,15 @@ func (c *hostEnforcerLogsCmd) SetFlags(fs *flag.FlagSet) {
 }
 
 func (c *hostEnforcerLogsCmd) Execute(ctx context.Context, fs *flag.FlagSet, args ...interface{}) subcommands.ExitStatus {
-	logsDir := mustLogsArg(fs)
+	logsFS := mustLogsFS(fs)
+	defer logsFS.Close()
 
-	fsys := os.DirFS(logsDir)
-
-	start, end, err := getStartEnd(c.workload, fsys)
+	start, end, err := getStartEnd(c.workload, logsFS)
 	if err != nil {
 		log.Fatalf("failed to get start/end for workload %q: %v", c.workload, err)
 	}
 
-	toAlign, err := proc.GlobAndCollectHostEnforcerLogs(fsys)
+	toAlign, err := proc.GlobAndCollectHostEnforcerLogs(logsFS)
 	if err != nil {
 		log.Fatalf("failed to find host enforcer logs: %v", err)
 	}
@@ -72,7 +70,7 @@ func (c *hostEnforcerLogsCmd) Execute(ctx context.Context, fs *flag.FlagSet, arg
 	}
 
 	err = proc.AlignHostEnforcerLogs(proc.AlignArgs{
-		FS:     fsys,
+		FS:     logsFS,
 		Inputs: toAlign,
 		Output: c.output,
 		Start:  start,

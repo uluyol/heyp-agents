@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"log"
-	"os"
 	"time"
 
 	"github.com/google/subcommands"
@@ -35,16 +34,17 @@ func (c *alignClusterAllocLogsCmd) SetFlags(fs *flag.FlagSet) {
 }
 
 func (c *alignClusterAllocLogsCmd) Execute(ctx context.Context, fs *flag.FlagSet, args ...interface{}) subcommands.ExitStatus {
-	logsDir := mustLogsArg(fs)
+	log.SetPrefix("align-cluster-alloc-logs: ")
 
-	fsys := os.DirFS(logsDir)
+	logsFS := mustLogsFS(fs)
+	defer logsFS.Close()
 
-	start, end, err := getStartEnd(c.workload, fsys)
+	start, end, err := getStartEnd(c.workload, logsFS)
 	if err != nil {
 		log.Fatalf("failed to get start/end for workload %q: %v", c.workload, err)
 	}
 
-	err = proc.AlignDebugClusterLogs(fsys, c.output, start, end, c.prec.D, c.debug)
+	err = proc.AlignDebugClusterLogs(logsFS, c.output, start, end, c.prec.D, c.debug)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -70,16 +70,17 @@ func (c *clusterAllocBWStatsCmd) SetFlags(fs *flag.FlagSet) {
 }
 
 func (c *clusterAllocBWStatsCmd) Execute(ctx context.Context, fs *flag.FlagSet, args ...interface{}) subcommands.ExitStatus {
-	logsDir := mustLogsArg(fs)
+	log.SetPrefix("cluster-alloc-bw-stats: ")
 
-	fsys := os.DirFS(logsDir)
+	logsFS := mustLogsFS(fs)
+	defer logsFS.Close()
 
-	start, end, err := getStartEnd(c.workload, fsys)
+	start, end, err := getStartEnd(c.workload, logsFS)
 	if err != nil {
 		log.Fatalf("failed to get start/end for workload %q: %v", c.workload, err)
 	}
 
-	err = proc.PrintDebugClusterFGStats(fsys, c.output, start, end)
+	err = proc.PrintDebugClusterFGStats(logsFS, c.output, start, end)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -105,16 +106,17 @@ func (c *clusterAllocQoSLifetime) SetFlags(fs *flag.FlagSet) {
 }
 
 func (c *clusterAllocQoSLifetime) Execute(ctx context.Context, fs *flag.FlagSet, args ...interface{}) subcommands.ExitStatus {
-	logsDir := mustLogsArg(fs)
+	log.SetPrefix("cluster-alloc-qos-lifetime: ")
 
-	fsys := os.DirFS(logsDir)
+	logsFS := mustLogsFS(fs)
+	defer logsFS.Close()
 
-	start, end, err := getStartEnd(c.workload, fsys)
+	start, end, err := getStartEnd(c.workload, logsFS)
 	if err != nil {
 		log.Fatalf("failed to get start/end for workload %q: %v", c.workload, err)
 	}
 
-	err = proc.PrintDebugClusterQoSLifetime(fsys, c.output, start, end)
+	err = proc.PrintDebugClusterQoSLifetime(logsFS, c.output, start, end)
 	if err != nil {
 		log.Fatal(err)
 	}

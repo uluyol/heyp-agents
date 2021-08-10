@@ -42,14 +42,15 @@ func (c *testlopriMakeLatencyCDFs) SetFlags(fs *flag.FlagSet) {
 func (c *testlopriMakeLatencyCDFs) Execute(ctx context.Context, fs *flag.FlagSet, args ...interface{}) subcommands.ExitStatus {
 	log.SetPrefix("testlopri-mk-latency-cdfs: ")
 
-	logsDir := mustLogsArg(fs)
+	logsFS := mustLogsFS(fs)
+	defer logsFS.Close()
 
-	instances, err := proc.GlobAndCollectTestLopri(os.DirFS(logsDir))
+	instances, err := proc.GlobAndCollectTestLopri(logsFS)
 	if err != nil {
 		log.Fatalf("failed to group logs: %v", err)
 	}
 
-	startTime, endTime, err := proc.GetStartEndTestLopri(os.DirFS(logsDir))
+	startTime, endTime, err := proc.GetStartEndTestLopri(logsFS)
 	if err != nil {
 		log.Fatalf("failed to get start/end time: %v", err)
 	}
@@ -65,7 +66,7 @@ func (c *testlopriMakeLatencyCDFs) Execute(ctx context.Context, fs *flag.FlagSet
 	for _, inst := range instances {
 		for _, client := range inst.Clients {
 			for _, shard := range client.Shards {
-				proc.ForEachStatsRec(&err, os.DirFS(logsDir), shard.Path,
+				proc.ForEachStatsRec(&err, logsFS, shard.Path,
 					func(rec *pb.StatsRecord) error {
 						t, err := time.Parse(time.RFC3339Nano, rec.Timestamp)
 						if err != nil {
@@ -140,14 +141,15 @@ func (c *testlopriMakeTimeseries) SetFlags(fs *flag.FlagSet) {
 func (c *testlopriMakeTimeseries) Execute(ctx context.Context, fs *flag.FlagSet, args ...interface{}) subcommands.ExitStatus {
 	log.SetPrefix("testlopri-mk-timeseries: ")
 
-	logsDir := mustLogsArg(fs)
+	logsFS := mustLogsFS(fs)
+	defer logsFS.Close()
 
-	instances, err := proc.GlobAndCollectTestLopri(os.DirFS(logsDir))
+	instances, err := proc.GlobAndCollectTestLopri(logsFS)
 	if err != nil {
 		log.Fatalf("failed to group logs: %v", err)
 	}
 
-	startTime, endTime, err := proc.GetStartEndTestLopri(os.DirFS(logsDir))
+	startTime, endTime, err := proc.GetStartEndTestLopri(logsFS)
 	if err != nil {
 		log.Fatalf("failed to get start/end time: %v", err)
 	}
@@ -160,7 +162,7 @@ func (c *testlopriMakeTimeseries) Execute(ctx context.Context, fs *flag.FlagSet,
 	for _, inst := range instances {
 		for _, client := range inst.Clients {
 			for _, shard := range client.Shards {
-				proc.ForEachStatsRec(&err, os.DirFS(logsDir), shard.Path,
+				proc.ForEachStatsRec(&err, logsFS, shard.Path,
 					func(rec *pb.StatsRecord) error {
 						t, err := time.Parse(time.RFC3339Nano, rec.Timestamp)
 						if err != nil {

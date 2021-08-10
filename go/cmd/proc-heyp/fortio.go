@@ -42,14 +42,15 @@ func (c *fortioMakeLatencyCDFs) SetFlags(fs *flag.FlagSet) {
 func (c *fortioMakeLatencyCDFs) Execute(ctx context.Context, fs *flag.FlagSet, args ...interface{}) subcommands.ExitStatus {
 	log.SetPrefix("fortio-mk-latency-cdfs: ")
 
-	logsDir := mustLogsArg(fs)
+	logsFS := mustLogsFS(fs)
+	defer logsFS.Close()
 
-	instances, err := proc.GlobAndCollectFortio(os.DirFS(logsDir))
+	instances, err := proc.GlobAndCollectFortio(logsFS)
 	if err != nil {
 		log.Fatalf("failed to group logs: %v", err)
 	}
 
-	startTime, endTime, err := proc.GetStartEndFortio(os.DirFS(logsDir))
+	startTime, endTime, err := proc.GetStartEndFortio(logsFS)
 	if err != nil {
 		log.Fatalf("failed to get start/end time: %v", err)
 	}
@@ -65,7 +66,7 @@ func (c *fortioMakeLatencyCDFs) Execute(ctx context.Context, fs *flag.FlagSet, a
 	for _, inst := range instances {
 		for _, client := range inst.Clients {
 			for _, shard := range client.Shards {
-				proc.ForEachStatsRec(&err, os.DirFS(logsDir), shard.Path,
+				proc.ForEachStatsRec(&err, logsFS, shard.Path,
 					func(rec *pb.StatsRecord) error {
 						t, err := time.Parse(time.RFC3339Nano, rec.Timestamp)
 						if err != nil {
@@ -150,14 +151,15 @@ func (c *fortioMakeTimeseries) SetFlags(fs *flag.FlagSet) {
 func (c *fortioMakeTimeseries) Execute(ctx context.Context, fs *flag.FlagSet, args ...interface{}) subcommands.ExitStatus {
 	log.SetPrefix("fortio-mk-timeseries: ")
 
-	logsDir := mustLogsArg(fs)
+	logsFS := mustLogsFS(fs)
+	defer logsFS.Close()
 
-	instances, err := proc.GlobAndCollectFortio(os.DirFS(logsDir))
+	instances, err := proc.GlobAndCollectFortio(logsFS)
 	if err != nil {
 		log.Fatalf("failed to group logs: %v", err)
 	}
 
-	startTime, endTime, err := proc.GetStartEndFortio(os.DirFS(logsDir))
+	startTime, endTime, err := proc.GetStartEndFortio(logsFS)
 	if err != nil {
 		log.Fatalf("failed to get start/end time: %v", err)
 	}
@@ -172,7 +174,7 @@ func (c *fortioMakeTimeseries) Execute(ctx context.Context, fs *flag.FlagSet, ar
 		histCombiner := proc.NewHistCombiner(3 * time.Second)
 		for _, client := range inst.Clients {
 			for _, shard := range client.Shards {
-				proc.ForEachStatsRec(&err, os.DirFS(logsDir), shard.Path,
+				proc.ForEachStatsRec(&err, logsFS, shard.Path,
 					func(rec *pb.StatsRecord) error {
 						t, err := time.Parse(time.RFC3339Nano, rec.Timestamp)
 						if err != nil {
@@ -234,16 +236,15 @@ func (c *fortioDemandTraceCmd) SetFlags(fs *flag.FlagSet) {
 func (c *fortioDemandTraceCmd) Execute(ctx context.Context, fs *flag.FlagSet, args ...interface{}) subcommands.ExitStatus {
 	log.SetPrefix("fortio-demand-trace: ")
 
-	logsDir := mustLogsArg(fs)
+	logsFS := mustLogsFS(fs)
+	defer logsFS.Close()
 
 	deployC, err := proc.LoadDeploymentConfig(c.deployConfig)
 	if err != nil {
 		log.Fatalf("failed to read deployment config: %v", err)
 	}
 
-	fsys := os.DirFS(logsDir)
-
-	start, end, err := getStartEnd("fortio", fsys)
+	start, end, err := getStartEnd("fortio", logsFS)
 	if err != nil {
 		log.Fatalf("failed to get start/end for workload \"fortio\": %v", err)
 	}

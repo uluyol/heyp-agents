@@ -71,20 +71,23 @@ func (c *alignInfosCmd) SetFlags(fs *flag.FlagSet) {
 }
 
 func (c *alignInfosCmd) Execute(ctx context.Context, fs *flag.FlagSet, args ...interface{}) subcommands.ExitStatus {
-	logsDir := mustLogsArg(fs)
+	log.SetPrefix("align-infos: ")
 
-	start, end, err := getStartEnd(c.workload, os.DirFS(logsDir))
+	logsFS := mustLogsFS(fs)
+	defer logsFS.Close()
+
+	start, end, err := getStartEnd(c.workload, logsFS)
 	if err != nil {
 		log.Fatalf("failed to get start/end for workload %q: %v", c.workload, err)
 	}
 
-	toAlign, err := proc.GlobAndCollectHostAgentStats(os.DirFS(logsDir))
+	toAlign, err := proc.GlobAndCollectHostAgentStats(logsFS)
 	if err != nil {
 		log.Fatalf("failed to find host stats: %v", err)
 	}
 
 	err = proc.AlignProto(proc.AlignArgs{
-		FS:     os.DirFS(logsDir),
+		FS:     logsFS,
 		Inputs: toAlign,
 		Output: c.output,
 		Start:  start,
@@ -128,14 +131,17 @@ func (c *alignHostStatsCmd) SetFlags(fs *flag.FlagSet) {
 }
 
 func (c *alignHostStatsCmd) Execute(ctx context.Context, fs *flag.FlagSet, args ...interface{}) subcommands.ExitStatus {
-	logsDir := mustLogsArg(fs)
+	log.SetPrefix("align-host-stats: ")
 
-	start, end, err := getStartEnd(c.workload, os.DirFS(logsDir))
+	logsFS := mustLogsFS(fs)
+	defer logsFS.Close()
+
+	start, end, err := getStartEnd(c.workload, logsFS)
 	if err != nil {
 		log.Fatalf("failed to get start/end for workload %q: %v", c.workload, err)
 	}
 
-	toAlign, err := proc.GlobAndCollectHostStats(os.DirFS(logsDir))
+	toAlign, err := proc.GlobAndCollectHostStats(logsFS)
 	if err != nil {
 		log.Fatalf("failed to find host stats: %v", err)
 	}
@@ -164,7 +170,7 @@ func (c *alignHostStatsCmd) Execute(ctx context.Context, fs *flag.FlagSet, args 
 	}
 
 	err = proc.AlignHostStats(proc.AlignArgs{
-		FS:     os.DirFS(logsDir),
+		FS:     logsFS,
 		Inputs: toAlign,
 		Output: c.output,
 		Start:  start,

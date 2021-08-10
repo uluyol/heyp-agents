@@ -28,6 +28,8 @@ func (c *approvalsCmd) SetFlags(fs *flag.FlagSet) {
 }
 
 func (c *approvalsCmd) Execute(ctx context.Context, fs *flag.FlagSet, args ...interface{}) subcommands.ExitStatus {
+	log.SetPrefix("approvals: ")
+
 	data, err := os.ReadFile(c.deployConfig)
 	if err != nil {
 		log.Fatalf("failed to open deployment config: %v", err)
@@ -82,9 +84,12 @@ func (c *wlStartEndCmd) SetFlags(fs *flag.FlagSet) {
 }
 
 func (c *wlStartEndCmd) Execute(ctx context.Context, fs *flag.FlagSet, args ...interface{}) subcommands.ExitStatus {
-	logsDir := mustLogsArg(fs)
-	fsys := os.DirFS(logsDir)
-	start, end, err := getStartEnd(c.workload, fsys)
+	log.SetPrefix("wl-start-end: ")
+
+	logsFS := mustLogsFS(fs)
+	defer logsFS.Close()
+
+	start, end, err := getStartEnd(c.workload, logsFS)
 	if err != nil {
 		log.Fatalf("failed to get start/end for workload %q: %v", c.workload, err)
 	}
