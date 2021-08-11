@@ -79,15 +79,18 @@ def GenWorkloadStagesStatic(
 
 def GenWorkloadStagesIncreasing(
         AA_bps = None,
+        num_AA_backends = None,
         WA_bps_min = None,
         WA_bps_max = None):
+    AA_per_be_bps = int(fdiv(float(AA_bps), float(num_AA_backends)))
+
     AA_instances, AA_client_roles, AA_server_roles_for = BackendOnEachHost(
-        num_backends = 1,
+        num_backends = num_AA_backends,
         workload_stages_per_backend = [{
-            "target_average_bps": AA_bps,
+            "target_average_bps": AA_per_be_bps,
             "run_dur": "150s",
         }],
-        num_shards_per_backend = NumShards(AA_bps),
+        num_shards_per_backend = NumShards(AA_per_be_bps),
         num_servers_per_backend_host = 2,
         name_prefix = "AA_",
         starting_port = AA_FORTIO_STARTING_PORT,
@@ -525,7 +528,7 @@ def Gbps(x):
     return x * 1024 * 1024 * 1024
 
 def GenConfigs():
-    ALL_X = [2]  # [8, 9]  # [2, 4, 6, 8]
+    ALL_X = []  # [8, 9]  # [2, 4, 6, 8]
     ALL_Y = [7, 8]  # [2.5, 5]
     ALL_C = [float("2.0")]  # [1.25, 1.5]
     ALL_LOPRI_CAP = [19]
@@ -564,6 +567,7 @@ def GenConfigs():
         "shard_key": "inc",
     }, **GenWorkloadStagesIncreasing(
         AA_bps = int(Gbps(16)),
+        num_AA_backends = 5,
         WA_bps_min = int(Gbps(4)),
         WA_bps_max = int(Gbps(12)),
     ))
@@ -574,6 +578,7 @@ def GenConfigs():
     #     "shard_key": "inc",
     # }, **GenWorkloadStagesIncreasing(
     #     AA_bps = int(Gbps(18)),
+    #     num_AA_backends = 5,
     #     WA_bps_min = int(Gbps(2)),
     #     WA_bps_max = int(Gbps(6)),
     # ))
