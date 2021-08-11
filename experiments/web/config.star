@@ -40,15 +40,15 @@ A_PROP_DELAY_MS = 30
 B_PROP_DELAY_MS = 50
 
 def GenWorkloadStagesStatic(
-        be1_bps = None,
-        be2_bps = None):
+        A_bps = None,
+        B_bps = None):
     A_instances, A_client_roles, A_server_roles_for = BackendOnEachHost(
         num_backends = 1,
         workload_stages_per_backend = [{
-            "target_average_bps": be1_bps,
+            "target_average_bps": A_bps,
             "run_dur": "90s",
         }],
-        num_shards_per_backend = NumShards(be1_bps),
+        num_shards_per_backend = NumShards(A_bps),
         num_servers_per_backend_host = 2,
         name_prefix = "A_",
         starting_port = A_FORTIO_STARTING_PORT,
@@ -58,10 +58,10 @@ def GenWorkloadStagesStatic(
     B_instances, B_client_roles, B_server_roles_for = BackendOnEachHost(
         num_backends = 1,
         workload_stages_per_backend = [{
-            "target_average_bps": be2_bps,
+            "target_average_bps": B_bps,
             "run_dur": "90s",
         }],
-        num_shards_per_backend = NumShards(be2_bps),
+        num_shards_per_backend = NumShards(B_bps),
         num_servers_per_backend_host = 4,
         name_prefix = "B_",
         starting_port = B_FORTIO_STARTING_PORT,
@@ -78,44 +78,44 @@ def GenWorkloadStagesStatic(
     }
 
 def GenWorkloadStagesIncreasing(
-        be1_bps = None,
-        be2_bps_min = None,
-        be2_bps_max = None):
+        A_bps = None,
+        B_bps_min = None,
+        B_bps_max = None):
     A_instances, A_client_roles, A_server_roles_for = BackendOnEachHost(
         num_backends = 1,
         workload_stages_per_backend = [{
-            "target_average_bps": be1_bps,
+            "target_average_bps": A_bps,
             "run_dur": "150s",
         }],
-        num_shards_per_backend = NumShards(be1_bps),
+        num_shards_per_backend = NumShards(A_bps),
         num_servers_per_backend_host = 2,
         name_prefix = "A_",
         starting_port = A_FORTIO_STARTING_PORT,
         prop_delay_ms = A_PROP_DELAY_MS,
     )
 
-    tick_bps = (be2_bps_max - be2_bps_min) // 60
-    be2_stages = [{
-        "target_average_bps": be2_bps_min,
+    tick_bps = (B_bps_max - B_bps_min) // 60
+    B_stages = [{
+        "target_average_bps": B_bps_min,
         "run_dur": "15s",
     }]
 
     for tick in range(60):
-        bps = be2_bps_min + tick_bps * tick
-        be2_stages.append({
+        bps = B_bps_min + tick_bps * tick
+        B_stages.append({
             "target_average_bps": bps,
             "run_dur": "2s",
         })
 
-    be2_stages.append({
-        "target_average_bps": be2_bps_max,
+    B_stages.append({
+        "target_average_bps": B_bps_max,
         "run_dur": "15s",
     })
 
     B_instances, B_client_roles, B_server_roles_for = BackendOnEachHost(
         num_backends = 1,
-        workload_stages_per_backend = be2_stages,
-        num_shards_per_backend = NumShards(be2_bps_max),
+        workload_stages_per_backend = B_stages,
+        num_shards_per_backend = NumShards(B_bps_max),
         num_servers_per_backend_host = 4,
         name_prefix = "B_",
         starting_port = B_FORTIO_STARTING_PORT,
@@ -132,17 +132,17 @@ def GenWorkloadStagesIncreasing(
     }
 
 def GenWorkloadStagesOscillating(
-        be1_bps_min = None,
-        be1_bps_max = None,
-        be2_bps = None):
-    half_be1_bps_range = (be1_bps_max - be1_bps_min) // 2
-    be1_stages = []
+        A_bps_min = None,
+        A_bps_max = None,
+        B_bps = None):
+    half_A_bps_range = (A_bps_max - A_bps_min) // 2
+    A_stages = []
 
     #print("start ====")
     for cycle in range(4):
         for tick in range(30):
-            bps = be1_bps_min + half_be1_bps_range + half_be1_bps_range * math.sin(fdiv(tick * 2 * math.pi, float(30)))
-            be1_stages.append({
+            bps = A_bps_min + half_A_bps_range + half_A_bps_range * math.sin(fdiv(tick * 2 * math.pi, float(30)))
+            A_stages.append({
                 "target_average_bps": bps,
                 "run_dur": "2s",
             })
@@ -150,8 +150,8 @@ def GenWorkloadStagesOscillating(
 
     A_instances, A_client_roles, A_server_roles_for = BackendOnEachHost(
         num_backends = 1,
-        workload_stages_per_backend = be1_stages,
-        num_shards_per_backend = NumShards(be1_bps_max),
+        workload_stages_per_backend = A_stages,
+        num_shards_per_backend = NumShards(A_bps_max),
         num_servers_per_backend_host = 2,
         name_prefix = "A_",
         starting_port = A_FORTIO_STARTING_PORT,
@@ -161,10 +161,10 @@ def GenWorkloadStagesOscillating(
     B_instances, B_client_roles, B_server_roles_for = BackendOnEachHost(
         num_backends = 1,
         workload_stages_per_backend = [{
-            "target_average_bps": be2_bps,
+            "target_average_bps": B_bps,
             "run_dur": "240s",
         }],
-        num_shards_per_backend = NumShards(be2_bps),
+        num_shards_per_backend = NumShards(B_bps),
         num_servers_per_backend_host = 4,
         name_prefix = "B_",
         starting_port = B_FORTIO_STARTING_PORT,
@@ -540,13 +540,13 @@ def GenConfigs():
                         "B_approved_bps": int(Gbps(y)),
                         "shard_key": str("x{0}-y{1}-c{2}-lcap{3}".format(x, y, c, lopri_cap)),
                     }, **GenWorkloadStagesStatic(
-                        be1_bps = int(c * Gbps(x)),
-                        be2_bps = int(Gbps(y)),
+                        A_bps = int(c * Gbps(x)),
+                        B_bps = int(Gbps(y)),
                     ))
                     # }, **GenWorkloadStagesOscillating(
-                    #     be1_bps_min = int(Gbps(x) // 2),
-                    #     be1_bps_max = int(3 * Gbps(x) // 2),
-                    #     be2_bps = int(Gbps(y)),
+                    #     A_bps_min = int(Gbps(x) // 2),
+                    #     A_bps_max = int(3 * Gbps(x) // 2),
+                    #     B_bps = int(Gbps(y)),
                     # ))
 
                     prefix = "AH-{0}-A-{1}-B-{2}-LCAP-{3}".format(x, c * x, y, lopri_cap)
@@ -563,9 +563,9 @@ def GenConfigs():
         "B_approved_bps": int(Gbps(12)),
         "shard_key": "inc",
     }, **GenWorkloadStagesIncreasing(
-        be1_bps = int(Gbps(16)),
-        be2_bps_min = int(Gbps(4)),
-        be2_bps_max = int(Gbps(12)),
+        A_bps = int(Gbps(16)),
+        B_bps_min = int(Gbps(4)),
+        B_bps_max = int(Gbps(12)),
     ))
     # kwargs = dict({
     #     "A_approved_bps": int(Gbps(8)),
@@ -573,9 +573,9 @@ def GenConfigs():
     #     "B_approved_bps": int(Gbps(6)),
     #     "shard_key": "inc",
     # }, **GenWorkloadStagesIncreasing(
-    #     be1_bps = int(Gbps(18)),
-    #     be2_bps_min = int(Gbps(2)),
-    #     be2_bps_max = int(Gbps(6)),
+    #     A_bps = int(Gbps(18)),
+    #     B_bps_min = int(Gbps(2)),
+    #     B_bps_max = int(Gbps(6)),
     # ))
 
     prefix = "inc"
