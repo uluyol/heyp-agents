@@ -145,8 +145,8 @@ PlotGoodputTo <- function(subset, output) {
         stat_myecdf(size=1) +
         xlab("Goodput (Gbps)") +
         ylab("CDF across time") +
-        coord_cartesian(xlim=c(0, 10), ylim=c(0, 1), expand=FALSE) +
-        scale_x_continuous(breaks=seq(0, 10, by=2)) +
+        coord_cartesian(xlim=c(0, 14), ylim=c(0, 1), expand=FALSE) +
+        scale_x_continuous(breaks=seq(0, 14, by=2)) +
         scale_y_continuous(breaks=seq(0, 1, by=0.2)) +
         theme_bw() +
         guides(color=guide_legend(ncol=3), linetype=guide_legend(ncol=3)) +
@@ -370,13 +370,13 @@ for (cfgGroup in cfgGroups) {
                 GoodputGbps=goodput.summed$MeanBps / (2^30),
                 Kind=paste0(goodput.summed$Group, "/", goodput.summed$Instance)))
 
-        a2edge.hipri <- max(0, approvals$ApprovalBps[approvals$SrcDC == "A" & approvals$DstDC == "EDGE"]) / (2^30)
-        a2edge.lopri <- max(0, approvals$LOPRILimitBps[approvals$SrcDC == "A" & approvals$DstDC == "EDGE"]) / (2^30)
+        aa2edge.hipri <- max(0, approvals$ApprovalBps[approvals$SrcDC == "AA" & approvals$DstDC == "EDGE"]) / (2^30)
+        aa2edge.lopri <- max(0, approvals$LOPRILimitBps[approvals$SrcDC == "AA" & approvals$DstDC == "EDGE"]) / (2^30)
 
-        b2edge.hipri <- max(0, approvals$ApprovalBps[approvals$SrcDC == "B" & approvals$DstDC == "EDGE"]) / (2^30)
-        b2edge.lopri <- max(0, approvals$LOPRILimitBps[approvals$SrcDC == "B" & approvals$DstDC == "EDGE"]) / (2^30)
+        wa2edge.hipri <- max(0, approvals$ApprovalBps[approvals$SrcDC == "WA" & approvals$DstDC == "EDGE"]) / (2^30)
+        wa2edge.lopri <- max(0, approvals$LOPRILimitBps[approvals$SrcDC == "WA" & approvals$DstDC == "EDGE"]) / (2^30)
 
-        usage.ts <- usage.ts[grepl("(A|B)_TO_EDGE", usage.ts$FG),]
+        usage.ts <- usage.ts[grepl("(AA|WA)_TO_EDGE", usage.ts$FG),]
 
         usage.ts$UsageGbps <- usage.ts$Usage / (2^30)
         usage.summed <- aggregate(UsageGbps ~ UnixTime + FG + QoS,
@@ -386,32 +386,32 @@ for (cfgGroup in cfgGroups) {
         usage.summed$Overage <- rep.int(-1, nrow(usage.summed))
         usage.summed$OverageFrac <- rep.int(-1, nrow(usage.summed))
 
-        mask <- usage.summed$FG == "A_TO_EDGE" & usage.summed$QoS == "HIPRI"
+        mask <- usage.summed$FG == "AA_TO_EDGE" & usage.summed$QoS == "HIPRI"
         usage.summed$Overage[mask] <-
-            pmax(0, usage.summed$UsageGbps[mask] - a2edge.hipri)
+            pmax(0, usage.summed$UsageGbps[mask] - aa2edge.hipri)
         usage.summed$OverageFrac[mask] <-
-            usage.summed$Overage[mask] / a2edge.hipri
+            usage.summed$Overage[mask] / aa2edge.hipri
         usage.summed$OverageFrac[mask & usage.summed$Overage == 0] <- 0
 
-        mask <- usage.summed$FG == "A_TO_EDGE" & usage.summed$QoS == "LOPRI"
+        mask <- usage.summed$FG == "AA_TO_EDGE" & usage.summed$QoS == "LOPRI"
         usage.summed$Overage[mask] <-
-            pmax(0, usage.summed$UsageGbps[mask] - a2edge.lopri)
+            pmax(0, usage.summed$UsageGbps[mask] - aa2edge.lopri)
         usage.summed$OverageFrac[mask] <-
-            usage.summed$Overage[mask] / a2edge.lopri
+            usage.summed$Overage[mask] / aa2edge.lopri
         usage.summed$OverageFrac[mask & usage.summed$Overage == 0] <- 0
 
-        mask <- usage.summed$FG == "B_TO_EDGE" & usage.summed$QoS == "HIPRI"
+        mask <- usage.summed$FG == "WA_TO_EDGE" & usage.summed$QoS == "HIPRI"
         usage.summed$Overage[mask] <-
-            pmax(0, usage.summed$UsageGbps[mask] - b2edge.hipri)
+            pmax(0, usage.summed$UsageGbps[mask] - wa2edge.hipri)
         usage.summed$OverageFrac[mask] <-
-            usage.summed$Overage[mask] / b2edge.hipri
+            usage.summed$Overage[mask] / wa2edge.hipri
         usage.summed$OverageFrac[mask & usage.summed$Overage == 0] <- 0
 
-        mask <- usage.summed$FG == "B_TO_EDGE" & usage.summed$QoS == "LOPRI"
+        mask <- usage.summed$FG == "WA_TO_EDGE" & usage.summed$QoS == "LOPRI"
         usage.summed$Overage[mask] <-
-            pmax(0, usage.summed$UsageGbps[mask] - b2edge.lopri)
+            pmax(0, usage.summed$UsageGbps[mask] - wa2edge.lopri)
         usage.summed$OverageFrac[mask] <-
-            usage.summed$Overage[mask] / b2edge.lopri
+            usage.summed$Overage[mask] / wa2edge.lopri
         usage.summed$OverageFrac[mask & usage.summed$Overage == 0] <- 0
 
         overage <- rbind(
@@ -425,30 +425,30 @@ for (cfgGroup in cfgGroups) {
 
         truedemand.ts$TrueDemandGbps <- truedemand.ts$Demand / (2^30)
 
-        truedemand.a2edge <- truedemand.ts[truedemand.ts$FG == "A_TO_EDGE",]
-        truedemand.b2edge <- truedemand.ts[truedemand.ts$FG == "B_TO_EDGE",]
+        truedemand.aa2edge <- truedemand.ts[truedemand.ts$FG == "AA_TO_EDGE",]
+        truedemand.wa2edge <- truedemand.ts[truedemand.ts$FG == "WA_TO_EDGE",]
 
         admitted.want <- rbind(
             data.frame(
-                UnixTime=truedemand.a2edge$UnixTime,
-                FG=truedemand.a2edge$FG,
-                QoS=rep.int("HIPRI", nrow(truedemand.a2edge)),
-                WantGbps=pmin(truedemand.a2edge$TrueDemandGbps, a2edge.hipri)),
+                UnixTime=truedemand.aa2edge$UnixTime,
+                FG=truedemand.aa2edge$FG,
+                QoS=rep.int("HIPRI", nrow(truedemand.aa2edge)),
+                WantGbps=pmin(truedemand.aa2edge$TrueDemandGbps, aa2edge.hipri)),
             data.frame(
-                UnixTime=truedemand.a2edge$UnixTime,
-                FG=truedemand.a2edge$FG,
-                QoS=rep.int("LOPRI", nrow(truedemand.a2edge)),
-                WantGbps=pmin(pmax(0, truedemand.a2edge$TrueDemandGbps - a2edge.hipri), a2edge.lopri)),
+                UnixTime=truedemand.aa2edge$UnixTime,
+                FG=truedemand.aa2edge$FG,
+                QoS=rep.int("LOPRI", nrow(truedemand.aa2edge)),
+                WantGbps=pmin(pmax(0, truedemand.aa2edge$TrueDemandGbps - aa2edge.hipri), aa2edge.lopri)),
             data.frame(
-                UnixTime=truedemand.b2edge$UnixTime,
-                FG=truedemand.b2edge$FG,
-                QoS=rep.int("HIPRI", nrow(truedemand.b2edge)),
-                WantGbps=pmin(truedemand.b2edge$TrueDemandGbps, b2edge.hipri)),
+                UnixTime=truedemand.wa2edge$UnixTime,
+                FG=truedemand.wa2edge$FG,
+                QoS=rep.int("HIPRI", nrow(truedemand.wa2edge)),
+                WantGbps=pmin(truedemand.wa2edge$TrueDemandGbps, wa2edge.hipri)),
             data.frame(
-                UnixTime=truedemand.b2edge$UnixTime,
-                FG=truedemand.b2edge$FG,
-                QoS=rep.int("LOPRI", nrow(truedemand.b2edge)),
-                WantGbps=pmin(pmax(0, truedemand.b2edge$TrueDemandGbps - b2edge.hipri), a2edge.lopri)))
+                UnixTime=truedemand.wa2edge$UnixTime,
+                FG=truedemand.wa2edge$FG,
+                QoS=rep.int("LOPRI", nrow(truedemand.wa2edge)),
+                WantGbps=pmin(pmax(0, truedemand.wa2edge$TrueDemandGbps - wa2edge.hipri), aa2edge.lopri)))
 
         shortage.this <- merge(usage.summed, admitted.want, by=c("UnixTime", "FG", "QoS"))
         shortage.this$ShortageGbps <- pmax(0, shortage.this$WantGbps - shortage.this$UsageGbps)
@@ -479,7 +479,7 @@ for (cfgGroup in cfgGroups) {
     for (fg in unique(overage$FG)) {
         fgsubset <- overage[overage$FG == fg,]
         for (qos in unique(fgsubset$QoS)) {
-            if (sum(fgsubset$OverageGbps[fgsubset$QoS == qos]) > 0) {
+            if (qos != "LOPRI" && sum(fgsubset$OverageGbps[fgsubset$QoS == qos]) > 0) {
                 PlotOverageTo(fgsubset[fgsubset$QoS == qos,], file.path(summarydir, paste0(cfgGroup, "-overage-", fg, "-", qos, ".pdf")))
             }
         }
@@ -488,7 +488,7 @@ for (cfgGroup in cfgGroups) {
     for (fg in unique(shortage$FG)) {
         fgsubset <- shortage[shortage$FG == fg,]
         for (qos in unique(fgsubset$QoS)) {
-            if (sum(fgsubset$ShortageGbps[fgsubset$QoS == qos]) > 0) {
+            if (qos != "LOPRI" && sum(fgsubset$ShortageGbps[fgsubset$QoS == qos]) > 0) {
                 PlotShortageTo(fgsubset[fgsubset$QoS == qos,], file.path(summarydir, paste0(cfgGroup, "-shortage-", fg, "-", qos, ".pdf")))
             }
         }
@@ -497,7 +497,7 @@ for (cfgGroup in cfgGroups) {
     for (fg in unique(overage$FG)) {
         fgsubset <- overage[overage$FG == fg,]
         for (qos in unique(fgsubset$QoS)) {
-            if (sum(fgsubset$OverageGbps[fgsubset$QoS == qos]) > 0) {
+            if (qos != "LOPRI" && sum(fgsubset$OverageGbps[fgsubset$QoS == qos]) > 0) {
                 PlotFracOverageTo(fgsubset[fgsubset$QoS == qos,], file.path(summarydir, paste0(cfgGroup, "-fracoverage-", fg, "-", qos, ".pdf")))
             }
         }
@@ -506,7 +506,7 @@ for (cfgGroup in cfgGroups) {
     for (fg in unique(shortage$FG)) {
         fgsubset <- shortage[shortage$FG == fg,]
         for (qos in unique(fgsubset$QoS)) {
-            if (sum(fgsubset$ShortageGbps[fgsubset$QoS == qos]) > 0) {
+            if (qos != "LOPRI" && sum(fgsubset$ShortageGbps[fgsubset$QoS == qos]) > 0) {
                 PlotFracShortageTo(fgsubset[fgsubset$QoS == qos,], file.path(summarydir, paste0(cfgGroup, "-fracshortage-", fg, "-", qos, ".pdf")))
             }
         }
