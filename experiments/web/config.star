@@ -33,151 +33,151 @@ def NumConnsPerShard(stages, size_dist, num_shards, prop_delay_ms):
 
     return int(math.ceil(num_conns_per_shard * float(5)))
 
-A_FORTIO_STARTING_PORT = 6000
-B_FORTIO_STARTING_PORT = 6100
+AA_FORTIO_STARTING_PORT = 6000
+WA_FORTIO_STARTING_PORT = 6100
 
-A_PROP_DELAY_MS = 30
-B_PROP_DELAY_MS = 50
+AA_PROP_DELAY_MS = 30
+WA_PROP_DELAY_MS = 50
 
 def GenWorkloadStagesStatic(
-        A_bps = None,
-        B_bps = None):
-    A_instances, A_client_roles, A_server_roles_for = BackendOnEachHost(
+        AA_bps = None,
+        WA_bps = None):
+    AA_instances, AA_client_roles, AA_server_roles_for = BackendOnEachHost(
         num_backends = 1,
         workload_stages_per_backend = [{
-            "target_average_bps": A_bps,
+            "target_average_bps": AA_bps,
             "run_dur": "90s",
         }],
-        num_shards_per_backend = NumShards(A_bps),
+        num_shards_per_backend = NumShards(AA_bps),
         num_servers_per_backend_host = 2,
-        name_prefix = "A_",
-        starting_port = A_FORTIO_STARTING_PORT,
-        prop_delay_ms = A_PROP_DELAY_MS,
+        name_prefix = "AA_",
+        starting_port = AA_FORTIO_STARTING_PORT,
+        prop_delay_ms = AA_PROP_DELAY_MS,
     )
 
-    B_instances, B_client_roles, B_server_roles_for = BackendOnEachHost(
+    WA_instances, WA_client_roles, WA_server_roles_for = BackendOnEachHost(
         num_backends = 1,
         workload_stages_per_backend = [{
-            "target_average_bps": B_bps,
+            "target_average_bps": WA_bps,
             "run_dur": "90s",
         }],
-        num_shards_per_backend = NumShards(B_bps),
+        num_shards_per_backend = NumShards(WA_bps),
         num_servers_per_backend_host = 4,
-        name_prefix = "B_",
-        starting_port = B_FORTIO_STARTING_PORT,
-        prop_delay_ms = B_PROP_DELAY_MS,
+        name_prefix = "WA_",
+        starting_port = WA_FORTIO_STARTING_PORT,
+        prop_delay_ms = WA_PROP_DELAY_MS,
     )
 
     return {
-        "A_fortio_instances": A_instances,
-        "A_client_roles": A_client_roles,
-        "A_server_roles_for": A_server_roles_for,
-        "B_fortio_instances": B_instances,
-        "B_client_roles": B_client_roles,
-        "B_server_roles_for": B_server_roles_for,
+        "AA_fortio_instances": AA_instances,
+        "AA_client_roles": AA_client_roles,
+        "AA_server_roles_for": AA_server_roles_for,
+        "WA_fortio_instances": WA_instances,
+        "WA_client_roles": WA_client_roles,
+        "WA_server_roles_for": WA_server_roles_for,
     }
 
 def GenWorkloadStagesIncreasing(
-        A_bps = None,
-        B_bps_min = None,
-        B_bps_max = None):
-    A_instances, A_client_roles, A_server_roles_for = BackendOnEachHost(
+        AA_bps = None,
+        WA_bps_min = None,
+        WA_bps_max = None):
+    AA_instances, AA_client_roles, AA_server_roles_for = BackendOnEachHost(
         num_backends = 1,
         workload_stages_per_backend = [{
-            "target_average_bps": A_bps,
+            "target_average_bps": AA_bps,
             "run_dur": "150s",
         }],
-        num_shards_per_backend = NumShards(A_bps),
+        num_shards_per_backend = NumShards(AA_bps),
         num_servers_per_backend_host = 2,
-        name_prefix = "A_",
-        starting_port = A_FORTIO_STARTING_PORT,
-        prop_delay_ms = A_PROP_DELAY_MS,
+        name_prefix = "AA_",
+        starting_port = AA_FORTIO_STARTING_PORT,
+        prop_delay_ms = AA_PROP_DELAY_MS,
     )
 
-    tick_bps = (B_bps_max - B_bps_min) // 60
-    B_stages = [{
-        "target_average_bps": B_bps_min,
+    tick_bps = (WA_bps_max - WA_bps_min) // 60
+    WA_stages = [{
+        "target_average_bps": WA_bps_min,
         "run_dur": "15s",
     }]
 
     for tick in range(60):
-        bps = B_bps_min + tick_bps * tick
-        B_stages.append({
+        bps = WA_bps_min + tick_bps * tick
+        WA_stages.append({
             "target_average_bps": bps,
             "run_dur": "2s",
         })
 
-    B_stages.append({
-        "target_average_bps": B_bps_max,
+    WA_stages.append({
+        "target_average_bps": WA_bps_max,
         "run_dur": "15s",
     })
 
-    B_instances, B_client_roles, B_server_roles_for = BackendOnEachHost(
+    WA_instances, WA_client_roles, WA_server_roles_for = BackendOnEachHost(
         num_backends = 1,
-        workload_stages_per_backend = B_stages,
-        num_shards_per_backend = NumShards(B_bps_max),
+        workload_stages_per_backend = WA_stages,
+        num_shards_per_backend = NumShards(WA_bps_max),
         num_servers_per_backend_host = 4,
-        name_prefix = "B_",
-        starting_port = B_FORTIO_STARTING_PORT,
-        prop_delay_ms = B_PROP_DELAY_MS,
+        name_prefix = "WA_",
+        starting_port = WA_FORTIO_STARTING_PORT,
+        prop_delay_ms = WA_PROP_DELAY_MS,
     )
 
     return {
-        "A_fortio_instances": A_instances,
-        "A_client_roles": A_client_roles,
-        "A_server_roles_for": A_server_roles_for,
-        "B_fortio_instances": B_instances,
-        "B_client_roles": B_client_roles,
-        "B_server_roles_for": B_server_roles_for,
+        "AA_fortio_instances": AA_instances,
+        "AA_client_roles": AA_client_roles,
+        "AA_server_roles_for": AA_server_roles_for,
+        "WA_fortio_instances": WA_instances,
+        "WA_client_roles": WA_client_roles,
+        "WA_server_roles_for": WA_server_roles_for,
     }
 
 def GenWorkloadStagesOscillating(
-        A_bps_min = None,
-        A_bps_max = None,
-        B_bps = None):
-    half_A_bps_range = (A_bps_max - A_bps_min) // 2
-    A_stages = []
+        AA_bps_min = None,
+        AA_bps_max = None,
+        WA_bps = None):
+    half_AA_bps_range = (AA_bps_max - AA_bps_min) // 2
+    AA_stages = []
 
     #print("start ====")
     for cycle in range(4):
         for tick in range(30):
-            bps = A_bps_min + half_A_bps_range + half_A_bps_range * math.sin(fdiv(tick * 2 * math.pi, float(30)))
-            A_stages.append({
+            bps = AA_bps_min + half_AA_bps_range + half_AA_bps_range * math.sin(fdiv(tick * 2 * math.pi, float(30)))
+            AA_stages.append({
                 "target_average_bps": bps,
                 "run_dur": "2s",
             })
             #print(tick, bps)
 
-    A_instances, A_client_roles, A_server_roles_for = BackendOnEachHost(
+    AA_instances, AA_client_roles, AA_server_roles_for = BackendOnEachHost(
         num_backends = 1,
-        workload_stages_per_backend = A_stages,
-        num_shards_per_backend = NumShards(A_bps_max),
+        workload_stages_per_backend = AA_stages,
+        num_shards_per_backend = NumShards(AA_bps_max),
         num_servers_per_backend_host = 2,
-        name_prefix = "A_",
-        starting_port = A_FORTIO_STARTING_PORT,
-        prop_delay_ms = A_PROP_DELAY_MS,
+        name_prefix = "AA_",
+        starting_port = AA_FORTIO_STARTING_PORT,
+        prop_delay_ms = AA_PROP_DELAY_MS,
     )
 
-    B_instances, B_client_roles, B_server_roles_for = BackendOnEachHost(
+    WA_instances, WA_client_roles, WA_server_roles_for = BackendOnEachHost(
         num_backends = 1,
         workload_stages_per_backend = [{
-            "target_average_bps": B_bps,
+            "target_average_bps": WA_bps,
             "run_dur": "240s",
         }],
-        num_shards_per_backend = NumShards(B_bps),
+        num_shards_per_backend = NumShards(WA_bps),
         num_servers_per_backend_host = 4,
-        name_prefix = "B_",
-        starting_port = B_FORTIO_STARTING_PORT,
-        prop_delay_ms = B_PROP_DELAY_MS,
+        name_prefix = "WA_",
+        starting_port = WA_FORTIO_STARTING_PORT,
+        prop_delay_ms = WA_PROP_DELAY_MS,
     )
 
     return {
-        "A_fortio_instances": A_instances,
-        "A_client_roles": A_client_roles,
-        "A_server_roles_for": A_server_roles_for,
-        "B_fortio_instances": B_instances,
-        "B_client_roles": B_client_roles,
-        "B_server_roles_for": B_server_roles_for,
+        "AA_fortio_instances": AA_instances,
+        "AA_client_roles": AA_client_roles,
+        "AA_server_roles_for": AA_server_roles_for,
+        "WA_fortio_instances": WA_instances,
+        "WA_client_roles": WA_client_roles,
+        "WA_server_roles_for": WA_server_roles_for,
     }
 
 def GenConfig(
@@ -185,15 +185,15 @@ def GenConfig(
         ca_limits_to_apply = None,
         limit_hipri = None,
         limit_lopri = None,
-        A_approved_bps = None,
-        A_surplus_bps = None,
-        A_server_roles_for = None,
-        A_client_roles = None,
-        A_fortio_instances = None,
-        B_approved_bps = None,
-        B_server_roles_for = None,
-        B_client_roles = None,
-        B_fortio_instances = None,
+        AA_approved_bps = None,
+        AA_surplus_bps = None,
+        AA_server_roles_for = None,
+        AA_client_roles = None,
+        AA_fortio_instances = None,
+        WA_approved_bps = None,
+        WA_server_roles_for = None,
+        WA_client_roles = None,
+        WA_fortio_instances = None,
         shard_key = ""):
     nodes = []
     clusters = {
@@ -202,34 +202,34 @@ def GenConfig(
             "node_names": [],
             "cluster_agent_port": 4560,
         },
-        "A": {
-            "name": "A",
+        "AA": {
+            "name": "AA",
             "node_names": [],
             "limits": {
                 "flow_allocs": [
                     {
                         "flow": {
-                            "src_dc": "A",
+                            "src_dc": "AA",
                             "dst_dc": "EDGE",
                         },
-                        "hipri_rate_limit_bps": A_approved_bps,
-                        "lopri_rate_limit_bps": A_surplus_bps,
+                        "hipri_rate_limit_bps": AA_approved_bps,
+                        "lopri_rate_limit_bps": AA_surplus_bps,
                     },
                 ],
             },
             "cluster_agent_port": 4570,
         },
-        "B": {
-            "name": "B",
+        "WA": {
+            "name": "WA",
             "node_names": [],
             "limits": {
                 "flow_allocs": [
                     {
                         "flow": {
-                            "src_dc": "B",
+                            "src_dc": "WA",
                             "dst_dc": "EDGE",
                         },
-                        "hipri_rate_limit_bps": B_approved_bps,
+                        "hipri_rate_limit_bps": WA_approved_bps,
                         "lopri_rate_limit_bps": 0,
                     },
                 ],
@@ -262,20 +262,20 @@ def GenConfig(
         if i == 1:
             roles = ["cluster-agent"]
             clusters["EDGE"]["node_names"].append(name)
-            clusters["A"]["node_names"].append(name)
-            clusters["B"]["node_names"].append(name)
+            clusters["AA"]["node_names"].append(name)
+            clusters["WA"]["node_names"].append(name)
             clusters["CLIENT"]["node_names"].append(name)
         elif i <= 3:
             roles = ["host-agent", "fortio-G-envoy-proxy"]
             clusters["EDGE"]["node_names"].append(name)
         elif i <= 12:
-            roles = ["host-agent"] + A_server_roles_for(i - 4, 9)
-            clusters["A"]["node_names"].append(name)
+            roles = ["host-agent"] + AA_server_roles_for(i - 4, 9)
+            clusters["AA"]["node_names"].append(name)
         elif i <= 14:
-            roles = ["host-agent"] + B_server_roles_for(i - 13, 2)
-            clusters["B"]["node_names"].append(name)
+            roles = ["host-agent"] + WA_server_roles_for(i - 13, 2)
+            clusters["WA"]["node_names"].append(name)
         else:
-            roles = ["host-agent"] + A_client_roles + B_client_roles
+            roles = ["host-agent"] + AA_client_roles + WA_client_roles
             clusters["CLIENT"]["node_names"].append(name)
         experiment_ip = "192.168.1." + str(i)
         external_ip, shard_index = ext_addr_for_ip(experiment_ip, shard_key)
@@ -338,7 +338,7 @@ def GenConfig(
                 "dc_pairs": [
                     {
                         "src_dc": "EDGE",
-                        "dst_dc": "A",
+                        "dst_dc": "AA",
                         "netem": {
                             "delay_ms": 30,
                             "delay_jitter_ms": 1,  # 5
@@ -348,7 +348,7 @@ def GenConfig(
                     },
                     {
                         "src_dc": "EDGE",
-                        "dst_dc": "B",
+                        "dst_dc": "WA",
                         "netem": {
                             "delay_ms": 50,
                             "delay_jitter_ms": 1,  # 10
@@ -358,7 +358,7 @@ def GenConfig(
                     },
                     {
                         "src_dc": "CLIENT",
-                        "dst_dc": "A",
+                        "dst_dc": "AA",
                         "netem": {
                             "delay_ms": 30,
                             "delay_jitter_ms": 1,  # 5
@@ -368,7 +368,7 @@ def GenConfig(
                     },
                     {
                         "src_dc": "CLIENT",
-                        "dst_dc": "B",
+                        "dst_dc": "WA",
                         "netem": {
                             "delay_ms": 50,
                             "delay_jitter_ms": 1,  # 10
@@ -385,7 +385,7 @@ def GenConfig(
             "envoy_admin_port": 5001,
             "envoy_num_threads": 10,
         }],
-        fortio_instances = A_fortio_instances + B_fortio_instances,
+        fortio_instances = AA_fortio_instances + WA_fortio_instances,
     ))
 
 OVERSUB_FACTOR = float("1.25")
@@ -535,21 +535,21 @@ def GenConfigs():
             for c in ALL_C:
                 for lopri_cap in ALL_LOPRI_CAP:
                     kwargs = dict({
-                        "A_approved_bps": int(Gbps(x)),
-                        "A_surplus_bps": int(Gbps(2 + lopri_cap - x - y)),
-                        "B_approved_bps": int(Gbps(y)),
+                        "AA_approved_bps": int(Gbps(x)),
+                        "AA_surplus_bps": int(Gbps(2 + lopri_cap - x - y)),
+                        "WA_approved_bps": int(Gbps(y)),
                         "shard_key": str("x{0}-y{1}-c{2}-lcap{3}".format(x, y, c, lopri_cap)),
                     }, **GenWorkloadStagesStatic(
-                        A_bps = int(c * Gbps(x)),
-                        B_bps = int(Gbps(y)),
+                        AA_bps = int(c * Gbps(x)),
+                        WA_bps = int(Gbps(y)),
                     ))
                     # }, **GenWorkloadStagesOscillating(
-                    #     A_bps_min = int(Gbps(x) // 2),
-                    #     A_bps_max = int(3 * Gbps(x) // 2),
-                    #     B_bps = int(Gbps(y)),
+                    #     AA_bps_min = int(Gbps(x) // 2),
+                    #     AA_bps_max = int(3 * Gbps(x) // 2),
+                    #     WA_bps = int(Gbps(y)),
                     # ))
 
-                    prefix = "AH-{0}-A-{1}-B-{2}-LCAP-{3}".format(x, c * x, y, lopri_cap)
+                    prefix = "AH-{0}-AA-{1}-WA-{2}-LCAP-{3}".format(x, c * x, y, lopri_cap)
 
                     configs[prefix + "-hsc"] = HSC20Config(**kwargs)
                     configs[prefix + "-nl"] = NoLimitConfig(**kwargs)
@@ -558,24 +558,24 @@ def GenConfigs():
                     configs[prefix + "-rl"] = RateLimitConfig(**kwargs)
 
     kwargs = dict({
-        "A_approved_bps": int(Gbps(2)),
-        "A_surplus_bps": int(Gbps(10)),
-        "B_approved_bps": int(Gbps(12)),
+        "AA_approved_bps": int(Gbps(2)),
+        "AA_surplus_bps": int(Gbps(10)),
+        "WA_approved_bps": int(Gbps(12)),
         "shard_key": "inc",
     }, **GenWorkloadStagesIncreasing(
-        A_bps = int(Gbps(16)),
-        B_bps_min = int(Gbps(4)),
-        B_bps_max = int(Gbps(12)),
+        AA_bps = int(Gbps(16)),
+        WA_bps_min = int(Gbps(4)),
+        WA_bps_max = int(Gbps(12)),
     ))
     # kwargs = dict({
-    #     "A_approved_bps": int(Gbps(8)),
-    #     "A_surplus_bps": int(Gbps(10)),
-    #     "B_approved_bps": int(Gbps(6)),
+    #     "AA_approved_bps": int(Gbps(8)),
+    #     "AA_surplus_bps": int(Gbps(10)),
+    #     "WA_approved_bps": int(Gbps(6)),
     #     "shard_key": "inc",
     # }, **GenWorkloadStagesIncreasing(
-    #     A_bps = int(Gbps(18)),
-    #     B_bps_min = int(Gbps(2)),
-    #     B_bps_max = int(Gbps(6)),
+    #     AA_bps = int(Gbps(18)),
+    #     WA_bps_min = int(Gbps(2)),
+    #     WA_bps_max = int(Gbps(6)),
     # ))
 
     prefix = "inc"
