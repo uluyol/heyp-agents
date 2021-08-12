@@ -97,7 +97,7 @@ func (*clusterAllocQoSLifetime) Name() string    { return "cluster-alloc-qos-lif
 func (c *clusterAllocQoSLifetime) Usage() string { return logsUsage(c) }
 
 func (*clusterAllocQoSLifetime) Synopsis() string {
-	return "extract per-host bw stats (demand, usage, rate limits) from cluster alloc"
+	return "print qos lifetimes from cluster alloc logs"
 }
 
 func (c *clusterAllocQoSLifetime) SetFlags(fs *flag.FlagSet) {
@@ -117,6 +117,42 @@ func (c *clusterAllocQoSLifetime) Execute(ctx context.Context, fs *flag.FlagSet,
 	}
 
 	err = proc.PrintDebugClusterQoSLifetime(logsFS, c.output, start, end)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return subcommands.ExitSuccess
+}
+
+type clusterAllocQoSRetained struct {
+	output   string
+	workload startEndWorkloadFlag
+}
+
+func (*clusterAllocQoSRetained) Name() string    { return "cluster-alloc-qos-retained" }
+func (c *clusterAllocQoSRetained) Usage() string { return logsUsage(c) }
+
+func (*clusterAllocQoSRetained) Synopsis() string {
+	return "print fraction of hosts that maintain their qos over time from cluster alloc logs"
+}
+
+func (c *clusterAllocQoSRetained) SetFlags(fs *flag.FlagSet) {
+	fs.StringVar(&c.output, "out", "cluster-qos-retained.csv", "output file")
+	wlFlag(&c.workload, fs)
+}
+
+func (c *clusterAllocQoSRetained) Execute(ctx context.Context, fs *flag.FlagSet, args ...interface{}) subcommands.ExitStatus {
+	log.SetPrefix("cluster-alloc-qos-retained: ")
+
+	logsFS := mustLogsFS(fs)
+	defer logsFS.Close()
+
+	start, end, err := getStartEnd(c.workload, logsFS)
+	if err != nil {
+		log.Fatalf("failed to get start/end for workload %q: %v", c.workload, err)
+	}
+
+	err = proc.PrintDebugClusterQoSRetained(logsFS, c.output, start, end)
 	if err != nil {
 		log.Fatal(err)
 	}

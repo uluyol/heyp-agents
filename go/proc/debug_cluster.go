@@ -225,8 +225,6 @@ func PrintDebugClusterQoSLifetime(fsys fs.FS, outfile string, start, end time.Ti
 		Node  string
 	}
 
-	curQoS := make(map[key]timeAndQoS)
-
 	outs := make([][]byte, len(logs))
 	var eg errgroup.Group
 	for logi, l := range logs {
@@ -242,6 +240,7 @@ func PrintDebugClusterQoSLifetime(fsys fs.FS, outfile string, start, end time.Ti
 			defer f.Close()
 			r := NewProtoJSONRecReader(f)
 			var curTime time.Time
+			curQoS := make(map[key]timeAndQoS)
 			for {
 				rec := new(pb.DebugAllocRecord)
 				if !r.ScanInto(rec) {
@@ -337,6 +336,169 @@ func PrintDebugClusterQoSLifetime(fsys fs.FS, outfile string, start, end time.Ti
 
 	if err == nil {
 		_, err = io.WriteString(f, "FG,Host,QoS,LifetimeSec\n")
+	}
+	if err == nil {
+		err = SortedPrintTable(f, outs, ",")
+	}
+	return err
+}
+
+func PrintDebugClusterQoSRetained(fsys fs.FS, outfile string, start, end time.Time) error {
+	logs, err := regGlobFiles(fsys, clusterAllocLogsRegex)
+	if err != nil {
+		return fmt.Errorf("failed to find cluster alloc logs: %w", err)
+	}
+
+	idToNode := getHostIDMap(fsys)
+
+	type key struct {
+		SrcDC string
+		DstDC string
+		Node  string
+	}
+
+	outs := make([][]byte, len(logs))
+	var eg errgroup.Group
+	for logi, l := range logs {
+		logi := logi
+		l := l
+		eg.Go(func() error {
+			qosWasLOPRI := make(map[key]bool)
+
+			var buf bytes.Buffer
+
+			f, err := fsys.Open(l)
+			if err != nil {
+				return fmt.Errorf("failed to open %s: %w", l, err)
+			}
+			defer f.Close()
+			r := NewProtoJSONRecReader(f)
+			var curTime time.Time
+			for {
+				rec := new(pb.DebugAllocRecord)
+				if !r.ScanInto(rec) {
+					break
+				}
+
+				// Process record
+				curTime, err = time.Parse(time.RFC3339Nano, rec.GetTimestamp())
+				if err != nil {
+					// skip bad records
+					continue
+				}
+
+				if curTime.After(end) {
+					break // end early
+				}
+
+				type fgCounters struct {
+					numHIPRIRetained int
+					numLOPRIRetained int
+					numPrevHIPRI     int
+					numPrevLOPRI     int
+					numToHIPRI       int
+					numToLOPRI       int
+				}
+
+				allCounters := make(map[key]*fgCounters)
+
+				for _, alloc := range rec.GetFlowAllocs() {
+					key := key{
+						SrcDC: alloc.GetFlow().GetSrcDc(),
+						DstDC: alloc.Flow.GetDstDc(),
+						Node:  idToNode[alloc.GetFlow().GetHostId()],
+					}
+
+					fgKey := key
+					fgKey.Node = ""
+
+					counters := allCounters[fgKey]
+					if counters == nil {
+						counters = new(fgCounters)
+						allCounters[fgKey] = counters
+					}
+
+					isLOPRI := alloc.LopriRateLimitBps > 0
+					wasLOPRI := qosWasLOPRI[key]
+					if wasLOPRI {
+						counters.numPrevLOPRI++
+						if isLOPRI {
+							counters.numLOPRIRetained++
+						} else {
+							counters.numToHIPRI++
+						}
+					} else {
+						counters.numPrevHIPRI++
+						if !isLOPRI {
+							counters.numHIPRIRetained++
+						} else {
+							counters.numToLOPRI++
+						}
+					}
+					qosWasLOPRI[key] = isLOPRI
+				}
+
+				if curTime.Before(start) {
+					continue // don't print early records
+				}
+
+				keys := make([]key, 0, len(allCounters))
+				for key := range allCounters {
+					keys = append(keys, key)
+				}
+
+				sort.Slice(keys, func(i, j int) bool {
+					if keys[i].SrcDC == keys[j].SrcDC {
+						if keys[i].DstDC == keys[j].DstDC {
+							return keys[i].Node < keys[j].Node
+						}
+						return keys[i].DstDC < keys[j].DstDC
+					}
+					return keys[i].SrcDC < keys[j].SrcDC
+				})
+
+				for _, key := range keys {
+					counters := allCounters[key]
+
+					var fracHIPRIRetained, fracLOPRIRetained float64 = 1, 1
+					if counters.numPrevHIPRI > 0 {
+						fracHIPRIRetained = float64(counters.numHIPRIRetained) /
+							float64(counters.numPrevHIPRI)
+					}
+					if counters.numPrevLOPRI > 0 {
+						fracLOPRIRetained = float64(counters.numLOPRIRetained) /
+							float64(counters.numPrevLOPRI)
+					}
+
+					fmt.Fprintf(&buf, "%f,%s_TO_%s,%f,%f,%d,%d,%d,%d,%d,%d\n", unixSec(curTime), key.SrcDC, key.DstDC,
+						fracHIPRIRetained, fracLOPRIRetained,
+						counters.numHIPRIRetained, counters.numToLOPRI, counters.numPrevHIPRI,
+						counters.numLOPRIRetained, counters.numToHIPRI, counters.numPrevLOPRI)
+				}
+			}
+
+			err = r.Err()
+			if err != nil {
+				err = fmt.Errorf("failed to read %s: %v", l, err)
+			} else {
+				outs[logi] = buf.Bytes()
+			}
+			return err
+		})
+	}
+
+	err = eg.Wait()
+
+	var f *os.File
+	if err == nil {
+		f, err = os.Create(outfile)
+	}
+	if f != nil {
+		defer f.Close()
+	}
+
+	if err == nil {
+		_, err = io.WriteString(f, "UnixTime,FG,FracHIPRIRetained,FracLOPRIRetained,NumHIPRIRetained,NumToLOPRI,NumPrevHIPRI,NumLOPRIRetained,NumToHIPRI,NumPrevLOPRI\n")
 	}
 	if err == nil {
 		err = SortedPrintTable(f, outs, ",")
