@@ -21,6 +21,7 @@ mkdir -p "$procdir/cluster-alloc"
 ./bin/proc-heyp cluster-alloc-bw-stats -workload fortio -out "$procdir/cluster-alloc-bw-stats.csv" "$outdir" &
 ./bin/proc-heyp fortio-demand-trace -deploy-config "$config" -prec 1s -out "$procdir/true-app-demand.csv" "$outdir" &
 ./bin/proc-heyp wl-start-end -workload fortio -out "$procdir/wl-start-end.csv" "$outdir" &
+./bin/proc-heyp cluster-alloc-qos-retained -workload fortio -out "$procdir/cluster-alloc-qos-retained.csv" "$outdir" &
 (
   ./bin/proc-heyp align-cluster-alloc-logs -workload fortio -prec 1s -out "$procdir/cluster-alloc-logs.json" "$outdir" && \
   echo UnixTime,FG,Burstiness,HIPRIBonus,LOPRIBonus,HIPRIRateLimitBps,LOPRIRateLimitBps,FracLOPRIInitial,FracLOPRIWithProbing,FracLOPRIPostPartition,FracLOPRIFinal > "$procdir/cluster-alloc-debug-state.csv" && \
@@ -159,6 +160,8 @@ done
   "$procdir/global-host-loss-ts-" &
 ./code/plot-cluster-alloc-bw.R "$procdir/cluster-alloc-bw-stats.csv" \
   "$procdir/cluster-alloc/" &
+./code/plot-cluster-alloc-qos-retained.R "$procdir/cluster-alloc-qos-retained.csv" \
+  "$procdir/cluster-alloc-qos-retained.pdf" &
 ./code/plot-installed-limits-ts.R "$procdir/host-enforcer-limits.csv" \
   "$procdir/host-limits-ts-" &
 ./code/plot-host-role-summary.R "$procdir/host-stats-summary.csv" \
