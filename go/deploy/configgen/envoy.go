@@ -15,6 +15,7 @@ type EnvoyReverseProxy struct {
 type Backend struct {
 	Name               string
 	LBPolicy           string // e.g. ROUND_ROBIN
+	TimeoutSec         float64
 	MaxConnections     int
 	MaxPendingRequests int
 	MaxRequests        int
@@ -53,6 +54,9 @@ static_resources:
                 route:
                   cluster: "{{.Name}}"
                   prefix_rewrite: "/"
+{{- if ne .TimeoutSec 0.0 }}
+                  timeout: {{.TimeoutSec}}s
+{{- end }}
 {{- end }}
           http_filters:
           - name: "envoy.filters.http.lua"

@@ -177,6 +177,7 @@ admin:
 				MaxConnections:     2000,
 				MaxPendingRequests: 134,
 				MaxRequests:        42,
+				TimeoutSec:         0.5,
 				Remotes: []AddrAndPort{
 					{"127.0.0.1", 123},
 					{"10.0.0.2", 88},
@@ -215,6 +216,7 @@ admin:
                 route:
                   cluster: "ZzZ"
                   prefix_rewrite: "/"
+                  timeout: 0.5s
           http_filters:
           - name: "envoy.filters.http.lua"
             typed_config:
