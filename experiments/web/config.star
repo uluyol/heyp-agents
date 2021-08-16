@@ -51,6 +51,7 @@ def GenWorkloadStagesStatic(
         num_shards_per_backend = NumShards(AA_bps),
         num_servers_per_backend_host = 2,
         name_prefix = "AA_",
+        envoy_group_name = "AA",
         starting_port = AA_FORTIO_STARTING_PORT,
         prop_delay_ms = AA_PROP_DELAY_MS,
     )
@@ -64,6 +65,7 @@ def GenWorkloadStagesStatic(
         num_shards_per_backend = NumShards(WA_bps),
         num_servers_per_backend_host = 4,
         name_prefix = "WA_",
+        envoy_group_name = "WA",
         starting_port = WA_FORTIO_STARTING_PORT,
         prop_delay_ms = WA_PROP_DELAY_MS,
     )
@@ -75,6 +77,7 @@ def GenWorkloadStagesStatic(
         "WA_fortio_instances": WA_instances,
         "WA_client_roles": WA_client_roles,
         "WA_server_roles_for": WA_server_roles_for,
+        "envoy_group_names": ["AA", "WA"],
     }
 
 def GenWorkloadStagesIncreasing(
@@ -93,6 +96,7 @@ def GenWorkloadStagesIncreasing(
         num_shards_per_backend = NumShards(AA_per_be_bps),
         num_servers_per_backend_host = 2,
         name_prefix = "AA_",
+        envoy_group_name = "AA",
         starting_port = AA_FORTIO_STARTING_PORT,
         prop_delay_ms = AA_PROP_DELAY_MS,
     )
@@ -121,6 +125,7 @@ def GenWorkloadStagesIncreasing(
         num_shards_per_backend = NumShards(WA_bps_max),
         num_servers_per_backend_host = 4,
         name_prefix = "WA_",
+        envoy_group_name = "WA",
         starting_port = WA_FORTIO_STARTING_PORT,
         prop_delay_ms = WA_PROP_DELAY_MS,
     )
@@ -132,6 +137,7 @@ def GenWorkloadStagesIncreasing(
         "WA_fortio_instances": WA_instances,
         "WA_client_roles": WA_client_roles,
         "WA_server_roles_for": WA_server_roles_for,
+        "envoy_group_names": ["AA", "WA"],
     }
 
 def GenWorkloadStagesOscillating(
@@ -157,6 +163,7 @@ def GenWorkloadStagesOscillating(
         num_shards_per_backend = NumShards(AA_bps_max),
         num_servers_per_backend_host = 2,
         name_prefix = "AA_",
+        envoy_group_name = "AA",
         starting_port = AA_FORTIO_STARTING_PORT,
         prop_delay_ms = AA_PROP_DELAY_MS,
     )
@@ -170,6 +177,7 @@ def GenWorkloadStagesOscillating(
         num_shards_per_backend = NumShards(WA_bps),
         num_servers_per_backend_host = 4,
         name_prefix = "WA_",
+        envoy_group_name = "WA",
         starting_port = WA_FORTIO_STARTING_PORT,
         prop_delay_ms = WA_PROP_DELAY_MS,
     )
@@ -181,6 +189,7 @@ def GenWorkloadStagesOscillating(
         "WA_fortio_instances": WA_instances,
         "WA_client_roles": WA_client_roles,
         "WA_server_roles_for": WA_server_roles_for,
+        "envoy_group_names": ["AA", "WA"],
     }
 
 def GenConfig(
@@ -197,6 +206,7 @@ def GenConfig(
         WA_server_roles_for = None,
         WA_client_roles = None,
         WA_fortio_instances = None,
+        envoy_group_names = None,
         shard_key = ""):
     nodes = []
     clusters = {
@@ -269,7 +279,7 @@ def GenConfig(
             clusters["WA"]["node_names"].append(name)
             clusters["CLIENT"]["node_names"].append(name)
         elif i <= 3:
-            roles = ["host-agent", "fortio-G-envoy-proxy"]
+            roles = ["host-agent"] + ["fortio-{0}-envoy-proxy".format(g) for g in envoy_group_names]
             clusters["EDGE"]["node_names"].append(name)
         elif i <= 12:
             roles = ["host-agent"] + AA_server_roles_for(i - 4, 9)
@@ -288,6 +298,17 @@ def GenConfig(
             "experiment_addr": experiment_ip,
             "roles": roles,
         })
+
+    envoy_port_counter = 5000
+    fortio_groups = []
+    for g in envoy_group_names:
+        fortio_groups.append({
+            "name": g,
+            "envoy_port": envoy_port_counter,
+            "envoy_admin_port": envoy_port_counter + 1,
+            "envoy_num_threads": 10,
+        })
+        envoy_port_counter += 2
 
     return (shard_index, deploy_pb.DeploymentConfig(
         nodes = nodes,
@@ -382,12 +403,7 @@ def GenConfig(
                 ],
             },
         },
-        fortio_groups = [{
-            "name": "G",
-            "envoy_port": 5000,
-            "envoy_admin_port": 5001,
-            "envoy_num_threads": 10,
-        }],
+        fortio_groups = fortio_groups,
         fortio_instances = AA_fortio_instances + WA_fortio_instances,
     ))
 
@@ -399,6 +415,7 @@ def BackendOnEachHost(
         num_shards_per_backend = None,
         num_servers_per_backend_host = None,
         name_prefix = None,
+        envoy_group_name = None,
         starting_port = None,
         prop_delay_ms = None):
     size_dist = [{
@@ -412,10 +429,10 @@ def BackendOnEachHost(
     cur_port = starting_port
     for i in range(num_backends):
         be_name = name_prefix + str(i)
-        client_roles.append("fortio-G-" + be_name + "-client")
-        server_roles.append("fortio-G-" + be_name + "-server")
+        client_roles.append("fortio-{0}-{1}-client".format(envoy_group_name, be_name))
+        server_roles.append("fortio-{0}-{1}-server".format(envoy_group_name, be_name))
         instances.append({
-            "group": "G",
+            "group": envoy_group_name,
             "name": be_name,
             "serve_ports": [cur_port + porti for porti in range(num_servers_per_backend_host)],
             "lb_policy": "LEAST_REQUEST",
