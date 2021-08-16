@@ -173,6 +173,44 @@ PlotGoodputTo <- function(subset, output) {
     .junk <- dev.off()
 }
 
+PlotQoSChurnTo <- function(subset, output) {
+    subset <- subset[subset$Sys != "NoLimit",]
+    subset <- subset[subset$Sys != "RateLimit",]
+    subset$Sys <- factor(subset$Sys, levels=c("HSC20", "QD+LimitLO", "QD"))
+
+    pdf(output, height=2.5, width=5)
+    p <- ggplot(data=subset, aes(x=FracChanged, color=Sys, linetype=Sys)) +
+        stat_myecdf(size=1) +
+        xlab("Fraction of hosts that changed QoS") +
+        ylab("CDF across time") +
+        coord_cartesian(xlim=c(0, 1), ylim=c(0, 1), expand=FALSE) +
+        scale_x_continuous(breaks=seq(0, 1, by=0.2)) +
+        scale_y_continuous(breaks=seq(0, 1, by=0.2)) +
+        theme_bw() +
+        guides(color=guide_legend(ncol=3), linetype=guide_legend(ncol=3)) +
+        theme(
+            legend.title=element_blank(),
+            legend.position="top",
+            legend.margin=margin(0, 0, 0, 0),
+            legend.box.margin=margin(-4, -4, -8, 0),
+            legend.background=element_rect(color="black", fill="white", linetype="blank", size=0),
+            legend.direction="horizontal",
+            legend.key=element_blank(),
+            legend.key.height=unit(11, "points"),
+            legend.key.width=unit(25, "points"),
+            legend.spacing.x=unit(1, "points"),
+            legend.spacing.y=unit(0, "points"),
+            legend.text=element_text(size=11, margin=margin(r=10)),
+            strip.background=element_rect(color="white", fill="white"),
+            strip.text=element_text(size=12),
+            plot.margin=unit(c(5.5, 8.5, 5.5, 5.5), "points"),
+            axis.text=element_text(color="black", size=11),
+            axis.title.y=element_text(size=12, margin=margin(0, 3, 0, 0)),
+            axis.title.x=element_text(size=12, margin=margin(3, 0, 0, 0)))
+    print(p)
+    .junk <- dev.off()
+}
+
 PlotOverageTo <- function(subset, output) {
     subset <- subset[subset$Sys != "NoLimit",]
     subset$Sys <- factor(subset$Sys, levels=c("RateLimit", "HSC20", "QD+LimitLO", "QD"))
@@ -342,6 +380,7 @@ for (cfgGroup in cfgGroups) {
     overage <- data.frame()
     goodput <- data.frame()
     retransmits.agg <- data.frame()
+    qos.churn <- data.frame()
 
     for (procdir in procdirs) {
         sys_name <- SYS_LONG[[gsub(".*-", "", procdir)]]
@@ -351,6 +390,7 @@ for (cfgGroup in cfgGroups) {
         usage.ts <- read.csv(file.path(procdir, "host-fg-usage-ts.csv"), header=TRUE, stringsAsFactors=FALSE)
         truedemand.ts <- read.csv(file.path(procdir, "true-app-demand.csv"), header=TRUE, stringsAsFactors=FALSE)
         host.ts <- read.csv(file.path(procdir, "global-host-ts.csv"), header=TRUE, stringsAsFactors=FALSE)
+        qos.retained.ts <- read.csv(file.path(procdir, "cluster-alloc-qos-retained.csv"), header=TRUE, stringsAsFactors=FALSE)
         startend <- read.csv(file.path(procdir, "wl-start-end.csv"), header=TRUE, stringsAsFactors=FALSE)
         #approvals$FG <- paste0(approvals$SrcDC, "_TO_", approvals$DstDC)
 
@@ -361,6 +401,7 @@ for (cfgGroup in cfgGroups) {
         usage.ts <- Trim(usage.ts, "UnixTime", startUnix, endUnix)
         truedemand.ts <- Trim(truedemand.ts, "UnixTime", startUnix, endUnix)
         host.ts <- Trim(host.ts, "UnixTime", startUnix, endUnix)
+        qos.retained.ts <- Trim(qos.retained.ts, "UnixTime", startUnix, endUnix)
 
         goodput.summed <- SumClientGoodput(client.ts)
         goodput <- rbind(
@@ -462,12 +503,27 @@ for (cfgGroup in cfgGroups) {
         retransmits.agg.this <- aggregate(cbind(RetransSegs, IngressBps, EgressBps) ~ UnixTime, data=host.ts, FUN=sum)
         retransmits.agg.this$Sys <- rep.int(sys_name, nrow(retransmits.agg.this))
         retransmits.agg <- rbind(retransmits.agg, retransmits.agg.this)
+
+        qos.retained.ts <- qos.retained.ts[qos.retained.ts$FG == "AA_TO_EDGE",]
+        qos.churn <- rbind(qos.churn,
+            rbind(
+                data.frame(
+                    UnixTime=qos.retained.ts$UnixTime,
+                    FracChanged=1-qos.retained.ts$FracHIPRIRetained,
+                    Kind=rep.int("HI to LOPRI", nrow(qos.retained.ts)),
+                    Sys=rep.int(sys_name, nrow(qos.retained.ts))),
+                data.frame(
+                    UnixTime=qos.retained.ts$UnixTime,
+                    FracChanged=1-qos.retained.ts$FracLOPRIRetained,
+                    Kind=rep.int("LO to HIPRI", nrow(qos.retained.ts)),
+                    Sys=rep.int(sys_name, nrow(qos.retained.ts)))))
     }
 
     write.csv(goodput, file.path(summarydir, paste0(cfgGroup, "-goodput.csv")), quote=FALSE, row.names=FALSE)
     write.csv(overage, file.path(summarydir, paste0(cfgGroup, "-overage.csv")), quote=FALSE, row.names=FALSE)
     write.csv(shortage, file.path(summarydir, paste0(cfgGroup, "-shortage.csv")), quote=FALSE, row.names=FALSE)
     write.csv(retransmits.agg, file.path(summarydir, paste0(cfgGroup, "-retransmits_agg.csv")), quote=FALSE, row.names=FALSE)
+    write.csv(qos.churn, file.path(summarydir, paste0(cfgGroup, "-qos_churn.csv")), quote=FALSE, row.names=FALSE)
 
     for (kind in unique(goodput$Kind)) {
         PlotGoodputTo(goodput[goodput$Kind == kind,], file.path(summarydir, paste0(cfgGroup, "-goodput-", gsub("/", "_", kind), ".pdf")))
@@ -480,7 +536,7 @@ for (cfgGroup in cfgGroups) {
         fgsubset <- overage[overage$FG == fg,]
         for (qos in unique(fgsubset$QoS)) {
             if (qos != "LOPRI" && sum(fgsubset$OverageGbps[fgsubset$QoS == qos]) > 0) {
-                PlotOverageTo(fgsubset[fgsubset$QoS == qos,], file.path(summarydir, paste0(cfgGroup, "-overage-", fg, "-", qos, ".pdf")))
+                PlotOverageTo(fgsubset[fgsubset$QoS == qos,], file.path(summarydir, paste0(cfgGroup, "-bw-overage-", fg, "-", qos, ".pdf")))
             }
         }
     }
@@ -489,7 +545,7 @@ for (cfgGroup in cfgGroups) {
         fgsubset <- shortage[shortage$FG == fg,]
         for (qos in unique(fgsubset$QoS)) {
             if (qos != "LOPRI" && sum(fgsubset$ShortageGbps[fgsubset$QoS == qos]) > 0) {
-                PlotShortageTo(fgsubset[fgsubset$QoS == qos,], file.path(summarydir, paste0(cfgGroup, "-shortage-", fg, "-", qos, ".pdf")))
+                PlotShortageTo(fgsubset[fgsubset$QoS == qos,], file.path(summarydir, paste0(cfgGroup, "-bw-shortage-", fg, "-", qos, ".pdf")))
             }
         }
     }
@@ -510,5 +566,9 @@ for (cfgGroup in cfgGroups) {
                 PlotFracShortageTo(fgsubset[fgsubset$QoS == qos,], file.path(summarydir, paste0(cfgGroup, "-fracshortage-", fg, "-", qos, ".pdf")))
             }
         }
+    }
+
+    for (kind in unique(qos.churn$Kind)) {
+        PlotQoSChurnTo(qos.churn[qos.churn$Kind == kind,], file.path(summarydir, paste0(cfgGroup, "-qos_churn-", gsub(" ", "_", kind), ".pdf")))
     }
 }
