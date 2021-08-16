@@ -37,6 +37,7 @@ func (g *FortioGroup) GetEnvoyYAML() string {
 			MaxConnections:     int(inst.Config.GetMaxConnections()),
 			MaxPendingRequests: int(inst.Config.GetMaxPendingRequests()),
 			MaxRequests:        int(inst.Config.GetMaxRequests()),
+			TimeoutSec:         inst.Config.GetTimeoutSec(),
 			Remotes:            make([]configgen.AddrAndPort, 0, len(inst.Servers)*len(inst.Config.GetServePorts())),
 		}
 		for _, port := range inst.Config.GetServePorts() {
