@@ -7,10 +7,14 @@ import (
 )
 
 type EnvoyReverseProxy struct {
+	AdminPort int
+	Listeners []EnvoyListener
+}
+
+type EnvoyListener struct {
 	Port             int
-	AdminPort        int
-	Backends         []Backend
 	AdmissionControl EnvoyAdmissionControl
+	Backends         []Backend
 }
 
 type EnvoyAdmissionControl struct {
@@ -40,6 +44,7 @@ type AddrAndPort struct {
 var proxyConfigTmpl = template.Must(template.New("proxycfg").Parse(`
 static_resources:
   listeners:
+{{- range .Listeners }}
   - address:
       socket_address:
         address: 0.0.0.0
@@ -123,8 +128,9 @@ static_resources:
                 end
           - name: envoy.filters.http.router
             typed_config: {}
-
+{{- end }}
   clusters:
+{{- range .Listeners }}
 {{- range .Backends }}
   - name: "{{.Name}}"
     type: STATIC
@@ -153,6 +159,7 @@ static_resources:
         max_connections: {{.MaxConnections}}
         max_pending_requests: {{.MaxPendingRequests}}
         max_requests: {{.MaxRequests}}
+{{- end }}
 {{- end }}
 
 admin:

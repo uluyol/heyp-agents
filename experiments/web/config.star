@@ -299,16 +299,15 @@ def GenConfig(
             "roles": roles,
         })
 
-    envoy_port_counter = 5000
+    envoy_admin_port = 5000
+    envoy_port_counter = 5001
     fortio_groups = []
     for g in envoy_group_names:
         fortio_groups.append({
             "name": g,
             "envoy_port": envoy_port_counter,
-            "envoy_admin_port": envoy_port_counter + 1,
-            "envoy_num_threads": 10,
         })
-        envoy_port_counter += 2
+        envoy_port_counter += 1
 
     return (shard_index, deploy_pb.DeploymentConfig(
         nodes = nodes,
@@ -403,8 +402,12 @@ def GenConfig(
                 ],
             },
         },
-        fortio_groups = fortio_groups,
-        fortio_instances = AA_fortio_instances + WA_fortio_instances,
+        fortio = {
+            "envoy_admin_port": envoy_admin_port,
+            "envoy_num_threads": 10,
+            "groups": fortio_groups,
+            "instances": AA_fortio_instances + WA_fortio_instances,
+        },
     ))
 
 OVERSUB_FACTOR = float("1.25")

@@ -107,16 +107,16 @@ func InstallCodeBundle(c *pb.DeploymentConfig, localTarball, remoteTopdir string
 				LogWithPrefix("install-bundle: "),
 				"ssh", n.GetExternalAddr(),
 				fmt.Sprintf(
-					"rm -rf '%[1]s/configs' '%[1]s/logs'; "+
+					"sudo rm -rf '%[1]s/configs' '%[1]s/logs'; "+
 						"mkdir -p '%[1]s/logs'; "+
 						"mkdir -p '%[1]s/configs'; "+
 						catToLocal+
 						"cd '%[1]s' && tar xzf heyp-bundle.tar.gz",
 					remoteTopdir))
 			cmd.SetStdin(localTarball, bytes.NewReader(bundle))
-			err = cmd.Run()
+			out, err = cmd.CombinedOutput()
 			if err != nil {
-				return fmt.Errorf("%s: failed to install: %v", n.GetName(), err)
+				return fmt.Errorf("%s: failed to install: %v; output: %s", n.GetName(), err, out)
 			}
 			return nil
 		})

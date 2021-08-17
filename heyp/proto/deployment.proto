@@ -47,6 +47,15 @@ message DeployedTestLopriInstance {
   optional int32 num_server_shards = 5 [default = 1];
 }
 
+message EnvoyAdmissionControlConfig {
+  optional bool enabled = 1 [default = false];
+  optional double sampling_window_sec = 2 [default = 120];
+  optional double success_rate_thresh = 3 [default = 95]; // don't activate unless SR < thresh
+  optional double aggression = 4 [default = 1.5];
+  optional double rps_thresh = 5 [default = 5];
+  optional double max_rejection_prob = 6 [default = 80];
+}
+
 message DeployedFortioInstance {
   // Node roles:
   // fortio-[group]-[name]-server
@@ -66,8 +75,14 @@ message DeployedFortioInstance {
 message DeployedFortioGroup {
   optional string name = 1;
   optional int32 envoy_port = 2;
-  optional int32 envoy_admin_port = 3;
-  optional int32 envoy_num_threads = 4 [default = 8];
+  optional EnvoyAdmissionControlConfig admission_control = 3;
+}
+
+message DeployedFortioConfig {
+  optional int32 envoy_admin_port = 1;
+  optional int32 envoy_num_threads = 2 [default = 8];
+  repeated DeployedFortioGroup groups = 3;
+  repeated DeployedFortioInstance instances = 4;
 }
 
 message DeploymentConfig {
@@ -86,6 +101,5 @@ message DeploymentConfig {
 
   // Workloads to run (all are run in parallel).
   repeated DeployedTestLopriInstance testlopri_instances = 12;
-  repeated DeployedFortioGroup fortio_groups = 13;
-  repeated DeployedFortioInstance fortio_instances = 14;
+  optional DeployedFortioConfig fortio = 13;
 }

@@ -249,8 +249,8 @@ func (c *fortioDemandTraceCmd) Execute(ctx context.Context, fs *flag.FlagSet, ar
 		log.Fatalf("failed to get start/end for workload \"fortio\": %v", err)
 	}
 
-	cumDurs := make([][]time.Duration, len(deployC.C.FortioInstances))
-	for i, inst := range deployC.C.FortioInstances {
+	cumDurs := make([][]time.Duration, len(deployC.C.GetFortio().Instances))
+	for i, inst := range deployC.C.GetFortio().Instances {
 		cumDurs[i] = make([]time.Duration, len(inst.Client.WorkloadStages))
 		{
 			var dur time.Duration
@@ -265,7 +265,7 @@ func (c *fortioDemandTraceCmd) Execute(ctx context.Context, fs *flag.FlagSet, ar
 		}
 	}
 
-	fortioGroups, err := actions.GetAndValidateFortioGroups(deployC.C)
+	fortio, err := actions.GetAndValidateFortioConfig(deployC.C)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -298,8 +298,8 @@ func (c *fortioDemandTraceCmd) Execute(ctx context.Context, fs *flag.FlagSet, ar
 
 	{
 		nextFGID := 1
-		for _, g := range fortioGroups {
-			dstCluster := nodesCluster(g.Proxies)
+		for _, g := range fortio.Groups {
+			dstCluster := nodesCluster(g.GroupProxies)
 			for _, inst := range g.Instances {
 				srcCluster := nodesCluster(inst.Servers)
 				fg := srcCluster + "_TO_" + dstCluster
@@ -335,7 +335,7 @@ func (c *fortioDemandTraceCmd) Execute(ctx context.Context, fs *flag.FlagSet, ar
 		for i := range fgDemands {
 			fgDemands[i] = 0
 		}
-		for i, inst := range deployC.C.FortioInstances {
+		for i, inst := range deployC.C.GetFortio().Instances {
 			stageFor := func(t time.Time) *pb.FortioClientConfig_WorkloadStage {
 				for j := 0; j < len(cumDurs[i])-1; j++ {
 					jPlusOneStart := start.Add(cumDurs[i][j+1])
