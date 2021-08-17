@@ -130,11 +130,11 @@ func RunHTTPTest(o *HTTPRunnerOptions) (*HTTPRunnerResults, error) {
 					bad                    bool
 				)
 				var try int
-				for try = 0; try < 5; try++ {
+				for try = 0; try < 50; try++ {
 					code, data, contentLen, headerSize = httpstate[i].client.Fetch()
 					if !o.AllowInitialErrors && !codeIsOK(code) {
 						bad = true
-						time.Sleep(time.Duration(rand.Intn(100)) * time.Millisecond)
+						time.Sleep(time.Duration(rand.Intn(200)) * time.Millisecond)
 					} else {
 						bad = false
 						break
