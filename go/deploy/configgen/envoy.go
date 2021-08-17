@@ -76,33 +76,33 @@ static_resources:
           http_filters:
 {{- if .AdmissionControl.Enabled }}
           - name: envoy.filters.http.admission_control
-          typed_config:
-            "@type": type.googleapis.com/envoy.extensions.filters.http.admission_control.v3alpha.AdmissionControl
-            enabled:
-              default_value: true
-              runtime_key: "admission_control.enabled"
-            sampling_window: {{.AdmissionControl.SamplingWindowSec}}s
-            sr_threshold:
-              default_value:
-                value: {{.AdmissionControl.SuccessRateThresh}}
-              runtime_key: "admission_control.sr_threshold"
-            aggression:
-              default_value: {{.AdmissionControl.Aggression}}
-              runtime_key: "admission_control.aggression"
-            rps_threshold:
-              default_value: {{.AdmissionControl.RPSThresh}}
-              runtime_key: "admission_control.rps_threshold"
-            max_rejection_probability:
-              default_value:
-                value: {{.AdmissionControl.MaxRejectionProb}}
-              runtime_key: "admission_control.max_rejection_probability"
-            success_criteria:
-              http_criteria:
-                http_success_status:
-                  - start: 100
-                    end:   400
-                  - start: 404
-                    end:   404
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.admission_control.v3alpha.AdmissionControl
+              enabled:
+                default_value: true
+                runtime_key: "admission_control.enabled"
+              sampling_window: {{.AdmissionControl.SamplingWindowSec}}s
+              sr_threshold:
+                default_value:
+                  value: {{.AdmissionControl.SuccessRateThresh}}
+                runtime_key: "admission_control.sr_threshold"
+              aggression:
+                default_value: {{.AdmissionControl.Aggression}}
+                runtime_key: "admission_control.aggression"
+              rps_threshold:
+                default_value: {{.AdmissionControl.RPSThresh}}
+                runtime_key: "admission_control.rps_threshold"
+              max_rejection_probability:
+                default_value:
+                  value: {{.AdmissionControl.MaxRejectionProb}}
+                runtime_key: "admission_control.max_rejection_probability"
+              success_criteria:
+                http_criteria:
+                  http_success_status:
+                    - start: 100
+                      end:   400
+                    - start: 404
+                      end:   404
 {{- end }}
           - name: "envoy.filters.http.lua"
             typed_config:

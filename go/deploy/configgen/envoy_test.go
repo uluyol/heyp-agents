@@ -78,33 +78,33 @@ func TestEnvoyReverseProxy(t *testing.T) {
                   prefix_rewrite: "/"
           http_filters:
           - name: envoy.filters.http.admission_control
-          typed_config:
-            "@type": type.googleapis.com/envoy.extensions.filters.http.admission_control.v3alpha.AdmissionControl
-            enabled:
-              default_value: true
-              runtime_key: "admission_control.enabled"
-            sampling_window: 5s
-            sr_threshold:
-              default_value:
-                value: 90
-              runtime_key: "admission_control.sr_threshold"
-            aggression:
-              default_value: 1.2
-              runtime_key: "admission_control.aggression"
-            rps_threshold:
-              default_value: 11
-              runtime_key: "admission_control.rps_threshold"
-            max_rejection_probability:
-              default_value:
-                value: 99
-              runtime_key: "admission_control.max_rejection_probability"
-            success_criteria:
-              http_criteria:
-                http_success_status:
-                  - start: 100
-                    end:   400
-                  - start: 404
-                    end:   404
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.admission_control.v3alpha.AdmissionControl
+              enabled:
+                default_value: true
+                runtime_key: "admission_control.enabled"
+              sampling_window: 5s
+              sr_threshold:
+                default_value:
+                  value: 90
+                runtime_key: "admission_control.sr_threshold"
+              aggression:
+                default_value: 1.2
+                runtime_key: "admission_control.aggression"
+              rps_threshold:
+                default_value: 11
+                runtime_key: "admission_control.rps_threshold"
+              max_rejection_probability:
+                default_value:
+                  value: 99
+                runtime_key: "admission_control.max_rejection_probability"
+              success_criteria:
+                http_criteria:
+                  http_success_status:
+                    - start: 100
+                      end:   400
+                    - start: 404
+                      end:   404
           - name: "envoy.filters.http.lua"
             typed_config:
               "@type": "type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua"
