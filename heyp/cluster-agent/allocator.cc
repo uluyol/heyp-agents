@@ -87,7 +87,14 @@ class BweAggAllocator : public PerAggAllocator {
   std::vector<proto::FlowAlloc> AllocAgg(
       absl::Time time, const proto::AggInfo& agg_info,
       proto::DebugAllocRecord::DebugState* debug_state) override {
-    const proto::FlowAlloc& admission = agg_admissions_.at(agg_info.parent().flow());
+    auto admissions_iter = agg_admissions_.find(agg_info.parent().flow());
+    if (admissions_iter == agg_admissions_.end()) {
+      SPDLOG_LOGGER_INFO(&logger_, "no admission for FG {}",
+                         agg_info.parent().flow().ShortDebugString());
+      return {};
+    }
+
+    const proto::FlowAlloc& admission = admissions_iter->second;
 
     H_SPDLOG_CHECK_EQ_MESG(&logger_, admission.lopri_rate_limit_bps(), 0,
                            "Bwe allocation incompatible with QoS downgrade");
@@ -170,7 +177,15 @@ class HeypSigcomm20Allocator : public PerAggAllocator {
       proto::DebugAllocRecord::DebugState* debug_state) override {
     const bool should_debug = DebugQosAndRateLimitSelection();
 
-    PerAggState& cur_state = agg_states_.at(agg_info.parent().flow());
+    auto state_iter = agg_states_.find(agg_info.parent().flow());
+    if (state_iter == agg_states_.end()) {
+      SPDLOG_LOGGER_INFO(&logger_, "no admission for FG {}",
+                         agg_info.parent().flow().ShortDebugString());
+      return {};
+    }
+
+    PerAggState& cur_state = state_iter->second;
+
     cur_state.alloc.set_lopri_rate_limit_bps(HeypSigcomm20MaybeReviseLOPRIAdmission(
         config_.heyp_acceptable_measured_ratio_over_intended_ratio(), time,
         agg_info.parent(), cur_state, &logger_));
@@ -332,7 +347,14 @@ class DowngradeAllocator : public PerAggAllocator {
       proto::DebugAllocRecord::DebugState* debug_state) override {
     const bool should_debug = DebugQosAndRateLimitSelection();
 
-    const proto::FlowAlloc& admissions = agg_admissions_.at(agg_info.parent().flow());
+    auto admissions_iter = agg_admissions_.find(agg_info.parent().flow());
+    if (admissions_iter == agg_admissions_.end()) {
+      SPDLOG_LOGGER_INFO(&logger_, "no admission for FG {}",
+                         agg_info.parent().flow().ShortDebugString());
+      return {};
+    }
+
+    const proto::FlowAlloc& admissions = admissions_iter->second;
 
     int64_t hipri_admission = admissions.hipri_rate_limit_bps();
     int64_t lopri_admission = admissions.lopri_rate_limit_bps();
@@ -459,6 +481,83 @@ class DowngradeAllocator : public PerAggAllocator {
   }
 };
 
+class NopAllocator : public PerAggAllocator {
+ private:
+  spdlog::logger logger_;
+
+ public:
+  NopAllocator() : logger_(MakeLogger("nop-alloc")) {}
+
+  std::vector<proto::FlowAlloc> AllocAgg(
+      absl::Time time, const proto::AggInfo& agg_info,
+      proto::DebugAllocRecord::DebugState* debug_state) {
+    const bool should_debug = DebugQosAndRateLimitSelection();
+    if (should_debug) {
+      if (should_debug) {
+        SPDLOG_LOGGER_INFO(&logger_, "returning empty alloc for time = {}", time);
+      }
+    }
+    return {};
+  }
+};
+
+class HostPatternAllocator : public PerAggAllocator {
+ private:
+  spdlog::logger logger_;
+  FlowMap<std::vector<proto::FlowAlloc>> per_host_alloc_patterns_;
+  size_t next_;
+
+ public:
+  HostPatternAllocator(const proto::ClusterAllocatorConfig& config)
+      : logger_(MakeLogger("host-pattern-alloc")), next_(0) {
+    for (const proto::FixedClusterHostAllocs& per_host_alloc_pattern :
+         config.fixed_host_alloc_patterns()) {
+      per_host_alloc_patterns_[per_host_alloc_pattern.cluster()] = {
+          per_host_alloc_pattern.per_host_alloc_pattern().begin(),
+          per_host_alloc_pattern.per_host_alloc_pattern().end()};
+    }
+  }
+
+  std::vector<proto::FlowAlloc> AllocAgg(
+      absl::Time time, const proto::AggInfo& agg_info,
+      proto::DebugAllocRecord::DebugState* debug_state) {
+    const bool should_debug = DebugQosAndRateLimitSelection();
+
+    auto alloc_pattern_iter = per_host_alloc_patterns_.find(agg_info.parent().flow());
+    if (alloc_pattern_iter == per_host_alloc_patterns_.end()) {
+      SPDLOG_LOGGER_INFO(&logger_, "no admission for FG {}",
+                         agg_info.parent().flow().ShortDebugString());
+      return {};
+    }
+
+    const std::vector<proto::FlowAlloc>& alloc_pattern = alloc_pattern_iter->second;
+
+    if (alloc_pattern.empty()) {
+      return {};
+    }
+
+    if (should_debug) {
+      if (should_debug) {
+        SPDLOG_LOGGER_INFO(&logger_, "allocating for time = {} step = {}", time, next_);
+      }
+    }
+
+    const proto::FlowAlloc& all_hosts_alloc = alloc_pattern[next_ % alloc_pattern.size()];
+    next_++;
+
+    std::vector<proto::FlowAlloc> allocs;
+    allocs.reserve(agg_info.children_size());
+    for (size_t i = 0; i < agg_info.children_size(); ++i) {
+      proto::FlowAlloc alloc;
+      *alloc.mutable_flow() = agg_info.children(i).flow();
+      alloc.set_hipri_rate_limit_bps(all_hosts_alloc.hipri_rate_limit_bps());
+      alloc.set_lopri_rate_limit_bps(all_hosts_alloc.lopri_rate_limit_bps());
+      allocs.push_back(std::move(alloc));
+    }
+    return allocs;
+  }
+};
+
 }  // namespace
 
 absl::StatusOr<std::unique_ptr<ClusterAllocator>> ClusterAllocator::Create(
@@ -467,6 +566,9 @@ absl::StatusOr<std::unique_ptr<ClusterAllocator>> ClusterAllocator::Create(
     NdjsonLogger* alloc_recorder) {
   FlowMap<proto::FlowAlloc> cluster_admissions = ToAdmissionsMap(cluster_wide_allocs);
   switch (config.type()) {
+    case proto::CA_NOP:
+      return absl::WrapUnique(
+          new ClusterAllocator(absl::make_unique<NopAllocator>(), alloc_recorder));
     case proto::CA_BWE:
       return absl::WrapUnique(new ClusterAllocator(
           absl::make_unique<BweAggAllocator>(config, std::move(cluster_admissions)),
@@ -481,6 +583,9 @@ absl::StatusOr<std::unique_ptr<ClusterAllocator>> ClusterAllocator::Create(
           absl::make_unique<DowngradeAllocator>(config, std::move(cluster_admissions),
                                                 demand_multiplier),
           alloc_recorder));
+    case proto::CA_FIXED_HOST_PATTERN:
+      return absl::WrapUnique(new ClusterAllocator(
+          absl::make_unique<HostPatternAllocator>(config), alloc_recorder));
   }
   std::cerr << "unreachable: got cluster allocator type: " << config.type() << "\n";
   DumpStackTraceAndExit(5);

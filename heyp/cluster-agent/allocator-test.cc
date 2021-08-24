@@ -26,6 +26,41 @@ proto::AllocBundle Bundle(const AllocSet& alloc_set) {
   return b;
 }
 
+TEST(BweClusterAllocatorTest, MissingAllocInConfig) {
+  auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+                                          type: CA_BWE
+                                          enable_burstiness: false
+                                          enable_bonus: true
+                                          oversub_factor: 1.0
+                                        )"),
+                                        ParseTextProto<proto::AllocBundle>(R"(
+                                          flow_allocs {
+                                            flow { src_dc: "east-us" dst_dc: "west-us" }
+                                            hipri_rate_limit_bps: 666666
+                                          }
+                                        )"),
+                                        1)
+                   .value();
+  alloc->Reset();
+  alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
+                           R"(
+                             parent { flow { src_dc: "east-us" dst_dc: "central-us" } }
+                             children {
+                               flow { src_dc: "east-us" dst_dc: "central-us" host_id: 1 }
+                               predicted_demand_bps: 600000
+                             }
+                             children {
+                               flow { src_dc: "east-us" dst_dc: "central-us" host_id: 2 }
+                               predicted_demand_bps: 60000
+                             }
+                             children {
+                               flow { src_dc: "east-us" dst_dc: "central-us" host_id: 3 }
+                               predicted_demand_bps: 6000
+                             }
+                           )"));
+  EXPECT_THAT(Bundle(alloc->GetAllocs()), AllocBundleEq(proto::AllocBundle()));
+}
+
 TEST(BweClusterAllocatorTest, Basic) {
   auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
                                           type: CA_BWE
@@ -372,6 +407,45 @@ TEST(BweClusterAllocatorTest, ZeroLimit) {
                   flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
                   hipri_rate_limit_bps: 0
                 })")));
+}
+
+TEST(HeypSigcomm20ClusterAllocatorTest, MissingAllocInConfig) {
+  auto alloc =
+      ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+                                 type: CA_HEYP_SIGCOMM20
+                                 enable_burstiness: false
+                                 enable_bonus: true
+                                 oversub_factor: 1.0
+                                 heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
+                                 heyp_probe_lopri_when_ambiguous: false
+                               )"),
+                               ParseTextProto<proto::AllocBundle>(R"(
+                                 flow_allocs {
+                                   flow { src_dc: "east-us" dst_dc: "west-us" }
+                                   hipri_rate_limit_bps: 666666
+                                   lopri_rate_limit_bps: 333333
+                                 }
+                               )"),
+                               1)
+          .value();
+  alloc->Reset();
+  alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
+                           R"(
+                             parent { flow { src_dc: "east-us" dst_dc: "central-us" } }
+                             children {
+                               flow { src_dc: "east-us" dst_dc: "central-us" host_id: 1 }
+                               predicted_demand_bps: 600000
+                             }
+                             children {
+                               flow { src_dc: "east-us" dst_dc: "central-us" host_id: 2 }
+                               predicted_demand_bps: 60000
+                             }
+                             children {
+                               flow { src_dc: "east-us" dst_dc: "central-us" host_id: 3 }
+                               predicted_demand_bps: 6000
+                             }
+                           )"));
+  EXPECT_THAT(Bundle(alloc->GetAllocs()), AllocBundleEq(proto::AllocBundle()));
 }
 
 TEST(HeypSigcomm20ClusterAllocatorTest, Basic) {
@@ -1028,6 +1102,43 @@ TEST(HeypSigcomm20ClusterAllocatorTest, UnboundedLOPRICongestion) {
   alloc->AddInfo(T(8), info_gen.AddUsage(16000, 0));
   update_bundle_and_collect(alloc->GetAllocs());
   EXPECT_THAT(expected_max_lopri_usage, testing::Eq(0));
+}
+
+TEST(SimpleDowngradeClusterAllocatorTest, MissingAllocInConfig) {
+  auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+                                          type: CA_SIMPLE_DOWNGRADE
+                                          enable_burstiness: false
+                                          enable_bonus: true
+                                          oversub_factor: 1.0
+                                          downgrade_selector { type: DS_KNAPSACK_SOLVER }
+                                        )"),
+                                        ParseTextProto<proto::AllocBundle>(R"(
+                                          flow_allocs {
+                                            flow { src_dc: "east-us" dst_dc: "west-us" }
+                                            hipri_rate_limit_bps: 666666
+                                            lopri_rate_limit_bps: 333333
+                                          }
+                                        )"),
+                                        1)
+                   .value();
+  alloc->Reset();
+  alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
+                           R"(
+                             parent { flow { src_dc: "east-us" dst_dc: "central-us" } }
+                             children {
+                               flow { src_dc: "east-us" dst_dc: "central-us" host_id: 1 }
+                               predicted_demand_bps: 600000
+                             }
+                             children {
+                               flow { src_dc: "east-us" dst_dc: "central-us" host_id: 2 }
+                               predicted_demand_bps: 60000
+                             }
+                             children {
+                               flow { src_dc: "east-us" dst_dc: "central-us" host_id: 3 }
+                               predicted_demand_bps: 6000
+                             }
+                           )"));
+  EXPECT_THAT(Bundle(alloc->GetAllocs()), AllocBundleEq(proto::AllocBundle()));
 }
 
 TEST(SimpleDowngradeClusterAllocatorTest, Basic) {

@@ -8,6 +8,8 @@ package heyp.proto;
 
 option go_package = "github.com/uluyol/heyp-agents/go/pb";
 
+import "heyp/proto/heyp.proto";
+
 message DemandPredictorConfig {
   optional string time_window_dur = 1 [default = "10s"];
   optional double usage_multiplier = 2 [default = 1.1];
@@ -94,9 +96,11 @@ message HostAgentConfig {
 }
 
 enum ClusterAllocatorType {
-  CA_BWE = 0;
-  CA_HEYP_SIGCOMM20 = 1;
-  CA_SIMPLE_DOWNGRADE = 2;
+  CA_NOP = 0;
+  CA_BWE = 1;
+  CA_HEYP_SIGCOMM20 = 2;
+  CA_SIMPLE_DOWNGRADE = 3;
+  CA_FIXED_HOST_PATTERN = 4;
 }
 
 enum DowngradeSelectorType {
@@ -109,6 +113,14 @@ message DowngradeSelector {
   optional DowngradeSelectorType type = 1 [default = DS_HEYP_SIGCOMM20];
 }
 
+message FixedClusterHostAllocs {
+  // Flow marker that identifies the cluster-level FG.
+  optional FlowMarker cluster = 1;
+
+  // All hosts in this FG will get per_host_alloc_pattern[i] at Step i.
+  repeated FlowAlloc per_host_alloc_pattern = 2;
+}
+
 message ClusterAllocatorConfig {
   optional ClusterAllocatorType type = 1 [default = CA_BWE];
   optional bool enable_burstiness = 2 [default = true];
@@ -119,6 +131,8 @@ message ClusterAllocatorConfig {
 
   optional double heyp_acceptable_measured_ratio_over_intended_ratio = 6 [default = 0.9];
   optional bool heyp_probe_lopri_when_ambiguous = 7 [default = true];
+
+  repeated FixedClusterHostAllocs fixed_host_alloc_patterns = 8;
 }
 
 message ClusterServerConfig {
