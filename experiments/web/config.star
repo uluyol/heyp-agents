@@ -1,5 +1,6 @@
-deploy_pb = proto.file("heyp/proto/deployment.proto")
 config_pb = proto.file("heyp/proto/config.proto")
+deploy_pb = proto.file("heyp/proto/deployment.proto")
+heyp_pb = proto.file("heyp/proto/heyp.proto")
 
 def NumShards(load_bps):
     inflated_load = float(2 * load_bps)
@@ -192,6 +193,30 @@ def GenWorkloadStagesOscillating(
         "envoy_group_names": ["AA", "WA"],
     }
 
+_DEFAULT_NODE_COUNTS = {
+    "EDGE": 2,
+    "AA": 9,
+    "WA": 2,
+    "CLIENT": 2,
+}
+
+def _GetNodeTypeUB(node_counts):
+    ubs = dict()
+
+    # IDs start from 1
+    # Node with ID 1 is cluster agent
+    c = 1
+    c += node_counts["EDGE"]
+    ubs["EDGE"] = c
+    c += node_counts["AA"]
+    ubs["AA"] = c
+    c += node_counts["WA"]
+    ubs["WA"] = c
+    c += node_counts["CLIENT"]
+    ubs["CLIENT"] = c
+
+    return ubs
+
 def GenConfig(
         ca_allocator = None,
         ca_limits_to_apply = None,
@@ -207,7 +232,8 @@ def GenConfig(
         WA_client_roles = None,
         WA_fortio_instances = None,
         envoy_group_names = None,
-        shard_key = ""):
+        shard_key = "",
+        node_counts = _DEFAULT_NODE_COUNTS):
     nodes = []
     clusters = {
         "EDGE": {
@@ -267,29 +293,43 @@ def GenConfig(
     else:
         fail("got ca_limits_to_apply = ", ca_limits_to_apply, "must be \"H\"/\"HL\"/\"\"")
 
+    idx_ubs = _GetNodeTypeUB(node_counts)
+
     shard_index = 0
     for idx in range(16):
         i = idx + 1
         name = "n" + str(i)
         roles = []
         if i == 1:
-            roles = ["cluster-agent"]
+            roles.append("cluster-agent")
             clusters["EDGE"]["node_names"].append(name)
             clusters["AA"]["node_names"].append(name)
             clusters["WA"]["node_names"].append(name)
             clusters["CLIENT"]["node_names"].append(name)
-        elif i <= 3:
-            roles = ["host-agent"] + ["fortio-{0}-envoy-proxy".format(g) for g in envoy_group_names]
-            clusters["EDGE"]["node_names"].append(name)
-        elif i <= 12:
-            roles = ["host-agent"] + AA_server_roles_for(i - 4, 9)
-            clusters["AA"]["node_names"].append(name)
-        elif i <= 14:
-            roles = ["host-agent"] + WA_server_roles_for(i - 13, 2)
-            clusters["WA"]["node_names"].append(name)
         else:
-            roles = ["host-agent"] + AA_client_roles + WA_client_roles
-            clusters["CLIENT"]["node_names"].append(name)
+            roles.append("host-agent")
+            if i <= idx_ubs["EDGE"]:
+                roles.extend(["fortio-{0}-envoy-proxy".format(g) for g in envoy_group_names])
+                clusters["EDGE"]["node_names"].append(name)
+            elif i <= idx_ubs["AA"]:
+                roles.extend(AA_server_roles_for(i - 4, 9))
+                clusters["AA"]["node_names"].append(name)
+            elif i <= idx_ubs["WA"]:
+                roles.extend(WA_server_roles_for(i - 13, 2))
+                clusters["WA"]["node_names"].append(name)
+            elif i <= idx_ubs["CLIENT"]:
+                roles.extend(AA_client_roles + WA_client_roles)
+                clusters["CLIENT"]["node_names"].append(name)
+            else:
+                if "UNUSED" not in clusters:
+                    clusters["UNUSED"] = {
+                        "name": "UNUSED",
+                        "node_names": ["n1"],
+                        "cluster_agent_port": 4600,
+                    }
+                clusters["UNUSED"]["node_names"].append(name)
+                #fail("got idx >= CLIENT upper bound index", idx, idx_ubs["CLIENT"])
+
         experiment_ip = "192.168.1." + str(i)
         external_ip, shard_index = ext_addr_for_ip(experiment_ip, shard_key)
         nodes.append({
@@ -445,6 +485,9 @@ def BackendOnEachHost(
                 "workload_stages": workload_stages_per_backend,
                 "size_dist": size_dist,
                 "jitter_on": False,
+                "http_options": {
+                    "use_fast_client": False,
+                },
             },
         })
         cur_port += num_servers_per_backend_host
@@ -544,6 +587,110 @@ def HSC20Config(**kwargs):
         **kwargs
     )
 
+def FixedHostPatternAlternatingQoSConfig(**kwargs):
+    allocator = config_pb.ClusterAllocatorConfig(
+        type = "CA_FIXED_HOST_PATTERN",
+        fixed_host_alloc_patterns = [
+            {
+                "cluster": {
+                    "src_dc": "AA",
+                    "dst_dc": "EDGE",
+                },
+                "per_host_alloc_pattern": [
+                    {
+                        "hipri_rate_limit_bps": Gbps(100),
+                    },
+                    {
+                        "lopri_rate_limit_bps": Gbps(100),
+                    },
+                ],
+            },
+            {
+                "cluster": {
+                    "src_dc": "WA",
+                    "dst_dc": "EDGE",
+                },
+                "per_host_alloc_pattern": [{
+                    "hipri_rate_limit_bps": Gbps(100),
+                }],
+            },
+        ],
+    )
+
+    return GenConfig(
+        ca_allocator = allocator,
+        ca_limits_to_apply = "HL",
+        limit_hipri = False,
+        limit_lopri = False,
+        **kwargs
+    )
+
+def FixedHostPatternHIPRIConfig(**kwargs):
+    allocator = config_pb.ClusterAllocatorConfig(
+        type = "CA_FIXED_HOST_PATTERN",
+        fixed_host_alloc_patterns = [
+            {
+                "cluster": {
+                    "src_dc": "AA",
+                    "dst_dc": "EDGE",
+                },
+                "per_host_alloc_pattern": [{
+                    "hipri_rate_limit_bps": Gbps(11),
+                }],
+            },
+            {
+                "cluster": {
+                    "src_dc": "WA",
+                    "dst_dc": "EDGE",
+                },
+                "per_host_alloc_pattern": [{
+                    "hipri_rate_limit_bps": Gbps(11),
+                }],
+            },
+        ],
+    )
+
+    return GenConfig(
+        ca_allocator = allocator,
+        ca_limits_to_apply = "HL",
+        limit_hipri = False,
+        limit_lopri = False,
+        **kwargs
+    )
+
+def FixedHostPatternLOPRIConfig(**kwargs):
+    allocator = config_pb.ClusterAllocatorConfig(
+        type = "CA_FIXED_HOST_PATTERN",
+        fixed_host_alloc_patterns = [
+            {
+                "cluster": {
+                    "src_dc": "AA",
+                    "dst_dc": "EDGE",
+                },
+                "per_host_alloc_pattern": [{
+                    "lopri_rate_limit_bps": Gbps(100),
+                }],
+            },
+            {
+                "cluster": {
+                    "src_dc": "WA",
+                    "dst_dc": "EDGE",
+                },
+                "per_host_alloc_pattern": [{
+                    "hipri_rate_limit_bps": Gbps(100),
+                }],
+            },
+        ],
+    )
+
+    return GenConfig(
+        ca_allocator = allocator,
+        ca_limits_to_apply = "HL",
+        limit_hipri = False,
+        limit_lopri = False,
+        **kwargs
+    )
+
 def Gbps(x):
     return x * 1024 * 1024 * 1024
 
@@ -612,4 +759,29 @@ def GenConfigs():
 
     return configs
 
+def GenConfigsFlipQoS():
+    kwargs = dict({
+        "AA_approved_bps": int(Gbps(11)),
+        "AA_surplus_bps": int(Gbps(11)),
+        "WA_approved_bps": int(Gbps(11)),
+        "shard_key": "flipqos",
+        "node_counts": {
+            "EDGE": 1,
+            "AA": 2,
+            "WA": 8,
+            "CLIENT": 1,
+        },
+    }, **GenWorkloadStagesStatic(
+        AA_bps = int(Gbps(1)),
+        WA_bps = int(Gbps(6)),
+    ))
+
+    configs = dict()
+    configs["qflip-nl"] = NoLimitConfig(**kwargs)
+    configs["qflip-hipri"] = FixedHostPatternHIPRIConfig(**kwargs)
+    configs["qflip-lopri"] = FixedHostPatternLOPRIConfig(**kwargs)
+    configs["qflip-flipflop"] = FixedHostPatternAlternatingQoSConfig(**kwargs)
+    return configs
+
 configs = GenConfigs()
+# configs = GenConfigsFlipQoS()
