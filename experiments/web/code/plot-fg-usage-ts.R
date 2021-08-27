@@ -32,6 +32,11 @@ truedemand <- read.csv(input.truedemand, header=TRUE, stringsAsFactors=FALSE)
 truedemand$Timestamp <- truedemand$UnixTime - minTime
 truedemand$Demand <- truedemand$Demand / (2 ^ 30)
 
+# Convert data to numeric since we might have null values.
+# Suppress warnings since we deliberately want null values to convert to NAs.
+allocs.state$HIPRIRateLimitBps <- suppressWarnings(as.numeric(allocs.state$HIPRIRateLimitBps))
+allocs.state$LOPRIRateLimitBps <- suppressWarnings(as.numeric(allocs.state$LOPRIRateLimitBps))
+
 allocs.state$Timestamp <- allocs.state$UnixTime - minTime
 allocs.state$HIPRIRateLimitBps <- allocs.state$HIPRIRateLimitBps / (2 ^ 30)
 allocs.state$LOPRIRateLimitBps <- allocs.state$LOPRIRateLimitBps / (2 ^ 30)
@@ -82,7 +87,7 @@ PlotFG <- function(fg, ycol, ylabel, output) {
           axis.title.y=element_text(size=12, margin=margin(0, 3, 0, 0)),
           axis.title.x=element_text(size=12, margin=margin(3, 0, 0, 0)))
 
-  if (approval.plus.lopri > approval && nrow(allocs.state[allocs.state$FG == fg,]) > 0 && max(allocs.state$LOPRIRateLimitBps[allocs.state$FG == fg]) > 0) {
+  if (length(approval.plus.lopri) != 0 && approval.plus.lopri > approval && sum(!is.na(allocs.state$LOPRIRateLimitBps[allocs.state$FG == fg])) > 0 && max(allocs.state$LOPRIRateLimitBps[allocs.state$FG == fg]) > 0) {
     p <- p + geom_line(aes(x=Timestamp, y=HIPRIRateLimitBps+LOPRIRateLimitBps), color="orange", data=allocs.state[allocs.state$FG == fg,])
   }
 
