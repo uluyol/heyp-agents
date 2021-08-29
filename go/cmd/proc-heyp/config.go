@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/subcommands"
 	"github.com/uluyol/heyp-agents/go/pb"
+	"github.com/uluyol/heyp-agents/go/proc"
 	"google.golang.org/protobuf/encoding/prototext"
 )
 
@@ -103,6 +104,42 @@ func (c *wlStartEndCmd) Execute(ctx context.Context, fs *flag.FlagSet, args ...i
 
 	if err := os.WriteFile(c.output, buf.Bytes(), 0o644); err != nil {
 		log.Fatalf("failed to write output file: %v", err)
+	}
+
+	return subcommands.ExitSuccess
+}
+
+var _ subcommands.Command = new(wlStartEndCmd)
+
+type diffRemoteConfigsCmd struct{}
+
+func (*diffRemoteConfigsCmd) Name() string     { return "diff-remote-configs" }
+func (*diffRemoteConfigsCmd) Synopsis() string { return "" }
+func (*diffRemoteConfigsCmd) Usage() string    { return "usage: proc-heyp diff-remote-configs a b\n" }
+
+func (c *diffRemoteConfigsCmd) SetFlags(fs *flag.FlagSet) {}
+
+func (c *diffRemoteConfigsCmd) Execute(ctx context.Context, fs *flag.FlagSet, args ...interface{}) subcommands.ExitStatus {
+	log.SetPrefix("diff-remote-configs: ")
+
+	if len(fs.Args()) != 2 {
+		fs.Usage()
+		return subcommands.ExitFailure
+	}
+	aFS, err := newLogsFS(fs.Arg(0))
+	if err != nil {
+		log.Fatalf("failed to open logs a: %v", err)
+	}
+	defer aFS.Close()
+	bFS, err := newLogsFS(fs.Arg(1))
+	if err != nil {
+		log.Fatalf("failed to open logs a: %v", err)
+	}
+	defer bFS.Close()
+
+	err = proc.DiffRemoteConfigs(aFS, bFS, os.Stdout)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	return subcommands.ExitSuccess

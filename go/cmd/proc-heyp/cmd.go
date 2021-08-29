@@ -263,6 +263,7 @@ func main() {
 	subcommands.Register(new(hostEnforcerLogsCmd), "")
 	subcommands.Register(new(approvalsCmd), "")
 	subcommands.Register(new(wlStartEndCmd), "")
+	subcommands.Register(new(diffRemoteConfigsCmd), "")
 
 	flag.Parse()
 
