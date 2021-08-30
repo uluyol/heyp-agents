@@ -734,7 +734,7 @@ def GenConfigs():
         "shard_key": "inc",
     }, **GenWorkloadStagesIncreasing(
         AA_bps = int(Gbps(16)),
-        num_AA_backends = 5,
+        num_AA_backends = 1,
         WA_bps_min = int(Gbps(4)),
         WA_bps_max = int(Gbps(12)),
     ))
