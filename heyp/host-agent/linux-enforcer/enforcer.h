@@ -40,7 +40,7 @@ MatchedHostFlows ExpandDestIntoHostsSinglePri(
 struct FlowNetemConfig {
   proto::FlowMarker flow;
   std::vector<proto::FlowMarker> matched_flows;
-  proto::NetemConfig netem;
+  SimulatedWanDB::QoSNetemConfig netem;
 };
 
 bool operator==(const FlowNetemConfig& lhs, const FlowNetemConfig& rhs);

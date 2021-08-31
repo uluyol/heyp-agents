@@ -80,6 +80,7 @@ message SimulatedWanConfig {
     optional string src_dc = 1;
     optional string dst_dc = 2;
     optional NetemConfig netem = 3;
+    optional NetemConfig netem_lopri = 4; // if unspecified, defaults to netem
   }
   repeated Pair dc_pairs = 1;
 }

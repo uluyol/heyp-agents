@@ -24,23 +24,40 @@ TEST(SimulatedWanDBTest, Basic) {
       src_dc: "sydney"
       dst_dc: "chicago"
       netem { delay_ms: 100 }
+      netem_lopri { delay_ms: 200 }
+    }
+    dc_pairs {
+      src_dc: "sydney"
+      dst_dc: "sanjose"
+      netem_lopri { delay_ms: 300 }
     }
   )"));
 
-  const proto::NetemConfig* c = db.GetNetem("chicago", "sydney");
+  const SimulatedWanDB::QoSNetemConfig* c = db.GetNetem("chicago", "sydney");
   ASSERT_TRUE(c != nullptr);
-  EXPECT_EQ(c->delay_ms(), 321);
-  EXPECT_EQ(c->delay_dist(), proto::NETEM_PARETO);
+  EXPECT_EQ(c->hipri.delay_ms(), 321);
+  EXPECT_EQ(c->hipri.delay_dist(), proto::NETEM_PARETO);
+  EXPECT_EQ(c->lopri.delay_ms(), 321);
+  EXPECT_EQ(c->lopri.delay_dist(), proto::NETEM_PARETO);
 
   c = db.GetNetem("chicago", "sanjose");
   ASSERT_TRUE(c != nullptr);
-  EXPECT_EQ(c->delay_ms(), 210);
-  EXPECT_EQ(c->delay_dist(), proto::NETEM_UNIFORM);
+  EXPECT_EQ(c->hipri.delay_ms(), 210);
+  EXPECT_EQ(c->hipri.delay_dist(), proto::NETEM_UNIFORM);
+  EXPECT_EQ(c->lopri.delay_ms(), 210);
+  EXPECT_EQ(c->lopri.delay_dist(), proto::NETEM_UNIFORM);
 
   c = db.GetNetem("sydney", "chicago");
   ASSERT_TRUE(c != nullptr);
-  EXPECT_EQ(c->delay_ms(), 100);
-  EXPECT_EQ(c->delay_dist(), proto::NETEM_NORMAL);
+  EXPECT_EQ(c->hipri.delay_ms(), 100);
+  EXPECT_EQ(c->hipri.delay_dist(), proto::NETEM_NORMAL);
+  EXPECT_EQ(c->lopri.delay_ms(), 200);
+  EXPECT_EQ(c->lopri.delay_dist(), proto::NETEM_NORMAL);
+
+  c = db.GetNetem("sydney", "sanjose");
+  ASSERT_TRUE(c != nullptr);
+  EXPECT_EQ(c->lopri.delay_ms(), 300);
+  EXPECT_EQ(c->lopri.delay_dist(), proto::NETEM_NORMAL);
 }
 
 }  // namespace

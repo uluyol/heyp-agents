@@ -61,7 +61,12 @@ bool operator==(const FlowNetemConfig& lhs, const FlowNetemConfig& rhs) {
   if (!IsSameFlow(lhs.flow, rhs.flow)) {
     return false;
   }
-  if (!google::protobuf::util::MessageDifferencer::Equivalent(lhs.netem, rhs.netem)) {
+  if (!google::protobuf::util::MessageDifferencer::Equivalent(lhs.netem.hipri,
+                                                              rhs.netem.hipri)) {
+    return false;
+  }
+  if (!google::protobuf::util::MessageDifferencer::Equivalent(lhs.netem.lopri,
+                                                              rhs.netem.lopri)) {
     return false;
   }
   if (lhs.matched_flows.size() != rhs.matched_flows.size()) {
@@ -87,7 +92,7 @@ std::ostream& operator<<(std::ostream& os, const FlowNetemConfig& c) {
             << "  flow = " << c.flow.ShortDebugString() << "\n  matched_flows = [\n    "
             << absl::StrJoin(c.matched_flows, "\n    ",
                              ShortDebugFormatter<proto::FlowMarker>())
-            << "\n  ]\n  netem = " << c.netem.ShortDebugString() << "\n}";
+            << "\n  ]\n  netem = " << c.netem.ToString() << "\n}";
 }
 
 std::vector<FlowNetemConfig> AllNetemConfigs(const StaticDCMapper& dc_mapper,
@@ -99,7 +104,8 @@ std::vector<FlowNetemConfig> AllNetemConfigs(const StaticDCMapper& dc_mapper,
     if (dst == my_dc) {
       continue;
     }
-    const proto::NetemConfig* maybe_config = simulated_wan.GetNetem(my_dc, dst);
+    const SimulatedWanDB::QoSNetemConfig* maybe_config =
+        simulated_wan.GetNetem(my_dc, dst);
     if (maybe_config == nullptr) {
       continue;
     }
@@ -251,14 +257,14 @@ absl::Status LinuxHostEnforcerImpl::InitSimulatedWan(std::vector<FlowNetemConfig
     FlowSys* sys = sys_info_[c.flow].get();
     StageTrafficControlForFlow({
         .rate_limit_bps = kMaxBandwidthBps,
-        .netem_config = &c.netem,
+        .netem_config = &c.netem.hipri,
         .sys = &sys->hipri,
         .create_count = &num_created_classes,
         .update_count = &num_updated_classes,
     });
     StageTrafficControlForFlow({
         .rate_limit_bps = kMaxBandwidthBps,
-        .netem_config = &c.netem,
+        .netem_config = &c.netem.lopri,
         .sys = &sys->lopri,
         .create_count = &num_created_classes,
         .update_count = &num_updated_classes,

@@ -53,10 +53,17 @@ TEST(AllNetemConfigs, Basic) {
                                          dst_addr: "10.0.0.3"
                                        )"),
                                    },
-                               .netem = ParseTextProto<proto::NetemConfig>(R"(
-                                 delay_ms: 53
-                                 delay_jitter_ms: 5
-                               )"),
+                               .netem =
+                                   SimulatedWanDB::QoSNetemConfig{
+                                       .hipri = ParseTextProto<proto::NetemConfig>(R"(
+                                         delay_ms: 53
+                                         delay_jitter_ms: 5
+                                       )"),
+                                       .lopri = ParseTextProto<proto::NetemConfig>(R"(
+                                         delay_ms: 53
+                                         delay_jitter_ms: 5
+                                       )"),
+                                   },
                            },
                            FlowNetemConfig{
                                .flow = ParseTextProto<proto::FlowMarker>(R"(
@@ -73,10 +80,17 @@ TEST(AllNetemConfigs, Basic) {
                                          dst_addr: "10.0.0.4"
                                        )"),
                                    },
-                               .netem = ParseTextProto<proto::NetemConfig>(R"(
-                                 delay_ms: 25
-                                 delay_jitter_ms: 4
-                               )"),
+                               .netem =
+                                   SimulatedWanDB::QoSNetemConfig{
+                                       .hipri = ParseTextProto<proto::NetemConfig>(R"(
+                                         delay_ms: 25
+                                         delay_jitter_ms: 4
+                                       )"),
+                                       .lopri = ParseTextProto<proto::NetemConfig>(R"(
+                                         delay_ms: 25
+                                         delay_jitter_ms: 4
+                                       )"),
+                                   },
                            }));
 }
 

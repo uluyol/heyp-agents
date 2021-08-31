@@ -15,11 +15,18 @@ class SimulatedWanDB {
  public:
   explicit SimulatedWanDB(const proto::SimulatedWanConfig& config);
 
-  const proto::NetemConfig* GetNetem(std::string_view src, std::string_view dst) const;
+  struct QoSNetemConfig {
+    proto::NetemConfig hipri;
+    proto::NetemConfig lopri;
+
+    std::string ToString() const;
+  };
+
+  const QoSNetemConfig* GetNetem(std::string_view src, std::string_view dst) const;
 
  private:
   std::vector<std::unique_ptr<std::string>> dc_names_;
-  absl::flat_hash_map<std::pair<std::string_view, std::string_view>, proto::NetemConfig>
+  absl::flat_hash_map<std::pair<std::string_view, std::string_view>, QoSNetemConfig>
       netem_configs_;
 };
 

@@ -222,6 +222,7 @@ def GenConfig(
         ca_limits_to_apply = None,
         limit_hipri = None,
         limit_lopri = None,
+        AA_lopri_is_longer = False,
         AA_approved_bps = None,
         AA_surplus_bps = None,
         AA_server_roles_for = None,
@@ -349,6 +350,15 @@ def GenConfig(
         })
         envoy_port_counter += 1
 
+    aa_to_edge_client_lopri = {}
+    if AA_lopri_is_longer:
+        aa_to_edge_client_lopri = {
+            "delay_ms": 60,  # total 90 since the other direction has 30
+            "delay_jitter_ms": 1,  # 5
+            "delay_correlation_pct": 1,  # 25
+            "delay_dist": "NETEM_NO_DIST",
+        }
+
     return (shard_index, deploy_pb.DeploymentConfig(
         nodes = nodes,
         clusters = [c for c in clusters.values()],
@@ -399,6 +409,16 @@ def GenConfig(
             # dc_mapper is automatically filled
             "simulated_wan": {
                 "dc_pairs": [
+                    {
+                        "src_dc": "AA",
+                        "dst_dc": "EDGE",
+                        "netem_lopri": aa_to_edge_client_lopri,
+                    },
+                    {
+                        "src_dc": "AA",
+                        "dst_dc": "CLIENT",
+                        "netem_lopri": aa_to_edge_client_lopri,
+                    },
                     {
                         "src_dc": "EDGE",
                         "dst_dc": "AA",
@@ -727,6 +747,7 @@ def GenConfigs():
                     configs[prefix + "-qdlrl"] = QoSDowngradeAndLimitLOPRIConfig(**kwargs)
                     configs[prefix + "-rl"] = RateLimitConfig(**kwargs)
 
+    # "AA_lopri_is_longer": True,
     kwargs = dict({
         "AA_approved_bps": int(Gbps(2)),
         "AA_surplus_bps": int(Gbps(10)),
@@ -761,6 +782,7 @@ def GenConfigs():
 
 def GenConfigsFlipQoS():
     kwargs = dict({
+        "AA_lopri_is_longer": True,
         "AA_approved_bps": int(Gbps(11)),
         "AA_surplus_bps": int(Gbps(11)),
         "WA_approved_bps": int(Gbps(11)),
@@ -768,12 +790,12 @@ def GenConfigsFlipQoS():
         "node_counts": {
             "EDGE": 1,
             "AA": 2,
-            "WA": 8,
+            "WA": 2,
             "CLIENT": 1,
         },
     }, **GenWorkloadStagesStatic(
         AA_bps = int(Gbps(1)),
-        WA_bps = int(Gbps(6)),
+        WA_bps = int(Gbps(1)),
     ))
 
     configs = dict()
