@@ -501,20 +501,46 @@ class NopAllocator : public PerAggAllocator {
   }
 };
 
+class SnapshotHostIter {
+  const proto::FixedClusterHostAllocs::Snapshot& snapshot_;
+  int pair_index_ = 0;
+  int pair_remaining_ = 0;
+  const proto::FlowAlloc empty_alloc_;
+
+ public:
+  SnapshotHostIter(const proto::FixedClusterHostAllocs::Snapshot& snapshot)
+      : snapshot_(snapshot) {
+    if (snapshot_.host_allocs_size() > 0) {
+      pair_remaining_ = snapshot_.host_allocs(0).num_hosts();
+    }
+  }
+
+  const proto::FlowAlloc& Next() {
+    while (pair_index_ < snapshot_.host_allocs_size()) {
+      if (pair_remaining_ > 0) {
+        --pair_remaining_;
+        return snapshot_.host_allocs(pair_index_).alloc();
+      }
+      ++pair_index_;
+      if (pair_index_ < snapshot_.host_allocs_size()) {
+        pair_remaining_ = snapshot_.host_allocs(pair_index_).num_hosts();
+      }
+    }
+    return empty_alloc_;
+  }
+};
+
 class HostPatternAllocator : public PerAggAllocator {
  private:
   spdlog::logger logger_;
-  FlowMap<std::vector<proto::FlowAlloc>> per_host_alloc_patterns_;
+  FlowMap<proto::FixedClusterHostAllocs> alloc_patterns_;
   size_t next_;
 
  public:
   HostPatternAllocator(const proto::ClusterAllocatorConfig& config)
       : logger_(MakeLogger("host-pattern-alloc")), next_(0) {
-    for (const proto::FixedClusterHostAllocs& per_host_alloc_pattern :
-         config.fixed_host_alloc_patterns()) {
-      per_host_alloc_patterns_[per_host_alloc_pattern.cluster()] = {
-          per_host_alloc_pattern.per_host_alloc_pattern().begin(),
-          per_host_alloc_pattern.per_host_alloc_pattern().end()};
+    for (const proto::FixedClusterHostAllocs& p : config.fixed_host_alloc_patterns()) {
+      alloc_patterns_[p.cluster()] = p;
     }
   }
 
@@ -523,16 +549,16 @@ class HostPatternAllocator : public PerAggAllocator {
       proto::DebugAllocRecord::DebugState* debug_state) {
     const bool should_debug = DebugQosAndRateLimitSelection();
 
-    auto alloc_pattern_iter = per_host_alloc_patterns_.find(agg_info.parent().flow());
-    if (alloc_pattern_iter == per_host_alloc_patterns_.end()) {
+    auto alloc_pattern_iter = alloc_patterns_.find(agg_info.parent().flow());
+    if (alloc_pattern_iter == alloc_patterns_.end()) {
       SPDLOG_LOGGER_INFO(&logger_, "no admission for FG {}",
                          agg_info.parent().flow().ShortDebugString());
       return {};
     }
 
-    const std::vector<proto::FlowAlloc>& alloc_pattern = alloc_pattern_iter->second;
+    const proto::FixedClusterHostAllocs& alloc_pattern = alloc_pattern_iter->second;
 
-    if (alloc_pattern.empty()) {
+    if (alloc_pattern.snapshots().empty()) {
       return {};
     }
 
@@ -542,16 +568,17 @@ class HostPatternAllocator : public PerAggAllocator {
       }
     }
 
-    const proto::FlowAlloc& all_hosts_alloc = alloc_pattern[next_ % alloc_pattern.size()];
+    const proto::FixedClusterHostAllocs::Snapshot& snapshot_pattern =
+        alloc_pattern.snapshots(next_ % alloc_pattern.snapshots().size());
     next_++;
+
+    SnapshotHostIter alloc_iter(snapshot_pattern);
 
     std::vector<proto::FlowAlloc> allocs;
     allocs.reserve(agg_info.children_size());
     for (size_t i = 0; i < agg_info.children_size(); ++i) {
-      proto::FlowAlloc alloc;
+      proto::FlowAlloc alloc = alloc_iter.Next();
       *alloc.mutable_flow() = agg_info.children(i).flow();
-      alloc.set_hipri_rate_limit_bps(all_hosts_alloc.hipri_rate_limit_bps());
-      alloc.set_lopri_rate_limit_bps(all_hosts_alloc.lopri_rate_limit_bps());
       allocs.push_back(std::move(alloc));
     }
     return allocs;

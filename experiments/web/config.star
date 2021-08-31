@@ -42,12 +42,15 @@ WA_PROP_DELAY_MS = 50
 
 def GenWorkloadStagesStatic(
         AA_bps = None,
-        WA_bps = None):
+        WA_bps = None,
+        AA_lb_policy = "LEAST_REQUEST",
+        WA_lb_policy = "LEAST_REQUEST",
+        run_dur = "90s"):
     AA_instances, AA_client_roles, AA_server_roles_for = BackendOnEachHost(
         num_backends = 1,
         workload_stages_per_backend = [{
             "target_average_bps": AA_bps,
-            "run_dur": "90s",
+            "run_dur": run_dur,
         }],
         num_shards_per_backend = NumShards(AA_bps),
         num_servers_per_backend_host = 2,
@@ -55,13 +58,14 @@ def GenWorkloadStagesStatic(
         envoy_group_name = "AA",
         starting_port = AA_FORTIO_STARTING_PORT,
         prop_delay_ms = AA_PROP_DELAY_MS,
+        lb_policy = AA_lb_policy,
     )
 
     WA_instances, WA_client_roles, WA_server_roles_for = BackendOnEachHost(
         num_backends = 1,
         workload_stages_per_backend = [{
             "target_average_bps": WA_bps,
-            "run_dur": "90s",
+            "run_dur": run_dur,
         }],
         num_shards_per_backend = NumShards(WA_bps),
         num_servers_per_backend_host = 4,
@@ -69,6 +73,7 @@ def GenWorkloadStagesStatic(
         envoy_group_name = "WA",
         starting_port = WA_FORTIO_STARTING_PORT,
         prop_delay_ms = WA_PROP_DELAY_MS,
+        lb_policy = WA_lb_policy,
     )
 
     return {
@@ -480,7 +485,8 @@ def BackendOnEachHost(
         name_prefix = None,
         envoy_group_name = None,
         starting_port = None,
-        prop_delay_ms = None):
+        prop_delay_ms = None,
+        lb_policy = "LEAST_REQUEST"):
     size_dist = [{
         "resp_size_bytes": 51200,
         "weight": 100,
@@ -498,7 +504,7 @@ def BackendOnEachHost(
             "group": envoy_group_name,
             "name": be_name,
             "serve_ports": [cur_port + porti for porti in range(num_servers_per_backend_host)],
-            "lb_policy": "LEAST_REQUEST",
+            "lb_policy": lb_policy,
             "client": {
                 "num_shards": num_shards_per_backend,
                 "num_conns": NumConnsPerShard(workload_stages_per_backend, size_dist, num_shards_per_backend, prop_delay_ms),
@@ -616,12 +622,38 @@ def FixedHostPatternAlternatingQoSConfig(**kwargs):
                     "src_dc": "AA",
                     "dst_dc": "EDGE",
                 },
-                "per_host_alloc_pattern": [
+                "snapshots": [
                     {
-                        "hipri_rate_limit_bps": Gbps(100),
+                        "host_allocs": [
+                            {
+                                "alloc": {
+                                    "hipri_rate_limit_bps": Gbps(100),
+                                },
+                                "num_hosts": 1,
+                            },
+                            {
+                                "alloc": {
+                                    "lopri_rate_limit_bps": Gbps(100),
+                                },
+                                "num_hosts": 1,
+                            },
+                        ],
                     },
                     {
-                        "lopri_rate_limit_bps": Gbps(100),
+                        "host_allocs": [
+                            {
+                                "alloc": {
+                                    "lopri_rate_limit_bps": Gbps(100),
+                                },
+                                "num_hosts": 1,
+                            },
+                            {
+                                "alloc": {
+                                    "hipri_rate_limit_bps": Gbps(100),
+                                },
+                                "num_hosts": 1,
+                            },
+                        ],
                     },
                 ],
             },
@@ -630,9 +662,18 @@ def FixedHostPatternAlternatingQoSConfig(**kwargs):
                     "src_dc": "WA",
                     "dst_dc": "EDGE",
                 },
-                "per_host_alloc_pattern": [{
-                    "hipri_rate_limit_bps": Gbps(100),
-                }],
+                "snapshots": [
+                    {
+                        "host_allocs": [
+                            {
+                                "alloc": {
+                                    "hipri_rate_limit_bps": Gbps(100),
+                                },
+                                "num_hosts": 2,
+                            },
+                        ],
+                    },
+                ],
             },
         ],
     )
@@ -654,18 +695,36 @@ def FixedHostPatternHIPRIConfig(**kwargs):
                     "src_dc": "AA",
                     "dst_dc": "EDGE",
                 },
-                "per_host_alloc_pattern": [{
-                    "hipri_rate_limit_bps": Gbps(11),
-                }],
+                "snapshots": [
+                    {
+                        "host_allocs": [
+                            {
+                                "alloc": {
+                                    "hipri_rate_limit_bps": Gbps(100),
+                                },
+                                "num_hosts": 2,
+                            },
+                        ],
+                    },
+                ],
             },
             {
                 "cluster": {
                     "src_dc": "WA",
                     "dst_dc": "EDGE",
                 },
-                "per_host_alloc_pattern": [{
-                    "hipri_rate_limit_bps": Gbps(11),
-                }],
+                "snapshots": [
+                    {
+                        "host_allocs": [
+                            {
+                                "alloc": {
+                                    "hipri_rate_limit_bps": Gbps(100),
+                                },
+                                "num_hosts": 2,
+                            },
+                        ],
+                    },
+                ],
             },
         ],
     )
@@ -687,18 +746,36 @@ def FixedHostPatternLOPRIConfig(**kwargs):
                     "src_dc": "AA",
                     "dst_dc": "EDGE",
                 },
-                "per_host_alloc_pattern": [{
-                    "lopri_rate_limit_bps": Gbps(100),
-                }],
+                "snapshots": [
+                    {
+                        "host_allocs": [
+                            {
+                                "alloc": {
+                                    "lopri_rate_limit_bps": Gbps(100),
+                                },
+                                "num_hosts": 2,
+                            },
+                        ],
+                    },
+                ],
             },
             {
                 "cluster": {
                     "src_dc": "WA",
                     "dst_dc": "EDGE",
                 },
-                "per_host_alloc_pattern": [{
-                    "hipri_rate_limit_bps": Gbps(100),
-                }],
+                "snapshots": [
+                    {
+                        "host_allocs": [
+                            {
+                                "alloc": {
+                                    "hipri_rate_limit_bps": Gbps(100),
+                                },
+                                "num_hosts": 2,
+                            },
+                        ],
+                    },
+                ],
             },
         ],
     )
@@ -796,9 +873,13 @@ def GenConfigsFlipQoS():
     }, **GenWorkloadStagesStatic(
         AA_bps = int(Gbps(1)),
         WA_bps = int(Gbps(1)),
+        AA_lb_policy = "ROUND_ROBIN",
+        WA_lb_policy = "ROUND_ROBIN",
+        run_dur = "150s",
     ))
 
     configs = dict()
+
     configs["qflip-nl"] = NoLimitConfig(**kwargs)
     configs["qflip-hipri"] = FixedHostPatternHIPRIConfig(**kwargs)
     configs["qflip-lopri"] = FixedHostPatternLOPRIConfig(**kwargs)

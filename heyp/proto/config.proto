@@ -115,11 +115,27 @@ message DowngradeSelector {
 }
 
 message FixedClusterHostAllocs {
+  message FlowAllocAndCount {
+    optional FlowAlloc alloc = 1;
+    optional int32 num_hosts = 2; // number of hosts that get this alloc
+  }
+
+  // Snapshot contains a list of (allocation, count) pairs.
+  //
+  // If we have a snapshot of [(HIPRI = 5, num_hosts = 2), (LOPRI = 2, num_hosts = 1)],
+  // then the first 2 hosts will get a HIPRI allocation of 5 and the third will get 1
+  // (remaining get 0).
+  //
+  // Hosts are ordered consistently between runs.
+  message Snapshot {
+    repeated FlowAllocAndCount host_allocs = 1;
+  };
+
   // Flow marker that identifies the cluster-level FG.
   optional FlowMarker cluster = 1;
 
-  // All hosts in this FG will get per_host_alloc_pattern[i] at Step i.
-  repeated FlowAlloc per_host_alloc_pattern = 2;
+  // Hosts in this FG will get allocs from snapshots[i % len(snapshots)] in Step i.
+  repeated Snapshot snapshots = 2;
 }
 
 message ClusterAllocatorConfig {
