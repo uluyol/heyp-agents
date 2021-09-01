@@ -260,6 +260,7 @@ func main() {
 	subcommands.Register(new(clusterAllocQoSLifetime), "cluster-alloc")
 	subcommands.Register(new(clusterAllocQoSRetained), "cluster-alloc")
 	subcommands.Register(new(alignClusterAllocLogsCmd), "cluster-alloc")
+	subcommands.Register(new(clusterAllocChanges), "cluster-alloc")
 	subcommands.Register(new(hostEnforcerLogsCmd), "")
 	subcommands.Register(new(approvalsCmd), "")
 	subcommands.Register(new(wlStartEndCmd), "")

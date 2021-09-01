@@ -159,3 +159,32 @@ func (c *clusterAllocQoSRetained) Execute(ctx context.Context, fs *flag.FlagSet,
 
 	return subcommands.ExitSuccess
 }
+
+type clusterAllocChanges struct {
+	output string
+}
+
+func (*clusterAllocChanges) Name() string    { return "cluster-alloc-changes" }
+func (c *clusterAllocChanges) Usage() string { return logsUsage(c) }
+
+func (*clusterAllocChanges) Synopsis() string {
+	return "print when an FG allocs is recomputed and whether it has changed"
+}
+
+func (c *clusterAllocChanges) SetFlags(fs *flag.FlagSet) {
+	fs.StringVar(&c.output, "out", "cluster-alloc-changes.csv", "output file")
+}
+
+func (c *clusterAllocChanges) Execute(ctx context.Context, fs *flag.FlagSet, args ...interface{}) subcommands.ExitStatus {
+	log.SetPrefix("cluster-alloc-changes: ")
+
+	logsFS := mustLogsFS(fs)
+	defer logsFS.Close()
+
+	err := proc.PrintClusterAllocChanges(logsFS, c.output)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return subcommands.ExitSuccess
+}

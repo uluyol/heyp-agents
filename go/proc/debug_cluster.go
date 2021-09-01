@@ -506,6 +506,133 @@ func PrintDebugClusterQoSRetained(fsys fs.FS, outfile string, start, end time.Ti
 	return err
 }
 
+type hostAllocs map[uint64][2]int64
+
+func newHostAllocs() hostAllocs { return hostAllocs(make(map[uint64][2]int64)) }
+
+func hostAllocsFromProto(rec *pb.DebugAllocRecord) hostAllocs {
+	hostAllocs := newHostAllocs()
+	srcDC := rec.GetInfo().GetParent().Flow.GetSrcDc()
+	dstDC := rec.GetInfo().GetParent().Flow.GetDstDc()
+	for _, alloc := range rec.GetFlowAllocs() {
+		if alloc.GetFlow().GetSrcDc() != srcDC || alloc.GetFlow().GetDstDc() != dstDC {
+			panic(fmt.Errorf("alloc src or dst DC doesn't match parent: %v", rec))
+		}
+		hostAllocs[alloc.GetFlow().HostId] = [2]int64{alloc.HipriRateLimitBps, alloc.LopriRateLimitBps}
+	}
+	return hostAllocs
+}
+
+func (a hostAllocs) equals(b hostAllocs) bool {
+	if a == nil || b == nil {
+		// if both are nil, then equal, else nil != non-nil
+		return a == nil && b == nil
+	}
+
+	if len(a) != len(b) {
+		return false
+	}
+
+	for k, v1 := range a {
+		v2, ok := b[k]
+		if !ok {
+			return false
+		}
+		if v1 != v2 {
+			return false
+		}
+	}
+
+	return true
+}
+
+func PrintClusterAllocChanges(fsys fs.FS, outfile string) error {
+	logs, err := regGlobFiles(fsys, clusterAllocLogsRegex)
+	if err != nil {
+		return fmt.Errorf("failed to find cluster alloc logs: %w", err)
+	}
+
+	type flowgroup struct {
+		SrcDC string
+		DstDC string
+	}
+
+	outs := make([][]byte, len(logs))
+	var eg errgroup.Group
+	for logi, l := range logs {
+		logi := logi
+		l := l
+		eg.Go(func() error {
+			var buf bytes.Buffer
+
+			f, err := fsys.Open(l)
+			if err != nil {
+				return fmt.Errorf("failed to open %s: %w", l, err)
+			}
+			defer f.Close()
+			r := NewProtoJSONRecReader(f)
+			var curTime time.Time
+			prevAllocs := make(map[flowgroup]hostAllocs)
+			for {
+				rec := new(pb.DebugAllocRecord)
+				if !r.ScanInto(rec) {
+					break
+				}
+
+				// Process record
+				curTime, err = time.Parse(time.RFC3339Nano, rec.GetTimestamp())
+				if err != nil {
+					// skip bad records
+					continue
+				}
+
+				parentFlow := rec.GetInfo().GetParent().GetFlow()
+				fg := flowgroup{
+					SrcDC: parentFlow.GetSrcDc(),
+					DstDC: parentFlow.GetDstDc(),
+				}
+
+				curAlloc := hostAllocsFromProto(rec)
+				allocChanged := !curAlloc.equals(prevAllocs[fg])
+				prevAllocs[fg] = curAlloc
+
+				status := "RanNoChange"
+				if allocChanged {
+					status = "AllocChanged"
+				}
+
+				fmt.Fprintf(&buf, "%f,%s_TO_%s,%s\n", unixSec(curTime), fg.SrcDC, fg.DstDC, status)
+			}
+
+			err = r.Err()
+			if err != nil {
+				err = fmt.Errorf("failed to read %s: %v", l, err)
+			} else {
+				outs[logi] = buf.Bytes()
+			}
+			return err
+		})
+	}
+
+	err = eg.Wait()
+
+	var f *os.File
+	if err == nil {
+		f, err = os.Create(outfile)
+	}
+	if f != nil {
+		defer f.Close()
+	}
+
+	if err == nil {
+		_, err = io.WriteString(f, "UnixTime,FG,Update\n")
+	}
+	if err == nil {
+		err = SortedPrintTable(f, outs, ",")
+	}
+	return err
+}
+
 func AlignDebugClusterLogs(fsys fs.FS, outfile string, start, end time.Time, prec time.Duration, debug bool) error {
 	logs, err := regGlobFiles(fsys, clusterAllocLogsRegex)
 	if err != nil {
