@@ -639,7 +639,7 @@ func AlignDebugClusterLogs(fsys fs.FS, outfile string, start, end time.Time, pre
 		return fmt.Errorf("failed to find cluster alloc logs: %w", err)
 	}
 
-	inputs := make([]ToAlign, 0, len(logs))
+	inputs := make([]NamedLog, 0, len(logs))
 
 	for _, l := range logs {
 		fi, err := fs.Stat(fsys, l)
@@ -647,7 +647,7 @@ func AlignDebugClusterLogs(fsys fs.FS, outfile string, start, end time.Time, pre
 			return fmt.Errorf("failed to stat %s: %w", l, err)
 		}
 		if fi.Size() > 0 {
-			inputs = append(inputs, ToAlign{
+			inputs = append(inputs, NamedLog{
 				Name: clusterAllocLogsRegex.FindStringSubmatch(l)[2],
 				Path: l,
 			})

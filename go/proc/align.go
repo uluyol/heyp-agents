@@ -15,7 +15,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-type ToAlign struct {
+type NamedLog struct {
 	Name string
 	Path string
 }
@@ -137,7 +137,7 @@ func (r *AlignedHostStatsRec) Reset() {
 
 type AlignArgs struct {
 	FS         fs.FS
-	Inputs     []ToAlign
+	Inputs     []NamedLog
 	Output     string
 	Start, End time.Time
 	Prec       time.Duration

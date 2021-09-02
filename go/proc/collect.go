@@ -246,19 +246,19 @@ func GlobAndCollectFortio(fsys fs.FS) ([]FortioInstanceLogs, error) {
 	return ret, nil
 }
 
-func globToAlignPerHost(fsys fs.FS, r *regexp.Regexp) ([]ToAlign, error) {
+func globToAlignPerHost(fsys fs.FS, r *regexp.Regexp) ([]NamedLog, error) {
 	all, err := regGlobFiles(fsys, r)
 	if err != nil {
 		return nil, fmt.Errorf("failed to walk: %w", err)
 	}
-	var ret []ToAlign
+	var ret []NamedLog
 	for _, p := range all {
 		matches := r.FindStringSubmatch(p)
 		if matches == nil {
 			continue
 		}
 		node := matches[2]
-		ret = append(ret, ToAlign{
+		ret = append(ret, NamedLog{
 			Name: node,
 			Path: p,
 		})
@@ -272,34 +272,34 @@ func globToAlignPerHost(fsys fs.FS, r *regexp.Regexp) ([]ToAlign, error) {
 var hostAgentStatsRegex = regexp.MustCompile(
 	`(^|.*/)([^/]+)/logs/host-agent-stats.log$`)
 
-func GlobAndCollectHostAgentStats(fsys fs.FS) ([]ToAlign, error) {
+func GlobAndCollectHostAgentStats(fsys fs.FS) ([]NamedLog, error) {
 	return globToAlignPerHost(fsys, hostAgentStatsRegex)
 }
 
 var hostStatsRegex = regexp.MustCompile(
 	`(^|.*/)([^/]+)/logs/host-stats.log$`)
 
-func GlobAndCollectHostStats(fsys fs.FS) ([]ToAlign, error) {
+func GlobAndCollectHostStats(fsys fs.FS) ([]NamedLog, error) {
 	return globToAlignPerHost(fsys, hostStatsRegex)
 }
 
 var hostEnforcerLogsRegex = regexp.MustCompile(
 	`(^|.*/)([^/]+)/logs/host-enforcer-debug`)
 
-func GlobAndCollectHostEnforcerLogs(fsys fs.FS) ([]ToAlign, error) {
+func GlobAndCollectHostEnforcerLogs(fsys fs.FS) ([]NamedLog, error) {
 	files, err := globToAlignPerHost(fsys, hostEnforcerLogsRegex)
 	if err != nil {
 		return nil, err
 	}
 
-	var logDirs []ToAlign
+	var logDirs []NamedLog
 	added := make(map[string]bool)
 	for _, f := range files {
 		i := strings.LastIndex(f.Path, "/logs/host-enforcer-debug")
 		d := f.Path[:i+len("/logs/host-enforcer-debug")]
 		if !added[d] {
 			added[d] = true
-			logDirs = append(logDirs, ToAlign{Name: f.Name, Path: d})
+			logDirs = append(logDirs, NamedLog{Name: f.Name, Path: d})
 		}
 	}
 
