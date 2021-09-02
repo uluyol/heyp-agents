@@ -84,3 +84,57 @@ func (c *hostEnforcerLogsCmd) Execute(ctx context.Context, fs *flag.FlagSet, arg
 
 	return subcommands.ExitSuccess
 }
+
+type hostEnforcerChanges struct {
+	deployConfig string
+	output       string
+}
+
+func (*hostEnforcerChanges) Name() string    { return "host-enforcer-changes" }
+func (c *hostEnforcerChanges) Usage() string { return logsUsage(c) }
+
+func (*hostEnforcerChanges) Synopsis() string {
+	return "print when an FG allocs is recomputed and whether it has changed"
+}
+
+func (c *hostEnforcerChanges) SetFlags(fs *flag.FlagSet) {
+	fs.StringVar(&c.output, "out", "host-enforcer-changes.csv", "output file")
+	fs.StringVar(&c.deployConfig, "deploy-config", "", "path to deployment configuration")
+}
+
+func (c *hostEnforcerChanges) Execute(ctx context.Context, fs *flag.FlagSet, args ...interface{}) subcommands.ExitStatus {
+	logsFS := mustLogsFS(fs)
+	defer logsFS.Close()
+
+	inputs, err := proc.GlobAndCollectHostEnforcerLogs(logsFS)
+	if err != nil {
+		log.Fatalf("failed to find host enforcer logs: %v", err)
+	}
+
+	hostDC := make(map[string]string)
+	nodeIP := make(map[string]string)
+	if c.deployConfig != "" {
+		deployC, err := proc.LoadDeploymentConfig(c.deployConfig)
+		if err != nil {
+			log.Fatalf("failed to read deployment config: %v", err)
+		}
+
+		for _, n := range deployC.C.GetNodes() {
+			nodeIP[n.GetName()] = n.GetExperimentAddr()
+		}
+
+		for _, cluster := range deployC.C.GetClusters() {
+			dc := cluster.GetName()
+			for _, n := range cluster.GetNodeNames() {
+				hostDC[nodeIP[n]] = dc
+			}
+		}
+	}
+
+	err = proc.PrintHostEnforcerChanges(logsFS, inputs, hostDC, nodeIP, c.output)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return subcommands.ExitSuccess
+}
