@@ -22,6 +22,8 @@ mkdir -p "$procdir/cluster-alloc"
 ./bin/proc-heyp fortio-demand-trace -deploy-config "$config" -prec 1s -out "$procdir/true-app-demand.csv" "$outdir" &
 ./bin/proc-heyp wl-start-end -workload fortio -out "$procdir/wl-start-end.csv" "$outdir" &
 ./bin/proc-heyp cluster-alloc-qos-retained -workload fortio -out "$procdir/cluster-alloc-qos-retained.csv" "$outdir" &
+./bin/proc-heyp cluster-alloc-changes -out "$procdir/cluster-alloc-changes.csv" "$outdir" &
+./bin/proc-heyp host-enforcer-changes -deploy-config "$config" -out "$procdir/host-enforcer-changes.csv" "$outdir" &
 (
   ./bin/proc-heyp align-cluster-alloc-logs -workload fortio -prec 1s -out "$procdir/cluster-alloc-logs.json" "$outdir" && \
   echo UnixTime,FG,Burstiness,HIPRIBonus,LOPRIBonus,HIPRIRateLimitBps,LOPRIRateLimitBps,FracLOPRIInitial,FracLOPRIWithProbing,FracLOPRIPostPartition,FracLOPRIFinal > "$procdir/cluster-alloc-debug-state.csv" && \

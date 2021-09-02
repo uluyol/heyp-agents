@@ -14,14 +14,28 @@ if (nrow(data) == 0) {
   quit()
 }
 
-data$Timestamp <- data$UnixTime - min(data$UnixTime)
+minUnixTime <- min(data$UnixTime)
+data$Timestamp <- data$UnixTime - minUnixTime
+
+alloc_changes <- data.frame()
+flowgroup <- ""
+if (length(args) > 3) {
+  alloc_changes <- read.csv(args[3], header=TRUE, stringsAsFactors=FALSE)
+  alloc_changes$Timestamp <- alloc_changes$UnixTime - minUnixTime
+  alloc_changes <- alloc_changes[
+    alloc_changes$Timestamp >= 0 &
+    alloc_changes$Timestamp <= max(data$Timestamp) &
+    alloc_changes$Update != "RanNoChange",]
+
+  flowgroup = args[4]
+}
 
 Plot <- function(subset, output) {
   pdf(output, height=2.5, width=5)
   p <- ggplot(subset, aes(x=Timestamp, y=RetransSegs, color=Node)) +
       geom_step(size=1) +
       xlab("Time (sec)") +
-      ylab("TCP Retransmissions per H") +
+      ylab("TCP Retransmissions per Host") +
       theme_bw() +
       theme(
           legend.title=element_blank(),
@@ -42,6 +56,9 @@ Plot <- function(subset, output) {
           axis.text=element_text(color="black", size=11),
           axis.title.y=element_text(size=12, margin=margin(0, 3, 0, 0)),
           axis.title.x=element_text(size=12, margin=margin(3, 0, 0, 0)))
+  if (nrow(alloc_changes) > 0) {
+    p <- p + geom_vline(xintercept=alloc_changes$Timestamp[alloc_changes$FG == flowgroup], size=0.1)
+  }
   print(p)
   .junk <- dev.off()
 }
@@ -73,6 +90,9 @@ PlotAgg <- function(subset, output) {
           axis.text=element_text(color="black", size=11),
           axis.title.y=element_text(size=12, margin=margin(0, 3, 0, 0)),
           axis.title.x=element_text(size=12, margin=margin(3, 0, 0, 0)))
+  if (nrow(alloc_changes) > 0) {
+    p <- p + geom_vline(xintercept=alloc_changes$Timestamp[alloc_changes$FG == flowgroup])
+  }
   print(p)
   .junk <- dev.off()
 }
