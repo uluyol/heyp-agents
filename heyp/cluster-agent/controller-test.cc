@@ -54,28 +54,6 @@ ClusterController MakeClusterController() {
           .value());
 }
 
-TEST(ClusterControllerTest, EmptyListenerDestroysCorrectly) {
-  ClusterController::Listener lis;
-}
-
-TEST(ClusterControllerTest, MoveListener) {
-  auto controller = MakeClusterController();
-  ClusterController::Listener lis1 =
-      controller.RegisterListener(1, [](const proto::AllocBundle&) {});
-  ClusterController::Listener lis2 =
-      controller.RegisterListener(2, [](const proto::AllocBundle&) {});
-
-  // Now move the listeners
-
-  ClusterController::Listener new_lis1 = std::move(lis1);
-  ClusterController::Listener new_lis2(std::move(lis2));
-
-  // One more time, just in case
-
-  ClusterController::Listener new_new_lis1 = std::move(new_lis1);
-  ClusterController::Listener new_new_lis2(std::move(new_lis2));
-}
-
 TEST(ClusterControllerTest, RemoveListener) {
   auto controller = MakeClusterController();
 
@@ -84,15 +62,14 @@ TEST(ClusterControllerTest, RemoveListener) {
   int num_broadcast_2 = 0;
   int num_broadcast_3 = 0;
 
-  auto lis1 = absl::make_unique<ClusterController::Listener>(controller.RegisterListener(
-      1, [&](const proto::AllocBundle&) { ++num_broadcast_1; }));
-  auto lis1_1 =
-      absl::make_unique<ClusterController::Listener>(controller.RegisterListener(
-          1, [&](const proto::AllocBundle&) { ++num_broadcast_1_1; }));
-  auto lis2 = absl::make_unique<ClusterController::Listener>(controller.RegisterListener(
-      2, [&](const proto::AllocBundle&) { ++num_broadcast_2; }));
-  auto lis3 = absl::make_unique<ClusterController::Listener>(controller.RegisterListener(
-      3, [&](const proto::AllocBundle&) { ++num_broadcast_3; }));
+  std::unique_ptr<ClusterController::Listener> lis1 = controller.RegisterListener(
+      1, [&](const proto::AllocBundle&) { ++num_broadcast_1; });
+  std::unique_ptr<ClusterController::Listener> lis1_1 = controller.RegisterListener(
+      1, [&](const proto::AllocBundle&) { ++num_broadcast_1_1; });
+  std::unique_ptr<ClusterController::Listener> lis2 = controller.RegisterListener(
+      2, [&](const proto::AllocBundle&) { ++num_broadcast_2; });
+  std::unique_ptr<ClusterController::Listener> lis3 = controller.RegisterListener(
+      3, [&](const proto::AllocBundle&) { ++num_broadcast_3; });
 
   // Update some infos
 
@@ -121,7 +98,9 @@ TEST(ClusterControllerTest, RemoveListener) {
     }
   )"));
 
+  controller.EnableWaitForBroadcastCompletion();
   controller.ComputeAndBroadcast();
+  controller.WaitForBroadcastCompletion();
 
   EXPECT_EQ(num_broadcast_1, 1);
   EXPECT_EQ(num_broadcast_1_1, 1);
@@ -160,7 +139,9 @@ TEST(ClusterControllerTest, RemoveListener) {
     }
   )"));
 
+  controller.EnableWaitForBroadcastCompletion();
   controller.ComputeAndBroadcast();
+  controller.WaitForBroadcastCompletion();
 
   EXPECT_EQ(num_broadcast_1, 1);
   EXPECT_EQ(num_broadcast_1_1, 2);
@@ -168,10 +149,59 @@ TEST(ClusterControllerTest, RemoveListener) {
   EXPECT_EQ(num_broadcast_3, 0);
 }
 
+TEST(ClusterControllerTest, BroadcastIsAsync) {
+  auto controller = MakeClusterController();
+
+  int num_broadcast_1 = 0;
+  int num_broadcast_2 = 0;
+
+  std::unique_ptr<ClusterController::Listener> lis1 =
+      controller.RegisterListener(1, [&](const proto::AllocBundle&) {
+        absl::SleepFor(absl::Seconds(1));
+        ++num_broadcast_1;
+      });
+
+  std::unique_ptr<ClusterController::Listener> lis2 = controller.RegisterListener(
+      2, [&](const proto::AllocBundle&) { ++num_broadcast_2; });
+
+  // Update some infos
+
+  controller.UpdateInfo(ParseTextProto<proto::InfoBundle>(R"(
+    bundler { host_id: 1 }
+    timestamp { seconds: 1 }
+    flow_infos {
+      flow { src_dc: "chicago" dst_dc: "detroit" host_id: 1 }
+      predicted_demand_bps: 1000
+      ewma_usage_bps: 1000
+      currently_lopri: true
+    }
+    flow_infos {
+      flow { src_dc: "chicago" dst_dc: "new_york" host_id: 1 }
+      predicted_demand_bps: 1000
+      ewma_usage_bps: 1000
+    }
+  )"));
+  controller.UpdateInfo(ParseTextProto<proto::InfoBundle>(R"(
+    bundler { host_id: 2 }
+    timestamp { seconds: 1 }
+    flow_infos {
+      flow { src_dc: "chicago" dst_dc: "detroit" host_id: 2 }
+      predicted_demand_bps: 1000
+      ewma_usage_bps: 1000
+    }
+  )"));
+
+  auto start = std::chrono::steady_clock::now();
+  controller.ComputeAndBroadcast();
+  auto end = std::chrono::steady_clock::now();
+  absl::Duration elapsed = absl::FromChrono(end - start);
+  EXPECT_LE(elapsed, absl::Milliseconds(100));
+}
+
 TEST(ClusterControllerTest, PlumbsDataCompletely) {
   auto controller = MakeClusterController();
 
-  int call_count = 0;
+  std::atomic<int> call_count = 0;
   auto lis1 = controller.RegisterListener(1, [&call_count](const proto::AllocBundle& b1) {
     EXPECT_THAT(b1, AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
                   flow_allocs {
@@ -219,7 +249,9 @@ TEST(ClusterControllerTest, PlumbsDataCompletely) {
       ewma_usage_bps: 1000
     }
   )"));
+  controller.EnableWaitForBroadcastCompletion();
   controller.ComputeAndBroadcast();
+  controller.WaitForBroadcastCompletion();
 
   EXPECT_EQ(call_count, 2);
 }
@@ -233,12 +265,12 @@ class SingleFGAllocBundleCollector {
         )")),
         controller_(c) {
     alloc_bundles_.resize(num_hosts_, {});
-    has_alloc_bundle_.resize(num_hosts_, false);
+    has_alloc_bundle_.resize(num_hosts_, 0);
     for (int64_t i = 0; i < num_hosts_; ++i) {
       lis_.push_back(c->RegisterListener(i + 1, [this, i](proto::AllocBundle b) {
-        H_ASSERT(!this->has_alloc_bundle_[i]);
+        H_ASSERT(this->has_alloc_bundle_[i] == 0);
         this->alloc_bundles_[i] = std::move(b);
-        this->has_alloc_bundle_[i] = true;
+        this->has_alloc_bundle_[i] = 1;
       }));
     }
   }
@@ -271,8 +303,8 @@ class SingleFGAllocBundleCollector {
   }
 
   bool GotAllAllocs() const {
-    for (bool filled : has_alloc_bundle_) {
-      if (!filled) {
+    for (int filled : has_alloc_bundle_) {
+      if (filled == 0) {
         return false;
       }
     }
@@ -280,15 +312,13 @@ class SingleFGAllocBundleCollector {
   }
 
   const std::vector<proto::AllocBundle>& GetAllocs() const {
-    for (bool filled : has_alloc_bundle_) {
-      H_ASSERT(filled);
+    for (int filled : has_alloc_bundle_) {
+      H_ASSERT(filled == 1);
     }
     return alloc_bundles_;
   }
 
-  void ResetAllocs() {
-    std::fill(has_alloc_bundle_.begin(), has_alloc_bundle_.end(), false);
-  }
+  void ResetAllocs() { std::fill(has_alloc_bundle_.begin(), has_alloc_bundle_.end(), 0); }
 
   int num_hosts() const { return num_hosts_; }
 
@@ -298,8 +328,8 @@ class SingleFGAllocBundleCollector {
   ClusterController* controller_;
 
   std::vector<proto::AllocBundle> alloc_bundles_;
-  std::vector<bool> has_alloc_bundle_;
-  std::vector<ClusterController::Listener> lis_;
+  std::vector<int> has_alloc_bundle_;
+  std::vector<std::unique_ptr<ClusterController::Listener>> lis_;
 };
 
 struct Limits {
@@ -428,7 +458,9 @@ class FixedDemandHostSimulator {
           }});
     }
 
+    controller_->EnableWaitForBroadcastCompletion();
     controller_->ComputeAndBroadcast();
+    controller_->WaitForBroadcastCompletion();
 
     const std::vector<proto::AllocBundle>& bundles = collector_.GetAllocs();
     for (int i = 0; i < true_demands_bps_.size(); ++i) {

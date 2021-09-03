@@ -18,7 +18,7 @@ grpc::Status ClusterAgentService::RegisterHost(
     grpc::ServerContext* context,
     grpc::ServerReaderWriter<proto::AllocBundle, proto::InfoBundle>* stream) {
   bool registered = false;
-  ClusterController::Listener lis;
+  std::unique_ptr<ClusterController::Listener> lis;
   SPDLOG_LOGGER_INFO(&logger_, "{}: called by {}", __func__, context->peer());
 
   std::string peer = context->peer();

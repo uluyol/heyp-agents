@@ -60,6 +60,7 @@ cc_library(
         "//heyp/alg:debug",
         "//heyp/flows:aggregator",
         "//heyp/proto:heyp_cc_proto",
+        "//heyp/threads:lossy-queue",
         "@com_google_absl//absl/container:flat_hash_map",
     ],
 )
