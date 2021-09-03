@@ -57,7 +57,7 @@ Plot <- function(subset, output) {
           axis.title.y=element_text(size=12, margin=margin(0, 3, 0, 0)),
           axis.title.x=element_text(size=12, margin=margin(3, 0, 0, 0)))
   if (nrow(alloc_changes) > 0) {
-    p <- p + geom_vline(xintercept=alloc_changes$Timestamp[alloc_changes$FG == flowgroup], size=0.1)
+    p <- p + geom_vline(xintercept=alloc_changes$Timestamp[alloc_changes$FG == flowgroup], size=0.3)
   }
   print(p)
   .junk <- dev.off()
@@ -91,7 +91,7 @@ PlotAgg <- function(subset, output) {
           axis.title.y=element_text(size=12, margin=margin(0, 3, 0, 0)),
           axis.title.x=element_text(size=12, margin=margin(3, 0, 0, 0)))
   if (nrow(alloc_changes) > 0) {
-    p <- p + geom_vline(xintercept=alloc_changes$Timestamp[alloc_changes$FG == flowgroup])
+    p <- p + geom_vline(xintercept=alloc_changes$Timestamp[alloc_changes$FG == flowgroup], size=0.3)
   }
   print(p)
   .junk <- dev.off()
