@@ -613,6 +613,63 @@ def HSC20Config(**kwargs):
         **kwargs
     )
 
+def FixedHostPatternStableQoSConfig(**kwargs):
+    allocator = config_pb.ClusterAllocatorConfig(
+        type = "CA_FIXED_HOST_PATTERN",
+        fixed_host_alloc_patterns = [
+            {
+                "cluster": {
+                    "src_dc": "AA",
+                    "dst_dc": "EDGE",
+                },
+                "snapshots": [
+                    {
+                        "host_allocs": [
+                            {
+                                "alloc": {
+                                    "hipri_rate_limit_bps": Gbps(100),
+                                },
+                                "num_hosts": 1,
+                            },
+                            {
+                                "alloc": {
+                                    "lopri_rate_limit_bps": Gbps(100),
+                                },
+                                "num_hosts": 1,
+                            },
+                        ],
+                    },
+                ],
+            },
+            {
+                "cluster": {
+                    "src_dc": "WA",
+                    "dst_dc": "EDGE",
+                },
+                "snapshots": [
+                    {
+                        "host_allocs": [
+                            {
+                                "alloc": {
+                                    "hipri_rate_limit_bps": Gbps(100),
+                                },
+                                "num_hosts": 2,
+                            },
+                        ],
+                    },
+                ],
+            },
+        ],
+    )
+
+    return GenConfig(
+        ca_allocator = allocator,
+        ca_limits_to_apply = "HL",
+        limit_hipri = False,
+        limit_lopri = False,
+        **kwargs
+    )
+
 def FixedHostPatternAlternatingQoSConfig(**kwargs):
     allocator = config_pb.ClusterAllocatorConfig(
         type = "CA_FIXED_HOST_PATTERN",
@@ -858,7 +915,7 @@ def GenConfigs():
     return configs
 
 def GenConfigsFlipQoS():
-    kwargs = dict({
+    kwargs_rr = dict({
         "AA_lopri_is_longer": True,
         "AA_approved_bps": int(Gbps(11)),
         "AA_surplus_bps": int(Gbps(11)),
@@ -878,12 +935,40 @@ def GenConfigsFlipQoS():
         run_dur = "150s",
     ))
 
+    kwargs_lr = dict({
+        "AA_lopri_is_longer": True,
+        "AA_approved_bps": int(Gbps(11)),
+        "AA_surplus_bps": int(Gbps(11)),
+        "WA_approved_bps": int(Gbps(11)),
+        "shard_key": "flipqos",
+        "node_counts": {
+            "EDGE": 1,
+            "AA": 2,
+            "WA": 2,
+            "CLIENT": 1,
+        },
+    }, **GenWorkloadStagesStatic(
+        AA_bps = int(Gbps(1)),
+        WA_bps = int(Gbps(1)),
+        AA_lb_policy = "LEAST_REQUEST",
+        WA_lb_policy = "LEAST_REQUEST",
+        run_dur = "150s",
+    ))
+
     configs = dict()
 
-    configs["qflip-nl"] = NoLimitConfig(**kwargs)
-    configs["qflip-hipri"] = FixedHostPatternHIPRIConfig(**kwargs)
-    configs["qflip-lopri"] = FixedHostPatternLOPRIConfig(**kwargs)
-    configs["qflip-flipflop"] = FixedHostPatternAlternatingQoSConfig(**kwargs)
+    configs["qflip_rr-nl"] = NoLimitConfig(**kwargs_rr)
+    configs["qflip_rr-hipri"] = FixedHostPatternHIPRIConfig(**kwargs_rr)
+    configs["qflip_rr-lopri"] = FixedHostPatternLOPRIConfig(**kwargs_rr)
+    configs["qflip_rr-flipflop"] = FixedHostPatternAlternatingQoSConfig(**kwargs_rr)
+    configs["qflip_rr-stableqos"] = FixedHostPatternStableQoSConfig(**kwargs_rr)
+
+    configs["qflip_lr-nl"] = NoLimitConfig(**kwargs_lr)
+    configs["qflip_lr-hipri"] = FixedHostPatternHIPRIConfig(**kwargs_lr)
+    configs["qflip_lr-lopri"] = FixedHostPatternLOPRIConfig(**kwargs_lr)
+    configs["qflip_lr-flipflop"] = FixedHostPatternAlternatingQoSConfig(**kwargs_lr)
+    configs["qflip_lr-stableqos"] = FixedHostPatternStableQoSConfig(**kwargs_lr)
+
     return configs
 
 configs = GenConfigs()
