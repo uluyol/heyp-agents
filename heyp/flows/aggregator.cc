@@ -14,6 +14,7 @@ namespace {
 CompareFlowOptions HostFlowOptions() {
   return CompareFlowOptions{
       .cmp_fg = true,
+      .cmp_job = true,
       .cmp_src_host = true,
       .cmp_host_flow = false,
       .cmp_seqnum = false,
@@ -23,6 +24,7 @@ CompareFlowOptions HostFlowOptions() {
 CompareFlowOptions ClusterFlowOptions() {
   return CompareFlowOptions{
       .cmp_fg = true,
+      .cmp_job = false,
       .cmp_src_host = false,
       .cmp_host_flow = false,
       .cmp_seqnum = false,
@@ -67,6 +69,7 @@ std::unique_ptr<FlowAggregator> NewHostToClusterAggregator(
           .usage_history_window = usage_history_window,
           .get_agg_flow_fn = [](const proto::FlowMarker& c) -> proto::FlowMarker {
             proto::FlowMarker h = c;
+            h.clear_job();
             h.clear_host_id();
             h.clear_src_addr();
             h.clear_dst_addr();

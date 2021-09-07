@@ -67,7 +67,8 @@ AllocSet ClusterAllocator::GetAllocs() {
 namespace {
 
 template <typename ValueType>
-using FlowMap = absl::flat_hash_map<proto::FlowMarker, ValueType, HashFlow, EqFlow>;
+using FlowMap =
+    absl::flat_hash_map<proto::FlowMarker, ValueType, HashClusterFlow, EqClusterFlow>;
 
 FlowMap<proto::FlowAlloc> ToAdmissionsMap(const proto::AllocBundle& cluster_wide_allocs) {
   FlowMap<proto::FlowAlloc> map;

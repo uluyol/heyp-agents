@@ -167,6 +167,7 @@ absl::Status Run(const proto::HostAgentConfig& c) {
   SPDLOG_LOGGER_INFO(&logger, "creating daemon");
   HostDaemon daemon(channel,
                     {
+                        .job_name = c.job_name(),
                         .host_id = host_id,
                         .inform_period = *inform_period_or,
                         .collect_stats_period = *collect_stats_period_or,

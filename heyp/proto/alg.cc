@@ -28,6 +28,9 @@ bool ExpectedFieldsAreSet(const proto::FlowMarker& marker, CompareFlowOptions op
     NONEMPTY_OR_RETURN(src_dc);
     NONEMPTY_OR_RETURN(dst_dc);
   }
+  if (options.cmp_job) {
+    NONEMPTY_OR_RETURN(job);
+  }
   if (options.cmp_src_host) {
     NONZERO_OR_RETURN(host_id);
   }
@@ -63,6 +66,9 @@ bool UnexpectedFieldsAreUnset(const proto::FlowMarker& marker,
     EMPTY_OR_RETURN(src_dc);
     EMPTY_OR_RETURN(dst_dc);
   }
+  if (options.cmp_job) {
+    EMPTY_OR_RETURN(job);
+  }
   if (!options.cmp_src_host) {
     ZERO_OR_RETURN(host_id);
   }
@@ -93,6 +99,9 @@ bool IsSameFlow(const proto::FlowMarker& lhs, const proto::FlowMarker& rhs,
     SAME_OR_RETURN(src_dc);
     SAME_OR_RETURN(dst_dc);
   }
+  if (options.cmp_job) {
+    SAME_OR_RETURN(job);
+  }
   if (options.cmp_src_host) {
     SAME_OR_RETURN(host_id);
   }
@@ -112,12 +121,12 @@ bool IsSameFlow(const proto::FlowMarker& lhs, const proto::FlowMarker& rhs,
 #undef SAME_OR_RETURN
 
 size_t HashFlow::operator()(const proto::FlowMarker& marker) const {
-  return absl::Hash<
-      std::tuple<absl::string_view, absl::string_view, uint64_t, absl::string_view,
-                 absl::string_view, int32_t, int32_t, int32_t, uint64_t>>()(
-      {marker.src_dc(), marker.dst_dc(), marker.host_id(), marker.src_addr(),
-       marker.dst_addr(), marker.protocol(), marker.src_port(), marker.dst_port(),
-       marker.seqnum()});
+  return absl::Hash<std::tuple<absl::string_view, absl::string_view, absl::string_view,
+                               uint64_t, absl::string_view, absl::string_view, int32_t,
+                               int32_t, int32_t, uint64_t>>()(
+      {marker.src_dc(), marker.dst_dc(), marker.job(), marker.host_id(),
+       marker.src_addr(), marker.dst_addr(), marker.protocol(), marker.src_port(),
+       marker.dst_port(), marker.seqnum()});
 }
 
 bool EqFlow::operator()(const proto::FlowMarker& lhs,
@@ -134,7 +143,7 @@ size_t HashHostFlowNoId::operator()(const proto::FlowMarker& marker) const {
 
 bool EqHostFlowNoId::operator()(const proto::FlowMarker& lhs,
                                 const proto::FlowMarker& rhs) const {
-  return IsSameFlow(lhs, rhs, {.cmp_fg = false, .cmp_seqnum = false});
+  return IsSameFlow(lhs, rhs, {.cmp_fg = false, .cmp_job = false, .cmp_seqnum = false});
 }
 
 size_t HashClusterFlow::operator()(const proto::FlowMarker& marker) const {
@@ -146,6 +155,7 @@ bool EqClusterFlow::operator()(const proto::FlowMarker& lhs,
                                const proto::FlowMarker& rhs) const {
   return IsSameFlow(lhs, rhs,
                     {
+                        .cmp_job = false,
                         .cmp_src_host = false,
                         .cmp_host_flow = false,
                         .cmp_seqnum = false,

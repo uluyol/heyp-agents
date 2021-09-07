@@ -122,6 +122,17 @@ cc_library(
 )
 
 cc_library(
+    name = "random",
+    srcs = ["random.cc"],
+    hdrs = ["random.h"],
+    deps = [
+        "//heyp/log:spdlog",
+        "@com_google_absl//absl/random",
+        "@com_google_protobuf//:protobuf",
+    ],
+)
+
+cc_library(
     name = "parse-text",
     hdrs = ["parse-text.h"],
     deps = [
@@ -137,5 +148,15 @@ cc_library(
     deps = [
         ":alg",
         "@gtest",
+    ],
+)
+
+cc_test(
+    name = "alg_test",
+    srcs = ["alg_test.cc"],
+    deps = [
+        ":alg",
+        ":random",
+        "//heyp/init:test-main",
     ],
 )

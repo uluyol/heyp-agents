@@ -15,6 +15,7 @@ enum Protocol {
 message FlowMarker {
   string src_dc = 1;
   string dst_dc = 2;
+  string job = 10;
   fixed64 host_id = 3;
   string src_addr = 4;
   string dst_addr = 5;

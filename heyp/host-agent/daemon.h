@@ -21,6 +21,7 @@ namespace heyp {
 class HostDaemon {
  public:
   struct Config {
+    std::string job_name;
     uint64_t host_id;
     absl::Duration inform_period = absl::Seconds(2);
     absl::Duration collect_stats_period = absl::Milliseconds(500);

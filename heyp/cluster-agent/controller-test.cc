@@ -77,13 +77,13 @@ TEST(ClusterControllerTest, RemoveListener) {
     bundler { host_id: 1 }
     timestamp { seconds: 1 }
     flow_infos {
-      flow { src_dc: "chicago" dst_dc: "detroit" host_id: 1 }
+      flow { src_dc: "chicago" dst_dc: "detroit" job: "UNSET" host_id: 1 }
       predicted_demand_bps: 1000
       ewma_usage_bps: 1000
       currently_lopri: true
     }
     flow_infos {
-      flow { src_dc: "chicago" dst_dc: "new_york" host_id: 1 }
+      flow { src_dc: "chicago" dst_dc: "new_york" job: "UNSET" host_id: 1 }
       predicted_demand_bps: 1000
       ewma_usage_bps: 1000
     }
@@ -92,7 +92,7 @@ TEST(ClusterControllerTest, RemoveListener) {
     bundler { host_id: 2 }
     timestamp { seconds: 1 }
     flow_infos {
-      flow { src_dc: "chicago" dst_dc: "detroit" host_id: 2 }
+      flow { src_dc: "chicago" dst_dc: "detroit" job: "UNSET" host_id: 2 }
       predicted_demand_bps: 1000
       ewma_usage_bps: 1000
     }
@@ -118,13 +118,13 @@ TEST(ClusterControllerTest, RemoveListener) {
     bundler { host_id: 1 }
     timestamp { seconds: 1 }
     flow_infos {
-      flow { src_dc: "chicago" dst_dc: "detroit" host_id: 1 }
+      flow { src_dc: "chicago" dst_dc: "detroit" job: "UNSET" host_id: 1 }
       predicted_demand_bps: 1000
       ewma_usage_bps: 1000
       currently_lopri: true
     }
     flow_infos {
-      flow { src_dc: "chicago" dst_dc: "new_york" host_id: 1 }
+      flow { src_dc: "chicago" dst_dc: "new_york" job: "UNSET" host_id: 1 }
       predicted_demand_bps: 1000
       ewma_usage_bps: 1000
     }
@@ -133,7 +133,7 @@ TEST(ClusterControllerTest, RemoveListener) {
     bundler { host_id: 2 }
     timestamp { seconds: 1 }
     flow_infos {
-      flow { src_dc: "chicago" dst_dc: "detroit" host_id: 2 }
+      flow { src_dc: "chicago" dst_dc: "detroit" job: "UNSET" host_id: 2 }
       predicted_demand_bps: 1000
       ewma_usage_bps: 1000
     }
@@ -170,13 +170,13 @@ TEST(ClusterControllerTest, BroadcastIsAsync) {
     bundler { host_id: 1 }
     timestamp { seconds: 1 }
     flow_infos {
-      flow { src_dc: "chicago" dst_dc: "detroit" host_id: 1 }
+      flow { src_dc: "chicago" dst_dc: "detroit" job: "UNSET" host_id: 1 }
       predicted_demand_bps: 1000
       ewma_usage_bps: 1000
       currently_lopri: true
     }
     flow_infos {
-      flow { src_dc: "chicago" dst_dc: "new_york" host_id: 1 }
+      flow { src_dc: "chicago" dst_dc: "new_york" job: "UNSET" host_id: 1 }
       predicted_demand_bps: 1000
       ewma_usage_bps: 1000
     }
@@ -185,7 +185,7 @@ TEST(ClusterControllerTest, BroadcastIsAsync) {
     bundler { host_id: 2 }
     timestamp { seconds: 1 }
     flow_infos {
-      flow { src_dc: "chicago" dst_dc: "detroit" host_id: 2 }
+      flow { src_dc: "chicago" dst_dc: "detroit" job: "UNSET" host_id: 2 }
       predicted_demand_bps: 1000
       ewma_usage_bps: 1000
     }
@@ -205,11 +205,11 @@ TEST(ClusterControllerTest, PlumbsDataCompletely) {
   auto lis1 = controller.RegisterListener(1, [&call_count](const proto::AllocBundle& b1) {
     EXPECT_THAT(b1, AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
                   flow_allocs {
-                    flow { src_dc: "chicago" dst_dc: "new_york" host_id: 1 }
+                    flow { src_dc: "chicago" dst_dc: "new_york" job: "UNSET" host_id: 1 }
                     hipri_rate_limit_bps: 1000
                   }
                   flow_allocs {
-                    flow { src_dc: "chicago" dst_dc: "detroit" host_id: 1 }
+                    flow { src_dc: "chicago" dst_dc: "detroit" job: "UNSET" host_id: 1 }
                     lopri_rate_limit_bps: 1000
                   }
                 )")));
@@ -218,7 +218,7 @@ TEST(ClusterControllerTest, PlumbsDataCompletely) {
   auto lis2 = controller.RegisterListener(2, [&call_count](const proto::AllocBundle& b2) {
     EXPECT_THAT(b2, AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
                   flow_allocs {
-                    flow { src_dc: "chicago" dst_dc: "detroit" host_id: 2 }
+                    flow { src_dc: "chicago" dst_dc: "detroit" job: "UNSET" host_id: 2 }
                     hipri_rate_limit_bps: 1000
                   }
                 )")));
@@ -229,13 +229,13 @@ TEST(ClusterControllerTest, PlumbsDataCompletely) {
     bundler { host_id: 1 }
     timestamp { seconds: 1 }
     flow_infos {
-      flow { src_dc: "chicago" dst_dc: "detroit" host_id: 1 }
+      flow { src_dc: "chicago" dst_dc: "detroit" job: "UNSET" host_id: 1 }
       predicted_demand_bps: 1000
       ewma_usage_bps: 1000
       currently_lopri: true
     }
     flow_infos {
-      flow { src_dc: "chicago" dst_dc: "new_york" host_id: 1 }
+      flow { src_dc: "chicago" dst_dc: "new_york" job: "UNSET" host_id: 1 }
       predicted_demand_bps: 1000
       ewma_usage_bps: 1000
     }
@@ -244,7 +244,7 @@ TEST(ClusterControllerTest, PlumbsDataCompletely) {
     bundler { host_id: 2 }
     timestamp { seconds: 1 }
     flow_infos {
-      flow { src_dc: "chicago" dst_dc: "detroit" host_id: 2 }
+      flow { src_dc: "chicago" dst_dc: "detroit" job: "UNSET" host_id: 2 }
       predicted_demand_bps: 1000
       ewma_usage_bps: 1000
     }
@@ -261,7 +261,9 @@ class SingleFGAllocBundleCollector {
   SingleFGAllocBundleCollector(int num_hosts, ClusterController* c)
       : num_hosts_(num_hosts),
         fg_(ParseTextProto<proto::FlowMarker>(R"(
-          src_dc: "east-us" dst_dc: "central-us"
+          src_dc: "east-us"
+          dst_dc: "central-us"
+          job: "UNSET"
         )")),
         controller_(c) {
     alloc_bundles_.resize(num_hosts_, {});

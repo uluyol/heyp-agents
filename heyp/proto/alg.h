@@ -11,6 +11,8 @@ struct CompareFlowOptions {
   // Include FlowGroup fields in comparison (src_dc, dst_dc)
   bool cmp_fg = true;
 
+  bool cmp_job = true;
+
   // Include source host address in comparison (host_id)
   bool cmp_src_host = true;
 

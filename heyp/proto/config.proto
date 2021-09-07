@@ -87,13 +87,14 @@ message SimulatedWanConfig {
 
 message HostAgentConfig {
   repeated string this_host_addrs = 1;
-  optional HostFlowTrackerConfig flow_tracker = 2;
-  optional FlowAggregatorConfig socket_to_host_aggregator = 3;
-  optional HostFlowStateReporterConfig flow_state_reporter = 4;
-  optional HostEnforcerConfig enforcer = 5;
-  optional HostDaemonConfig daemon = 6;
-  optional StaticDCMapperConfig dc_mapper = 7;
-  optional SimulatedWanConfig simulated_wan = 8;
+  optional string job_name = 2 [default = "UNSET"];
+  optional HostFlowTrackerConfig flow_tracker = 3;
+  optional FlowAggregatorConfig socket_to_host_aggregator = 4;
+  optional HostFlowStateReporterConfig flow_state_reporter = 5;
+  optional HostEnforcerConfig enforcer = 6;
+  optional HostDaemonConfig daemon = 7;
+  optional StaticDCMapperConfig dc_mapper = 8;
+  optional SimulatedWanConfig simulated_wan = 9;
 }
 
 enum ClusterAllocatorType {

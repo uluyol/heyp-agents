@@ -33,8 +33,8 @@ HostDaemon::HostDaemon(const std::shared_ptr<grpc::Channel>& channel, Config con
 
 namespace {
 
-bool WithDCs(proto::FlowMarker marker, const DCMapper& dc_mapper,
-             proto::FlowMarker* out) {
+bool WithDCsAndJob(proto::FlowMarker marker, const DCMapper& dc_mapper,
+                   const std::string& job_name, proto::FlowMarker* out) {
   auto src_dc = dc_mapper.HostDC(marker.src_addr());
   auto dst_dc = dc_mapper.HostDC(marker.dst_addr());
   if (src_dc != nullptr) {
@@ -43,6 +43,7 @@ bool WithDCs(proto::FlowMarker marker, const DCMapper& dc_mapper,
   if (dst_dc != nullptr) {
     marker.set_dst_dc(*dst_dc);
   }
+  marker.set_job(job_name);
   *out = std::move(marker);
   return src_dc != nullptr && dst_dc != nullptr;
 }
@@ -58,7 +59,8 @@ bool FlaggedOrWaitFor(absl::Duration dur, std::atomic<bool>* exit_flag) {
 
 void CollectStats(absl::Duration period, bool force_run,
                   FlowStateReporter* flow_state_reporter, const DCMapper* dc_mapper,
-                  uint64_t host_id, FlowStateProvider* flow_state_provider,
+                  uint64_t host_id, std::string job_name,
+                  FlowStateProvider* flow_state_provider,
                   FlowAggregator* socket_to_host_aggregator,
                   NdjsonLogger* flow_state_logger, HostEnforcer* enforcer,
                   std::atomic<bool>* should_exit) {
@@ -100,9 +102,10 @@ void CollectStats(absl::Duration period, bool force_run,
     bundle.mutable_bundler()->set_host_id(host_id);
     *bundle.mutable_timestamp() = ToProtoTimestamp(absl::Now());
     flow_state_provider->ForEachActiveFlow(
-        [&bundle, dc_mapper](absl::Time time, const proto::FlowInfo& info) {
+        [&bundle, dc_mapper, &job_name](absl::Time time, const proto::FlowInfo& info) {
           proto::FlowInfo send_info = info;
-          if (WithDCs(info.flow(), *dc_mapper, send_info.mutable_flow())) {
+          if (WithDCsAndJob(info.flow(), *dc_mapper, job_name,
+                            send_info.mutable_flow())) {
             *bundle.add_flow_infos() = std::move(send_info);
           }
         });
@@ -192,14 +195,15 @@ void HostDaemon::Run(std::atomic<bool>* should_exit) {
     NdjsonLogger empty_logger(-1);
     std::atomic<bool> once_should_exit = true;
     CollectStats(absl::ZeroDuration(), true, flow_state_reporter_, dc_mapper_,
-                 config_.host_id, flow_state_provider_, socket_to_host_aggregator_.get(),
-                 &empty_logger, enforcer_, &once_should_exit);
+                 config_.host_id, config_.job_name, flow_state_provider_,
+                 socket_to_host_aggregator_.get(), &empty_logger, enforcer_,
+                 &once_should_exit);
   }
 
   collect_stats_thread_ = std::thread(
       CollectStats, config_.collect_stats_period, false, flow_state_reporter_, dc_mapper_,
-      config_.host_id, flow_state_provider_, socket_to_host_aggregator_.get(),
-      &flow_state_logger_, enforcer_, should_exit);
+      config_.host_id, config_.job_name, flow_state_provider_,
+      socket_to_host_aggregator_.get(), &flow_state_logger_, enforcer_, should_exit);
 
   info_thread_ = std::thread(SendInfo, config_.inform_period, config_.host_id,
                              socket_to_host_aggregator_.get(), should_exit, &channel_);
