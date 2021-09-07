@@ -157,6 +157,7 @@ type HEYPNodeConfigs struct {
 
 type HostAgentNode struct {
 	Host             *pb.DeployedNode
+	JobName          string
 	ClusterAgentAddr string
 }
 
@@ -190,17 +191,31 @@ func GetHEYPNodeConfigs(c *pb.DeploymentConfig) (HEYPNodeConfigs, error) {
 						Dc:       proto.String(cluster.GetName()),
 					})
 			}
+			var (
+				hostAgentConfig HostAgentNode
+				isHostAgent     bool
+				hasJobName      bool
+			)
 			for _, role := range n.Roles {
-				switch role {
-				case "host-agent":
-					nodeConfigs.HostAgentNodes = append(
-						nodeConfigs.HostAgentNodes, HostAgentNode{Host: n})
-				case "cluster-agent":
+				switch {
+				case role == "cluster-agent":
 					nodeConfigs.ClusterAgentNodes = append(
 						nodeConfigs.ClusterAgentNodes,
 						ClusterAgentNode{n, cluster, "0.0.0.0:" + strconv.Itoa(int(cluster.GetClusterAgentPort()))})
 					thisClusterAgentNode = n
+				case role == "host-agent":
+					hostAgentConfig.Host = n
+					isHostAgent = true
+				case strings.HasPrefix(role, "job-"):
+					hostAgentConfig.JobName = strings.TrimPrefix(role, "job-")
+					hasJobName = true
 				}
+			}
+			if hasJobName && !isHostAgent {
+				return nodeConfigs, fmt.Errorf("node '%s': has job name but no host-agent role", n.GetName())
+			}
+			if isHostAgent {
+				nodeConfigs.HostAgentNodes = append(nodeConfigs.HostAgentNodes, hostAgentConfig)
 			}
 		}
 
@@ -285,6 +300,7 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string, startConfig HE
 			eg.Go(func() error {
 				hostConfig := proto.Clone(c.HostAgentTemplate).(*pb.HostAgentConfig)
 				hostConfig.ThisHostAddrs = []string{n.Host.GetExperimentAddr()}
+				hostConfig.JobName = proto.String(n.JobName)
 				hostConfig.Daemon.ClusterAgentAddr = &n.ClusterAgentAddr
 				if startConfig.LogHostStats {
 					hostConfig.Daemon.StatsLogFile = proto.String(
