@@ -207,6 +207,9 @@ func GetHEYPNodeConfigs(c *pb.DeploymentConfig) (HEYPNodeConfigs, error) {
 					hostAgentConfig.Host = n
 					isHostAgent = true
 				case strings.HasPrefix(role, "job-"):
+					if hasJobName {
+						return nodeConfigs, fmt.Errorf("node '%s': has multiple job names", n.GetName())
+					}
 					hostAgentConfig.JobName = strings.TrimPrefix(role, "job-")
 					hasJobName = true
 				}
