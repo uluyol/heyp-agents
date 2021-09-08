@@ -2,6 +2,7 @@
 #define HEYP_PROTO_TESTING_H_
 
 #include "gmock/gmock.h"
+#include "google/protobuf/util/message_differencer.h"
 #include "heyp/proto/alg.h"
 #include "heyp/proto/heyp.pb.h"
 
@@ -35,6 +36,22 @@ MATCHER_P(AllocBundleEq, other, "") {
       }
     }
     if (!found_match) {
+      return false;
+    }
+  }
+  return true;
+}
+
+MATCHER_P(EqProto, other, "") {
+  return google::protobuf::util::MessageDifferencer::Equivalent(arg, other);
+}
+
+MATCHER_P(EqRepeatedProto, other, "") {
+  if (arg.size() != other.size()) {
+    return false;
+  }
+  for (int i = 0; i < arg.size(); ++i) {
+    if (!google::protobuf::util::MessageDifferencer::Equivalent(arg[i], other[i])) {
       return false;
     }
   }
