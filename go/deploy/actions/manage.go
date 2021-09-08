@@ -303,7 +303,9 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string, startConfig HE
 			eg.Go(func() error {
 				hostConfig := proto.Clone(c.HostAgentTemplate).(*pb.HostAgentConfig)
 				hostConfig.ThisHostAddrs = []string{n.Host.GetExperimentAddr()}
-				hostConfig.JobName = proto.String(n.JobName)
+				if n.JobName != "" {
+					hostConfig.JobName = proto.String(n.JobName)
+				}
 				hostConfig.Daemon.ClusterAgentAddr = &n.ClusterAgentAddr
 				if startConfig.LogHostStats {
 					hostConfig.Daemon.StatsLogFile = proto.String(
