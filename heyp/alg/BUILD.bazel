@@ -5,6 +5,17 @@ package(
 )
 
 cc_library(
+    name = "agg-info-views",
+    srcs = ["agg-info-views.cc"],
+    hdrs = ["agg-info-views.h"],
+    deps = [
+        "//heyp/proto:alg",
+        "//heyp/proto:heyp_cc_proto",
+        "@com_google_absl//absl/container:flat_hash_map",
+    ],
+)
+
+cc_library(
     name = "debug",
     srcs = ["debug.cc"],
     hdrs = ["debug.h"],
@@ -42,6 +53,17 @@ cc_library(
     deps = [
         "//heyp/proto:heyp_cc_proto",
         "@com_google_absl//absl/base",
+    ],
+)
+
+cc_test(
+    name = "agg-info-views-test",
+    srcs = ["agg-info-views-test.cc"],
+    deps = [
+        ":agg-info-views",
+        "//heyp/init:test-main",
+        "//heyp/proto:parse-text",
+        "//heyp/proto:testing",
     ],
 )
 
