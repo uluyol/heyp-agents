@@ -541,7 +541,6 @@ def NoLimitConfig(**kwargs):
     )
 
 def RateLimitConfig(**kwargs):
-    # Basically does nothing
     allocator = config_pb.ClusterAllocatorConfig(
         type = "CA_BWE",
         enable_burstiness = True,
@@ -558,7 +557,6 @@ def RateLimitConfig(**kwargs):
     )
 
 def QoSDowngradeConfig(**kwargs):
-    # Basically does nothing
     allocator = config_pb.ClusterAllocatorConfig(
         type = "CA_SIMPLE_DOWNGRADE",
         downgrade_selector = {"type": "DS_KNAPSACK_SOLVER"},
@@ -576,10 +574,26 @@ def QoSDowngradeConfig(**kwargs):
     )
 
 def QoSDowngradeAndLimitLOPRIConfig(**kwargs):
-    # Basically does nothing
     allocator = config_pb.ClusterAllocatorConfig(
         type = "CA_SIMPLE_DOWNGRADE",
         downgrade_selector = {"type": "DS_KNAPSACK_SOLVER"},
+        enable_burstiness = True,
+        enable_bonus = True,
+        oversub_factor = OVERSUB_FACTOR,
+    )
+
+    return GenConfig(
+        ca_allocator = allocator,
+        ca_limits_to_apply = "HL",
+        limit_hipri = False,
+        limit_lopri = True,
+        **kwargs
+    )
+
+def QoSDowngradeAndLimitLOPRIConfigJobLevel(**kwargs):
+    allocator = config_pb.ClusterAllocatorConfig(
+        type = "CA_SIMPLE_DOWNGRADE",
+        downgrade_selector = {"type": "DS_KNAPSACK_SOLVER", "downgrade_jobs": True},
         enable_burstiness = True,
         enable_bonus = True,
         oversub_factor = OVERSUB_FACTOR,
@@ -881,6 +895,25 @@ def AddConfigsSweep(configs):
                     configs[prefix + "-qdlrl"] = QoSDowngradeAndLimitLOPRIConfig(**kwargs)
                     configs[prefix + "-rl"] = RateLimitConfig(**kwargs)
 
+def AddConfigsMixedVersusFullDowngrade(configs):
+    print("TODO: need to separate jobs on different machines within AA")
+
+    kwargs = dict({
+        "AA_approved_bps": int(Gbps(2)),
+        "AA_surplus_bps": int(Gbps(10)),
+        "WA_approved_bps": int(Gbps(12)),
+        "shard_key": "inc",
+    }, **GenWorkloadStagesIncreasing(
+        AA_bps = int(Gbps(16)),
+        num_AA_backends = 1,
+        WA_bps_min = int(Gbps(4)),
+        WA_bps_max = int(Gbps(12)),
+    ))
+
+    prefix = "inc"
+    configs[prefix + "-qdlrl"] = QoSDowngradeAndLimitLOPRIConfig(**kwargs)
+    configs[prefix + "-qdlrlj"] = QoSDowngradeAndLimitLOPRIConfigJobLevel(**kwargs)
+
 def AddConfigsIncreasing(configs):
     # "AA_lopri_is_longer": True,
     kwargs = dict({
@@ -967,16 +1000,20 @@ def AddConfigsFlipQoS(configs):
     configs["qflip_lr-stableqos"] = FixedHostPatternStableQoSConfig(**kwargs_lr)
 
 def GenConfigs():
+    generators = {
+        "cmpmixed": AddConfigsMixedVersusFullDowngrade,
+        "inc": AddConfigsIncreasing,
+        "qflip": AddConfigsFlipQoS,
+        "sweep": AddConfigsSweep,
+    }
+
     configs = dict()
     for c in configs_to_gen:
-        if c == "qflip":
-            AddConfigsFlipQoS(configs)
-        elif c == "inc":
-            AddConfigsIncreasing(configs)
-        elif c == "sweep":
-            AddConfigsSweep(configs)
-        else:
+        gen_fn = generators.get(c, None)
+        if gen_fn == None:
             print("unknown config set '", c, "'")
+        else:
+            gen_fn(configs)
     return configs
 
 configs = GenConfigs()
