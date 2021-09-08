@@ -9,11 +9,16 @@ strjoin() {
 }
 
 if [[ $# -lt 1 ]]; then
-  echo bad
+  echo usage: ./1-gen-configs.bash outdir config config...
   exit 1
 fi
 
 outdir=${1%/}
+shift
+configs=("$@")
+if [[ ${#configs[@]} -lt 1 ]]; then
+  configs=(inc)
+fi
 
 rm -rf "$outdir"
 
@@ -22,4 +27,5 @@ exec bin/deploy-heyp gen-configs \
     -o "$outdir/configs" \
     -oshard "$outdir/shards" \
     -rspec "$(strjoin ';' rspec*.xml)" \
-    -ssh-user uluyol
+    -ssh-user uluyol \
+    "${configs[@]}"

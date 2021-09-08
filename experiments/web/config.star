@@ -848,12 +848,12 @@ def FixedHostPatternLOPRIConfig(**kwargs):
 def Gbps(x):
     return x * 1024 * 1024 * 1024
 
-def GenConfigs():
+def AddConfigsSweep(configs):
     ALL_X = []  # [8, 9]  # [2, 4, 6, 8]
     ALL_Y = [7, 8]  # [2.5, 5]
     ALL_C = [float("2.0")]  # [1.25, 1.5]
     ALL_LOPRI_CAP = [19]
-    configs = {}
+
     for x in ALL_X:
         for y in ALL_Y:
             for c in ALL_C:
@@ -881,6 +881,7 @@ def GenConfigs():
                     configs[prefix + "-qdlrl"] = QoSDowngradeAndLimitLOPRIConfig(**kwargs)
                     configs[prefix + "-rl"] = RateLimitConfig(**kwargs)
 
+def AddConfigsIncreasing(configs):
     # "AA_lopri_is_longer": True,
     kwargs = dict({
         "AA_approved_bps": int(Gbps(2)),
@@ -912,9 +913,7 @@ def GenConfigs():
     configs[prefix + "-qdlrl"] = QoSDowngradeAndLimitLOPRIConfig(**kwargs)
     configs[prefix + "-rl"] = RateLimitConfig(**kwargs)
 
-    return configs
-
-def GenConfigsFlipQoS():
+def AddConfigsFlipQoS(configs):
     kwargs_rr = dict({
         "AA_lopri_is_longer": True,
         "AA_approved_bps": int(Gbps(11)),
@@ -955,8 +954,6 @@ def GenConfigsFlipQoS():
         run_dur = "150s",
     ))
 
-    configs = dict()
-
     configs["qflip_rr-nl"] = NoLimitConfig(**kwargs_rr)
     configs["qflip_rr-hipri"] = FixedHostPatternHIPRIConfig(**kwargs_rr)
     configs["qflip_rr-lopri"] = FixedHostPatternLOPRIConfig(**kwargs_rr)
@@ -969,7 +966,17 @@ def GenConfigsFlipQoS():
     configs["qflip_lr-flipflop"] = FixedHostPatternAlternatingQoSConfig(**kwargs_lr)
     configs["qflip_lr-stableqos"] = FixedHostPatternStableQoSConfig(**kwargs_lr)
 
+def GenConfigs():
+    configs = dict()
+    for c in configs_to_gen:
+        if c == "qflip":
+            AddConfigsFlipQoS(configs)
+        elif c == "inc":
+            AddConfigsIncreasing(configs)
+        elif c == "sweep":
+            AddConfigsSweep(configs)
+        else:
+            print("unknown config set '", c, "'")
     return configs
 
 configs = GenConfigs()
-# configs = GenConfigsFlipQoS()

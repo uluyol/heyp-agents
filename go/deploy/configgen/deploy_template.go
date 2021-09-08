@@ -57,11 +57,16 @@ func ReadExternalAddrsMap(rspecPath, sshUser string) (map[string]string, error) 
 	return externalAddrForIP, nil
 }
 
-func GenDeploymentConfigs(filename string, externalAddrForIP []map[string]string) (configs map[string]*pb.DeploymentConfig, shardConfigs [][]string, err error) {
+func GenDeploymentConfigs(filename string, configSetsToGen []string, externalAddrForIP []map[string]string) (configs map[string]*pb.DeploymentConfig, shardConfigs [][]string, err error) {
 	// starExternalAddrForIP := starlark.NewDict(len(externalAddrForIP))
 	// for k, v := range externalAddrForIP {
 	// 	starExternalAddrForIP.SetKey(starlark.String(k), starlark.String(v))
 	// }
+
+	configSetsToGenList := starlark.NewList(nil)
+	for _, s := range configSetsToGen {
+		configSetsToGenList.Append(starlark.String(s))
+	}
 
 	nextShard := 0
 	knownShards := make(map[string]int)
@@ -97,6 +102,7 @@ func GenDeploymentConfigs(filename string, externalAddrForIP []map[string]string
 		"time":            starlarktime.Module,
 		"ext_addr_for_ip": starExternalAddrForIP,
 		"fdiv":            starDivide, // used because buildifier doesn't support floats
+		"configs_to_gen":  configSetsToGenList,
 	}
 
 	// Execute the Starlark file.

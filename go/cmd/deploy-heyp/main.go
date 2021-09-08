@@ -482,7 +482,7 @@ func (c *genConfigsCmd) Execute(ctx context.Context, fs *flag.FlagSet,
 		extAddrs = append(extAddrs, m)
 	}
 
-	cfgs, shardCfgs, err := configgen.GenDeploymentConfigs(c.input, extAddrs)
+	cfgs, shardCfgs, err := configgen.GenDeploymentConfigs(c.input, fs.Args(), extAddrs)
 	if err != nil {
 		log.Fatal(err)
 	}
