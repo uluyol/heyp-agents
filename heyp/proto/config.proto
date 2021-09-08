@@ -113,6 +113,11 @@ enum DowngradeSelectorType {
 
 message DowngradeSelector {
   optional DowngradeSelectorType type = 1 [default = DS_HEYP_SIGCOMM20];
+
+  // If set, the DowngradeSelector will identify jobs to downgrade and mark all hosts
+  // within those jobs as LOPRI.
+  // Otherwise, it will select hosts without looking at which job a host belongs to.
+  optional bool downgrade_jobs = 2 [default = false];
 }
 
 message FixedClusterHostAllocs {

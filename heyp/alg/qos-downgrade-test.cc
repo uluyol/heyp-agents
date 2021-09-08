@@ -1,6 +1,7 @@
 #include "heyp/alg/qos-downgrade.h"
 
 #include "absl/functional/bind_front.h"
+#include "debug.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "heyp/proto/config.pb.h"
@@ -17,13 +18,19 @@ proto::AggInfo ChildrenWithDemands(std::vector<int64_t> demands_bps) {
   return info;
 }
 
-proto::AggInfo ChildrenWithDemandsAndPri(
-    std::vector<std::pair<int64_t, bool>> demands_islopri_bps) {
+struct ChildInfo {
+  int64_t demand_bps = 0;
+  bool is_lopri = false;
+  std::string job = "";
+};
+
+proto::AggInfo ChildrenWithDemandsAndPri(std::vector<ChildInfo> demands_islopri_bps) {
   proto::AggInfo info;
-  for (std::pair<int64_t, bool> p : demands_islopri_bps) {
+  for (const ChildInfo& p : demands_islopri_bps) {
     auto cp = info.add_children();
-    cp->set_predicted_demand_bps(p.first);
-    cp->set_currently_lopri(p.second);
+    cp->mutable_flow()->set_job(p.job);
+    cp->set_predicted_demand_bps(p.demand_bps);
+    cp->set_currently_lopri(p.is_lopri);
   }
   return info;
 }
@@ -40,7 +47,7 @@ std::vector<bool> GreedyAssignToMinimizeGapWrapper(proto::AggInfo demands,
           .cur_demand = cur_demand,
           .want_demand = want_demand,
           .children_sorted_by_dec_demand = sorted_by_demand,
-          .agg_info = demands,
+          .agg_info = TransparentView(demands),
       },
       lopri_children, false);
   return lopri_children;
@@ -229,6 +236,37 @@ TEST(KnapsackSolverPickLOPRIChildrenTest, FlipCompletely) {
               testing::ElementsAre(t, t, t, t));
   EXPECT_THAT(PickLOPRIChildren(info, 0, selector, &logger),
               testing::ElementsAre(f, f, f, f));
+}
+
+TEST(KnapsackSolverPickLOPRIChildrenTest, JobLevel) {
+  const proto::AggInfo info = ChildrenWithDemandsAndPri({
+      {200, true, "YT"},
+      {100, false, "YT"},
+      {300, false, "FB"},
+      {100, true, "FB"},
+  });
+
+  constexpr bool t = true;
+  constexpr bool f = false;
+
+  auto logger = MakeLogger("test");
+
+  proto::DowngradeSelector selector;
+  selector.set_type(proto::DS_KNAPSACK_SOLVER);
+  selector.set_downgrade_jobs(true);
+
+  EXPECT_THAT(PickLOPRIChildren(info, 0.428, selector, &logger),
+              testing::ElementsAre(f, f, f, f));
+  EXPECT_THAT(PickLOPRIChildren(info, 0.429, selector, &logger),
+              testing::ElementsAre(t, t, f, f));
+  EXPECT_THAT(PickLOPRIChildren(info, 0.571, selector, &logger),
+              testing::ElementsAre(t, t, f, f));
+  EXPECT_THAT(PickLOPRIChildren(info, 0.572, selector, &logger),
+              testing::ElementsAre(f, f, t, t));
+  EXPECT_THAT(PickLOPRIChildren(info, 0.999, selector, &logger),
+              testing::ElementsAre(f, f, t, t));
+  EXPECT_THAT(PickLOPRIChildren(info, t, selector, &logger),
+              testing::ElementsAre(t, t, t, t));
 }
 
 TEST(FracAdmittedAtLOPRITest, Basic) {

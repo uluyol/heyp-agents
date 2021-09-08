@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include "absl/strings/str_join.h"
+#include "heyp/alg/agg-info-views.h"
 #include "heyp/alg/debug.h"
 #include "heyp/log/spdlog.h"
 #include "heyp/proto/config.pb.h"
@@ -68,13 +69,20 @@ struct BitmapFormatter {
   }
 };
 
-static std::vector<bool> HeypSigcomm20PickLOPRIChildren(const proto::AggInfo& agg_info,
+struct FlowInfoFormatter {
+  void operator()(std::string* out, const proto::FlowInfo& info) {
+    *out += info.DebugString();
+  }
+};
+
+static std::vector<bool> HeypSigcomm20PickLOPRIChildren(const AggInfoView& agg_info,
                                                         const double want_frac_lopri,
                                                         spdlog::logger* logger) {
   const bool should_debug = DebugQosAndRateLimitSelection();
-
   if (should_debug) {
-    SPDLOG_LOGGER_INFO(logger, "agg_info: {}", agg_info.DebugString());
+    SPDLOG_LOGGER_INFO(logger, "parent: {}", agg_info.parent().DebugString());
+    SPDLOG_LOGGER_INFO(logger, "children: {}",
+                       absl::StrJoin(agg_info.children(), "\n", FlowInfoFormatter()));
   }
 
   std::vector<bool> lopri_children(agg_info.children_size(), false);
@@ -147,13 +155,15 @@ static std::vector<bool> HeypSigcomm20PickLOPRIChildren(const proto::AggInfo& ag
   return lopri_children;
 }
 
-static std::vector<bool> LargestFirstPickLOPRIChildren(const proto::AggInfo& agg_info,
+static std::vector<bool> LargestFirstPickLOPRIChildren(const AggInfoView& agg_info,
                                                        const double want_frac_lopri,
                                                        spdlog::logger* logger) {
   const bool should_debug = DebugQosAndRateLimitSelection();
 
   if (should_debug) {
-    SPDLOG_LOGGER_INFO(logger, "agg_info: {}", agg_info.DebugString());
+    SPDLOG_LOGGER_INFO(logger, "parent: {}", agg_info.parent().DebugString());
+    SPDLOG_LOGGER_INFO(logger, "children: {}",
+                       absl::StrJoin(agg_info.children(), "\n", FlowInfoFormatter()));
   }
 
   int64_t total_demand = 0;
@@ -205,9 +215,16 @@ static std::vector<bool> LargestFirstPickLOPRIChildren(const proto::AggInfo& agg
   return lopri_children;
 }
 
-std::vector<bool> KnapsackSolverPickLOPRIChildren(const proto::AggInfo& agg_info,
+std::vector<bool> KnapsackSolverPickLOPRIChildren(const AggInfoView& agg_info,
                                                   const double want_frac_lopri,
                                                   spdlog::logger* logger) {
+  const bool should_debug = DebugQosAndRateLimitSelection();
+  if (should_debug) {
+    SPDLOG_LOGGER_INFO(logger, "parent: {}", agg_info.parent().DebugString());
+    SPDLOG_LOGGER_INFO(logger, "children: {}",
+                       absl::StrJoin(agg_info.children(), "\n", FlowInfoFormatter()));
+  }
+
   absl::optional<operations_research::KnapsackSolver> solver;
 
   if (agg_info.children_size() <= 64) {
@@ -242,6 +259,11 @@ std::vector<bool> KnapsackSolverPickLOPRIChildren(const proto::AggInfo& agg_info
   H_SPDLOG_CHECK_LE(logger, got_total_demand, want_demand);
   H_SPDLOG_CHECK_EQ(logger, double_check_total_demand, got_total_demand);
 
+  if (should_debug) {
+    SPDLOG_LOGGER_INFO(logger, "picked LOPRI assignment: {}",
+                       absl::StrJoin(lopri_children, "", BitmapFormatter()));
+  }
+
   return lopri_children;
 }
 
@@ -249,17 +271,42 @@ std::vector<bool> PickLOPRIChildren(const proto::AggInfo& agg_info,
                                     const double want_frac_lopri,
                                     const proto::DowngradeSelector& selector,
                                     spdlog::logger* logger) {
+  TransparentView raw_view(agg_info);
+  std::unique_ptr<JobLevelView> job_level_view;
+  AggInfoView* view = &raw_view;
+
+  if (selector.downgrade_jobs()) {
+    job_level_view = absl::make_unique<JobLevelView>(agg_info);
+    view = job_level_view.get();
+  }
+  std::vector<bool> selection;
   switch (selector.type()) {
     case proto::DS_HEYP_SIGCOMM20:
-      return HeypSigcomm20PickLOPRIChildren(agg_info, want_frac_lopri, logger);
+      selection = HeypSigcomm20PickLOPRIChildren(*view, want_frac_lopri, logger);
+      break;
     case proto::DS_KNAPSACK_SOLVER:
-      return KnapsackSolverPickLOPRIChildren(agg_info, want_frac_lopri, logger);
+      selection = KnapsackSolverPickLOPRIChildren(*view, want_frac_lopri, logger);
+      break;
     case proto::DS_LARGEST_FIRST:
-      return LargestFirstPickLOPRIChildren(agg_info, want_frac_lopri, logger);
+      selection = LargestFirstPickLOPRIChildren(*view, want_frac_lopri, logger);
+      break;
+    default:
+      SPDLOG_LOGGER_CRITICAL(logger, "unsupported DowngradeSelectorType: {}",
+                             selector.type());
+      DumpStackTraceAndExit(5);
   }
-  SPDLOG_LOGGER_CRITICAL(logger, "unsupported DowngradeSelectorType: {}",
-                         selector.type());
-  DumpStackTraceAndExit(5);
+  if (selector.downgrade_jobs()) {
+    std::vector<bool> host_selection(agg_info.children_size(), false);
+    const std::vector<int>& job_of_host = job_level_view->job_index_of_host();
+    H_SPDLOG_CHECK_EQ(logger, host_selection.size(), job_of_host.size());
+    for (int i = 0; i < host_selection.size(); ++i) {
+      H_SPDLOG_CHECK_GE(logger, job_of_host[i], 0);
+      H_SPDLOG_CHECK_LT(logger, job_of_host[i], selection.size());
+      host_selection[i] = selection[job_of_host[i]];
+    }
+    return host_selection;
+  }
+  return selection;
 }
 
 double FracAdmittedAtLOPRI(const proto::FlowInfo& parent,

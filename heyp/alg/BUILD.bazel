@@ -36,6 +36,7 @@ cc_library(
     srcs = ["qos-downgrade.cc"],
     hdrs = ["qos-downgrade.h"],
     deps = [
+        ":agg-info-views",
         ":debug",
         "//heyp/log:spdlog",
         "//heyp/proto:config_cc_proto",

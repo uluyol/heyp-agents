@@ -6,6 +6,7 @@
 
 #include "absl/strings/str_format.h"
 #include "absl/time/time.h"
+#include "heyp/alg/agg-info-views.h"
 #include "heyp/log/spdlog.h"
 #include "heyp/proto/config.pb.h"
 #include "heyp/proto/heyp.pb.h"
@@ -48,7 +49,7 @@ struct GreedyAssignToMinimizeGapArgs {
   int64_t cur_demand;
   const int64_t want_demand;
   const std::vector<size_t>& children_sorted_by_dec_demand;
-  const proto::AggInfo& agg_info;
+  const AggInfoView& agg_info;
 };
 
 // GreedyAssignToMinimizeGap is a greedy algorithm to partition children into
