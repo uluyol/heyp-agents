@@ -146,6 +146,97 @@ def GenWorkloadStagesIncreasing(
         "envoy_group_names": ["AA", "WA"],
     }
 
+def GenWorkloadStagesIncreasingTwoAAJobs(
+        AA_bps = None,
+        num_AA_backends = None,
+        WA_bps_min = None,
+        WA_bps_max = None):
+    AA_per_be_bps = int(fdiv(float(AA_bps), float(2 * num_AA_backends)))
+
+    AA_instances_0, AA_client_roles_0, AA_server_roles_for_0 = BackendOnEachHost(
+        num_backends = num_AA_backends,
+        workload_stages_per_backend = [{
+            "target_average_bps": AA_per_be_bps,
+            "run_dur": "150s",
+        }],
+        num_shards_per_backend = NumShards(AA_per_be_bps),
+        num_servers_per_backend_host = 2,
+        name_prefix = "AA0_",
+        envoy_group_name = "AA0",
+        starting_port = AA_FORTIO_STARTING_PORT,
+        prop_delay_ms = AA_PROP_DELAY_MS,
+        make_server_roles_for_fn = lambda roles: MakeAssignRolesToServerSlice(0, 2, roles),
+    )
+
+    AA_instances_1, AA_client_roles_1, AA_server_roles_for_1 = BackendOnEachHost(
+        num_backends = num_AA_backends,
+        workload_stages_per_backend = [{
+            "target_average_bps": AA_per_be_bps,
+            "run_dur": "150s",
+        }],
+        num_shards_per_backend = NumShards(AA_per_be_bps),
+        num_servers_per_backend_host = 2,
+        name_prefix = "AA1_",
+        envoy_group_name = "AA1",
+        starting_port = AA_FORTIO_STARTING_PORT,
+        prop_delay_ms = AA_PROP_DELAY_MS,
+        make_server_roles_for_fn = lambda roles: MakeAssignRolesToServerSlice(1, 2, roles),
+    )
+
+    def AA_server_roles_for(server_index, num_servers):
+        return AA_server_roles_for_0(server_index, num_servers) + AA_server_roles_for_1(server_index, num_servers)
+
+    def AA_jobs_for(server_index, num_servers):
+        slice = server_index % 2
+        if slice == 0:
+            return ["AA0"]
+        elif slice == 1:
+            return ["AA1"]
+        fail("impossible branch")
+
+    AA_instances = AA_instances_0 + AA_instances_1
+    AA_client_roles = AA_client_roles_0 + AA_client_roles_1
+
+    tick_bps = (WA_bps_max - WA_bps_min) // 60
+    WA_stages = [{
+        "target_average_bps": WA_bps_min,
+        "run_dur": "15s",
+    }]
+
+    for tick in range(60):
+        bps = WA_bps_min + tick_bps * tick
+        WA_stages.append({
+            "target_average_bps": bps,
+            "run_dur": "2s",
+        })
+
+    WA_stages.append({
+        "target_average_bps": WA_bps_max,
+        "run_dur": "15s",
+    })
+
+    WA_instances, WA_client_roles, WA_server_roles_for = BackendOnEachHost(
+        num_backends = 1,
+        workload_stages_per_backend = WA_stages,
+        num_shards_per_backend = NumShards(WA_bps_max),
+        num_servers_per_backend_host = 4,
+        name_prefix = "WA_",
+        envoy_group_name = "WA",
+        starting_port = WA_FORTIO_STARTING_PORT,
+        prop_delay_ms = WA_PROP_DELAY_MS,
+    )
+
+    return {
+        "AA_fortio_instances": AA_instances,
+        "AA_client_roles": AA_client_roles,
+        "AA_server_roles_for": AA_server_roles_for,
+        "AA_jobs_for": AA_jobs_for,
+        "WA_fortio_instances": WA_instances,
+        "WA_client_roles": WA_client_roles,
+        "WA_server_roles_for": WA_server_roles_for,
+        "envoy_group_names": ["AA0", "AA1", "WA"],
+    }
+
 def GenWorkloadStagesOscillating(
         AA_bps_min = None,
         AA_bps_max = None,
@@ -231,6 +322,7 @@ def GenConfig(
         AA_approved_bps = None,
         AA_surplus_bps = None,
         AA_server_roles_for = None,
+        AA_jobs_for = None,
         AA_client_roles = None,
         AA_fortio_instances = None,
         WA_approved_bps = None,
@@ -319,6 +411,8 @@ def GenConfig(
                 clusters["EDGE"]["node_names"].append(name)
             elif i <= idx_ubs["AA"]:
                 roles.extend(AA_server_roles_for(i - 4, 9))
+                if AA_jobs_for != None:
+                    roles.extend(["job-" + job for job in AA_jobs_for(i - 4, 9)])
                 clusters["AA"]["node_names"].append(name)
             elif i <= idx_ubs["WA"]:
                 roles.extend(WA_server_roles_for(i - 13, 2))
@@ -477,6 +571,20 @@ def GenConfig(
 
 OVERSUB_FACTOR = float("1.25")
 
+def MakeSameRolesForAllServers(server_roles):
+    def ServerRolesFor(server_index, num_servers):
+        return server_roles
+
+    return ServerRolesFor
+
+def MakeAssignRolesToServerSlice(slice_index, num_slices, server_roles):
+    def ServerRolesFor(server_index, num_servers):
+        if (server_index % num_slices) == slice_index:
+            return server_roles
+        return []
+
+    return ServerRolesFor
+
 def BackendOnEachHost(
         num_backends = None,
         workload_stages_per_backend = None,
@@ -486,7 +594,8 @@ def BackendOnEachHost(
         envoy_group_name = None,
         starting_port = None,
         prop_delay_ms = None,
-        lb_policy = "LEAST_REQUEST"):
+        lb_policy = "LEAST_REQUEST",
+        make_server_roles_for_fn = MakeSameRolesForAllServers):
     size_dist = [{
         "resp_size_bytes": 51200,
         "weight": 100,
@@ -518,10 +627,7 @@ def BackendOnEachHost(
         })
         cur_port += num_servers_per_backend_host
 
-    def ServerRolesFor(server_index, num_servers):
-        return server_roles
-
-    return instances, client_roles, ServerRolesFor
+    return instances, client_roles, make_server_roles_for_fn(server_roles)
 
 def NoLimitConfig(**kwargs):
     # Basically does nothing
@@ -896,21 +1002,19 @@ def AddConfigsSweep(configs):
                     configs[prefix + "-rl"] = RateLimitConfig(**kwargs)
 
 def AddConfigsMixedVersusFullDowngrade(configs):
-    print("TODO: need to separate jobs on different machines within AA")
-
     kwargs = dict({
-        "AA_approved_bps": int(Gbps(2)),
-        "AA_surplus_bps": int(Gbps(10)),
-        "WA_approved_bps": int(Gbps(12)),
-        "shard_key": "inc",
-    }, **GenWorkloadStagesIncreasing(
-        AA_bps = int(Gbps(16)),
+        "AA_approved_bps": int(Gbps(6)),
+        "AA_surplus_bps": int(Gbps(6)),
+        "WA_approved_bps": int(Gbps(6)),
+        "shard_key": "cmpmixed",
+    }, **GenWorkloadStagesIncreasingTwoAAJobs(
+        AA_bps = int(Gbps(12)),
         num_AA_backends = 1,
         WA_bps_min = int(Gbps(4)),
         WA_bps_max = int(Gbps(12)),
     ))
 
-    prefix = "inc"
+    prefix = "cmpmixed"
     configs[prefix + "-qdlrl"] = QoSDowngradeAndLimitLOPRIConfig(**kwargs)
     configs[prefix + "-qdlrlj"] = QoSDowngradeAndLimitLOPRIConfigJobLevel(**kwargs)
 
