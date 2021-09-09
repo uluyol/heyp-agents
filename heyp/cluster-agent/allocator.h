@@ -43,6 +43,10 @@ class ClusterAllocator {
   AllocSet allocs_ ABSL_GUARDED_BY(mu_);
 };
 
+// Exposed for testing
+
+double ClampFracLOPRI(spdlog::logger* logger, double frac_lopri);
+
 }  // namespace heyp
 
 #endif  // HEYP_CLUSTER_AGENT_ALLOCATOR_H_

@@ -64,6 +64,20 @@ AllocSet ClusterAllocator::GetAllocs() {
   return allocs_;
 }
 
+double ClampFracLOPRI(spdlog::logger* logger, double frac_lopri) {
+  // Make sure frac_lopri >= 0. Use a double-negative condition to
+  // also capture the case where frac_lopri is NaN.
+  if (!(frac_lopri >= 0.0)) {
+    SPDLOG_LOGGER_WARN(logger, "frac_lopri [{}] < 0; clamping to 0", frac_lopri);
+    return 0;
+  }
+  if (!(frac_lopri <= 1)) {
+    SPDLOG_LOGGER_WARN(logger, "frac_lopri [{}] > 1; clamping to 1", frac_lopri);
+    return 1;
+  }
+  return frac_lopri;
+}
+
 namespace {
 
 template <typename ValueType>
@@ -224,8 +238,8 @@ class HeypSigcomm20Allocator : public PerAggAllocator {
                          cur_state.frac_lopri, cur_state.frac_lopri_with_probing);
     }
 
-    ABSL_ASSERT(cur_state.frac_lopri_with_probing >= 0);
-    ABSL_ASSERT(cur_state.frac_lopri_with_probing <= 1);
+    cur_state.frac_lopri_with_probing =
+        ClampFracLOPRI(&logger_, cur_state.frac_lopri_with_probing);
 
     // Burstiness matters for selecting children and assigning them rate limits.
     if (config_.enable_burstiness()) {
@@ -369,9 +383,8 @@ class DowngradeAllocator : public PerAggAllocator {
     const int64_t lopri_bps =
         std::max<int64_t>(0, agg_info.parent().predicted_demand_bps() - hipri_admission);
 
-    const double frac_lopri =
-        static_cast<double>(lopri_bps) /
-        static_cast<double>(agg_info.parent().predicted_demand_bps());
+    double frac_lopri = static_cast<double>(lopri_bps) /
+                        static_cast<double>(agg_info.parent().predicted_demand_bps());
 
     *debug_state->mutable_parent_alloc() = admissions;
     debug_state->set_frac_lopri_initial(frac_lopri);
@@ -381,8 +394,7 @@ class DowngradeAllocator : public PerAggAllocator {
       SPDLOG_LOGGER_INFO(&logger_, "lopri_frac = {}", frac_lopri);
     }
 
-    ABSL_ASSERT(frac_lopri >= 0);
-    ABSL_ASSERT(frac_lopri <= 1);
+    frac_lopri = ClampFracLOPRI(&logger_, frac_lopri);
 
     // Burstiness matters for selecting children and assigning them rate limits.
     if (config_.enable_burstiness()) {
