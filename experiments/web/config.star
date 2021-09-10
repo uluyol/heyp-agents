@@ -165,7 +165,7 @@ def GenWorkloadStagesIncreasingTwoAAJobs(
         envoy_group_name = "AA0",
         starting_port = AA_FORTIO_STARTING_PORT,
         prop_delay_ms = AA_PROP_DELAY_MS,
-        make_server_roles_for_fn = lambda roles: MakeAssignRolesToServerSlice(0, 2, roles),
+        make_server_roles_for_fn = lambda roles: MakeAssignRolesToServerSlices([0], 2, roles),
     )
 
     AA_instances_1, AA_client_roles_1, AA_server_roles_for_1 = BackendOnEachHost(
@@ -180,7 +180,7 @@ def GenWorkloadStagesIncreasingTwoAAJobs(
         envoy_group_name = "AA1",
         starting_port = AA_FORTIO_STARTING_PORT,
         prop_delay_ms = AA_PROP_DELAY_MS,
-        make_server_roles_for_fn = lambda roles: MakeAssignRolesToServerSlice(1, 2, roles),
+        make_server_roles_for_fn = lambda roles: MakeAssignRolesToServerSlices([1], 2, roles),
     )
 
     def AA_server_roles_for(server_index, num_servers):
@@ -235,6 +235,65 @@ def GenWorkloadStagesIncreasingTwoAAJobs(
         "WA_client_roles": WA_client_roles,
         "WA_server_roles_for": WA_server_roles_for,
         "envoy_group_names": ["AA0", "AA1", "WA"],
+    }
+
+def GenWorkloadStagesDemandSuppression(AA_bps = None):
+    AA0_bps = int(8 * AA_bps // 9)
+    AA1_initial_bps = int(AA_bps // 9)
+
+    AA_instances_0, AA_client_roles_0, AA_server_roles_for_0 = BackendOnEachHost(
+        num_backends = 1,
+        workload_stages_per_backend = [{
+            "target_average_bps": AA0_bps,
+            "run_dur": "30s",
+        }],
+        num_shards_per_backend = NumShards(AA0_bps),
+        num_servers_per_backend_host = 2,
+        name_prefix = "AA0_",
+        envoy_group_name = "AA0",
+        starting_port = AA_FORTIO_STARTING_PORT,
+        prop_delay_ms = AA_PROP_DELAY_MS,
+        make_server_roles_for_fn = lambda roles: MakeAssignRolesToServerSlices([1, 2, 3, 4, 5, 6, 7, 8], 9, roles),
+    )
+
+    AA_instances_1, AA_client_roles_1, AA_server_roles_for_1 = BackendOnEachHost(
+        num_backends = 1,
+        workload_stages_per_backend = [
+            {
+                "target_average_bps": AA1_initial_bps,
+                "run_dur": "30s",
+            },
+            {
+                "target_average_bps": AA_bps,
+                "run_dur": "120s",
+            },
+        ],
+        num_shards_per_backend = NumShards(AA_bps),
+        num_servers_per_backend_host = 2,
+        name_prefix = "AA1_",
+        envoy_group_name = "AA1",
+        starting_port = AA_FORTIO_STARTING_PORT,
+        prop_delay_ms = AA_PROP_DELAY_MS,
+        make_server_roles_for_fn = lambda roles: MakeAssignRolesToServerSlices([0], 9, roles),
+    )
+
+    def AA_server_roles_for(server_index, num_servers):
+        return AA_server_roles_for_0(server_index, num_servers) + AA_server_roles_for_1(server_index, num_servers)
+
+    AA_instances = AA_instances_0 + AA_instances_1
+    AA_client_roles = AA_client_roles_0 + AA_client_roles_1
+
+    def WA_server_roles_for(server_index, num_servers):
+        return []
+
+    return {
+        "AA_fortio_instances": AA_instances,
+        "AA_client_roles": AA_client_roles,
+        "AA_server_roles_for": AA_server_roles_for,
+        "WA_fortio_instances": [],
+        "WA_client_roles": [],
+        "WA_server_roles_for": WA_server_roles_for,
+        "envoy_group_names": ["AA0", "AA1"],
     }
 
 def GenWorkloadStagesOscillating(
@@ -577,9 +636,9 @@ def MakeSameRolesForAllServers(server_roles):
 
     return ServerRolesFor
 
-def MakeAssignRolesToServerSlice(slice_index, num_slices, server_roles):
+def MakeAssignRolesToServerSlices(slice_indices, num_slices, server_roles):
     def ServerRolesFor(server_index, num_servers):
-        if (server_index % num_slices) == slice_index:
+        if (server_index % num_slices) in slice_indices:
             return server_roles
         return []
 
@@ -1018,6 +1077,20 @@ def AddConfigsMixedVersusFullDowngrade(configs):
     configs[prefix + "-qdlrl"] = QoSDowngradeAndLimitLOPRIConfig(**kwargs)
     configs[prefix + "-qdlrlj"] = QoSDowngradeAndLimitLOPRIConfigJobLevel(**kwargs)
 
+def AddConfigsDemandSuppression(configs):
+    kwargs = dict({
+        "AA_approved_bps": int(Gbps(9)),
+        "AA_surplus_bps": int(Gbps(6)),
+        "WA_approved_bps": int(Gbps(6)),
+        "shard_key": "cmpmixed",
+    }, **GenWorkloadStagesDemandSuppression(
+        AA_bps = int(Gbps(9)),
+    ))
+
+    prefix = "demandsuppression"
+    configs[prefix + "-nl"] = NoLimitConfig(**kwargs)
+    configs[prefix + "-rl"] = RateLimitConfig(**kwargs)
+
 def AddConfigsIncreasing(configs):
     # "AA_lopri_is_longer": True,
     kwargs = dict({
@@ -1106,6 +1179,7 @@ def AddConfigsFlipQoS(configs):
 def GenConfigs():
     generators = {
         "cmpmixed": AddConfigsMixedVersusFullDowngrade,
+        "demandsuppression": AddConfigsDemandSuppression,
         "inc": AddConfigsIncreasing,
         "qflip": AddConfigsFlipQoS,
         "sweep": AddConfigsSweep,
