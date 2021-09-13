@@ -58,6 +58,7 @@ var DefaultRunnerOptions = RunnerOptions{
 
 type RunRet struct {
 	ByteSize int
+	OK       bool
 }
 
 // Runnable are the function to run periodically.
@@ -575,7 +576,9 @@ func runOne(id int, r *periodicRunner, sched *qpsScheduler) {
 
 		fStart := time.Now()
 		got := f.Run(id)
-		r.Recorder.RecordRPC1(got.ByteSize, "net", time.Since(fStart))
+		if got.OK {
+			r.Recorder.RecordRPC1(got.ByteSize, "net", time.Since(fStart))
+		}
 	}
 }
 
