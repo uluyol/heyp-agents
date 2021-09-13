@@ -30,7 +30,7 @@ import (
 type Noop struct{}
 
 func (n *Noop) Run(t int) RunRet {
-	return RunRet{}
+	return RunRet{OK: true}
 }
 
 // used for when we don't actually run periodic test/want to initialize
@@ -85,7 +85,7 @@ func (c *TestCount) Run(i int) RunRet {
 	(*c.count)++
 	c.lock.Unlock()
 	time.Sleep(50 * time.Millisecond)
-	return RunRet{}
+	return RunRet{OK: true}
 }
 
 func TestStart(t *testing.T) {

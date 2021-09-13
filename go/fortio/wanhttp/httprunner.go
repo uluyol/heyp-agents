@@ -68,6 +68,7 @@ func (httpstate *HTTPRunnerResults) Run(t int) stagedperiodic.RunRet {
 	}
 	return stagedperiodic.RunRet{
 		ByteSize: size,
+		OK:       codeIsOK(code),
 	}
 }
 
