@@ -146,6 +146,20 @@ bool EqHostFlowNoId::operator()(const proto::FlowMarker& lhs,
   return IsSameFlow(lhs, rhs, {.cmp_fg = false, .cmp_job = false, .cmp_seqnum = false});
 }
 
+size_t HashFlowNoJob::operator()(const proto::FlowMarker& marker) const {
+  return absl::Hash<
+      std::tuple<absl::string_view, absl::string_view, uint64_t, absl::string_view,
+                 absl::string_view, int32_t, int32_t, int32_t, uint64_t>>()(
+      {marker.src_dc(), marker.dst_dc(), marker.host_id(), marker.src_addr(),
+       marker.dst_addr(), marker.protocol(), marker.src_port(), marker.dst_port(),
+       marker.seqnum()});
+}
+
+bool EqFlowNoJob::operator()(const proto::FlowMarker& lhs,
+                             const proto::FlowMarker& rhs) const {
+  return IsSameFlow(lhs, rhs, {.cmp_job = false});
+}
+
 size_t HashClusterFlow::operator()(const proto::FlowMarker& marker) const {
   return absl::Hash<std::tuple<absl::string_view, absl::string_view>>()(
       {marker.src_dc(), marker.dst_dc()});

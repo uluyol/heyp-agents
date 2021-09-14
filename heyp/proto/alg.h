@@ -53,6 +53,14 @@ struct EqHostFlowNoId {
   bool operator()(const proto::FlowMarker& lhs, const proto::FlowMarker& rhs) const;
 };
 
+struct HashFlowNoJob {
+  size_t operator()(const proto::FlowMarker& marker) const;
+};
+
+struct EqFlowNoJob {
+  bool operator()(const proto::FlowMarker& lhs, const proto::FlowMarker& rhs) const;
+};
+
 struct HashClusterFlow {
   size_t operator()(const proto::FlowMarker& marker) const;
 };

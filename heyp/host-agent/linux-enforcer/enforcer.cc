@@ -188,12 +188,17 @@ class LinuxHostEnforcerImpl : public LinuxHostEnforcer {
   DebugOutputLogger debug_logger_ ABSL_GUARDED_BY(mu_);
   int32_t next_class_id_ ABSL_GUARDED_BY(mu_);
 
-  absl::flat_hash_map<proto::FlowMarker, std::unique_ptr<FlowSys>, HashFlow, EqFlow>
+  absl::flat_hash_map<proto::FlowMarker, std::unique_ptr<FlowSys>, HashFlowNoJob,
+                      EqFlowNoJob>
       sys_info_ ABSL_GUARDED_BY(
           mu_);  // entries are never deleted, values are pointer for stability
 
   mutable absl::Mutex snapshot_mu_;
   iptables::SettingBatch ipt_snapshot_ ABSL_GUARDED_BY(snapshot_mu_);
+
+  FlowSys* GetSysInfo(const proto::FlowMarker& flow) ABSL_EXCLUSIVE_LOCKS_REQUIRED(mu_);
+  FlowSys* GetOrCreateSysInfo(const proto::FlowMarker& flow)
+      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mu_);
 
   absl::Status ResetIptables() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mu_);
   absl::Status ResetTrafficControl() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mu_);
@@ -248,13 +253,12 @@ absl::Status LinuxHostEnforcerImpl::InitSimulatedWan(std::vector<FlowNetemConfig
   std::vector<std::string> errors;
   tc_batch_input_.Clear();
   for (const FlowNetemConfig& c : configs) {
-    if (sys_info_[c.flow] != nullptr) {
+    if (GetSysInfo(c.flow) != nullptr) {
       errors.push_back(
           absl::StrCat("FlowSys already exists for flow: ", c.flow.ShortDebugString()));
       continue;
     }
-    sys_info_[c.flow] = absl::make_unique<FlowSys>();
-    FlowSys* sys = sys_info_[c.flow].get();
+    FlowSys* sys = GetOrCreateSysInfo(c.flow);
     StageTrafficControlForFlow({
         .rate_limit_bps = kMaxBandwidthBps,
         .netem_config = &c.netem.hipri,
@@ -295,7 +299,7 @@ absl::Status LinuxHostEnforcerImpl::InitSimulatedWan(std::vector<FlowNetemConfig
   // ==== Stage 2: set up iptables ====
 
   for (const FlowNetemConfig& c : configs) {
-    FlowSys* sys = sys_info_[c.flow].get();
+    FlowSys* sys = GetSysInfo(c.flow);
     sys->hipri.did_create_class = true;
     sys->lopri.did_create_class = true;
 
@@ -329,6 +333,27 @@ absl::Status LinuxHostEnforcerImpl::InitSimulatedWan(std::vector<FlowNetemConfig
     }
   }
   return absl::OkStatus();
+}
+
+LinuxHostEnforcerImpl::FlowSys* LinuxHostEnforcerImpl::GetSysInfo(
+    const proto::FlowMarker& flow) {
+  auto iter = sys_info_.find(flow);
+  if (iter == sys_info_.end()) {
+    return nullptr;
+  }
+  return iter->second.get();
+}
+
+LinuxHostEnforcerImpl::FlowSys* LinuxHostEnforcerImpl::GetOrCreateSysInfo(
+    const proto::FlowMarker& flow) {
+  auto iter = sys_info_.find(flow);
+  if (iter != sys_info_.end()) {
+    return iter->second.get();
+  }
+  proto::FlowMarker f = flow;
+  f.clear_job();
+  sys_info_[f] = std::make_unique<FlowSys>();
+  return sys_info_[f].get();
 }
 
 absl::Status LinuxHostEnforcerImpl::ResetIptables() { return ipt_controller_.Clear(); }
@@ -442,11 +467,9 @@ void LinuxHostEnforcerImpl::EnforceAllocs(const FlowStateProvider& flow_state_pr
   tc_batch_input_.Clear();
   int create_count = 0;
   int update_count = 0;
+  std::vector<std::string> flows_with_created_classes;  // for logging
   for (const proto::FlowAlloc& flow_alloc : bundle.flow_allocs()) {
-    if (sys_info_[flow_alloc.flow()] == nullptr) {
-      sys_info_[flow_alloc.flow()] = absl::make_unique<FlowSys>();
-    }
-    FlowSys* sys = sys_info_[flow_alloc.flow()].get();
+    FlowSys* sys = GetOrCreateSysInfo(flow_alloc.flow());
     sys->matched = match_host_flows_fn_(flow_state_provider, flow_alloc, &logger_);
 
     // Early update for traffic control (HIPRI)
@@ -478,6 +501,7 @@ void LinuxHostEnforcerImpl::EnforceAllocs(const FlowStateProvider& flow_state_pr
       if (!config_.limit_lopri()) {
         limit = kMaxBandwidthBps;
       }
+      auto old_create_count = create_count;
       StageTrafficControlForFlow({
           .rate_limit_bps = limit,
           .sys = &sys->lopri,
@@ -485,6 +509,10 @@ void LinuxHostEnforcerImpl::EnforceAllocs(const FlowStateProvider& flow_state_pr
           .create_count = &create_count,
           .update_count = &update_count,
       });
+      if (old_create_count != create_count) {
+        flows_with_created_classes.push_back("flow {\n" +
+                                             flow_alloc.flow().DebugString() + "}");
+      }
       sys->lopri.update_after_ipt_change = false;
     } else if (flow_alloc.lopri_rate_limit_bps() < sys->lopri.cur_rate_limit_bps) {
       sys->lopri.update_after_ipt_change = true;
@@ -492,8 +520,11 @@ void LinuxHostEnforcerImpl::EnforceAllocs(const FlowStateProvider& flow_state_pr
     sys->lopri.cur_rate_limit_bps = flow_alloc.lopri_rate_limit_bps();
   }
 
-  SPDLOG_LOGGER_INFO(&logger_, "creating {} rate limiters and increasing {} rate limits",
-                     create_count, update_count);
+  SPDLOG_LOGGER_INFO(&logger_,
+                     "creating {} rate limiters and increasing {} rate limits; flows "
+                     "with new limiters:{}{}",
+                     create_count, update_count, create_count > 0 ? "\n" : "",
+                     absl::StrJoin(flows_with_created_classes, "\n"));
   absl::Status st = tc_caller_.Batch(tc_batch_input_, /*force=*/true);
   if (!st.ok()) {
     SPDLOG_LOGGER_ERROR(&logger_,
@@ -530,7 +561,7 @@ void LinuxHostEnforcerImpl::EnforceAllocs(const FlowStateProvider& flow_state_pr
   // ==== Stage 2: Update iptables ====
 
   for (const proto::FlowAlloc& flow_alloc : bundle.flow_allocs()) {
-    FlowSys* sys = sys_info_[flow_alloc.flow()].get();
+    FlowSys* sys = GetSysInfo(flow_alloc.flow());
 
     if (!sys->matched.hipri.empty() && !sys->hipri.did_create_class) {
       SPDLOG_LOGGER_ERROR(&logger_,
@@ -568,7 +599,7 @@ void LinuxHostEnforcerImpl::EnforceAllocs(const FlowStateProvider& flow_state_pr
     create_count = 0;
     update_count = 0;
     for (const proto::FlowAlloc& flow_alloc : bundle.flow_allocs()) {
-      FlowSys* sys = sys_info_[flow_alloc.flow()].get();
+      FlowSys* sys = GetSysInfo(flow_alloc.flow());
 
       if (sys->hipri.update_after_ipt_change) {
         auto limit = sys->hipri.cur_rate_limit_bps;
