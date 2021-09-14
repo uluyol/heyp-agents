@@ -3,6 +3,7 @@ package actions
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -18,6 +19,77 @@ type ipAddrRec struct {
 	AddrInfo []struct {
 		Local string `json:"local"`
 	} `json:"addr_info"`
+}
+
+func iperfBW(b []byte) (int64, error) {
+	fields := bytes.Split(bytes.Fields(b)[0], []byte{','})
+	v, err := strconv.ParseInt(string(fields[len(fields)-1]), 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("failed to interpret iperf output: %v; output:\n%s", err, b)
+	}
+	return v, nil
+}
+
+func ReportPrioritizationBW(c *pb.DeploymentConfig) (hipri float64, lopri float64, err error) {
+	if len(c.Nodes) < 3 {
+		return 0, 0, errors.New("fewer than 3 nodes")
+	}
+
+	server := c.Nodes[0]
+	c1 := c.Nodes[1]
+	c2 := c.Nodes[2]
+
+	cmd := TracingCommand(LogWithPrefix("report-pri-bw: "),
+		"ssh", server.GetExternalAddr(), "iperf -s")
+	if err := cmd.Start(); err != nil {
+		return 0, 0, fmt.Errorf("failed to start iperf server: %w", err)
+	}
+	defer func() {
+		cmd.Process.Kill()
+		cmd.Wait()
+	}()
+
+	var outLO, outHI []byte
+
+	var eg multierrgroup.Group
+	eg.Go(func() error {
+		cmd := TracingCommand(LogWithPrefix("report-pri-bw: "),
+			"ssh", c1.GetExternalAddr(), "iperf -y C -S 0x00 -c "+server.GetExperimentAddr())
+		var err error
+		outLO, err = cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("failure running LOPRI client: %w", err)
+		}
+		return nil
+	})
+	eg.Go(func() error {
+		cmd := TracingCommand(LogWithPrefix("report-pri-bw: "),
+			"ssh", c2.GetExternalAddr(), "iperf -y C -S 0x48 -c "+server.GetExperimentAddr())
+		var err error
+		outHI, err = cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("failure running HIPRI client: %w", err)
+		}
+		return nil
+	})
+
+	if err := eg.Wait(); err != nil {
+		return 0, 0, err
+	}
+
+	loBW, err := iperfBW(outLO)
+	if err != nil {
+		return 0, 0, err
+	}
+	hiBW, err := iperfBW(outHI)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	loGbps := float64(loBW) / (1 << 30)
+	hiGbps := float64(hiBW) / (1 << 30)
+
+	return hiGbps, loGbps, nil
 }
 
 func CheckNodeIPs(c *pb.DeploymentConfig) error {

@@ -143,6 +143,19 @@ var killIPerfCmd = &configCmd{
 	exec:     actions.KillIPerf,
 }
 
+var reportPriBW = &configCmd{
+	name:     "report-pri-bw",
+	synopsis: "measure HIPRI & LOPRI BW on a congested link",
+	exec: func(c *pb.DeploymentConfig) error {
+		hi, lo, err := actions.ReportPrioritizationBW(c)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("HIPRI %v Gbps\nLOPRI %v Gbps\n", hi, lo)
+		return nil
+	},
+}
+
 var stopHEYPCmd = &configAndRemDirCmd{
 	name:     "stop-heyp-agents",
 	synopsis: "gracefully stop all HEYP agents",
@@ -607,6 +620,7 @@ func main() {
 	subcommands.Register(checkNodesCmd, "check")
 	subcommands.Register(measureNodesBandwidthCmd, "check")
 	subcommands.Register(killIPerfCmd, "check")
+	subcommands.Register(reportPriBW, "check")
 	subcommands.Register(new(updateConfigCmd), "")
 	subcommands.Register(new(collectHostStatsCmd), "")
 	subcommands.Register(killHEYPCmd, "")
