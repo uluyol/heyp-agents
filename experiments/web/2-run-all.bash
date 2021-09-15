@@ -93,6 +93,8 @@ for shard in "$outdir"/shards/*; do
         bin/deploy-heyp check-nodes -c $c
         echo config sys
         bin/deploy-heyp config-sys -c $c -cc bbr -debugmon
+        echo "roughly measure per-QoS BW w/ congestion (info only)"
+        bin/deploy-heyp report-pri-bw -c $c
         echo install bundle
         bin/deploy-heyp install-bundle -c $c
         first=0
