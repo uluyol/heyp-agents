@@ -837,13 +837,13 @@ def FixedHostPatternStableQoSConfig(**kwargs):
                                 "alloc": {
                                     "hipri_rate_limit_bps": Gbps(100),
                                 },
-                                "num_hosts": 1,
+                                "num_hosts": 4,
                             },
                             {
                                 "alloc": {
                                     "lopri_rate_limit_bps": Gbps(100),
                                 },
-                                "num_hosts": 1,
+                                "num_hosts": 4,
                             },
                         ],
                     },
@@ -894,13 +894,13 @@ def FixedHostPatternAlternatingQoSConfig(**kwargs):
                                 "alloc": {
                                     "hipri_rate_limit_bps": Gbps(100),
                                 },
-                                "num_hosts": 1,
+                                "num_hosts": 4,
                             },
                             {
                                 "alloc": {
                                     "lopri_rate_limit_bps": Gbps(100),
                                 },
-                                "num_hosts": 1,
+                                "num_hosts": 4,
                             },
                         ],
                     },
@@ -910,13 +910,13 @@ def FixedHostPatternAlternatingQoSConfig(**kwargs):
                                 "alloc": {
                                     "lopri_rate_limit_bps": Gbps(100),
                                 },
-                                "num_hosts": 1,
+                                "num_hosts": 4,
                             },
                             {
                                 "alloc": {
                                     "hipri_rate_limit_bps": Gbps(100),
                                 },
-                                "num_hosts": 1,
+                                "num_hosts": 4,
                             },
                         ],
                     },
@@ -967,7 +967,7 @@ def FixedHostPatternHIPRIConfig(**kwargs):
                                 "alloc": {
                                     "hipri_rate_limit_bps": Gbps(100),
                                 },
-                                "num_hosts": 2,
+                                "num_hosts": 8,
                             },
                         ],
                     },
@@ -1018,7 +1018,7 @@ def FixedHostPatternLOPRIConfig(**kwargs):
                                 "alloc": {
                                     "lopri_rate_limit_bps": Gbps(100),
                                 },
-                                "num_hosts": 2,
+                                "num_hosts": 8,
                             },
                         ],
                     },
@@ -1162,61 +1162,70 @@ def AddConfigsIncreasing(configs):
     configs[prefix + "-rl"] = RateLimitConfig(**kwargs)
 
 def AddConfigsFlipQoS(configs):
-    # "admission_controlled_envoy_groups": ["AA"],
-    kwargs_rr = dict({
-        "AA_lopri_is_longer": True,
-        "AA_approved_bps": int(Gbps(11)),
-        "AA_surplus_bps": int(Gbps(11)),
-        "WA_approved_bps": int(Gbps(11)),
-        "shard_key": "flipqos",
-        "node_counts": {
-            "EDGE": 1,
-            "AA": 2,
-            "WA": 2,
-            "CLIENT": 1,
-        },
-    }, **GenWorkloadStagesStatic(
-        AA_bps = int(Gbps(1)),
-        WA_bps = int(Gbps(1)),
-        AA_lb_policy = "ROUND_ROBIN",
-        WA_lb_policy = "ROUND_ROBIN",
-        run_dur = "150s",
-        enable_timeout = False,
-    ))
+    AA_approval = int(Gbps(4))
 
-    # "admission_controlled_envoy_groups": ["AA"],
-    kwargs_lr = dict({
-        "AA_lopri_is_longer": True,
-        "AA_approved_bps": int(Gbps(11)),
-        "AA_surplus_bps": int(Gbps(11)),
-        "WA_approved_bps": int(Gbps(11)),
-        "shard_key": "flipqos",
-        "node_counts": {
-            "EDGE": 1,
-            "AA": 2,
-            "WA": 2,
-            "CLIENT": 1,
-        },
-    }, **GenWorkloadStagesStatic(
-        AA_bps = int(Gbps(1)),
-        WA_bps = int(Gbps(1)),
-        AA_lb_policy = "LEAST_REQUEST",
-        WA_lb_policy = "LEAST_REQUEST",
-        run_dur = "150s",
-        enable_timeout = False,
-    ))
+    for WA_demand_gbps in [8, 10, 12, 14]:
+        WA_demand = int(Gbps(WA_demand_gbps))
 
-    configs["qflip_rr-nl"] = NoLimitConfig(**kwargs_rr)
-    configs["qflip_rr-hipri"] = FixedHostPatternHIPRIConfig(**kwargs_rr)
-    configs["qflip_rr-lopri"] = FixedHostPatternLOPRIConfig(**kwargs_rr)
-    configs["qflip_rr-flipflop"] = FixedHostPatternAlternatingQoSConfig(**kwargs_rr)
-    configs["qflip_rr-stableqos"] = FixedHostPatternStableQoSConfig(**kwargs_rr)
+        kwargs_rr = dict({
+            "AA_lopri_is_longer": True,
+            "AA_approved_bps": AA_approval,
+            "AA_surplus_bps": AA_approval,
+            "WA_approved_bps": WA_demand,
+            "shard_key": "flipqos",
+            "node_counts": {
+                "EDGE": 2,
+                "AA": 8,
+                "WA": 2,
+                "CLIENT": 2,
+            },
+            "admission_controlled_envoy_groups": ["AA"],
+        }, **GenWorkloadStagesStatic(
+            AA_bps = 2 * AA_approval,
+            WA_bps = WA_demand,
+            AA_lb_policy = "ROUND_ROBIN",
+            WA_lb_policy = "ROUND_ROBIN",
+            run_dur = "150s",
+            enable_timeout = True,
+        ))
 
-    configs["qflip_lr-nl"] = NoLimitConfig(**kwargs_lr)
-    configs["qflip_lr-hipri"] = FixedHostPatternHIPRIConfig(**kwargs_lr)
-    configs["qflip_lr-lopri"] = FixedHostPatternLOPRIConfig(**kwargs_lr)
-    configs["qflip_lr-flipflop"] = FixedHostPatternAlternatingQoSConfig(**kwargs_lr)
-    configs["qflip_lr-stableqos"] = FixedHostPatternStableQoSConfig(**kwargs_lr)
+        kwargs_lr = dict({
+            "AA_lopri_is_longer": True,
+            "AA_approved_bps": AA_approval,
+            "AA_surplus_bps": AA_approval,
+            "WA_approved_bps": WA_demand,
+            "shard_key": "flipqos",
+            "node_counts": {
+                "EDGE": 2,
+                "AA": 8,
+                "WA": 2,
+                "CLIENT": 2,
+            },
+            "admission_controlled_envoy_groups": ["AA"],
+        }, **GenWorkloadStagesStatic(
+            AA_bps = 2 * AA_approval,
+            WA_bps = WA_demand,
+            AA_lb_policy = "LEAST_REQUEST",
+            WA_lb_policy = "LEAST_REQUEST",
+            run_dur = "150s",
+            enable_timeout = True,
+        ))
+
+        prefix = "qflip_rr_bg" + str(WA_demand_gbps)
+
+        configs[prefix + "-nl"] = NoLimitConfig(**kwargs_rr)
+        configs[prefix + "-hipri"] = FixedHostPatternHIPRIConfig(**kwargs_rr)
+        configs[prefix + "-lopri"] = FixedHostPatternLOPRIConfig(**kwargs_rr)
+        configs[prefix + "-flipflop"] = FixedHostPatternAlternatingQoSConfig(**kwargs_rr)
+        configs[prefix + "-stableqos"] = FixedHostPatternStableQoSConfig(**kwargs_rr)
+
+        prefix = "qflip_lr_bg" + str(WA_demand_gbps)
+
+        configs[prefix + "-nl"] = NoLimitConfig(**kwargs_lr)
+        configs[prefix + "-hipri"] = FixedHostPatternHIPRIConfig(**kwargs_lr)
+        configs[prefix + "-lopri"] = FixedHostPatternLOPRIConfig(**kwargs_lr)
+        configs[prefix + "-flipflop"] = FixedHostPatternAlternatingQoSConfig(**kwargs_lr)
+        configs[prefix + "-stableqos"] = FixedHostPatternStableQoSConfig(**kwargs_lr)
 
 def AddConfigsTestAdmissionControl(configs):
     # for aa_bps in [int(Gbps(1)), int(Gbps(4)), int(Gbps(5)), int(Gbps(6)), int(Gbps(7)), int(Gbps(8)), int(Gbps(9))]:
