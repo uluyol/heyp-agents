@@ -20,6 +20,43 @@ SYS_LONG[["stableqos"]] <- "MixedStable"
 SYS_LONG[["hipri"]] <- "AllHIPRI"
 SYS_LONG[["lopri"]] <- "AllLOPRI"
 
+PlotLatencyCumCountsTo <- function(subset, output) {
+    if (nrow(subset) > 0) {
+        subset$Sys <- factor(subset$Sys, levels=c("NoLimit", "AllHIPRI", "MixedStable", "MixedFlipFlop", "AllLOPRI"))
+        subset$Y <- subset$CumNumSamples
+
+        pdf(output, height=2.5, width=5)
+        p <- ggplot(data=subset, aes(x=LatencyNanos / 1e6, y=Y, color=Sys, linetype=Sys)) +
+            geom_step(size=1) +
+            xlab("Latency (ms)") +
+            ylab("# of requests with latency < X") +
+            coord_cartesian(xlim=c(0, 350), expand=FALSE) +
+            theme_bw() +
+            guides(color=guide_legend(ncol=3), linetype=guide_legend(ncol=3)) +
+            theme(
+                legend.title=element_blank(),
+                legend.position="top",
+                legend.margin=margin(0, 0, 0, 0),
+                legend.box.margin=margin(-4, -4, -8, 0),
+                legend.background=element_rect(color="black", fill="white", linetype="blank", size=0),
+                legend.direction="horizontal",
+                legend.key=element_blank(),
+                legend.key.height=unit(11, "points"),
+                legend.key.width=unit(25, "points"),
+                legend.spacing.x=unit(1, "points"),
+                legend.spacing.y=unit(0, "points"),
+                legend.text=element_text(size=11, margin=margin(r=10)),
+                strip.background=element_rect(color="white", fill="white"),
+                strip.text=element_text(size=12),
+                plot.margin=unit(c(5.5, 8.5, 5.5, 5.5), "points"),
+                axis.text=element_text(color="black", size=11),
+                axis.title.y=element_text(size=12, margin=margin(0, 3, 0, 0)),
+                axis.title.x=element_text(size=12, margin=margin(3, 0, 0, 0)))
+        print(p)
+        .junk <- dev.off()
+    }
+}
+
 PlotLatencyCDFTo <- function(subset, output) {
     if (nrow(subset) > 0) {
         subset$Sys <- factor(subset$Sys, levels=c("NoLimit", "AllHIPRI", "MixedStable", "MixedFlipFlop", "AllLOPRI"))
@@ -122,7 +159,7 @@ ProcCfgGroup <- function(cfgGroup) {
         sys_name <- SYS_LONG[[gsub(".*-", "", procdir)]]
 
         latency.this <- read.csv(file.path(procdir, "cdf-per-instance.csv"), header=TRUE, stringsAsFactors=FALSE)
-        latency.this <- latency.this[latency.this$LatencyKind == "net", c("Group", "Instance", "Percentile", "LatencyNanos")]
+        latency.this <- latency.this[latency.this$LatencyKind == "net", c("Group", "Instance", "Percentile", "CumNumSamples", "LatencyNanos")]
         latency.this$Sys <- rep.int(sys_name, nrow(latency.this))
 
         latency <- rbind(latency, latency.this)
@@ -137,6 +174,9 @@ ProcCfgGroup <- function(cfgGroup) {
 
     for (group in unique(latency$Group)) {
         for (inst in unique(latency$Instance)) {
+            PlotLatencyCumCountsTo(
+                latency[latency$Group == group & latency$Instance == inst,],
+                file.path(summarydir, paste0(cfgGroup, "-counts-", group, "_", inst, ".pdf")))
             PlotLatencyCDFTo(
                 latency[latency$Group == group & latency$Instance == inst,],
                 file.path(summarydir, paste0(cfgGroup, "-cdf-", group, "_", inst, ".pdf")))
