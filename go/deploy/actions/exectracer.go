@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"context"
 	"io"
 	"os"
 	"os/exec"
@@ -34,6 +35,11 @@ func (c *TracingCmd) logRun() {
 		}
 		c.logf("%s", sb.String())
 	}
+}
+
+func TracingCommandContext(ctx context.Context, logf func(format string, args ...interface{}),
+	name string, args ...string) *TracingCmd {
+	return &TracingCmd{Cmd: exec.CommandContext(ctx, name, args...), logf: logf}
 }
 
 func TracingCommand(logf func(format string, args ...interface{}),

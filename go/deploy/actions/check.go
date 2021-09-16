@@ -2,6 +2,7 @@ package actions
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -192,6 +193,7 @@ func CheckNodeConnectivity(c *pb.DeploymentConfig) error {
 	}
 
 	var eg multierrgroup.Group
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 
 	for _, n := range c.Nodes {
 		n := n
@@ -210,7 +212,7 @@ func CheckNodeConnectivity(c *pb.DeploymentConfig) error {
 				return err
 			}
 
-			cmd := TracingCommand(
+			cmd := TracingCommandContext(ctx,
 				LogWithPrefix("check-node-connectivity: "),
 				"ssh", n.GetExternalAddr(), "bash",
 			)
@@ -225,11 +227,7 @@ func CheckNodeConnectivity(c *pb.DeploymentConfig) error {
 		})
 	}
 
-	if err := eg.Wait(); err != nil {
-		return err
-	}
-
-	return nil
+	return eg.Wait()
 }
 
 func KillIPerf(c *pb.DeploymentConfig) error {
