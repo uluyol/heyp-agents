@@ -19,6 +19,7 @@ class HostEnforcer {
 
   virtual void EnforceAllocs(const FlowStateProvider& flow_state_provider,
                              const proto::AllocBundle& bundle) = 0;
+  virtual void LogState() = 0;
 
   virtual IsLopriFunc GetIsLopriFunc() const = 0;
 };
@@ -29,6 +30,7 @@ class NopHostEnforcer : public HostEnforcer {
 
   void EnforceAllocs(const FlowStateProvider& flow_state_provider,
                      const proto::AllocBundle& bundle) override;
+  void LogState() override;
 
   IsLopriFunc GetIsLopriFunc() const override;
 

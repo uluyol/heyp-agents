@@ -151,6 +151,8 @@ class LinuxHostEnforcerImpl : public LinuxHostEnforcer {
   void EnforceAllocs(const FlowStateProvider& flow_state_provider,
                      const proto::AllocBundle& bundle) override;
 
+  void LogState() override;
+
   IsLopriFunc GetIsLopriFunc() const override;
 
  private:
@@ -633,6 +635,10 @@ void LinuxHostEnforcerImpl::EnforceAllocs(const FlowStateProvider& flow_state_pr
                           st);
     }
   }
+}
+
+void LinuxHostEnforcerImpl::LogState() {
+  MutexLockWarnLong l(&mu_, absl::Seconds(1), &logger_, "mu_");
 
   if (debug_logger_.should_log()) {
     SPDLOG_LOGGER_INFO(&logger_, "debug logging: gather iptables state");

@@ -11,6 +11,10 @@ void NopHostEnforcer::EnforceAllocs(const FlowStateProvider& flow_state_provider
   SPDLOG_LOGGER_INFO(&logger_, "got alloc to enforce (ignored)");
 }
 
+void NopHostEnforcer::LogState() {
+  SPDLOG_LOGGER_INFO(&logger_, "call to log state (ignored)");
+}
+
 IsLopriFunc NopHostEnforcer::GetIsLopriFunc() const {
   return [](const proto::FlowMarker& flow, spdlog::logger* logger) { return false; };
 }

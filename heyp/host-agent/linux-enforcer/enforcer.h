@@ -70,10 +70,11 @@ class LinuxHostEnforcer : public HostEnforcer {
 
   // Inherited from HostEnforcer
   //
-  // virtual bool IsLopri(const proto::FlowMarker& flow) = 0;
-  //
   // void EnforceAllocs(const FlowStateProvider& flow_state_provider,
   //                   const proto::AllocBundle& bundle) = 0;
+  // virtual void LogState() = 0;
+  //
+  // virtual IsLopriFunc GetIsLopriFunc() const = 0;
 };
 
 }  // namespace heyp

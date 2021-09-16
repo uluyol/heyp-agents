@@ -57,13 +57,34 @@ bool FlaggedOrWaitFor(absl::Duration dur, std::atomic<bool>* exit_flag) {
   return exit_flag->load();
 }
 
+class LogTime {
+ public:
+  LogTime() : t_(absl::Now()) {}
+
+  absl::Time Get() {
+    absl::MutexLock l(&mu_);
+    return t_;
+  }
+
+  void UpdateToNow() {
+    auto now = absl::Now();
+    absl::MutexLock l(&mu_);
+    t_ = now;
+  }
+
+ private:
+  absl::Mutex mu_;
+  absl::Time t_ ABSL_GUARDED_BY(mu_);
+};
+
 void CollectStats(absl::Duration period, bool force_run,
                   FlowStateReporter* flow_state_reporter, const DCMapper* dc_mapper,
                   uint64_t host_id, std::string job_name,
                   FlowStateProvider* flow_state_provider,
                   FlowAggregator* socket_to_host_aggregator,
                   NdjsonLogger* flow_state_logger, HostEnforcer* enforcer,
-                  std::atomic<bool>* should_exit) {
+                  std::atomic<bool>* should_exit,
+                  std::shared_ptr<LogTime> last_enforcer_log_time) {
   auto start_time = std::chrono::steady_clock::now();
   auto logger = MakeLogger("collect-stats");
 
@@ -130,6 +151,12 @@ void CollectStats(absl::Duration period, bool force_run,
     } else {
       SPDLOG_LOGGER_INFO(&logger, "null log: don't log flow infos to disk");
     }
+
+    // Step 4: log enforcer state (if not logged for some time)
+    if (last_enforcer_log_time->Get() + absl::Seconds(15) < absl::Now()) {
+      enforcer->LogState();
+      last_enforcer_log_time->UpdateToNow();
+    }
   }
 }
 
@@ -166,10 +193,15 @@ void SendInfo(absl::Duration inform_period, uint64_t host_id,
 }
 
 void EnforceAlloc(const FlowStateProvider* flow_state_provider, HostEnforcer* enforcer,
-                  std::atomic<bool>* should_exit, ClusterAgentChannel* channel) {
+                  std::atomic<bool>* should_exit, ClusterAgentChannel* channel,
+                  std::shared_ptr<LogTime> last_enforcer_log_time) {
   auto logger = MakeLogger("enforce-alloc");
   SPDLOG_LOGGER_INFO(&logger, "begin loop");
   absl::Cleanup loop_done = [&logger] { SPDLOG_LOGGER_INFO(&logger, "end loop"); };
+
+  // Init: log enforcer state
+  enforcer->LogState();
+  last_enforcer_log_time->UpdateToNow();
 
   while (!should_exit->load()) {
     // Step 1: wait for allocation from cluster agent.
@@ -183,12 +215,18 @@ void EnforceAlloc(const FlowStateProvider* flow_state_provider, HostEnforcer* en
                        bundle.flow_allocs_size());
     // Step 2: enforce the new allocation.
     enforcer->EnforceAllocs(*flow_state_provider, bundle);
+
+    // Step 3: log enforcer state
+    enforcer->LogState();
+    last_enforcer_log_time->UpdateToNow();
   }
 }
 
 }  // namespace
 
 void HostDaemon::Run(std::atomic<bool>* should_exit) {
+  auto last_enforcer_log_time = std::make_shared<LogTime>();
+
   // Make sure CollectStats has run at least once before we start reporting anything to
   // the cluster agent or start enforcement.
   {
@@ -197,19 +235,20 @@ void HostDaemon::Run(std::atomic<bool>* should_exit) {
     CollectStats(absl::ZeroDuration(), true, flow_state_reporter_, dc_mapper_,
                  config_.host_id, config_.job_name, flow_state_provider_,
                  socket_to_host_aggregator_.get(), &empty_logger, enforcer_,
-                 &once_should_exit);
+                 &once_should_exit, last_enforcer_log_time);
   }
 
-  collect_stats_thread_ = std::thread(
-      CollectStats, config_.collect_stats_period, false, flow_state_reporter_, dc_mapper_,
-      config_.host_id, config_.job_name, flow_state_provider_,
-      socket_to_host_aggregator_.get(), &flow_state_logger_, enforcer_, should_exit);
+  collect_stats_thread_ =
+      std::thread(CollectStats, config_.collect_stats_period, false, flow_state_reporter_,
+                  dc_mapper_, config_.host_id, config_.job_name, flow_state_provider_,
+                  socket_to_host_aggregator_.get(), &flow_state_logger_, enforcer_,
+                  should_exit, last_enforcer_log_time);
 
   info_thread_ = std::thread(SendInfo, config_.inform_period, config_.host_id,
                              socket_to_host_aggregator_.get(), should_exit, &channel_);
 
-  enforcer_thread_ =
-      std::thread(EnforceAlloc, flow_state_provider_, enforcer_, should_exit, &channel_);
+  enforcer_thread_ = std::thread(EnforceAlloc, flow_state_provider_, enforcer_,
+                                 should_exit, &channel_, last_enforcer_log_time);
 }
 
 HostDaemon::~HostDaemon() {

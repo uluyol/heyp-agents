@@ -94,6 +94,8 @@ class MockHostEnforcer : public HostEnforcer {
                const proto::AllocBundle& bundle),
               (override));
 
+  void LogState() override {}
+
   IsLopriFunc GetIsLopriFunc() const override {
     return [](const proto::FlowMarker&, spdlog::logger*) { return false; };
   }
