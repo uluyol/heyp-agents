@@ -2,6 +2,7 @@
 #define HEYP_HOST_AGENT_SIMULATED_WAN_DB_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -16,8 +17,8 @@ class SimulatedWanDB {
   explicit SimulatedWanDB(const proto::SimulatedWanConfig& config);
 
   struct QoSNetemConfig {
-    proto::NetemConfig hipri;
-    proto::NetemConfig lopri;
+    std::optional<proto::NetemConfig> hipri;
+    std::optional<proto::NetemConfig> lopri;
 
     std::string ToString() const;
   };

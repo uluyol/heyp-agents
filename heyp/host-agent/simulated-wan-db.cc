@@ -18,10 +18,12 @@ static std::string_view InternString(const std::string& s,
 SimulatedWanDB::SimulatedWanDB(const proto::SimulatedWanConfig& config) {
   for (auto pair : config.dc_pairs()) {
     QoSNetemConfig c;
-    c.hipri = pair.netem();
+    if (pair.has_netem()) {
+      c.hipri = pair.netem();
+    }
     if (pair.has_netem_lopri()) {
       c.lopri = pair.netem_lopri();
-    } else {
+    } else if (pair.has_netem()) {
       c.lopri = c.hipri;
     }
     netem_configs_[{InternString(pair.src_dc(), &dc_names_),
@@ -39,8 +41,9 @@ const SimulatedWanDB::QoSNetemConfig* SimulatedWanDB::GetNetem(
 }
 
 std::string SimulatedWanDB::QoSNetemConfig::ToString() const {
-  return absl::StrCat("{ hipri = ", hipri.ShortDebugString(),
-                      ", lopri = ", lopri.ShortDebugString(), " }");
+  return absl::StrCat(
+      "{ hipri = ", hipri.has_value() ? hipri->ShortDebugString() : "unset",
+      ", lopri = ", lopri.has_value() ? lopri->ShortDebugString() : "unset", " }");
 }
 
 }  // namespace heyp

@@ -61,12 +61,19 @@ bool operator==(const FlowNetemConfig& lhs, const FlowNetemConfig& rhs) {
   if (!IsSameFlow(lhs.flow, rhs.flow)) {
     return false;
   }
-  if (!google::protobuf::util::MessageDifferencer::Equivalent(lhs.netem.hipri,
-                                                              rhs.netem.hipri)) {
+
+  auto eq_netem = [](const std::optional<proto::NetemConfig>& lhs,
+                     const std::optional<proto::NetemConfig>& rhs) {
+    if (lhs.has_value() && rhs.has_value()) {
+      return google::protobuf::util::MessageDifferencer::Equivalent(*lhs, *rhs);
+    }
+    return lhs.has_value() == rhs.has_value();
+  };
+
+  if (!eq_netem(lhs.netem.hipri, rhs.netem.hipri)) {
     return false;
   }
-  if (!google::protobuf::util::MessageDifferencer::Equivalent(lhs.netem.lopri,
-                                                              rhs.netem.lopri)) {
+  if (!eq_netem(lhs.netem.lopri, rhs.netem.lopri)) {
     return false;
   }
   if (lhs.matched_flows.size() != rhs.matched_flows.size()) {
@@ -245,6 +252,14 @@ absl::Status LinuxHostEnforcerImpl::ResetDeviceConfig() {
   return absl::OkStatus();
 }
 
+template <typename T>
+const T* OptionalToPointer(const std::optional<T>& o) {
+  if (o.has_value()) {
+    return &o.value();
+  }
+  return nullptr;
+}
+
 absl::Status LinuxHostEnforcerImpl::InitSimulatedWan(std::vector<FlowNetemConfig> configs,
                                                      bool contains_all_flows) {
   MutexLockWarnLong l(&mu_, absl::Seconds(1), &logger_, "mu_");
@@ -263,14 +278,14 @@ absl::Status LinuxHostEnforcerImpl::InitSimulatedWan(std::vector<FlowNetemConfig
     FlowSys* sys = GetOrCreateSysInfo(c.flow);
     StageTrafficControlForFlow({
         .rate_limit_bps = kMaxBandwidthBps,
-        .netem_config = &c.netem.hipri,
+        .netem_config = OptionalToPointer(c.netem.hipri),
         .sys = &sys->hipri,
         .create_count = &num_created_classes,
         .update_count = &num_updated_classes,
     });
     StageTrafficControlForFlow({
         .rate_limit_bps = kMaxBandwidthBps,
-        .netem_config = &c.netem.lopri,
+        .netem_config = OptionalToPointer(c.netem.lopri),
         .sys = &sys->lopri,
         .create_count = &num_created_classes,
         .update_count = &num_updated_classes,
