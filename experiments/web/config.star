@@ -576,6 +576,7 @@ def GenConfig(
                 "ss_binary_name": "ss",
             },
             "enforcer": {
+                # debug_log_dir is automatically filled
                 "limit_hipri": limit_hipri,
                 "limit_lopri": limit_lopri,
                 "pacing_burst_bytes": 0,
