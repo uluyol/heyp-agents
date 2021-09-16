@@ -93,7 +93,7 @@ void FlowTracker::FinalizeFlows(absl::Time timestamp,
   MutexLockWarnLong l(&mu_, absl::Seconds(1), &logger_, "mu_");
   for (const Update& u : flow_update_batch) {
     if (!active_flows_.contains(u.flow)) {
-      SPDLOG_LOGGER_INFO(&logger_, "missing active flow: {}", u.flow.ShortDebugString());
+      SPDLOG_LOGGER_DEBUG(&logger_, "missing active flow: {}", u.flow.ShortDebugString());
       active_flows_.emplace(u.flow, CreateLeafState(u.flow, ++next_seqnum_));
     }
     LeafState& state = active_flows_.at(u.flow);
@@ -213,10 +213,10 @@ absl::Status ParseLine(uint64_t host_id, absl::string_view line,
   }
 
   if (!found_cum_usage_bytes && !is_estab) {
-    SPDLOG_LOGGER_WARN(logger, "no 'bytes_sent' field: {}", line);
+    SPDLOG_LOGGER_INFO(logger, "no 'bytes_sent' field: {}", line);
   }
   if (!found_usage_bps && !is_unconn) {
-    SPDLOG_LOGGER_WARN(logger, "no 'send' bps field: {}", line);
+    SPDLOG_LOGGER_INFO(logger, "no 'send' bps field: {}", line);
   }
 
   return absl::OkStatus();
