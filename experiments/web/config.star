@@ -1165,7 +1165,7 @@ def AddConfigsIncreasing(configs):
 def AddConfigsFlipQoS(configs):
     AA_approval = int(Gbps(4))
 
-    for WA_demand_gbps in [8, 10, 12, 14]:
+    for WA_demand_gbps in [6, 8, 10, 12]:
         WA_demand = int(Gbps(WA_demand_gbps))
 
         kwargs_rr = dict({
