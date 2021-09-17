@@ -8,13 +8,15 @@
 #include <vector>
 
 #include "absl/container/flat_hash_map.h"
+#include "heyp/flows/dc-mapper.h"
 #include "heyp/proto/config.pb.h"
 
 namespace heyp {
 
 class SimulatedWanDB {
  public:
-  explicit SimulatedWanDB(const proto::SimulatedWanConfig& config);
+  explicit SimulatedWanDB(const proto::SimulatedWanConfig& config,
+                          const StaticDCMapper& dc_mapper);
 
   struct QoSNetemConfig {
     std::optional<proto::NetemConfig> hipri;

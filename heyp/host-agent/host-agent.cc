@@ -141,7 +141,8 @@ absl::Status Run(const proto::HostAgentConfig& c) {
     }
 
     st = e->InitSimulatedWan(
-        AllNetemConfigs(dc_mapper, SimulatedWanDB(c.simulated_wan()), my_dc, host_id),
+        AllNetemConfigs(dc_mapper, SimulatedWanDB(c.simulated_wan(), dc_mapper), my_dc,
+                        host_id),
         /*contains_all_flows=*/true);
     if (!st.ok()) {
       SPDLOG_LOGGER_ERROR(&logger, "failed to init simulated WAN: {}", st);

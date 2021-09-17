@@ -15,7 +15,8 @@ static std::string_view InternString(const std::string& s,
   return *table->back();
 }
 
-SimulatedWanDB::SimulatedWanDB(const proto::SimulatedWanConfig& config) {
+SimulatedWanDB::SimulatedWanDB(const proto::SimulatedWanConfig& config,
+                               const StaticDCMapper& dc_mapper) {
   for (auto pair : config.dc_pairs()) {
     QoSNetemConfig c;
     if (pair.has_netem()) {
@@ -28,6 +29,16 @@ SimulatedWanDB::SimulatedWanDB(const proto::SimulatedWanConfig& config) {
     }
     netem_configs_[{InternString(pair.src_dc(), &dc_names_),
                     InternString(pair.dst_dc(), &dc_names_)}] = c;
+  }
+
+  for (const std::string& src_dc_str : dc_mapper.AllDCs()) {
+    std::string_view src_dc = InternString(src_dc_str, &dc_names_);
+    for (const std::string& dst_dc : dc_mapper.AllDCs()) {
+      auto key = std::make_pair(src_dc, InternString(dst_dc, &dc_names_));
+      if (netem_configs_.find(key) == netem_configs_.end()) {
+        netem_configs_[key] = QoSNetemConfig();
+      }
+    }
   }
 }
 

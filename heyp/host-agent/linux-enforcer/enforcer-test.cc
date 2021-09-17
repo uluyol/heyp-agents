@@ -18,17 +18,18 @@ TEST(AllNetemConfigs, Basic) {
                         }
                       )")),
                       SimulatedWanDB(ParseTextProto<proto::SimulatedWanConfig>(R"(
-                        dc_pairs {
-                          src_dc: "chicago"
-                          dst_dc: "sanjose"
-                          netem { delay_ms: 53 delay_jitter_ms: 5 }
-                        }
-                        dc_pairs {
-                          src_dc: "chicago"
-                          dst_dc: "newyork"
-                          netem { delay_ms: 25 delay_jitter_ms: 4 }
-                        }
-                      )")),
+                                       dc_pairs {
+                                         src_dc: "chicago"
+                                         dst_dc: "sanjose"
+                                         netem { delay_ms: 53 delay_jitter_ms: 5 }
+                                       }
+                                       dc_pairs {
+                                         src_dc: "chicago"
+                                         dst_dc: "newyork"
+                                         netem { delay_ms: 25 delay_jitter_ms: 4 }
+                                       }
+                                     )"),
+                                     StaticDCMapper({})),
                       "chicago", 1234);
 
   EXPECT_THAT(configs, testing::UnorderedElementsAre(

@@ -103,6 +103,7 @@ cc_library(
     srcs = ["simulated-wan-db.cc"],
     hdrs = ["simulated-wan-db.h"],
     deps = [
+        "//heyp/flows:dc-mapper",
         "//heyp/proto:config_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/strings",
