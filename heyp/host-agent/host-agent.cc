@@ -166,16 +166,18 @@ absl::Status Run(const proto::HostAgentConfig& c) {
     return absl::DeadlineExceededError("failed to connect to cluster agent");
   }
   SPDLOG_LOGGER_INFO(&logger, "creating daemon");
-  HostDaemon daemon(channel,
-                    {
-                        .job_name = c.job_name(),
-                        .host_id = host_id,
-                        .inform_period = *inform_period_or,
-                        .collect_stats_period = *collect_stats_period_or,
-                        .stats_log_file = c.daemon().stats_log_file(),
-                    },
-                    &dc_mapper, &flow_tracker, std::move(flow_aggregator),
-                    flow_state_reporter.get(), enforcer.get());
+  HostDaemon daemon(
+      channel,
+      {
+          .job_name = c.job_name(),
+          .host_id = host_id,
+          .inform_period = *inform_period_or,
+          .collect_stats_period = *collect_stats_period_or,
+          .stats_log_file = c.daemon().stats_log_file(),
+          .fine_grained_stats_log_file = c.daemon().fine_grained_stats_log_file(),
+      },
+      &dc_mapper, &flow_tracker, std::move(flow_aggregator), flow_state_reporter.get(),
+      enforcer.get());
   SPDLOG_LOGGER_INFO(&logger, "running daemon main loop");
   daemon.Run(&should_exit_flag);
   SPDLOG_LOGGER_INFO(&logger, "exited daemon main loop");

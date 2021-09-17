@@ -98,8 +98,9 @@ message DeploymentConfig {
   // - host_agent_template.daemon.cluster_agent_addr
   // - host_agent_template.dc_mapper
   optional HostAgentConfig host_agent_template = 11;
+  optional bool host_agent_log_fine_grained_stats = 12;
 
   // Workloads to run (all are run in parallel).
-  repeated DeployedTestLopriInstance testlopri_instances = 12;
-  optional DeployedFortioConfig fortio = 13;
+  repeated DeployedTestLopriInstance testlopri_instances = 13;
+  optional DeployedFortioConfig fortio = 14;
 }

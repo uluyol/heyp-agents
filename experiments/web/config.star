@@ -406,7 +406,8 @@ def GenConfig(
         envoy_group_names = None,
         admission_controlled_envoy_groups = list(),
         shard_key = "",
-        node_counts = _DEFAULT_NODE_COUNTS):
+        node_counts = _DEFAULT_NODE_COUNTS,
+        host_agent_log_fine_grained_stats = False):
     nodes = []
     clusters = {
         "EDGE": {
@@ -587,6 +588,9 @@ def GenConfig(
                 # cluster_agent_addr is automatically filled
                 "cluster_agent_connection_timeout_dur": "10s",
                 # stats_log_file is automatically filled
+                #
+                # fine_grained_stats_log_file is automaticalled filled if
+                # host_agent_log_fine_grained_stats is set.
             },
             # dc_mapper is automatically filled
             "simulated_wan": {
@@ -644,6 +648,7 @@ def GenConfig(
                 ],
             },
         },
+        host_agent_log_fine_grained_stats = host_agent_log_fine_grained_stats,
         fortio = {
             "envoy_admin_port": envoy_admin_port,
             "envoy_num_threads": 10,
@@ -1162,6 +1167,38 @@ def AddConfigsIncreasing(configs):
     configs[prefix + "-qdlrl"] = QoSDowngradeAndLimitLOPRIConfig(**kwargs)
     configs[prefix + "-rl"] = RateLimitConfig(**kwargs)
 
+def AddConfigsLossTrainingData(configs):
+    # "AA_lopri_is_longer": True,
+    # "admission_controlled_envoy_groups": ["AA"],
+    kwargs = dict({
+        "AA_approved_bps": int(Gbps(2)),
+        "AA_surplus_bps": int(Gbps(10)),
+        "WA_approved_bps": int(Gbps(12)),
+        "shard_key": "inc",
+        "host_agent_log_fine_grained_stats": True,
+    }, **GenWorkloadStagesIncreasing(
+        AA_bps = int(Gbps(16)),
+        num_AA_backends = 1,
+        WA_bps_min = int(Gbps(4)),
+        WA_bps_max = int(Gbps(12)),
+        enable_timeout = False,
+    ))
+    # kwargs = dict({
+    #     "AA_approved_bps": int(Gbps(8)),
+    #     "AA_surplus_bps": int(Gbps(10)),
+    #     "WA_approved_bps": int(Gbps(6)),
+    #     "shard_key": "inc",
+    # }, **GenWorkloadStagesIncreasing(
+    #     AA_bps = int(Gbps(18)),
+    #     num_AA_backends = 5,
+    #     WA_bps_min = int(Gbps(2)),
+    #     WA_bps_max = int(Gbps(6)),
+    # ))
+
+    prefix = "ltd_inc"
+    configs[prefix + "-qd"] = QoSDowngradeConfig(**kwargs)
+    configs[prefix + "-qdlrl"] = QoSDowngradeAndLimitLOPRIConfig(**kwargs)
+
 def AddConfigsFlipQoS(configs):
     AA_approval = int(Gbps(4))
 
@@ -1260,6 +1297,7 @@ def GenConfigs():
         "cmpmixed": AddConfigsMixedVersusFullDowngrade,
         "demandsuppression": AddConfigsDemandSuppression,
         "inc": AddConfigsIncreasing,
+        "ltd": AddConfigsLossTrainingData,
         "qflip": AddConfigsFlipQoS,
         "sweep": AddConfigsSweep,
         "tac": AddConfigsTestAdmissionControl,

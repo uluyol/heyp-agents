@@ -45,7 +45,15 @@ message HostDaemonConfig {
   optional string inform_period_dur = 2 [default = "2s"];
   optional string cluster_agent_addr = 3;
   optional string cluster_agent_connection_timeout_dur = 4 [default = "10s"];
-  optional string stats_log_file = 5; // if non-empty, will log here once per collect_stats_period
+
+  // Log files - will record data once per collect_stats_period.
+  //
+  // - stats_log_file: src/dst host-level flow data
+  // - fine_grained_stats_log_file: fine grained flow data
+  //
+  // If unspecified, data will not be logged.
+  optional string stats_log_file = 5;
+  optional string fine_grained_stats_log_file = 6;
 }
 
 message DCMapping {

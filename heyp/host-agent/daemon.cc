@@ -20,6 +20,7 @@ HostDaemon::HostDaemon(const std::shared_ptr<grpc::Channel>& channel, Config con
       socket_to_host_aggregator_(std::move(socket_to_host_aggregator)),
       flow_state_reporter_(flow_state_reporter),
       flow_state_logger_(-1),
+      fine_grained_flow_state_logger_(-1),
       enforcer_(enforcer),
       channel_(proto::ClusterAgent::NewStub(channel)) {
   if (!config.stats_log_file.empty()) {
@@ -27,6 +28,15 @@ HostDaemon::HostDaemon(const std::shared_ptr<grpc::Channel>& channel, Config con
     if (!st.ok()) {
       auto logger = MakeLogger("host-daemon");
       SPDLOG_LOGGER_ERROR(&logger, "failed to init flow_state_logger_: {}", st);
+    }
+  }
+  if (!config.fine_grained_stats_log_file.empty()) {
+    absl::Status st =
+        fine_grained_flow_state_logger_.Init(config.fine_grained_stats_log_file);
+    if (!st.ok()) {
+      auto logger = MakeLogger("host-daemon");
+      SPDLOG_LOGGER_ERROR(&logger, "failed to init fine_grained_flow_state_logger_: {}",
+                          st);
     }
   }
 }
@@ -57,6 +67,8 @@ bool FlaggedOrWaitFor(absl::Duration dur, std::atomic<bool>* exit_flag) {
   return exit_flag->load();
 }
 
+}  // namespace
+
 class LogTime {
  public:
   LogTime() : t_(absl::Now()) {}
@@ -77,14 +89,11 @@ class LogTime {
   absl::Time t_ ABSL_GUARDED_BY(mu_);
 };
 
-void CollectStats(absl::Duration period, bool force_run,
-                  FlowStateReporter* flow_state_reporter, const DCMapper* dc_mapper,
-                  uint64_t host_id, std::string job_name,
-                  FlowStateProvider* flow_state_provider,
-                  FlowAggregator* socket_to_host_aggregator,
-                  NdjsonLogger* flow_state_logger, HostEnforcer* enforcer,
-                  std::atomic<bool>* should_exit,
-                  std::shared_ptr<LogTime> last_enforcer_log_time) {
+void HostDaemon::CollectStats(absl::Duration period, bool force_run,
+                              NdjsonLogger* flow_state_logger,
+                              NdjsonLogger* fine_grained_flow_state_logger,
+                              std::atomic<bool>* should_exit,
+                              std::shared_ptr<LogTime> last_enforcer_log_time) {
   auto start_time = std::chrono::steady_clock::now();
   auto logger = MakeLogger("collect-stats");
 
@@ -109,8 +118,8 @@ void CollectStats(absl::Duration period, bool force_run,
 
     force_run = false;
     // Step 1: refresh stats on all socket-level flows.
-    IsLopriFunc is_lopri = enforcer->GetIsLopriFunc();
-    absl::Status report_status = flow_state_reporter->ReportState(is_lopri);
+    IsLopriFunc is_lopri = enforcer_->GetIsLopriFunc();
+    absl::Status report_status = flow_state_reporter_->ReportState(is_lopri);
     if (!report_status.ok()) {
       SPDLOG_LOGGER_ERROR(&logger, "failed to report flow state: {}", report_status);
       continue;
@@ -120,26 +129,36 @@ void CollectStats(absl::Duration period, bool force_run,
     //         with src / dst DC.
     proto::InfoBundle bundle;
     SPDLOG_LOGGER_INFO(&logger, "collect bundle");
-    bundle.mutable_bundler()->set_host_id(host_id);
+    bundle.mutable_bundler()->set_host_id(config_.host_id);
     *bundle.mutable_timestamp() = ToProtoTimestamp(absl::Now());
-    flow_state_provider->ForEachActiveFlow(
-        [&bundle, dc_mapper, &job_name](absl::Time time, const proto::FlowInfo& info) {
+    flow_state_provider_->ForEachActiveFlow(
+        [&bundle, this](absl::Time time, const proto::FlowInfo& info) {
           proto::FlowInfo send_info = info;
-          if (WithDCsAndJob(info.flow(), *dc_mapper, job_name,
+          if (WithDCsAndJob(info.flow(), *dc_mapper_, config_.job_name,
                             send_info.mutable_flow())) {
             *bundle.add_flow_infos() = std::move(send_info);
           }
         });
 
+    // Step 2.5: log all fine-grained flows on the host, if requested
+    if (fine_grained_flow_state_logger->should_log()) {
+      SPDLOG_LOGGER_INFO(&logger, "log fine-grained flow infos to disk");
+      absl::Status log_status = fine_grained_flow_state_logger->Write(bundle);
+      if (!log_status.ok()) {
+        SPDLOG_LOGGER_WARN(&logger, "failed to log fine-grained flow infos: {}",
+                           log_status);
+      }
+    }
+
     // Step 3: aggregate socket-level flows to host-level.
     SPDLOG_LOGGER_INFO(&logger, "aggregate info to host-level");
-    socket_to_host_aggregator->Update(bundle);
+    socket_to_host_aggregator_->Update(bundle);
 
-    // Step 3.5: log all src/dst DC-level flows on the flows, if requested.
+    // Step 3.5: log all src/dst DC-level flows on the host, if requested.
     if (flow_state_logger->should_log()) {
       SPDLOG_LOGGER_INFO(&logger, "log flow infos to disk");
       bundle.clear_flow_infos();
-      socket_to_host_aggregator->ForEachAgg(
+      socket_to_host_aggregator_->ForEachAgg(
           [&bundle](absl::Time time, const proto::AggInfo& info) {
             *bundle.add_flow_infos() = info.parent();
           });
@@ -154,59 +173,56 @@ void CollectStats(absl::Duration period, bool force_run,
 
     // Step 4: log enforcer state (if not logged for some time)
     if (last_enforcer_log_time->Get() + absl::Seconds(15) < absl::Now()) {
-      enforcer->LogState();
+      enforcer_->LogState();
       last_enforcer_log_time->UpdateToNow();
     }
   }
 }
 
-void SendInfo(absl::Duration inform_period, uint64_t host_id,
-              FlowAggregator* socket_to_host_aggregator, std::atomic<bool>* should_exit,
-              ClusterAgentChannel* channel) {
+void HostDaemon::SendInfos(std::atomic<bool>* should_exit) {
   auto logger = MakeLogger("send-info");
   SPDLOG_LOGGER_INFO(&logger, "begin loop");
   absl::Cleanup loop_done = [&logger] { SPDLOG_LOGGER_INFO(&logger, "end loop"); };
 
   do {
-    // Step 4: collect a bundle of all src/dst DC-level flows on the host.
+    // Step 1: collect a bundle of all src/dst DC-level flows on the host.
     proto::InfoBundle bundle;
-    bundle.mutable_bundler()->set_host_id(host_id);
+    bundle.mutable_bundler()->set_host_id(config_.host_id);
     *bundle.mutable_timestamp() = ToProtoTimestamp(absl::Now());
 
-    socket_to_host_aggregator->ForEachAgg(
+    socket_to_host_aggregator_->ForEachAgg(
         [&bundle](absl::Time time, const proto::AggInfo& info) {
           *bundle.add_flow_infos() = info.parent();
         });
 
-    // Step 5: send to cluster agent.
+    // Step 2: send to cluster agent.
     SPDLOG_LOGGER_INFO(&logger, "sending info bundle to cluster agent with {} FGs",
                        bundle.flow_infos_size());
-    if (auto st = channel->Write(bundle); !st.ok()) {
+    if (auto st = channel_.Write(bundle); !st.ok()) {
       SPDLOG_LOGGER_WARN(&logger,
                          "failed to send info bundle to cluster agent with {} FGs: {}",
                          bundle.flow_infos_size(), st.error_message());
     }
-  } while (!FlaggedOrWaitFor(inform_period, should_exit));
+  } while (!FlaggedOrWaitFor(config_.inform_period, should_exit));
 
-  channel->WritesDone();
-  channel->TryCancel();
+  channel_.WritesDone();
+  channel_.TryCancel();
 }
 
-void EnforceAlloc(const FlowStateProvider* flow_state_provider, HostEnforcer* enforcer,
-                  std::atomic<bool>* should_exit, ClusterAgentChannel* channel,
-                  std::shared_ptr<LogTime> last_enforcer_log_time) {
+void HostDaemon::EnforceAllocs(std::atomic<bool>* should_exit,
+                               std::shared_ptr<LogTime> last_enforcer_log_time) {
   auto logger = MakeLogger("enforce-alloc");
   SPDLOG_LOGGER_INFO(&logger, "begin loop");
   absl::Cleanup loop_done = [&logger] { SPDLOG_LOGGER_INFO(&logger, "end loop"); };
 
   // Init: log enforcer state
-  enforcer->LogState();
+  enforcer_->LogState();
   last_enforcer_log_time->UpdateToNow();
 
   while (!should_exit->load()) {
     // Step 1: wait for allocation from cluster agent.
     proto::AllocBundle bundle;
-    if (auto st = channel->Read(&bundle); !st.ok()) {
+    if (auto st = channel_.Read(&bundle); !st.ok()) {
       SPDLOG_LOGGER_WARN(&logger, "failed to read alloc bundle: {}", st.error_message());
       continue;
     }
@@ -214,15 +230,13 @@ void EnforceAlloc(const FlowStateProvider* flow_state_provider, HostEnforcer* en
     SPDLOG_LOGGER_INFO(&logger, "got alloc bundle from cluster agent for {} FGs",
                        bundle.flow_allocs_size());
     // Step 2: enforce the new allocation.
-    enforcer->EnforceAllocs(*flow_state_provider, bundle);
+    enforcer_->EnforceAllocs(*flow_state_provider_, bundle);
 
     // Step 3: log enforcer state
-    enforcer->LogState();
+    enforcer_->LogState();
     last_enforcer_log_time->UpdateToNow();
   }
 }
-
-}  // namespace
 
 void HostDaemon::Run(std::atomic<bool>* should_exit) {
   auto last_enforcer_log_time = std::make_shared<LogTime>();
@@ -232,23 +246,17 @@ void HostDaemon::Run(std::atomic<bool>* should_exit) {
   {
     NdjsonLogger empty_logger(-1);
     std::atomic<bool> once_should_exit = true;
-    CollectStats(absl::ZeroDuration(), true, flow_state_reporter_, dc_mapper_,
-                 config_.host_id, config_.job_name, flow_state_provider_,
-                 socket_to_host_aggregator_.get(), &empty_logger, enforcer_,
+    CollectStats(absl::ZeroDuration(), true, &empty_logger, &empty_logger,
                  &once_should_exit, last_enforcer_log_time);
   }
 
   collect_stats_thread_ =
-      std::thread(CollectStats, config_.collect_stats_period, false, flow_state_reporter_,
-                  dc_mapper_, config_.host_id, config_.job_name, flow_state_provider_,
-                  socket_to_host_aggregator_.get(), &flow_state_logger_, enforcer_,
-                  should_exit, last_enforcer_log_time);
-
-  info_thread_ = std::thread(SendInfo, config_.inform_period, config_.host_id,
-                             socket_to_host_aggregator_.get(), should_exit, &channel_);
-
-  enforcer_thread_ = std::thread(EnforceAlloc, flow_state_provider_, enforcer_,
-                                 should_exit, &channel_, last_enforcer_log_time);
+      std::thread(&HostDaemon::CollectStats, this, config_.collect_stats_period, false,
+                  &flow_state_logger_, &fine_grained_flow_state_logger_, should_exit,
+                  last_enforcer_log_time);
+  info_thread_ = std::thread(&HostDaemon::SendInfos, this, should_exit);
+  enforcer_thread_ =
+      std::thread(&HostDaemon::EnforceAllocs, this, should_exit, last_enforcer_log_time);
 }
 
 HostDaemon::~HostDaemon() {

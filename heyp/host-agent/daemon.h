@@ -18,6 +18,8 @@
 
 namespace heyp {
 
+class LogTime;
+
 class HostDaemon {
  public:
   struct Config {
@@ -26,6 +28,7 @@ class HostDaemon {
     absl::Duration inform_period = absl::Seconds(2);
     absl::Duration collect_stats_period = absl::Milliseconds(500);
     std::string stats_log_file;
+    std::string fine_grained_stats_log_file;
   };
 
   HostDaemon(const std::shared_ptr<grpc::Channel>& channel, Config config,
@@ -38,12 +41,23 @@ class HostDaemon {
   void Run(std::atomic<bool>* should_exit);
 
  private:
+  // Daemon loops
+  void CollectStats(absl::Duration period, bool force_run,
+                    NdjsonLogger* flow_state_logger,
+                    NdjsonLogger* fine_grained_flow_state_logger,
+                    std::atomic<bool>* should_exit,
+                    std::shared_ptr<LogTime> last_enforcer_log_time);
+  void SendInfos(std::atomic<bool>* should_exit);
+  void EnforceAllocs(std::atomic<bool>* should_exit,
+                     std::shared_ptr<LogTime> last_enforcer_log_time);
+
   const Config config_;
   DCMapper* dc_mapper_;
   FlowStateProvider* flow_state_provider_;
   std::unique_ptr<FlowAggregator> socket_to_host_aggregator_;
   FlowStateReporter* flow_state_reporter_;
   NdjsonLogger flow_state_logger_;
+  NdjsonLogger fine_grained_flow_state_logger_;
   HostEnforcer* enforcer_;
   ClusterAgentChannel channel_;
 

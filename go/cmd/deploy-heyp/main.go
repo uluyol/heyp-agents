@@ -244,8 +244,9 @@ func (c *startHEYPAgentsCmd) SetFlags(fs *flag.FlagSet) {
 	remdirVar(&c.remDir, fs)
 	c.startConfig = actions.DefaultHEYPAgentsConfig()
 	fs.BoolVar(&c.startConfig.LogClusterAllocState, "log-cluster-alloc-state", c.startConfig.LogClusterAllocState, "collect detailed logs with input/allocation info at cluster agents")
-	fs.BoolVar(&c.startConfig.LogEnforcerState, "log-enforcer-state", c.startConfig.LogEnforcerState, "collect host enforcer state at host agents for debugging")
-	fs.BoolVar(&c.startConfig.LogHostStats, "log-host-stats", c.startConfig.LogHostStats, "collect host statistics at host agents")
+	fs.BoolVar(&c.startConfig.LogEnforcerState, "log-enforcer-state", c.startConfig.LogEnforcerState, "collect enforcer state at host agents for debugging")
+	fs.BoolVar(&c.startConfig.LogHostStats, "log-host-stats", c.startConfig.LogHostStats, "collect  statistics at host agents")
+	fs.BoolVar(&c.startConfig.LogFineGrainedHostStats, "log-fine-grained-host-stats", c.startConfig.LogFineGrainedHostStats, "collect fine-grained statistics at host agents")
 	fs.IntVar(&c.startConfig.HostAgentVLog, "host-agent-vlog", c.startConfig.HostAgentVLog, "vlog level for host agent")
 }
 

@@ -134,9 +134,10 @@ func hasRole(n *pb.DeployedNode, want string) bool {
 }
 
 type HEYPAgentsConfig struct {
-	LogClusterAllocState bool
-	LogEnforcerState     bool
-	LogHostStats         bool
+	LogClusterAllocState    bool
+	LogEnforcerState        bool
+	LogHostStats            bool
+	LogFineGrainedHostStats bool
 
 	HostAgentVLog int
 }
@@ -310,6 +311,10 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string, startConfig HE
 				if startConfig.LogHostStats {
 					hostConfig.Daemon.StatsLogFile = proto.String(
 						path.Join(remoteTopdir, "logs/host-agent-stats.log"))
+				}
+				if startConfig.LogFineGrainedHostStats || c.GetHostAgentLogFineGrainedStats() {
+					hostConfig.Daemon.FineGrainedStatsLogFile = proto.String(
+						path.Join(remoteTopdir, "logs/host-agent-fine-grained-stats.log"))
 				}
 				if startConfig.LogEnforcerState {
 					hostConfig.Enforcer.DebugLogDir = proto.String(
