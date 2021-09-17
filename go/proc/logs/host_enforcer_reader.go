@@ -80,6 +80,14 @@ func (r *HostEnforcerLogReader) Read(times []time.Time, data []interface{}) (int
 	return len(times), r.Err()
 }
 
+type warnStatus int
+
+const (
+	noWarn warnStatus = iota
+	oneWarn
+	multiWarn
+)
+
 func (r *HostEnforcerLogReader) ReadOne(e *HostEnforcerLogEntry) bool {
 	if r.err != nil || len(r.remaining) == 0 {
 		return false
@@ -101,6 +109,7 @@ func (r *HostEnforcerLogReader) ReadOne(e *HostEnforcerLogEntry) bool {
 
 	e.Time = t
 
+	iptablesFile := r.remaining[0] + "-iptables:mangle"
 	f, err := r.dir.Open(r.remaining[0] + "-iptables:mangle")
 	if err != nil {
 		if len(r.remaining) == 1 {
@@ -147,6 +156,7 @@ func (r *HostEnforcerLogReader) ReadOne(e *HostEnforcerLogEntry) bool {
 		return false
 	}
 
+	warnUnknownQoS := noWarn
 	for _, rule := range ipt {
 		bkt := &e.HIPRI
 		switch rule.QoS {
@@ -155,7 +165,17 @@ func (r *HostEnforcerLogReader) ReadOne(e *HostEnforcerLogEntry) bool {
 		case "0", "0x0", "0x00":
 			bkt = &e.LOPRI
 		default:
-			log.Printf("warning: treating unknown QoS value %s as HIPRI", rule.QoS)
+			if warnUnknownQoS == noWarn {
+				log.Printf("warning: treating unknown QoS value as HIPRI in rule %v", rule)
+				b, err := fs.ReadFile(r.dir, iptablesFile)
+				if err == nil {
+					log.Printf("collected %+v from iptables rules:\n%s", ipt, b)
+				}
+				warnUnknownQoS = oneWarn
+			} else if warnUnknownQoS == oneWarn {
+				log.Print("(additional warnings surpressed)")
+				warnUnknownQoS = multiWarn
+			}
 		}
 
 		*bkt = append(*bkt, QoSEnforcerEntry{
