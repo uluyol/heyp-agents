@@ -58,20 +58,31 @@ func ReadIPTablesEnforcementRules(r io.Reader) ([]EnforcementRule, error) {
 
 	last := 0
 	for i := 1; i < len(rules); i++ {
+		verb := false
 		if rules[i].DstIP == rules[last].DstIP {
 			if !didRets[last] {
 				// Merge
 				if rules[i].QoS != "" {
+					if verb {
+						fmt.Printf("merge qos from %v into %v\n", rules[i], rules[last])
+					}
 					rules[last].QoS = rules[i].QoS
 				}
 				if (rules[i].ClassID != TCHandle{}) {
+					if verb {
+						fmt.Printf("merge ClassID from %v into %v\n", rules[i], rules[last])
+					}
 					rules[last].ClassID = rules[i].ClassID
+				}
+				if verb {
+					fmt.Printf("overwrite %v with %v\n", rules[i], rules[last])
 				}
 				didRets[last] = didRets[i]
 			}
 		} else {
 			last++
 			rules[last] = rules[i]
+			didRets[last] = didRets[i]
 		}
 	}
 
