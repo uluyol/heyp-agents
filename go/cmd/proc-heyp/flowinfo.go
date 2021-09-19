@@ -49,17 +49,18 @@ func wlFlag(wl *startEndWorkloadFlag, fs *flag.FlagSet) {
 }
 
 type alignInfosCmd struct {
-	output   string
-	workload startEndWorkloadFlag
-	prec     flagtypes.Duration
-	debug    bool
+	output      string
+	workload    startEndWorkloadFlag
+	prec        flagtypes.Duration
+	fineGrained bool
+	debug       bool
 }
 
 func (*alignInfosCmd) Name() string    { return "align-infos" }
 func (c *alignInfosCmd) Usage() string { return logsUsage(c) }
 
 func (*alignInfosCmd) Synopsis() string {
-	return "combine stats timeseries from hosts to have shared timestamps"
+	return "combine stats timeseries from host agents to have shared timestamps"
 }
 
 func (c *alignInfosCmd) SetFlags(fs *flag.FlagSet) {
@@ -67,6 +68,7 @@ func (c *alignInfosCmd) SetFlags(fs *flag.FlagSet) {
 	wlFlag(&c.workload, fs)
 	c.prec.D = 50 * time.Millisecond
 	fs.Var(&c.prec, "prec", "precision of time measurements")
+	fs.BoolVar(&c.fineGrained, "fine", false, "align fine-grained stats (sub-host granularity)")
 	fs.BoolVar(&c.debug, "debug", false, "debug timeseries alignment")
 }
 
@@ -81,7 +83,12 @@ func (c *alignInfosCmd) Execute(ctx context.Context, fs *flag.FlagSet, args ...i
 		log.Fatalf("failed to get start/end for workload %q: %v", c.workload, err)
 	}
 
-	toAlign, err := proc.GlobAndCollectHostAgentStats(logsFS)
+	var toAlign []proc.NamedLog
+	if c.fineGrained {
+		toAlign, err = proc.GlobAndCollectHostAgentStatsFineGrained(logsFS)
+	} else {
+		toAlign, err = proc.GlobAndCollectHostAgentStats(logsFS)
+	}
 	if err != nil {
 		log.Fatalf("failed to find host stats: %v", err)
 	}

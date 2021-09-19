@@ -276,6 +276,13 @@ func GlobAndCollectHostAgentStats(fsys fs.FS) ([]NamedLog, error) {
 	return globToAlignPerHost(fsys, hostAgentStatsRegex)
 }
 
+var hostAgentStatsFineGrainedRegex = regexp.MustCompile(
+	`(^|.*/)([^/]+)/logs/host-agent-fine-grained-stats.log$`)
+
+func GlobAndCollectHostAgentStatsFineGrained(fsys fs.FS) ([]NamedLog, error) {
+	return globToAlignPerHost(fsys, hostAgentStatsFineGrainedRegex)
+}
+
 var hostStatsRegex = regexp.MustCompile(
 	`(^|.*/)([^/]+)/logs/host-stats.log$`)
 
