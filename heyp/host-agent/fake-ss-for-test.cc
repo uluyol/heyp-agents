@@ -39,10 +39,10 @@ int main(int argc, char** argv) {
           "send 3458943bps",
           "lastsnd:72",
           "lastrcv:40",
-          "pacing_rate"
-          "6917808bps"
-          "delivery_rate"
-          "336408bps"
+          "pacing_rate",
+          "6917808bps",
+          "delivery_rate",
+          "336408bps",
           "delivered:16",
           "busy:436ms",
           "rcv_space:14600",
@@ -82,10 +82,10 @@ int main(int argc, char** argv) {
       "send 458943bps",
       "lastsnd:72",
       "lastrcv:40",
-      "pacing_rate"
-      "6917808bps"
-      "delivery_rate"
-      "336408bps"
+      "pacing_rate",
+      "6917808bps",
+      "delivery_rate",
+      "336408bps",
       "delivered:16",
       "busy:436ms",
       "rcv_space:14600",
@@ -117,10 +117,10 @@ int main(int argc, char** argv) {
       "send 458943bps",
       "lastsnd:72",
       "lastrcv:40",
-      "pacing_rate"
-      "6917808bps"
-      "delivery_rate"
-      "336408bps"
+      "pacing_rate",
+      "6917808bps",
+      "delivery_rate",
+      "336408bps",
       "delivered:16",
       "busy:436ms",
       "rcv_space:14600",
@@ -152,10 +152,10 @@ int main(int argc, char** argv) {
       "send 999999999bps",
       "lastsnd:72",
       "lastrcv:40",
-      "pacing_rate"
-      "6917808bps"
-      "delivery_rate"
-      "336408bps"
+      "pacing_rate",
+      "6917808bps",
+      "delivery_rate",
+      "336408bps",
       "delivered:16",
       "busy:436ms",
       "rcv_space:14600",
