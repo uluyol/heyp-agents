@@ -37,6 +37,9 @@ void AggState::UpdateUsage(const Update u, absl::Duration usage_history_window,
   H_SPDLOG_CHECK_GE(&logger_, u.cum_lopri_usage_bytes, cur_.cum_lopri_usage_bytes());
 
   double measured_usage_bps = u.sum_child_usage_bps;
+  if (u.aux != nullptr) {
+    *cur_.mutable_aux() = *u.aux;
+  }
 
   if (was_updated_) {
     const int64_t usage_bits = 8 * (cum_usage_bytes - cur_.cum_usage_bytes());
@@ -140,6 +143,7 @@ void LeafState::UpdateUsage(const Update u, absl::Duration usage_history_window,
           .sum_child_usage_bps = u.instantaneous_usage_bps,
           .cum_hipri_usage_bytes = cum_hipri_usage_bytes,
           .cum_lopri_usage_bytes = cum_lopri_usage_bytes,
+          .aux = u.aux,
       },
       usage_history_window, demand_predictor);
 }

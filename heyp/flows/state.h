@@ -24,6 +24,7 @@ class AggState {
     int64_t sum_child_usage_bps = 0;
     int64_t cum_hipri_usage_bytes = 0;
     int64_t cum_lopri_usage_bytes = 0;
+    const proto::FlowInfo::AuxInfo* aux = nullptr;  // optional
   };
 
   // UpdatesUpdate updates the demand and automatically sets currently_lopri
@@ -52,8 +53,9 @@ class LeafState {
   struct Update {
     absl::Time time;
     int64_t cum_usage_bytes = 0;
-    int64_t instantaneous_usage_bps = 0;  // optional
-    bool is_lopri = false;                // optional
+    int64_t instantaneous_usage_bps = 0;            // optional
+    bool is_lopri = false;                          // optional
+    const proto::FlowInfo::AuxInfo* aux = nullptr;  // optional
   };
 
   void UpdateUsage(const Update u, absl::Duration usage_history_window,

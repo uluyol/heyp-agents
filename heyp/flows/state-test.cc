@@ -344,5 +344,34 @@ TEST(LeafStateTest, Priorities) {
   EXPECT_EQ(state.cur().currently_lopri(), false);
 }
 
+TEST(LeafStateTest, PassesAuxData) {
+  NopDemandPredictor demand_predictor;
+
+  const absl::Time now = absl::Now();
+  auto time = [now](int64_t sec) -> absl::Time { return now + absl::Seconds(sec); };
+
+  LeafState state({});
+  constexpr absl::Duration kHistoryWindow = absl::Seconds(10);
+
+  EXPECT_EQ(state.cur().cum_usage_bytes(), 0);
+  EXPECT_EQ(state.cur().cum_hipri_usage_bytes(), 0);
+  EXPECT_EQ(state.cur().cum_lopri_usage_bytes(), 0);
+  EXPECT_EQ(state.cur().currently_lopri(), false);
+  EXPECT_EQ(state.cur().has_aux(), false);
+
+  state.UpdateUsage(
+      {
+          .time = time(0),
+          .cum_usage_bytes = 1000,
+          .is_lopri = false,
+      },
+      kHistoryWindow, demand_predictor);
+  EXPECT_EQ(state.cur().cum_usage_bytes(), 1000);
+  EXPECT_EQ(state.cur().cum_hipri_usage_bytes(), 1000);
+  EXPECT_EQ(state.cur().cum_lopri_usage_bytes(), 0);
+  EXPECT_EQ(state.cur().currently_lopri(), false);
+  EXPECT_EQ(state.cur().has_aux(), false);
+}
+
 }  // namespace
 }  // namespace heyp
