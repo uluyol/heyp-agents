@@ -38,6 +38,64 @@ message FlowInfo {
   // currently_lopri indiciates whether a flow is exclusively using LOPRI
   // bandwidth.
   bool currently_lopri = 7;
+
+  message AuxInfo {
+    bool app_limited = 1;
+    double ato_ms = 2;
+    double bbr_cwnd_gain = 3;
+    double bbr_min_rtt_ms = 4;
+    double bbr_pacing_gain = 5;
+    double min_rtt_ms = 6;
+    double rcv_rtt_ms = 7;
+    double rto_ms = 8;
+    double rtt_ms = 9;
+    double rtt_var_ms = 10;
+    int64 advmss = 11;
+    int64 backoff = 12;
+    int64 bbr_bw = 13;
+    int64 busy_time_ms = 14;
+    int64 bytes_acked = 15;
+    int64 bytes_received = 16;
+    int64 bytes_retrans = 17;
+    int64 cwnd = 18;
+    int64 data_segs_in = 19;
+    int64 data_segs_out = 20;
+    int64 delivered = 21;
+    int64 delivered_ce = 22;
+    int64 delivery_rate = 23;
+    int64 dsack_dups = 24;
+    int64 fackets = 25;
+    int64 lastack_ms = 26;
+    int64 lastrcv_ms = 27;
+    int64 lastsnd_ms = 28;
+    int64 lost = 29;
+    int64 mss = 30;
+    int64 not_sent = 31;
+    int64 pacing_rate = 32;
+    int64 pacing_rate_max = 33;
+    int64 pmtu = 34;
+    int64 qack = 35;
+    int64 rcv_space = 36;
+    int64 rcv_ssthresh = 37;
+    int64 rcv_wscale = 38;
+    int64 rcvmss = 39;
+    int64 reord_seen = 40;
+    int64 reordering = 41;
+    int64 retrans = 42;
+    int64 retrans_total = 43;
+    int64 rwnd_limited_ms = 44;
+    int64 sacked = 45;
+    int64 segs_in = 46;
+    int64 segs_out = 47;
+    int64 snd_wscale = 48;
+    int64 sndbuf_limited_ms = 49;
+    int64 ssthresh = 50;
+    int64 unacked = 51;
+  }
+
+  // aux contains additional info that may not always be present.
+  // Primarily used to dump data for later analysis.
+  AuxInfo aux = 20;
 }
 
 message AggInfo {
