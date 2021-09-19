@@ -7,8 +7,6 @@
 namespace heyp {
 namespace {
 
-// TODO: Implement ParseBpsSS
-
 // ParseBpsSS parses bps values printed by ss.
 //
 // ss's output format can be found here:
