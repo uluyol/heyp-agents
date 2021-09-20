@@ -83,7 +83,7 @@ cc_library(
     srcs = ["flow-tracker.cc"],
     hdrs = ["flow-tracker.h"],
     deps = [
-        ":urls",
+        ":parse-ss",
         "//heyp/alg:demand-predictor",
         "//heyp/flows:state",
         "//heyp/log:spdlog",

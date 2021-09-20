@@ -28,7 +28,7 @@ int main(int argc, char** argv) {
           "pmtu:1500",
           "rcvmss:1392",
           "advmss:1448",
-          "cwnd:10",
+          "cwnd:2",
           "bytes_sent:4140",
           "bytes_acked:4141",
           "bytes_received:3302",

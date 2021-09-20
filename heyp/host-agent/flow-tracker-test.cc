@@ -170,5 +170,118 @@ TEST(SSFlowStateReporterTest, CollectsExpectedOutput) {
   EXPECT_TRUE(saw_closing);
 }
 
+// Same As CollectsExpectedOutput, but checks that cwnd aux value is collected.
+TEST(SSFlowStateReporterTest, CollectsExpectedOutputWithAux) {
+  FlowTracker tracker(
+      absl::make_unique<BweDemandPredictor>(absl::Seconds(240), 1.4, 8'000), {});
+
+  auto reporter_or = SSFlowStateReporter::Create(
+      {
+          .my_addrs = {"140.197.113.99"},
+          .ss_binary_name = "heyp/host-agent/fake-ss-for-test",
+          .collect_aux = true,
+      },
+      &tracker);
+
+  ASSERT_THAT(reporter_or.status(),
+              testing::Property(&absl::Status::ok, testing::IsTrue()));
+
+  std::unique_ptr<SSFlowStateReporter> reporter = std::move(*reporter_or);
+  int i = 0;
+  ASSERT_THAT(reporter->ReportState([&i](const proto::FlowMarker&, spdlog::logger*) {
+    return (++i % 2) == 0;
+  }),
+              testing::Property(&absl::Status::ok, testing::IsTrue()));
+
+  constexpr absl::Duration kMaxWaitDur = absl::Seconds(2);
+  absl::Time start = absl::Now();
+  bool saw_closing = false;
+  while (!saw_closing && absl::Now() - start < kMaxWaitDur) {
+    absl::flat_hash_map<proto::FlowMarker, std::tuple<int64_t, int64_t, int64_t>,
+                        HashHostFlowNoId, EqHostFlowNoId>
+        active_usage_bps_cum_bytes_cwnd;
+    tracker.ForEachActiveFlow(
+        [&active_usage_bps_cum_bytes_cwnd](absl::Time time, const proto::FlowInfo& info) {
+          active_usage_bps_cum_bytes_cwnd[info.flow()] = {
+              info.ewma_usage_bps(),
+              info.cum_usage_bytes(),
+              info.aux().cwnd(),
+          };
+        });
+
+    absl::flat_hash_map<proto::FlowMarker, std::tuple<int64_t, int64_t, int64_t>,
+                        HashHostFlowNoId, EqHostFlowNoId>
+        dead_usage_bps_cum_bytes_cwnd;
+    tracker.ForEachFlow([&dead_usage_bps_cum_bytes_cwnd, &active_usage_bps_cum_bytes_cwnd,
+                         &saw_closing](absl::Time time, const proto::FlowInfo& info) {
+      if (!active_usage_bps_cum_bytes_cwnd.contains(info.flow())) {
+        dead_usage_bps_cum_bytes_cwnd[info.flow()] = {
+            info.ewma_usage_bps(),
+            info.cum_usage_bytes(),
+            info.aux().cwnd(),
+        };
+        saw_closing = true;
+      }
+    });
+
+    const proto::FlowMarker marker1 = ProtoFlowMarker({
+        .src_addr = "140.197.113.99",
+        .dst_addr = "165.121.234.111",
+        .protocol = proto::TCP,
+        .src_port = 22,
+        .dst_port = 21364,
+    });
+
+    const proto::FlowMarker marker2 = ProtoFlowMarker({
+        .src_addr = "140.197.113.99",
+        .dst_addr = "165.121.234.111",
+        .protocol = proto::TCP,
+        .src_port = 99,
+        .dst_port = 21364,
+    });
+
+    const proto::FlowMarker marker3 = ProtoFlowMarker({
+        .src_addr = "140.197.113.99",
+        .dst_addr = "192.168.1.7",
+        .protocol = proto::TCP,
+        .src_port = 4580,
+        .dst_port = 38290,
+    });
+
+    if (active_usage_bps_cum_bytes_cwnd.size() == 2) {
+      ASSERT_THAT(
+          active_usage_bps_cum_bytes_cwnd,
+          testing::UnorderedElementsAre(
+              testing::Pair(EqFlowNoId(marker2),
+                            testing::FieldsAre(testing::Eq(999'999'999),
+                                               testing::Eq(9999), testing::Eq(10))),
+              testing::Pair(EqFlowNoId(marker3),
+                            testing::FieldsAre(testing::Eq(3'891'500'000),
+                                               testing::Eq(1431), testing::Eq(43)))));
+      ASSERT_THAT(dead_usage_bps_cum_bytes_cwnd,
+                  testing::UnorderedElementsAre(testing::Pair(
+                      EqFlowNoId(marker1),
+                      testing::FieldsAre(testing::Ge(1'358'943), testing::Eq(4140),
+                                         testing::Eq(2)))));
+    } else {
+      ASSERT_THAT(
+          active_usage_bps_cum_bytes_cwnd,
+          testing::UnorderedElementsAre(
+              testing::Pair(EqFlowNoId(marker1),
+                            testing::FieldsAre(testing::Eq(458'943), testing::Eq(240),
+                                               testing::Eq(10))),
+              testing::Pair(EqFlowNoId(marker2),
+                            testing::FieldsAre(testing::Eq(999'999'999),
+                                               testing::Eq(9999), testing::Eq(10))),
+              testing::Pair(EqFlowNoId(marker3),
+                            testing::FieldsAre(testing::Eq(3'891'500'000),
+                                               testing::Eq(1431), testing::Eq(43)))));
+      ASSERT_THAT(dead_usage_bps_cum_bytes_cwnd, testing::IsEmpty());
+    }
+  }
+
+  EXPECT_TRUE(saw_closing);
+}
+
 }  // namespace
 }  // namespace heyp

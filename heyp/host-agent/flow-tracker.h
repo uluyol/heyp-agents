@@ -13,6 +13,7 @@
 #include "heyp/alg/demand-predictor.h"
 #include "heyp/flows/state.h"
 #include "heyp/proto/alg.h"
+#include "heyp/proto/heyp.pb.h"
 #include "heyp/threads/mutex-helpers.h"
 #include "spdlog/spdlog.h"
 
@@ -63,6 +64,7 @@ class FlowTracker : public FlowStateProvider {
     int64_t instantaneous_usage_bps;
     int64_t cum_usage_bytes;
     FlowPri used_priority;
+    const proto::FlowInfo::AuxInfo* aux = nullptr;  // optional
   };
 
   // Updates the usage of the specified Flows.
@@ -98,6 +100,7 @@ class SSFlowStateReporter : public FlowStateReporter {
     // on the same interface.
     std::vector<std::string> my_addrs;
     std::string ss_binary_name = "ss";
+    bool collect_aux = false;
   };
 
   ~SSFlowStateReporter();

@@ -1,6 +1,7 @@
 #include "heyp/host-agent/flow-tracker.h"
 
 #include <algorithm>
+#include <deque>
 
 #include "absl/cleanup/cleanup.h"
 #include "absl/status/status.h"
@@ -9,6 +10,7 @@
 #include "boost/process/io.hpp"
 #include "boost/process/pipe.hpp"
 #include "boost/process/search_path.hpp"
+#include "heyp/host-agent/parse-ss.h"
 #include "heyp/host-agent/urls.h"
 #include "heyp/log/spdlog.h"
 #include "heyp/threads/mutex-helpers.h"
@@ -77,6 +79,7 @@ void FlowTracker::UpdateFlows(absl::Time timestamp,
           .cum_usage_bytes = u.cum_usage_bytes,
           .instantaneous_usage_bps = u.instantaneous_usage_bps,
           .is_lopri = is_lopri,
+          .aux = u.aux,
       };
       if (config_.ignore_instantaneous_usage) {
         flow_update.instantaneous_usage_bps = 0;
@@ -106,6 +109,7 @@ void FlowTracker::FinalizeFlows(absl::Time timestamp,
         .cum_usage_bytes = u.cum_usage_bytes,
         .instantaneous_usage_bps = u.instantaneous_usage_bps,
         .is_lopri = is_lopri,
+        .aux = u.aux,
     };
     if (config_.ignore_instantaneous_usage) {
       flow_update.instantaneous_usage_bps = 0;
@@ -146,82 +150,6 @@ SSFlowStateReporter::~SSFlowStateReporter() {
 
 namespace {
 
-absl::Status ParseLine(uint64_t host_id, absl::string_view line,
-                       proto::FlowMarker& parsed, int64_t& usage_bps,
-                       int64_t& cum_usage_bytes, spdlog::logger* logger) {
-  parsed.Clear();
-
-  std::vector<absl::string_view> fields =
-      absl::StrSplit(line, absl::ByAnyChar(" \t"), absl::SkipWhitespace());
-
-  absl::string_view src_addr;
-  absl::string_view dst_addr;
-  int32_t src_port;
-  int32_t dst_port;
-  absl::Status status = ParseHostPort(fields[3], &src_addr, &src_port);
-  status.Update(ParseHostPort(fields[4], &dst_addr, &dst_port));
-  if (!status.ok()) {
-    return status;
-  }
-
-  parsed.set_host_id(host_id);
-  parsed.set_src_addr(std::string(src_addr));
-  parsed.set_dst_addr(std::string(dst_addr));
-  parsed.set_protocol(proto::TCP);
-  parsed.set_src_port(src_port);
-  parsed.set_dst_port(dst_port);
-
-  bool found_cum_usage_bytes = false;
-  bool found_usage_bps = false;
-  cum_usage_bytes = 0;
-  bool next_is_usage_bps = false;
-  usage_bps = 0;
-
-  bool is_estab = false;
-  bool is_unconn = false;
-
-  if (fields.size() >= 1) {
-    if (fields[0] == "ESTAB") {
-      is_estab = true;
-    } else if (fields[0] == "UNCONN") {
-      is_unconn = true;
-    }
-  }
-
-  for (absl::string_view field : fields) {
-    if (absl::StartsWith(field, "bytes_sent:")) {
-      field = absl::StripPrefix(field, "bytes_sent:");
-      if (!absl::SimpleAtoi(field, &cum_usage_bytes)) {
-        return absl::InvalidArgumentError("failed to parse 'bytes_sent' field");
-      }
-      found_cum_usage_bytes = true;
-    }
-    if (next_is_usage_bps) {
-      if (!absl::EndsWith(field, "bps")) {
-        return absl::InvalidArgumentError("failed to parse send bps field");
-      }
-      field = absl::StripSuffix(field, "bps");
-      if (!absl::SimpleAtoi(field, &usage_bps)) {
-        return absl::InvalidArgumentError("failed to parse send bps field");
-      }
-      next_is_usage_bps = false;
-      found_usage_bps = true;
-    }
-    if (field == "send") {
-      next_is_usage_bps = true;
-    }
-  }
-
-  if (!found_cum_usage_bytes && !is_estab) {
-    SPDLOG_LOGGER_INFO(logger, "no 'bytes_sent' field: {}", line);
-  }
-  if (!found_usage_bps && !is_unconn) {
-    SPDLOG_LOGGER_INFO(logger, "no 'send' bps field: {}", line);
-  }
-
-  return absl::OkStatus();
-}
-
 absl::Status StartDoneMonitor(const std::string& ss_binary_name,
                               std::unique_ptr<bp::ipstream>* out, bp::child* proc,
                               absl::Mutex* proc_mu) {
@@ -257,8 +185,13 @@ void SSFlowStateReporter::MonitorDone() {
       proto::FlowMarker f;
       int64_t usage_bps = 0;
       int64_t cum_usage_bytes = 0;
+      proto::FlowInfo::AuxInfo aux_space;
+      proto::FlowInfo::AuxInfo* aux = nullptr;
+      if (impl_->config.collect_aux) {
+        aux = &aux_space;
+      }
       auto status =
-          ParseLine(impl_->config.host_id, line, f, usage_bps, cum_usage_bytes, &logger);
+          ParseLineSS(impl_->config.host_id, line, f, usage_bps, cum_usage_bytes, aux);
       if (!status.ok()) {
         SPDLOG_LOGGER_DEBUG(&logger, "failed to parse done line: {} on {}", status, line);
         continue;
@@ -270,7 +203,7 @@ void SSFlowStateReporter::MonitorDone() {
       SPDLOG_LOGGER_DEBUG(&logger, "counting done flow: {}", f.ShortDebugString());
 
       impl_->flow_tracker->FinalizeFlows(
-          now, {{f, usage_bps, cum_usage_bytes, FlowPri::kUnset}});
+          now, {{f, usage_bps, cum_usage_bytes, FlowPri::kUnset, aux}});
     }
     if (impl_->is_dying) {
       break;
@@ -294,13 +227,19 @@ absl::Status SSFlowStateReporter::ReportState(
 
     absl::Time now = absl::Now();
     std::string line;
+    std::deque<proto::FlowInfo::AuxInfo> aux_space;
     std::vector<FlowTracker::Update> flow_updates;
     while (std::getline(out, line) && !line.empty()) {
       proto::FlowMarker f;
       int64_t usage_bps = 0;
       int64_t cum_usage_bytes = 0;
+      proto::FlowInfo::AuxInfo* aux = nullptr;
+      if (impl_->config.collect_aux) {
+        aux_space.push_back({});
+        aux = &aux_space.back();
+      }
       auto status =
-          ParseLine(impl_->config.host_id, line, f, usage_bps, cum_usage_bytes, &logger_);
+          ParseLineSS(impl_->config.host_id, line, f, usage_bps, cum_usage_bytes, aux);
       if (!status.ok()) {
         SPDLOG_LOGGER_DEBUG(&logger_, "failed to parse line: {} on {}", status, line);
         continue;
@@ -314,7 +253,7 @@ absl::Status SSFlowStateReporter::ReportState(
       if (is_lopri(f, &logger_)) {
         pri = FlowPri::kLo;
       }
-      flow_updates.push_back({f, usage_bps, cum_usage_bytes, pri});
+      flow_updates.push_back({f, usage_bps, cum_usage_bytes, pri, aux});
     }
     impl_->flow_tracker->UpdateFlows(now, flow_updates);
     c.wait();

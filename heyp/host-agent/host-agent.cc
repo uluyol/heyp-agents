@@ -103,6 +103,7 @@ absl::Status Run(const proto::HostAgentConfig& c) {
           .host_id = host_id,
           .my_addrs = {c.this_host_addrs().begin(), c.this_host_addrs().end()},
           .ss_binary_name = c.flow_state_reporter().ss_binary_name(),
+          .collect_aux = !c.daemon().fine_grained_stats_log_file().empty(),
       },
       &flow_tracker);
   if (!flow_state_reporter_or.ok()) {
