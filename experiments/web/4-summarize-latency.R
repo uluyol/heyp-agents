@@ -14,13 +14,14 @@ SYS_LONG[["hsc"]] <- "HSC20"
 SYS_LONG[["nl"]] <- "NoLimit"
 SYS_LONG[["qd"]] <- "QD"
 SYS_LONG[["qdlrl"]] <- "QD+LimitLO"
+SYS_LONG[["qdlrlj"]] <- "QDJob+LimitLO"
 SYS_LONG[["rl"]] <- "RateLimit"
 SYS_LONG[["flipflop"]] <- "MixedFlipFlop"
 SYS_LONG[["stableqos"]] <- "MixedStable"
 SYS_LONG[["hipri"]] <- "AllHIPRI"
 SYS_LONG[["lopri"]] <- "AllLOPRI"
 
-PlotLatencyCumCountsTo <- function(subset, output) {
+PlotLatencyCumCountsTo <- function(ymax, subset, output) {
     if (nrow(subset) > 0) {
         subset$Sys <- factor(subset$Sys, levels=c("NoLimit", "AllHIPRI", "MixedStable", "MixedFlipFlop", "AllLOPRI"))
         subset$Y <- subset$CumNumSamples
@@ -30,7 +31,7 @@ PlotLatencyCumCountsTo <- function(subset, output) {
             geom_step(size=1) +
             xlab("Latency (ms)") +
             ylab("# of requests with latency < X") +
-            coord_cartesian(xlim=c(0, 350), expand=FALSE) +
+            coord_cartesian(xlim=c(0, 350), ylim=c(0, ymax), expand=FALSE) +
             theme_bw() +
             guides(color=guide_legend(ncol=3), linetype=guide_legend(ncol=3)) +
             theme(
@@ -175,6 +176,7 @@ ProcCfgGroup <- function(cfgGroup) {
     for (group in unique(latency$Group)) {
         for (inst in unique(latency$Instance)) {
             PlotLatencyCumCountsTo(
+                max(latency$CumNumSamples),
                 latency[latency$Group == group & latency$Instance == inst,],
                 file.path(summarydir, paste0(cfgGroup, "-counts-", group, "_", inst, ".pdf")))
             PlotLatencyCDFTo(
