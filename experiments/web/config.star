@@ -89,6 +89,63 @@ def GenWorkloadStagesStatic(
         "envoy_group_names": ["AA", "WA"],
     }
 
+def GenWorkloadStagesPeriodicSpike(
+        AA_bps = None,
+        WA_bps_min = None,
+        WA_bps_max = None,
+        enable_timeout = False):
+    AA_instances, AA_client_roles, AA_server_roles_for = BackendOnEachHost(
+        num_backends = 1,
+        workload_stages_per_backend = [{
+            "target_average_bps": AA_bps,
+            "run_dur": "150s",
+        }],
+        num_shards_per_backend = NumShards(AA_bps),
+        num_servers_per_backend_host = 2,
+        name_prefix = "AA_",
+        envoy_group_name = "AA",
+        starting_port = AA_FORTIO_STARTING_PORT,
+        prop_delay_ms = AA_PROP_DELAY_MS,
+        enable_timeout = enable_timeout,
+    )
+
+    for tick in range(7):
+        WA_stages = [{
+            "target_average_bps": WA_bps_min,
+            "run_dur": "15s",
+        }]
+        WA_stages.append({
+            "target_average_bps": WA_bps_max,
+            "run_dur": "5s",
+        })
+
+    WA_stages.append({
+        "target_average_bps": WA_bps_min,
+        "run_dur": "10s",
+    })
+
+    WA_instances, WA_client_roles, WA_server_roles_for = BackendOnEachHost(
+        num_backends = 1,
+        workload_stages_per_backend = WA_stages,
+        num_shards_per_backend = NumShards(WA_bps_max),
+        num_servers_per_backend_host = 4,
+        name_prefix = "WA_",
+        envoy_group_name = "WA",
+        starting_port = WA_FORTIO_STARTING_PORT,
+        prop_delay_ms = WA_PROP_DELAY_MS,
+        enable_timeout = enable_timeout,
+    )
+
+    return {
+        "AA_fortio_instances": AA_instances,
+        "AA_client_roles": AA_client_roles,
+        "AA_server_roles_for": AA_server_roles_for,
+        "WA_fortio_instances": WA_instances,
+        "WA_client_roles": WA_client_roles,
+        "WA_server_roles_for": WA_server_roles_for,
+        "envoy_group_names": ["AA", "WA"],
+    }
+
 def GenWorkloadStagesIncreasing(
         AA_bps = None,
         num_AA_backends = None,
@@ -400,6 +457,7 @@ def GenConfig(
         AA_client_roles = None,
         AA_fortio_instances = None,
         WA_approved_bps = None,
+        WA_surplus_bps = 0,
         WA_server_roles_for = None,
         WA_client_roles = None,
         WA_fortio_instances = None,
@@ -443,7 +501,7 @@ def GenConfig(
                             "dst_dc": "EDGE",
                         },
                         "hipri_rate_limit_bps": WA_approved_bps,
-                        "lopri_rate_limit_bps": 0,
+                        "lopri_rate_limit_bps": WA_surplus_bps,
                     },
                 ],
             },
@@ -1167,37 +1225,95 @@ def AddConfigsIncreasing(configs):
     configs[prefix + "-qdlrl"] = QoSDowngradeAndLimitLOPRIConfig(**kwargs)
     configs[prefix + "-rl"] = RateLimitConfig(**kwargs)
 
-def AddConfigsLossTrainingData(configs):
-    # "AA_lopri_is_longer": True,
-    # "admission_controlled_envoy_groups": ["AA"],
+def AddConfigsLossTrainingDataIncreasing(configs, lopri_latency = "same"):
     kwargs = dict({
         "AA_approved_bps": int(Gbps(2)),
-        "AA_surplus_bps": int(Gbps(10)),
+        "AA_surplus_bps": int(Gbps(8)),
         "WA_approved_bps": int(Gbps(12)),
-        "shard_key": "inc",
+        "shard_key": "ltd_inc",
         "host_agent_log_fine_grained_stats": True,
+        "AA_lopri_is_longer": lopri_latency == "longer",
     }, **GenWorkloadStagesIncreasing(
-        AA_bps = int(Gbps(16)),
+        AA_bps = int(Gbps(10)),
         num_AA_backends = 1,
-        WA_bps_min = int(Gbps(4)),
+        WA_bps_min = int(Gbps(1)),
         WA_bps_max = int(Gbps(12)),
         enable_timeout = False,
     ))
-    # kwargs = dict({
-    #     "AA_approved_bps": int(Gbps(8)),
-    #     "AA_surplus_bps": int(Gbps(10)),
-    #     "WA_approved_bps": int(Gbps(6)),
-    #     "shard_key": "inc",
-    # }, **GenWorkloadStagesIncreasing(
-    #     AA_bps = int(Gbps(18)),
-    #     num_AA_backends = 5,
-    #     WA_bps_min = int(Gbps(2)),
-    #     WA_bps_max = int(Gbps(6)),
-    # ))
 
-    prefix = "ltd_inc"
+    prefix = "ltd_inc_" + lopri_latency
     configs[prefix + "-qd"] = QoSDowngradeConfig(**kwargs)
     configs[prefix + "-qdlrl"] = QoSDowngradeAndLimitLOPRIConfig(**kwargs)
+
+def AddConfigsLossTrainingDataIncreasingLOPRI(configs, lopri_latency = "same"):
+    kwargs = dict({
+        "AA_approved_bps": int(Gbps(2)),
+        "AA_surplus_bps": int(Gbps(8)),
+        "WA_approved_bps": int(Gbps(3)),
+        "WA_surplus_bps": int(Gbps(10)),
+        "shard_key": "ltd_inc_lp",
+        "host_agent_log_fine_grained_stats": True,
+        "AA_lopri_is_longer": lopri_latency == "longer",
+    }, **GenWorkloadStagesIncreasing(
+        AA_bps = int(Gbps(10)),
+        num_AA_backends = 1,
+        WA_bps_min = int(Gbps(1)),
+        WA_bps_max = int(Gbps(12)),
+        enable_timeout = False,
+    ))
+
+    prefix = "ltd_inc_lp_" + lopri_latency
+    configs[prefix + "-qd"] = QoSDowngradeConfig(**kwargs)
+    configs[prefix + "-qdlrl"] = QoSDowngradeAndLimitLOPRIConfig(**kwargs)
+
+def AddConfigsLossTrainingDataPeriodicSpike(configs, lopri_latency = "same"):
+    kwargs = dict({
+        "AA_approved_bps": int(Gbps(2)),
+        "AA_surplus_bps": int(Gbps(8)),
+        "WA_approved_bps": int(Gbps(20)),
+        "shard_key": "ltd_spike",
+        "host_agent_log_fine_grained_stats": True,
+        "AA_lopri_is_longer": lopri_latency == "longer",
+    }, **GenWorkloadStagesPeriodicSpike(
+        AA_bps = int(Gbps(10)),
+        WA_bps_min = int(Gbps(2)),
+        WA_bps_max = int(Gbps(8)),
+        enable_timeout = False,
+    ))
+
+    prefix = "ltd_spike_" + lopri_latency
+    configs[prefix + "-qd"] = QoSDowngradeConfig(**kwargs)
+    configs[prefix + "-qdlrl"] = QoSDowngradeAndLimitLOPRIConfig(**kwargs)
+
+def AddConfigsLossTrainingDataPeriodicSpikeLOPRI(configs, lopri_latency = "same"):
+    kwargs = dict({
+        "AA_approved_bps": int(Gbps(2)),
+        "AA_surplus_bps": int(Gbps(8)),
+        "WA_approved_bps": int(Gbps(0)),
+        "WA_surplus_bps": int(Gbps(20)),
+        "shard_key": "ltd_spike_lp",
+        "host_agent_log_fine_grained_stats": True,
+        "AA_lopri_is_longer": lopri_latency == "longer",
+    }, **GenWorkloadStagesPeriodicSpike(
+        AA_bps = int(Gbps(10)),
+        WA_bps_min = int(Gbps(2)),
+        WA_bps_max = int(Gbps(8)),
+        enable_timeout = False,
+    ))
+
+    prefix = "ltd_spike_lp_" + lopri_latency
+    configs[prefix + "-qd"] = QoSDowngradeConfig(**kwargs)
+    configs[prefix + "-qdlrl"] = QoSDowngradeAndLimitLOPRIConfig(**kwargs)
+
+def AddConfigsLossTrainingData(configs):
+    AddConfigsLossTrainingDataIncreasing(configs, lopri_latency = "same")
+    AddConfigsLossTrainingDataIncreasing(configs, lopri_latency = "longer")
+    AddConfigsLossTrainingDataIncreasingLOPRI(configs, lopri_latency = "same")
+    AddConfigsLossTrainingDataIncreasingLOPRI(configs, lopri_latency = "longer")
+    AddConfigsLossTrainingDataPeriodicSpike(configs, lopri_latency = "same")
+    AddConfigsLossTrainingDataPeriodicSpike(configs, lopri_latency = "longer")
+    AddConfigsLossTrainingDataPeriodicSpikeLOPRI(configs, lopri_latency = "same")
+    AddConfigsLossTrainingDataPeriodicSpikeLOPRI(configs, lopri_latency = "longer")
 
 def AddConfigsFlipQoS(configs):
     AA_approval = int(Gbps(4))
