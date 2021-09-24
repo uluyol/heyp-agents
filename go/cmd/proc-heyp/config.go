@@ -11,6 +11,7 @@ import (
 	"github.com/google/subcommands"
 	"github.com/uluyol/heyp-agents/go/pb"
 	"github.com/uluyol/heyp-agents/go/proc"
+	"github.com/uluyol/heyp-agents/go/proc/logs"
 	"google.golang.org/protobuf/encoding/prototext"
 )
 
@@ -126,12 +127,12 @@ func (c *diffRemoteConfigsCmd) Execute(ctx context.Context, fs *flag.FlagSet, ar
 		fs.Usage()
 		return subcommands.ExitFailure
 	}
-	aFS, err := newLogsFS(fs.Arg(0))
+	aFS, err := logs.NewDataFS(fs.Arg(0))
 	if err != nil {
 		log.Fatalf("failed to open logs a: %v", err)
 	}
 	defer aFS.Close()
-	bFS, err := newLogsFS(fs.Arg(1))
+	bFS, err := logs.NewDataFS(fs.Arg(1))
 	if err != nil {
 		log.Fatalf("failed to open logs a: %v", err)
 	}

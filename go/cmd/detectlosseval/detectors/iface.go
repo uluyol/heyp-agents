@@ -6,12 +6,11 @@ import (
 
 	"github.com/uluyol/heyp-agents/go/cmd/detectlosseval/sysconfig"
 	"github.com/uluyol/heyp-agents/go/pb"
-	"github.com/uluyol/heyp-agents/go/proc"
 )
 
 type LossDetectorArgs struct {
 	UnixSec    float64
-	Stats      *proc.AlignedHostAgentStats
+	HostInfos  []*pb.InfoBundle
 	Admissions map[string]sysconfig.FGAdmissions
 	FGs        []string
 }
@@ -63,18 +62,18 @@ func makeIgnoreWithCumBytesLessThan(thresh int64) filterFunc {
 
 var _ filterFunc = ignoreAppLimited
 
-func forEachFGHost(fgs []string, stats *proc.AlignedHostAgentStats, filters []filterFunc, fn func(fgID int, hostID uint64, infos []*pb.FlowInfo)) {
+func forEachFGHost(fgs []string, infoBundles []*pb.InfoBundle, filters []filterFunc, fn func(fgID int, hostID uint64, infos []*pb.FlowInfo)) {
 	type fgState struct {
 		infos []*pb.FlowInfo
 	}
 
 	states := make([]fgState, len(fgs))
-	for _, mesg := range stats.Data {
+	for _, bundle := range infoBundles {
 		for i, st := range states {
 			states[i].infos = st.infos[:0]
 		}
 
-		hostInfos := mesg.M.GetFlowInfos()
+		hostInfos := bundle.GetFlowInfos()
 		include := make([]bool, len(hostInfos))
 		for i := range include {
 			include[i] = true
@@ -98,7 +97,7 @@ func forEachFGHost(fgs []string, stats *proc.AlignedHostAgentStats, filters []fi
 		}
 
 		for fgID, state := range states {
-			fn(fgID, mesg.M.GetBundler().GetHostId(), state.infos)
+			fn(fgID, bundle.GetBundler().GetHostId(), state.infos)
 		}
 	}
 }
@@ -168,7 +167,7 @@ func (d *AvgRetransDetector) FGsWithLOPRILoss(args LossDetectorArgs, detectedLos
 	}
 	d.curInfos = t
 
-	forEachFGHost(args.FGs, args.Stats, d.Filters, d.procHost)
+	forEachFGHost(args.FGs, args.HostInfos, d.Filters, d.procHost)
 
 	for fgID := range d.fgStats {
 		state := &d.fgStats[fgID]

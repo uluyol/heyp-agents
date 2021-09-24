@@ -35,6 +35,7 @@ import (
 	"github.com/uluyol/heyp-agents/go/cmd/detectlosseval/replay"
 	"github.com/uluyol/heyp-agents/go/cmd/detectlosseval/sysconfig"
 	"github.com/uluyol/heyp-agents/go/proc"
+	"github.com/uluyol/heyp-agents/go/proc/logs"
 )
 
 func main() {
@@ -43,7 +44,7 @@ func main() {
 
 	var (
 		configPath            = flag.String("c", "", "path to config file")
-		alignedHostStatsPath  = flag.String("host-stats", "", "path to aligned host agent stats")
+		dataPath              = flag.String("data", "", "path to run data")
 		fortioDemandTracePath = flag.String("fortio-trace", "", "path to fortio demand trace")
 		lossOutPath           = flag.String("oloss", "/dev/stdout", "path to output loss metrics")
 		bottleneckCap         = flag.Float64("cap", 20<<30, "bottleneck capacity in bps")
@@ -60,12 +61,6 @@ func main() {
 		log.Fatal(err)
 	}
 
-	alignedHostStats, err := os.Open(*alignedHostStatsPath)
-	if err != nil {
-		log.Fatalf("failed to open aligned host agent stats: %v", err)
-	}
-	// don't bother closing: we need it until program ends
-
 	fortioTrace, err := os.Open(*fortioDemandTracePath)
 	if err != nil {
 		log.Fatalf("failed to open fortio demand trace: %v", err)
@@ -77,8 +72,29 @@ func main() {
 		log.Fatal(err)
 	}
 
+	var hostReaders []*proc.ProtoJSONRecReader
+	{
+		dataFS, err := logs.NewDataFS(*dataPath)
+		if err != nil {
+			log.Fatalf("failed to open data: %v", err)
+		}
+		toAlign, err := proc.GlobAndCollectHostAgentStatsFineGrained(dataFS)
+		if err != nil {
+			log.Fatalf("failed to find fine-grained host-agent logs: %v", err)
+		}
+		hostReaders = make([]*proc.ProtoJSONRecReader, len(toAlign))
+		for i := range toAlign {
+			f, err := dataFS.Open(toAlign[i].Path)
+			if err != nil {
+				log.Fatalf("failed to open fine-grained host-agent log for %s: %v", toAlign[i].Name, toAlign[i].Path)
+			}
+			// don't bother closing: we need it until program ends
+			hostReaders[i] = proc.NewProtoJSONRecReader(f)
+		}
+	}
+
 	replayer := replay.NewReplayer(replay.ReplayerOptions{
-		HostReader:         proc.NewAlignedHostAgentStatsReader(alignedHostStats),
+		HostReaders:        hostReaders,
 		FortioDemandReader: proc.NewFortioDemandTraceReader(fortioTrace),
 		Evaluator: &replay.Evaluator{
 			W: lossFile,

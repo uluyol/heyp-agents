@@ -10,6 +10,7 @@ import (
 
 	"github.com/uluyol/heyp-agents/go/cmd/detectlosseval/detectors"
 	"github.com/uluyol/heyp-agents/go/cmd/detectlosseval/sysconfig"
+	"github.com/uluyol/heyp-agents/go/pb"
 	"github.com/uluyol/heyp-agents/go/proc"
 )
 
@@ -17,7 +18,7 @@ const numLookaheadSnaps = 3
 
 type EvalSnap struct {
 	UnixSec   float64
-	HostAgent *proc.AlignedHostAgentStats
+	HostInfos []*pb.InfoBundle
 	Fortio    *proc.FortioDemandSnapshot
 }
 
@@ -77,7 +78,7 @@ func (e *Evaluator) Process(s EvalSnap) {
 		s := e.getSnap(0)
 		e.LossDetector.FGsWithLOPRILoss(detectors.LossDetectorArgs{
 			UnixSec:    s.UnixSec,
-			Stats:      s.HostAgent,
+			HostInfos:  s.HostInfos,
 			Admissions: e.Admissions,
 			FGs:        e.fgs,
 		}, e.detectedLoss, e.scores)
