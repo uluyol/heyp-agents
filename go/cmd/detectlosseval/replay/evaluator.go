@@ -95,7 +95,7 @@ func (e *Evaluator) Process(s EvalSnap) {
 		fmt.Fprintf(&e.buf, "%g,%s,%t,%g,%g,%g,%g\n", e.getSnap(0).UnixSec, fg,
 			e.detectedLoss[i], e.scores[i], loss.Avg, loss.AvgHIPRI, loss.AvgLOPRI)
 	}
-	_, e.err = e.buf.Write(e.buf.Bytes())
+	_, e.err = e.W.Write(e.buf.Bytes())
 	if e.err != nil {
 		log.Print("saw error, will skip processing remaining events")
 	}

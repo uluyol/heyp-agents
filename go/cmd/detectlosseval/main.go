@@ -91,6 +91,7 @@ func main() {
 			// don't bother closing: we need it until program ends
 			hostReaders[i] = proc.NewProtoJSONRecReader(f)
 		}
+		log.Printf("reading fine-grained logs from %d host agents", len(hostReaders))
 	}
 
 	replayer := replay.NewReplayer(replay.ReplayerOptions{
