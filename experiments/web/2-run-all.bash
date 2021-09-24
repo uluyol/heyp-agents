@@ -83,19 +83,23 @@ pids=""
 mkdir -p "$outdir/data"
 for shard in "$outdir"/shards/*; do
   (
+    shardi=$(basename "$shard")
+    if [[ $shardi -ne 0 ]]; then
+      sleep 5
+    fi
     all_good=1
     first=1
     for name in $(sort $shard); do
       c="$outdir/configs/$name.textproto"
       o="$outdir/data/$name"
       if (( first == 1 )); then
-        echo check nodes
+        echo "[shard $shardi] check nodes"
         bin/deploy-heyp check-nodes -c $c
-        echo config sys
+        echo "[shard $shardi] config sys"
         bin/deploy-heyp config-sys -c $c -cc bbr -debugmon
-        echo "roughly measure per-QoS BW w/ congestion (info only)"
+        echo "[shard $shardi] roughly measure per-QoS BW w/ congestion (info only)"
         bin/deploy-heyp report-pri-bw -c $c
-        echo install bundle
+        echo "[shard $shardi] install bundle"
         bin/deploy-heyp install-bundle -c $c
         first=0
       fi
