@@ -25,8 +25,8 @@ func ReadApprovals(p string) (map[string]FGAdmissions, error) {
 	}
 
 	admissions := make(map[string]FGAdmissions)
-	for _, cl := range cfg.Clusters {
-		for _, limits := range cl.Limits.FlowAllocs {
+	for _, cl := range cfg.GetClusters() {
+		for _, limits := range cl.GetLimits().GetFlowAllocs() {
 			fg := limits.GetFlow().SrcDc + "_TO_" + limits.GetFlow().DstDc
 			admissions[fg] = FGAdmissions{
 				HIPRI: float64(limits.HipriRateLimitBps),

@@ -17,8 +17,8 @@ const numLookaheadSnaps = 3
 
 type EvalSnap struct {
 	UnixSec   float64
-	HostAgent proc.AlignedHostAgentStats
-	Fortio    proc.FortioDemandSnapshot
+	HostAgent *proc.AlignedHostAgentStats
+	Fortio    *proc.FortioDemandSnapshot
 }
 
 type Evaluator struct {

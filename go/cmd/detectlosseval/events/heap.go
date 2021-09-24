@@ -49,7 +49,7 @@ func (h *heap) Pop() Event {
 	h.h[0], h.h[n] = h.h[n], h.h[0]
 	h.down(0, n)
 	ev := h.h[n]
-	h.h = h.h[:n-1]
+	h.h = h.h[:n]
 	return ev
 }
 

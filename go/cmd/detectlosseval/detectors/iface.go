@@ -11,7 +11,7 @@ import (
 
 type LossDetectorArgs struct {
 	UnixSec    float64
-	Stats      proc.AlignedHostAgentStats
+	Stats      *proc.AlignedHostAgentStats
 	Admissions map[string]sysconfig.FGAdmissions
 	FGs        []string
 }
@@ -63,7 +63,7 @@ func makeIgnoreWithCumBytesLessThan(thresh int64) filterFunc {
 
 var _ filterFunc = ignoreAppLimited
 
-func forEachFGHost(fgs []string, stats proc.AlignedHostAgentStats, filters []filterFunc, fn func(fgID int, hostID uint64, infos []*pb.FlowInfo)) {
+func forEachFGHost(fgs []string, stats *proc.AlignedHostAgentStats, filters []filterFunc, fn func(fgID int, hostID uint64, infos []*pb.FlowInfo)) {
 	type fgState struct {
 		infos []*pb.FlowInfo
 	}
@@ -153,6 +153,8 @@ type AvgRetransDetector struct {
 func (d *AvgRetransDetector) FGsWithLOPRILoss(args LossDetectorArgs, detectedLoss []bool, scores []float64) {
 	if d.fgStats == nil {
 		d.fgStats = make([]avgRetransDetectorFGState, len(args.FGs))
+		d.prevInfos = make(map[hostConn]*pb.FlowInfo)
+		d.curInfos = make(map[hostConn]*pb.FlowInfo)
 	} else {
 		for i := range d.fgStats {
 			d.fgStats[i].Cur.HIPRI = trackedStats{}

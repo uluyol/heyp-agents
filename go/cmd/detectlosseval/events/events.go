@@ -6,20 +6,21 @@ type Event struct {
 }
 
 type Loop struct {
-	q heap
+	q        heap
+	sawFirst bool
 }
 
 func (l *Loop) AddEv(ev Event) { l.q.Push(ev) }
 
 func (l *Loop) Next() bool {
-	if l.q.Len() <= 1 {
-		if l.q.Len() == 1 {
-			l.q.Pop()
-		}
-		return false
+	if !l.sawFirst {
+		l.sawFirst = true
+		return l.q.Len() > 0
 	}
-	l.q.Pop()
-	return true
+	if l.q.Len() > 0 {
+		l.q.Pop()
+	}
+	return l.q.Len() > 0
 }
 
 func (l *Loop) Ev() Event { return l.q.Peek() }

@@ -9,16 +9,16 @@ import (
 )
 
 type HostAgentStatsMesg struct {
-	M *pb.InfoBundle
+	M pb.InfoBundle
 }
 
 func (m *HostAgentStatsMesg) UnmarshalJSON(b []byte) error {
-	return protojson.Unmarshal(b, m.M)
+	return protojson.Unmarshal(b, &m.M)
 }
 
 type AlignedHostAgentStats struct {
-	UnixSec float64                       `json:"unixSec"`
-	Data    map[string]HostAgentStatsMesg `json:"data"`
+	UnixSec float64                        `json:"unixSec"`
+	Data    map[string]*HostAgentStatsMesg `json:"data"`
 }
 
 type AlignedHostAgentStatsReader struct {

@@ -96,9 +96,10 @@ func NewReplayer(o ReplayerOptions) *Replayer {
 			}()
 			hr := r.o.HostReader
 			for hr.Next() {
+				v := hr.Get()
 				ev := events.Event{
 					UnixSec: hr.Get().UnixSec,
-					Data:    hr.Get(),
+					Data:    &v,
 				}
 				select {
 				case <-r.done:
@@ -121,9 +122,10 @@ func NewReplayer(o ReplayerOptions) *Replayer {
 			}()
 			fr := r.o.FortioDemandReader
 			for fr.Next() {
+				v := fr.Get()
 				ev := events.Event{
 					UnixSec: fr.Get().UnixSec,
-					Data:    fr.Get(),
+					Data:    &v,
 				}
 				select {
 				case <-r.done:
@@ -148,8 +150,8 @@ var evalEventPayload interface{} = evalEventPayloadType{}
 
 type evalEventProducer struct {
 	eval             *Evaluator
-	hostAgentStats   proc.AlignedHostAgentStats
-	fortioDemandSnap proc.FortioDemandSnapshot
+	hostAgentStats   *proc.AlignedHostAgentStats
+	fortioDemandSnap *proc.FortioDemandSnapshot
 	sawHost          bool
 	sawFortio        bool
 	shouldEval       bool // initially true
@@ -166,10 +168,10 @@ func newEvalEventProducer(evaluator *Evaluator) *evalEventProducer {
 // and proc.FortioDemandSnapshot appear, and periodically every 5 seconds afterward.
 func (p *evalEventProducer) MaybeAddNext(curEv events.Event, loop *events.Loop, hostAndFortioDone bool) {
 	switch v := curEv.Data.(type) {
-	case proc.AlignedHostAgentStats:
+	case *proc.AlignedHostAgentStats:
 		p.hostAgentStats = v
 		p.sawHost = true
-	case proc.FortioDemandSnapshot:
+	case *proc.FortioDemandSnapshot:
 		p.fortioDemandSnap = v
 		p.sawFortio = true
 	case evalEventPayloadType:
