@@ -19,18 +19,22 @@ type DeploymentConfig struct {
 }
 
 func LoadDeploymentConfig(path string) (*DeploymentConfig, error) {
-	var cfg DeploymentConfig
-
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config in %s: %w", path, err)
 	}
+	return LoadDeploymentConfigData(data, path)
+}
+
+func LoadDeploymentConfigData(data []byte, dataPath string) (*DeploymentConfig, error) {
+	var cfg DeploymentConfig
+
 	cfg.C = new(pb.DeploymentConfig)
-	err = prototext.Unmarshal(data, cfg.C)
+	err := prototext.Unmarshal(data, cfg.C)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse config: %w", err)
 	}
-	cfg.Name = filepath.Base(path)
+	cfg.Name = filepath.Base(dataPath)
 	cfg.Name = strings.TrimSuffix(cfg.Name, filepath.Ext(cfg.Name))
 
 	cfg.NodeRoles = make(map[string][]string)

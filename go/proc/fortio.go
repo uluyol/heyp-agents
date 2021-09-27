@@ -5,10 +5,14 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/uluyol/heyp-agents/go/deploy/actions"
+	"github.com/uluyol/heyp-agents/go/pb"
 )
 
 var fortioLogsRegex = regexp.MustCompile(
@@ -113,4 +117,151 @@ func NewFortioDemandTraceReader(r io.Reader) *FortioDemandTraceReader {
 		internFGs: make(map[string]string),
 		isHeader:  true,
 	}
+}
+
+type FortioDemandTraceGenerator struct {
+	config               *DeploymentConfig
+	instanceFG           map[[2]string]string
+	fgNames              []string
+	nextTime, start, end time.Time
+	instancePos          []int
+	cumDurs              [][]time.Duration
+	snapshot             FortioDemandSnapshot
+}
+
+func newFortioDemandTraceGeneratorWithStartEnd(
+	deployC *DeploymentConfig, start, end time.Time) (*FortioDemandTraceGenerator, error) {
+
+	instancePos := make([]int, len(deployC.C.GetFortio().Instances))
+	cumDurs := make([][]time.Duration, len(deployC.C.GetFortio().Instances))
+	for i, inst := range deployC.C.GetFortio().Instances {
+		cumDurs[i] = make([]time.Duration, len(inst.Client.WorkloadStages))
+		{
+			var dur time.Duration
+			for j, stage := range inst.Client.WorkloadStages {
+				d, err := time.ParseDuration(stage.GetRunDur())
+				if err != nil {
+					return nil, fmt.Errorf("failed to parse stage run duration: %w", err)
+				}
+				dur += d
+				cumDurs[i][j] = dur
+			}
+		}
+	}
+
+	fortio, err := actions.GetAndValidateFortioConfig(deployC.C)
+	if err != nil {
+		return nil, err
+	}
+
+	nodeCluster := make(map[string]string)
+	for _, c := range deployC.C.Clusters {
+		for _, node := range c.NodeNames {
+			nodeCluster[node] = c.GetName()
+		}
+	}
+
+	nodesCluster := func(nodes []*pb.DeployedNode) string {
+		if len(nodes) == 0 {
+			return ""
+		}
+		ret := nodeCluster[nodes[0].GetName()]
+		for _, n := range nodes[1:] {
+			if got := nodeCluster[n.GetName()]; got != ret {
+				log.Fatalf("nodes %v span multiple clusters (found %s and %s)", nodes, ret, got)
+			}
+		}
+		return ret
+	}
+
+	var (
+		instanceFG = make(map[[2]string]string)
+		fgNames    []string
+		haveFG     = make(map[string]bool)
+	)
+
+	{
+		for _, g := range fortio.Groups {
+			dstCluster := nodesCluster(g.GroupProxies)
+			for _, inst := range g.Instances {
+				srcCluster := nodesCluster(inst.Servers)
+				fg := srcCluster + "_TO_" + dstCluster
+				instanceFG[[2]string{inst.Config.GetGroup(), inst.Config.GetName()}] = fg
+				if !haveFG[fg] {
+					fgNames = append(fgNames, fg)
+					haveFG[fg] = true
+				}
+			}
+		}
+	}
+
+	gen := &FortioDemandTraceGenerator{
+		config:      deployC,
+		instanceFG:  instanceFG,
+		fgNames:     fgNames,
+		nextTime:    start,
+		start:       start,
+		end:         end.Add(500 * time.Millisecond),
+		instancePos: instancePos,
+		cumDurs:     cumDurs,
+	}
+
+	return gen, nil
+}
+
+func NewFortioDemandTraceGenerator(deployC *DeploymentConfig, logDir fs.FS) (*FortioDemandTraceGenerator, error) {
+	start, end, err := GetStartEndFortio(logDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get start/end time of workload: %w", err)
+	}
+
+	return newFortioDemandTraceGeneratorWithStartEnd(deployC, start, end)
+}
+
+func (g *FortioDemandTraceGenerator) Next() bool {
+	if g.nextTime.After(g.end) {
+		return false
+	}
+
+	fgDemands := make(map[string]float64, len(g.fgNames))
+
+	for _, fg := range g.fgNames {
+		fgDemands[fg] = 0
+	}
+
+	possibleNext := g.end.Add(time.Minute)
+Outer:
+	for i, inst := range g.config.C.GetFortio().Instances {
+		for foundEntry := false; !foundEntry; {
+			if g.instancePos[i] >= len(g.cumDurs[i]) {
+				continue Outer
+			}
+			posEnd := g.start.Add(g.cumDurs[i][g.instancePos[i]])
+			if !posEnd.After(g.nextTime) {
+				g.instancePos[i]++
+			} else {
+				// Found the right entry
+				if posEnd.Before(possibleNext) {
+					possibleNext = posEnd
+				}
+				fg := g.instanceFG[[2]string{inst.GetGroup(), inst.GetName()}]
+				stage := inst.GetClient().WorkloadStages[g.instancePos[i]]
+				fgDemands[fg] += stage.GetTargetAverageBps()
+				foundEntry = true
+			}
+		}
+	}
+	now := g.nextTime
+	g.nextTime = possibleNext
+
+	g.snapshot = FortioDemandSnapshot{
+		UnixSec:  unixSec(now),
+		FGDemand: fgDemands,
+	}
+
+	return true
+}
+
+func (g *FortioDemandTraceGenerator) Get() FortioDemandSnapshot {
+	return g.snapshot
 }
