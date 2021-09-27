@@ -14,9 +14,9 @@ import (
 )
 
 type ReplayerOptions struct {
-	HostReaders        []*proc.ProtoJSONRecReader
-	FortioDemandReader *proc.FortioDemandTraceReader
-	Evaluator          *Evaluator
+	HostReaders          []*proc.ProtoJSONRecReader
+	FortioTraceGenerator *proc.FortioDemandTraceGenerator
+	Evaluator            *Evaluator
 }
 
 type Replayer struct {
@@ -66,9 +66,7 @@ func (r *Replayer) Run() error {
 			errs = append(errs, fmt.Errorf("failed to read host-agent stats: %w", err))
 		}
 	}
-	if err := r.o.FortioDemandReader.Err(); err != nil {
-		errs = append(errs, fmt.Errorf("failed to read fortio demand trace: %w", err))
-	}
+	// FortioTraceGenerator does not produce errors
 	if err := r.o.Evaluator.Err(); err != nil {
 		errs = append(errs, fmt.Errorf("failure in evaluator: %w", err))
 	}
@@ -136,7 +134,7 @@ func NewReplayer(o ReplayerOptions) *Replayer {
 				close(fc)
 				r.wg.Done()
 			}()
-			fr := r.o.FortioDemandReader
+			fr := r.o.FortioTraceGenerator
 			for fr.Next() {
 				v := fr.Get()
 				ev := events.Event{

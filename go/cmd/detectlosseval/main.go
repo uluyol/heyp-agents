@@ -43,11 +43,10 @@ func main() {
 	log.SetFlags(0)
 
 	var (
-		configPath            = flag.String("c", "", "path to config file")
-		dataPath              = flag.String("data", "", "path to run data")
-		fortioDemandTracePath = flag.String("fortio-trace", "", "path to fortio demand trace")
-		lossOutPath           = flag.String("oloss", "/dev/stdout", "path to output loss metrics")
-		bottleneckCap         = flag.Float64("cap", 20<<30, "bottleneck capacity in bps")
+		configPath    = flag.String("c", "", "path to config file")
+		dataPath      = flag.String("data", "", "path to run data")
+		lossOutPath   = flag.String("oloss", "/dev/stdout", "path to output loss metrics")
+		bottleneckCap = flag.Float64("cap", 20<<30, "bottleneck capacity in bps")
 
 		admissionSlack       = flag.Float64("admission-slack", 0.25, "if usage > 1+admission-slack, don't detect loss")
 		allowedFracLossLOPRI = flag.Float64("allowed-frac-loss-lopri", 0.6, "if Loss(LOPRI) / Loss(LOPRI and HIPRI) > val, detect loss")
@@ -61,23 +60,18 @@ func main() {
 		log.Fatal(err)
 	}
 
-	fortioTrace, err := os.Open(*fortioDemandTracePath)
-	if err != nil {
-		log.Fatalf("failed to open fortio demand trace: %v", err)
-	}
-	// don't bother closing: we need it until program ends
-
 	lossFile, err := os.Create(*lossOutPath)
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	dataFS, err := logs.NewDataFS(*dataPath)
+	if err != nil {
+		log.Fatalf("failed to open data: %v", err)
+	}
+
 	var hostReaders []*proc.ProtoJSONRecReader
 	{
-		dataFS, err := logs.NewDataFS(*dataPath)
-		if err != nil {
-			log.Fatalf("failed to open data: %v", err)
-		}
 		toAlign, err := proc.GlobAndCollectHostAgentStatsFineGrained(dataFS)
 		if err != nil {
 			log.Fatalf("failed to find fine-grained host-agent logs: %v", err)
@@ -94,9 +88,19 @@ func main() {
 		log.Printf("reading fine-grained logs from %d host agents", len(hostReaders))
 	}
 
+	deployConfig, err := proc.LoadDeploymentConfig(*configPath)
+	if err != nil {
+		log.Fatalf("failed to open deployment config: %v", err)
+	}
+
+	fortioGen, err := proc.NewFortioDemandTraceGenerator(deployConfig, dataFS)
+	if err != nil {
+		log.Fatalf("failed to create fortio trace generator: %v", err)
+	}
+
 	replayer := replay.NewReplayer(replay.ReplayerOptions{
-		HostReaders:        hostReaders,
-		FortioDemandReader: proc.NewFortioDemandTraceReader(fortioTrace),
+		HostReaders:          hostReaders,
+		FortioTraceGenerator: fortioGen,
 		Evaluator: &replay.Evaluator{
 			W: lossFile,
 			LossDetector: &detectors.AvgRetransDetector{
