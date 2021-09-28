@@ -39,6 +39,7 @@ exit
 
 policy-map-output heyp-pri-pol
 service-queue 2 qos-policy heyp-pri-qos
+service-queue 3 qos-policy heyp-pri-qos
 exit
 
 interface range TenGigabitEthernet 1/1 - 1/48
