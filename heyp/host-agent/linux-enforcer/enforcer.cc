@@ -221,9 +221,6 @@ class LinuxHostEnforcerImpl : public LinuxHostEnforcer {
 
 constexpr int64_t kMaxBandwidthBps = 100 * (static_cast<int64_t>(1) << 30);  // 100 Gbps
 
-constexpr char kDscpHipri[] = "AF21";
-constexpr char kDscpLopri[] = "BE";
-
 LinuxHostEnforcerImpl::LinuxHostEnforcerImpl(
     absl::string_view device, const MatchHostFlowsFunc& match_host_flows_fn,
     const proto::HostEnforcerConfig& config)
@@ -321,7 +318,7 @@ absl::Status LinuxHostEnforcerImpl::InitSimulatedWan(std::vector<FlowNetemConfig
     sys->lopri.did_create_class = true;
 
     sys->matched.hipri = {c.matched_flows.begin(), c.matched_flows.end()};
-    StageIptablesForFlow(sys->matched.hipri, kDscpHipri, sys->hipri.class_id);
+    StageIptablesForFlow(sys->matched.hipri, config_.dscp_hipri(), sys->hipri.class_id);
   }
 
   st = ipt_controller_.CommitChanges();
@@ -587,7 +584,7 @@ void LinuxHostEnforcerImpl::EnforceAllocs(const FlowStateProvider& flow_state_pr
       SPDLOG_LOGGER_WARN(&logger_, "will not change iptables config for flow");
       continue;
     } else {
-      StageIptablesForFlow(sys->matched.hipri, kDscpHipri, sys->hipri.class_id);
+      StageIptablesForFlow(sys->matched.hipri, config_.dscp_hipri(), sys->hipri.class_id);
     }
 
     if (!sys->matched.lopri.empty() && !sys->lopri.did_create_class) {
@@ -597,7 +594,7 @@ void LinuxHostEnforcerImpl::EnforceAllocs(const FlowStateProvider& flow_state_pr
       SPDLOG_LOGGER_WARN(&logger_, "will not change iptables config for flow");
       continue;
     } else {
-      StageIptablesForFlow(sys->matched.lopri, kDscpLopri, sys->lopri.class_id);
+      StageIptablesForFlow(sys->matched.lopri, config_.dscp_lopri(), sys->lopri.class_id);
     }
   }
 
@@ -716,9 +713,12 @@ IsLopriFunc LinuxHostEnforcerImpl::GetIsLopriFunc() const {
   snapshot_mu_.Lock();
   iptables::SettingBatch settings = ipt_snapshot_;
   snapshot_mu_.Unlock();
-  return [settings](const proto::FlowMarker& flow, spdlog::logger* logger) {
+  std::string dscp_hipri = config_.dscp_hipri();
+  std::string dscp_lopri = config_.dscp_lopri();
+  return [settings, dscp_hipri, dscp_lopri](const proto::FlowMarker& flow,
+                                            spdlog::logger* logger) {
     return iptables::SettingsFindDscp(settings, flow.src_port(), flow.dst_port(),
-                                      flow.dst_addr(), kDscpHipri) == kDscpLopri;
+                                      flow.dst_addr(), dscp_hipri) == dscp_lopri;
   };
 }
 

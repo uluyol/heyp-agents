@@ -38,6 +38,9 @@ message HostEnforcerConfig {
 
   // HostEnforcer will never drop rate limits below min_rate_limit_bps.
   optional int64 min_rate_limit_bps = 5 [default = 5242880];
+
+  optional string dscp_hipri = 6 [default = "AF21"];
+  optional string dscp_lopri = 7 [default = "BE"];
 }
 
 message HostDaemonConfig {
