@@ -16,6 +16,7 @@ if (nrow(data) == 0) {
 
 data$Timestamp <- data$UnixTime - min(data$UnixTime)
 data$LimitGbps <- data$LimitBps / (1024 * 1024 * 1024)
+data$QoS[data$QoS == "CRITICAL"] <- "HIPRI" # TODO: consider distinguishing these
 data$Kind <- paste(data$Node, ":", data$QoS, sep="")
 
 kinds.all <- unique(data$Kind)

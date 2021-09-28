@@ -122,6 +122,15 @@ mkdir -p "$procdir/cluster-alloc"
       .data |
       to_entries[] |
       .key as $key |
+      .value.CRITICAL?[] |
+      "\($time),\($key),CRITICAL,\(.SrcDC),\"\(.SrcIP)\",\(.DstDC),\"\(.DstIP)\",\(.Limiter.RateBps)"' \
+    "$procdir/host-enforcer-logs.json" \
+    >> "$procdir/host-enforcer-limits.csv" && \
+  jq -r '
+      .unixSec as $time |
+      .data |
+      to_entries[] |
+      .key as $key |
       .value.HIPRI?[] |
       "\($time),\($key),HIPRI,\(.SrcDC),\"\(.SrcIP)\",\(.DstDC),\"\(.DstIP)\",\(.Limiter.RateBps)"' \
     "$procdir/host-enforcer-logs.json" \

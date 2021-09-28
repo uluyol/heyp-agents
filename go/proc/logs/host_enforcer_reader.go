@@ -55,8 +55,8 @@ func NewHostEnforcerLogReader(logDir fs.FS, hostDC map[string]string, srcIP stri
 }
 
 type HostEnforcerLogEntry struct {
-	Time         time.Time
-	HIPRI, LOPRI []QoSEnforcerEntry
+	Time                   time.Time
+	CRITICAL, HIPRI, LOPRI []QoSEnforcerEntry
 }
 
 type QoSEnforcerEntry struct {
@@ -93,12 +93,14 @@ func (r *HostEnforcerLogReader) ReadOne(e *HostEnforcerLogEntry) bool {
 		return false
 	}
 
+	sawCRITICAL := make(map[string]bool)
 	sawHIPRI := make(map[string]bool)
 	sawLOPRI := make(map[string]bool)
 
 	*e = HostEnforcerLogEntry{
-		HIPRI: make([]QoSEnforcerEntry, 0),
-		LOPRI: make([]QoSEnforcerEntry, 0),
+		CRITICAL: make([]QoSEnforcerEntry, 0),
+		HIPRI:    make([]QoSEnforcerEntry, 0),
+		LOPRI:    make([]QoSEnforcerEntry, 0),
 	}
 
 	t, err := time.Parse(time.RFC3339Nano, r.remaining[0])
@@ -160,6 +162,8 @@ func (r *HostEnforcerLogReader) ReadOne(e *HostEnforcerLogEntry) bool {
 	for _, rule := range ipt {
 		bkt := &e.HIPRI
 		switch rule.QoS {
+		case "0x1a", "0x1A":
+			bkt = &e.CRITICAL
 		case "0x12":
 			// bkt is already HIPRI
 		case "0", "0x0", "0x00":
@@ -186,10 +190,15 @@ func (r *HostEnforcerLogReader) ReadOne(e *HostEnforcerLogEntry) bool {
 			Limiter: classes[rule.ClassID],
 		})
 
-		if bkt == &e.HIPRI {
+		switch bkt {
+		case &e.CRITICAL:
+			sawCRITICAL[rule.DstIP] = true
+		case &e.HIPRI:
 			sawHIPRI[rule.DstIP] = true
-		} else {
+		case &e.LOPRI:
 			sawLOPRI[rule.DstIP] = true
+		default:
+			panic("bkt was not CRITICAL, HIPRI, or LOPRI")
 		}
 	}
 
@@ -201,6 +210,15 @@ func (r *HostEnforcerLogReader) ReadOne(e *HostEnforcerLogEntry) bool {
 	}
 
 	for dstIP := range r.prevDstIPs {
+		if !sawCRITICAL[dstIP] {
+			e.CRITICAL = append(e.CRITICAL, QoSEnforcerEntry{
+				SrcDC:   r.srcDC,
+				SrcIP:   r.srcIP,
+				DstDC:   r.hostDC[dstIP],
+				DstIP:   dstIP,
+				Limiter: HTBClass{},
+			})
+		}
 		if !sawHIPRI[dstIP] {
 			e.HIPRI = append(e.HIPRI, QoSEnforcerEntry{
 				SrcDC:   r.srcDC,
