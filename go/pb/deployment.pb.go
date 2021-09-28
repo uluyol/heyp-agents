@@ -35,6 +35,8 @@ type DeployedNode struct {
 	// Valid roles:
 	// - host-agent
 	// - cluster-agent
+	// - hipri-[DSCP VALUE]
+	// - lopri-[DSCP VALUE]
 	// - testlopri-[name]-server
 	// - testlopri-[name]-client
 	// - fortio-[group]-envoy-proxy

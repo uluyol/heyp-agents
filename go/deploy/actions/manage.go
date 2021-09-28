@@ -157,9 +157,10 @@ type HEYPNodeConfigs struct {
 }
 
 type HostAgentNode struct {
-	Host             *pb.DeployedNode
-	JobName          string
-	ClusterAgentAddr string
+	Host                     *pb.DeployedNode
+	JobName                  string
+	ClusterAgentAddr         string
+	PatchHostAgentConfigFunc func(c *pb.HostAgentConfig)
 }
 
 type ClusterAgentNode struct {
@@ -197,6 +198,7 @@ func GetHEYPNodeConfigs(c *pb.DeploymentConfig) (HEYPNodeConfigs, error) {
 				isHostAgent     bool
 				hasJobName      bool
 			)
+			hostAgentConfig.PatchHostAgentConfigFunc = func(*pb.HostAgentConfig) {}
 			for _, role := range n.Roles {
 				switch {
 				case role == "cluster-agent":
@@ -213,6 +215,20 @@ func GetHEYPNodeConfigs(c *pb.DeploymentConfig) (HEYPNodeConfigs, error) {
 					}
 					hostAgentConfig.JobName = strings.TrimPrefix(role, "job-")
 					hasJobName = true
+				case strings.HasPrefix(role, "hipri-"):
+					dscp := strings.TrimPrefix(role, "hipri-")
+					prev := hostAgentConfig.PatchHostAgentConfigFunc
+					hostAgentConfig.PatchHostAgentConfigFunc = func(c *pb.HostAgentConfig) {
+						prev(c)
+						c.Enforcer.DscpHipri = proto.String(dscp)
+					}
+				case strings.HasPrefix(role, "lopri-"):
+					dscp := strings.TrimPrefix(role, "lopri-")
+					prev := hostAgentConfig.PatchHostAgentConfigFunc
+					hostAgentConfig.PatchHostAgentConfigFunc = func(c *pb.HostAgentConfig) {
+						prev(c)
+						c.Enforcer.DscpLopri = proto.String(dscp)
+					}
 				}
 			}
 			if hasJobName && !isHostAgent {
@@ -321,6 +337,7 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string, startConfig HE
 						path.Join(remoteTopdir, "logs/host-enforcer-debug"))
 				}
 				hostConfig.DcMapper = nodeConfigs.DCMapperConfig
+				n.PatchHostAgentConfigFunc(hostConfig)
 
 				hostConfigBytes, err := prototext.MarshalOptions{Indent: "  "}.Marshal(hostConfig)
 				if err != nil {
