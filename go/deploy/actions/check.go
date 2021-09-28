@@ -31,7 +31,11 @@ func iperfBW(b []byte) (int64, error) {
 	return v, nil
 }
 
-func ReportPrioritizationBW(c *pb.DeploymentConfig) (hipri float64, lopri float64, err error) {
+const TOS_LOPRI = "0x00"    // BE
+const TOS_HIPRI = "0x48"    // AF21
+const TOS_CRITICAL = "0x68" // AF31
+
+func ReportPrioritizationBW(c *pb.DeploymentConfig, lohiTOS [2]string) (hipri float64, lopri float64, err error) {
 	if len(c.Nodes) < 3 {
 		return 0, 0, errors.New("fewer than 3 nodes")
 	}
@@ -55,7 +59,7 @@ func ReportPrioritizationBW(c *pb.DeploymentConfig) (hipri float64, lopri float6
 	var eg multierrgroup.Group
 	eg.Go(func() error {
 		cmd := TracingCommand(LogWithPrefix("report-pri-bw: "),
-			"ssh", c1.GetExternalAddr(), "iperf -y C -S 0x00 -c "+server.GetExperimentAddr())
+			"ssh", c1.GetExternalAddr(), "iperf -y C -S "+lohiTOS[0]+" -c "+server.GetExperimentAddr())
 		var err error
 		outLO, err = cmd.CombinedOutput()
 		if err != nil {
@@ -65,7 +69,7 @@ func ReportPrioritizationBW(c *pb.DeploymentConfig) (hipri float64, lopri float6
 	})
 	eg.Go(func() error {
 		cmd := TracingCommand(LogWithPrefix("report-pri-bw: "),
-			"ssh", c2.GetExternalAddr(), "iperf -y C -S 0x48 -c "+server.GetExperimentAddr())
+			"ssh", c2.GetExternalAddr(), "iperf -y C -S "+lohiTOS[1]+" -c "+server.GetExperimentAddr())
 		var err error
 		outHI, err = cmd.CombinedOutput()
 		if err != nil {

@@ -143,17 +143,43 @@ var killIPerfCmd = &configCmd{
 	exec:     actions.KillIPerf,
 }
 
-var reportPriBW = &configCmd{
-	name:     "report-pri-bw",
-	synopsis: "measure HIPRI & LOPRI BW on a congested link",
-	exec: func(c *pb.DeploymentConfig) error {
-		hi, lo, err := actions.ReportPrioritizationBW(c)
+type reportPriBWCmd struct {
+	configPath string
+	full       bool
+}
+
+func (c *reportPriBWCmd) Name() string     { return "report-pri-bw" }
+func (c *reportPriBWCmd) Synopsis() string { return "measure HIPRI & LOPRI BW on a congested link" }
+func (c *reportPriBWCmd) Usage() string    { return "" }
+
+func (c *reportPriBWCmd) SetFlags(fs *flag.FlagSet) {
+	configVar(&c.configPath, fs)
+	fs.BoolVar(&c.full, "full", false, "compare critical in addition to HIPRI/LOPRI")
+}
+
+func (c *reportPriBWCmd) Execute(ctx context.Context, fs *flag.FlagSet,
+	args ...interface{}) subcommands.ExitStatus {
+	cfg := parseConfig(c.configPath)
+	hi, lo, err := actions.ReportPrioritizationBW(cfg, [2]string{actions.TOS_LOPRI, actions.TOS_HIPRI})
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("HIPRI    %v Gbps\nLOPRI    %v Gbps\n", hi, lo)
+	if c.full {
+		hi, lo, err = actions.ReportPrioritizationBW(cfg, [2]string{actions.TOS_HIPRI, actions.TOS_CRITICAL})
 		if err != nil {
 			log.Fatal(err)
 		}
-		fmt.Printf("HIPRI %v Gbps\nLOPRI %v Gbps\n", hi, lo)
-		return nil
-	},
+		fmt.Printf("CRITICAL %v Gbps\nHIPRI    %v Gbps\n", hi, lo)
+
+		hi, lo, err = actions.ReportPrioritizationBW(cfg, [2]string{actions.TOS_LOPRI, actions.TOS_CRITICAL})
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("CRITICAL %v Gbps\nLOPRI    %v Gbps\n", hi, lo)
+	}
+
+	return subcommands.ExitSuccess
 }
 
 var stopHEYPCmd = &configAndRemDirCmd{
@@ -621,7 +647,7 @@ func main() {
 	subcommands.Register(checkNodesCmd, "check")
 	subcommands.Register(measureNodesBandwidthCmd, "check")
 	subcommands.Register(killIPerfCmd, "check")
-	subcommands.Register(reportPriBW, "check")
+	subcommands.Register(new(reportPriBWCmd), "check")
 	subcommands.Register(new(updateConfigCmd), "")
 	subcommands.Register(new(collectHostStatsCmd), "")
 	subcommands.Register(killHEYPCmd, "")
