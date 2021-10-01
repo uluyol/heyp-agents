@@ -104,10 +104,12 @@ func (fc *FortioConfig) GetEnvoyYAML(proxyNode *pb.DeployedNode) string {
 }
 
 func GetAndValidateFortioConfig(dc *pb.DeploymentConfig) (*FortioConfig, error) {
-	out := new(FortioConfig)
-	out.Groups = make(map[string]*FortioGroup)
+	out := &FortioConfig{
+		Config: dc.GetFortio(),
+		Groups: make(map[string]*FortioGroup),
+	}
 
-	c := dc.GetFortio()
+	c := out.Config
 	for _, g := range c.GetGroups() {
 		out.Groups[g.GetName()] = &FortioGroup{
 			Config:    g,
