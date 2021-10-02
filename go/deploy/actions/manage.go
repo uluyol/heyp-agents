@@ -169,9 +169,30 @@ type ClusterAgentNode struct {
 	Address string
 }
 
-func GetHEYPNodeConfigs(c *pb.DeploymentConfig) (HEYPNodeConfigs, error) {
+func checkNetem(dcPair *pb.SimulatedWanConfig_Pair, netem *pb.NetemConfig, fieldName string) error {
+	if netem.GetDelayMs() <= 0 {
+		return fmt.Errorf("bad simulated wan: %s->%s has %s config with latency = %d ms",
+			dcPair.GetSrcDc(), dcPair.GetDstDc(), fieldName, netem.GetDelayMs())
+	}
+	return nil
+}
+
+func GetAndValidateHEYPNodeConfigs(c *pb.DeploymentConfig) (HEYPNodeConfigs, error) {
 	var nodeConfigs HEYPNodeConfigs
 	nodeConfigs.DCMapperConfig = new(pb.StaticDCMapperConfig)
+
+	for _, dcPair := range c.GetHostAgentTemplate().GetSimulatedWan().DcPairs {
+		if dcPair.Netem != nil {
+			if err := checkNetem(dcPair, dcPair.Netem, "netem"); err != nil {
+				return nodeConfigs, err
+			}
+		}
+		if dcPair.NetemLopri != nil {
+			if err := checkNetem(dcPair, dcPair.NetemLopri, "netem_lopri"); err != nil {
+				return nodeConfigs, err
+			}
+		}
+	}
 
 	numHostsFilled := 0
 	for _, cluster := range c.Clusters {
@@ -256,7 +277,7 @@ func GetHEYPNodeConfigs(c *pb.DeploymentConfig) (HEYPNodeConfigs, error) {
 }
 
 func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string, startConfig HEYPAgentsConfig) error {
-	nodeConfigs, err := GetHEYPNodeConfigs(c)
+	nodeConfigs, err := GetAndValidateHEYPNodeConfigs(c)
 	if err != nil {
 		return err
 	}
@@ -551,7 +572,7 @@ func KillHEYP(c *pb.DeploymentConfig) error {
 }
 
 func GracefulStopHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string) error {
-	nodeConfigs, err := GetHEYPNodeConfigs(c)
+	nodeConfigs, err := GetAndValidateHEYPNodeConfigs(c)
 	if err != nil {
 		return err
 	}
