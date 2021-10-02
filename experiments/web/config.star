@@ -160,6 +160,7 @@ def GenWorkloadStagesPeriodicSpike(
 def GenWorkloadStagesIncreasing(
         AA_bps = None,
         num_AA_backends = None,
+        num_AA_servers_per_backend_host = 2,
         WA_bps_min = None,
         WA_bps_max = None,
         AA_max_prop_delay_ms = _DEFAULT_AA_prop_delay_ms,
@@ -175,7 +176,7 @@ def GenWorkloadStagesIncreasing(
             "run_dur": "150s",
         }],
         num_shards_per_backend = NumShards(AA_per_be_bps),
-        num_servers_per_backend_host = 2,
+        num_servers_per_backend_host = num_AA_servers_per_backend_host,
         name_prefix = "AA_",
         envoy_group_name = "AA",
         starting_port = AA_FORTIO_STARTING_PORT,
@@ -628,7 +629,7 @@ def GenConfig(
         })
         envoy_port_counter += 1
 
-    aa_to_edge_client_lopri = {}
+    aa_to_edge_client_lopri = None
     if AA_lopri_is_longer:
         aa_to_edge_client_lopri = {
             "delay_ms": AA_prop_delay_ms_extra_lopri,  # total should include latency of opposite direction
