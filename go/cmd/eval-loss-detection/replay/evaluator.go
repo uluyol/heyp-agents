@@ -8,8 +8,8 @@ import (
 	"math"
 	"sort"
 
-	"github.com/uluyol/heyp-agents/go/cmd/detectlosseval/detectors"
-	"github.com/uluyol/heyp-agents/go/cmd/detectlosseval/sysconfig"
+	"github.com/uluyol/heyp-agents/go/cmd/eval-loss-detection/detectors"
+	"github.com/uluyol/heyp-agents/go/cmd/eval-loss-detection/sysconfig"
 	"github.com/uluyol/heyp-agents/go/pb"
 	"github.com/uluyol/heyp-agents/go/proc"
 )

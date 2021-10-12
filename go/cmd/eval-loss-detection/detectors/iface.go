@@ -4,7 +4,7 @@ import (
 	"log"
 	"sort"
 
-	"github.com/uluyol/heyp-agents/go/cmd/detectlosseval/sysconfig"
+	"github.com/uluyol/heyp-agents/go/cmd/eval-loss-detection/sysconfig"
 	"github.com/uluyol/heyp-agents/go/pb"
 )
 

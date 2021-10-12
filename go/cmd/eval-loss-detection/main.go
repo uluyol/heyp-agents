@@ -31,15 +31,15 @@ import (
 	"log"
 	"os"
 
-	"github.com/uluyol/heyp-agents/go/cmd/detectlosseval/detectors"
-	"github.com/uluyol/heyp-agents/go/cmd/detectlosseval/replay"
-	"github.com/uluyol/heyp-agents/go/cmd/detectlosseval/sysconfig"
+	"github.com/uluyol/heyp-agents/go/cmd/eval-loss-detection/detectors"
+	"github.com/uluyol/heyp-agents/go/cmd/eval-loss-detection/replay"
+	"github.com/uluyol/heyp-agents/go/cmd/eval-loss-detection/sysconfig"
 	"github.com/uluyol/heyp-agents/go/proc"
 	"github.com/uluyol/heyp-agents/go/proc/logs"
 )
 
 func main() {
-	log.SetPrefix("detectlosseval: ")
+	log.SetPrefix("eval-loss-detection: ")
 	log.SetFlags(0)
 
 	var (

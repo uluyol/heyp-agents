@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/uluyol/heyp-agents/go/cmd/detectlosseval/events"
+	"github.com/uluyol/heyp-agents/go/cmd/eval-loss-detection/events"
 	"github.com/uluyol/heyp-agents/go/pb"
 	"github.com/uluyol/heyp-agents/go/proc"
 )

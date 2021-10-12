@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/uluyol/heyp-agents/go/cmd/internal/alloc"
 	"golang.org/x/exp/rand"
 
 	"gonum.org/v1/gonum/stat"
@@ -338,7 +339,7 @@ func runSim(numFlows int, c SimConfig) simRunResult {
 					hipriAggLimit, lopriAggLimit := AggLimits(wantLOPRIFrac, c.NumBottleneckFlows)
 
 					demands := hostsDemandsIgnoreZero(trial.Hosts, c.NumBottleneckFlows)
-					trial.WaterlevelHIPRI = MaxMinFairWaterlevel(hipriAggLimit, demands)
+					trial.WaterlevelHIPRI = alloc.MaxMinFairWaterlevel(hipriAggLimit, demands)
 					for i := range demands {
 						if demands[i] < trial.WaterlevelHIPRI {
 							demands[i] = 0
@@ -346,7 +347,7 @@ func runSim(numFlows int, c SimConfig) simRunResult {
 							demands[i] -= trial.WaterlevelHIPRI
 						}
 					}
-					trial.WaterlevelLOPRI = MaxMinFairWaterlevel(lopriAggLimit, demands)
+					trial.WaterlevelLOPRI = alloc.MaxMinFairWaterlevel(lopriAggLimit, demands)
 
 					var numBottleneckedLOPRI int
 					switch c.Method {
@@ -509,24 +510,4 @@ func hostsDemandsIgnoreZero(hosts []hostInfo, numBottleneckedFlows int) []float6
 		}
 	}
 	return demands
-}
-
-func MaxMinFairWaterlevel(capacity float64, demands []float64) float64 {
-	// Compute max-min fair HIPRI waterlevel
-	unsatisfied := append([]float64(nil), demands...)
-	sort.Float64s(unsatisfied)
-	var waterlevel float64
-	for i := range unsatisfied {
-		delta := unsatisfied[i] - waterlevel
-		numUnsatisfied := len(unsatisfied) - i
-		ask := delta * float64(numUnsatisfied)
-		if ask <= capacity {
-			waterlevel += delta
-			capacity -= ask
-		} else {
-			waterlevel += capacity / float64(numUnsatisfied)
-			break
-		}
-	}
-	return waterlevel
 }
