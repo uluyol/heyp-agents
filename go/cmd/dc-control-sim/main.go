@@ -6,7 +6,7 @@ import (
 	"math"
 	"os"
 
-	"github.com/uluyol/heyp-agents/go/cmd/internal/sampling"
+	"github.com/uluyol/heyp-agents/go/intradc/sampling"
 	"golang.org/x/exp/rand"
 )
 

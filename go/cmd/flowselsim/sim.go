@@ -17,7 +17,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/uluyol/heyp-agents/go/cmd/internal/alloc"
+	"github.com/uluyol/heyp-agents/go/intradc/alloc"
 	"golang.org/x/exp/rand"
 
 	"gonum.org/v1/gonum/stat"
