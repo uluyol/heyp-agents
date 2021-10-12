@@ -6,36 +6,10 @@ import (
 	"math"
 	"os"
 
+	"github.com/uluyol/heyp-agents/go/intradc/dists"
 	"github.com/uluyol/heyp-agents/go/intradc/sampling"
 	"golang.org/x/exp/rand"
 )
-
-type usageRange struct {
-	Low  float64
-	High float64
-	Num  int
-}
-
-func uniformDemands(rng *rand.Rand, r usageRange) []float64 {
-	d := make([]float64, r.Num)
-	urange := r.High - r.Low
-	for i := range d {
-		d[i] = r.Low + rand.Float64()*urange
-	}
-	return d
-}
-
-func elephantsMiceDemands(rng *rand.Rand, elephants, mice usageRange) []float64 {
-	return append(uniformDemands(rng, elephants), uniformDemands(rng, mice)...)
-}
-
-func expDemands(rng *rand.Rand, mean, max float64, num int) []float64 {
-	d := make([]float64, num)
-	for i := range d {
-		d[i] = math.Min(max, rng.ExpFloat64()*mean)
-	}
-	return d
-}
 
 type evalResult struct {
 	ExactSum   float64
@@ -70,229 +44,250 @@ type evalConfig struct {
 	Name             string
 	Approval         float64
 	TargetNumSamples int
-	MkDist           func(*rand.Rand) []float64
+	DistGen          dists.DistGen
 }
 
 func main() {
-	mkUni := func(r usageRange) func(*rand.Rand) []float64 {
-		return func(rng *rand.Rand) []float64 {
-			return uniformDemands(rng, r)
-		}
-	}
-	mkEleph := func(e, m usageRange) func(*rand.Rand) []float64 {
-		return func(rng *rand.Rand) []float64 {
-			return elephantsMiceDemands(rng, e, m)
-		}
-	}
-	mkExp := func(mean, max float64, num int) func(*rand.Rand) []float64 {
-		return func(rng *rand.Rand) []float64 {
-			return expDemands(rng, mean, max, num)
-		}
-	}
 
 	var baseConfigs = []evalConfig{
 		// UNIFORM //
 		{
 			Name:     "uniform,3x,10",
 			Approval: 20_000,
-			MkDist:   mkUni(usageRange{High: 12000, Num: 10}),
+			DistGen:  dists.UniformGen{High: 12000, Num: 10},
 		},
 		{
 			Name:     "uniform,2x,10",
 			Approval: 30_000,
-			MkDist:   mkUni(usageRange{High: 12000, Num: 10}),
+			DistGen:  dists.UniformGen{High: 12000, Num: 10},
 		},
 		{
 			Name:     "uniform,1x,10",
 			Approval: 60_000,
-			MkDist:   mkUni(usageRange{High: 12000, Num: 10}),
+			DistGen:  dists.UniformGen{High: 12000, Num: 10},
 		},
 		{
 			Name:     "uniform,0.5x,10",
 			Approval: 120_000,
-			MkDist:   mkUni(usageRange{High: 12000, Num: 10}),
+			DistGen:  dists.UniformGen{High: 12000, Num: 10},
 		},
 		{
 			Name:     "uniform,3x,100",
 			Approval: 20_000,
-			MkDist:   mkUni(usageRange{High: 1200, Num: 100}),
+			DistGen:  dists.UniformGen{High: 1200, Num: 100},
 		},
 		{
 			Name:     "uniform,2x,100",
 			Approval: 30_000,
-			MkDist:   mkUni(usageRange{High: 1200, Num: 100}),
+			DistGen:  dists.UniformGen{High: 1200, Num: 100},
 		},
 		{
 			Name:     "uniform,1x,100",
 			Approval: 60_000,
-			MkDist:   mkUni(usageRange{High: 1200, Num: 100}),
+			DistGen:  dists.UniformGen{High: 1200, Num: 100},
 		},
 		{
 			Name:     "uniform,0.5x,100",
 			Approval: 120_000,
-			MkDist:   mkUni(usageRange{High: 1200, Num: 100}),
+			DistGen:  dists.UniformGen{High: 1200, Num: 100},
 		},
 		{
 			Name:     "uniform,3x,1000",
 			Approval: 20_000,
-			MkDist:   mkUni(usageRange{High: 120, Num: 1000}),
+			DistGen:  dists.UniformGen{High: 120, Num: 1000},
 		},
 		{
 			Name:     "uniform,2x,1000",
 			Approval: 30_000,
-			MkDist:   mkUni(usageRange{High: 120, Num: 1000}),
+			DistGen:  dists.UniformGen{High: 120, Num: 1000},
 		},
 		{
 			Name:     "uniform,1x,1000",
 			Approval: 60_000,
-			MkDist:   mkUni(usageRange{High: 120, Num: 1000}),
+			DistGen:  dists.UniformGen{High: 120, Num: 1000},
 		},
 		{
 			Name:     "uniform,0.5x,1000",
 			Approval: 120_000,
-			MkDist:   mkUni(usageRange{High: 120, Num: 1000}),
+			DistGen:  dists.UniformGen{High: 120, Num: 1000},
 		},
 		{
 			Name:     "uniform,3x,100000",
 			Approval: 20_000,
-			MkDist:   mkUni(usageRange{High: 1.2, Num: 100_000}),
+			DistGen:  dists.UniformGen{High: 1.2, Num: 100_000},
 		},
 		{
 			Name:     "uniform,2x,100000",
 			Approval: 30_000,
-			MkDist:   mkUni(usageRange{High: 1.2, Num: 100_000}),
+			DistGen:  dists.UniformGen{High: 1.2, Num: 100_000},
 		},
 		{
 			Name:     "uniform,1x,100000",
 			Approval: 60_000,
-			MkDist:   mkUni(usageRange{High: 1.2, Num: 100_000}),
+			DistGen:  dists.UniformGen{High: 1.2, Num: 100_000},
 		},
 		{
 			Name:     "uniform,0.5x,100000",
 			Approval: 120_000,
-			MkDist:   mkUni(usageRange{High: 1.2, Num: 100_000}),
+			DistGen:  dists.UniformGen{High: 1.2, Num: 100_000},
 		},
 		// EXPONENTIAL //
 		{
 			Name:     "exp,3x,10",
 			Approval: 20_000,
-			MkDist:   mkExp(6000, 1000000, 10),
+			DistGen:  dists.ExponentialGen{Mean: 6000, Max: 1000000, Num: 10},
 		},
 		{
 			Name:     "exp,2x,10",
 			Approval: 30_000,
-			MkDist:   mkExp(6000, 1000000, 10),
+			DistGen:  dists.ExponentialGen{Mean: 6000, Max: 1000000, Num: 10},
 		},
 		{
 			Name:     "exp,1x,10",
 			Approval: 60_000,
-			MkDist:   mkExp(6000, 1000000, 10),
+			DistGen:  dists.ExponentialGen{Mean: 6000, Max: 1000000, Num: 10},
 		},
 		{
 			Name:     "exp,0.5x,10",
 			Approval: 120_000,
-			MkDist:   mkExp(6000, 1000000, 10),
+			DistGen:  dists.ExponentialGen{Mean: 6000, Max: 1000000, Num: 10},
 		},
 		{
 			Name:     "exp,3x,100",
 			Approval: 20_000,
-			MkDist:   mkExp(600, 100000, 100),
+			DistGen:  dists.ExponentialGen{Mean: 600, Max: 100000, Num: 100},
 		},
 		{
 			Name:     "exp,2x,100",
 			Approval: 30_000,
-			MkDist:   mkExp(600, 100000, 100),
+			DistGen:  dists.ExponentialGen{Mean: 600, Max: 100000, Num: 100},
 		},
 		{
 			Name:     "exp,1x,100",
 			Approval: 60_000,
-			MkDist:   mkExp(600, 100000, 100),
+			DistGen:  dists.ExponentialGen{Mean: 600, Max: 100000, Num: 100},
 		},
 		{
 			Name:     "exp,0.5x,100",
 			Approval: 120_000,
-			MkDist:   mkExp(600, 100000, 100),
+			DistGen:  dists.ExponentialGen{Mean: 600, Max: 100000, Num: 100},
 		},
 		{
 			Name:     "exp,3x,1000",
 			Approval: 20_000,
-			MkDist:   mkExp(60, 10000, 1000),
+			DistGen:  dists.ExponentialGen{Mean: 60, Max: 10000, Num: 100},
 		},
 		{
 			Name:     "exp,2x,1000",
 			Approval: 30_000,
-			MkDist:   mkExp(60, 10000, 1000),
+			DistGen:  dists.ExponentialGen{Mean: 60, Max: 10000, Num: 1000},
 		},
 		{
 			Name:     "exp,1x,1000",
 			Approval: 60_000,
-			MkDist:   mkExp(60, 10000, 1000),
+			DistGen:  dists.ExponentialGen{Mean: 60, Max: 10000, Num: 1000},
 		},
 		{
 			Name:     "exp,0.5x,1000",
 			Approval: 120_000,
-			MkDist:   mkExp(60, 10000, 1000),
+			DistGen:  dists.ExponentialGen{Mean: 60, Max: 10000, Num: 1000},
 		},
 		// ELEPHANTS AND MICE //
 		{
 			Name:     "eleph_mice-17-100,3x,117",
 			Approval: 6_000,
-			MkDist:   mkEleph(usageRange{High: 1200, Low: 8000, Num: 17}, usageRange{High: 20, Num: 100}),
+			DistGen: dists.ElephantsMiceGen{
+				Elephants: dists.UniformGen{High: 1200, Low: 8000, Num: 17},
+				Mice:      dists.UniformGen{High: 20, Num: 100},
+			},
 		},
 		{
 			Name:     "eleph_mice-17-100,2x,117",
 			Approval: 9_000,
-			MkDist:   mkEleph(usageRange{High: 1200, Low: 8000, Num: 17}, usageRange{High: 20, Num: 100}),
+			DistGen: dists.ElephantsMiceGen{
+				Elephants: dists.UniformGen{High: 1200, Low: 8000, Num: 17},
+				Mice:      dists.UniformGen{High: 20, Num: 100},
+			},
 		},
 		{
 			Name:     "eleph_mice-17-100,1x,117",
 			Approval: 18_000,
-			MkDist:   mkEleph(usageRange{High: 1200, Low: 8000, Num: 17}, usageRange{High: 20, Num: 100}),
+			DistGen: dists.ElephantsMiceGen{
+				Elephants: dists.UniformGen{High: 1200, Low: 8000, Num: 17},
+				Mice:      dists.UniformGen{High: 20, Num: 100},
+			},
 		},
 		{
 			Name:     "eleph_mice-17-100,0.5x,117",
 			Approval: 36_000,
-			MkDist:   mkEleph(usageRange{High: 1200, Low: 8000, Num: 17}, usageRange{High: 20, Num: 100}),
+			DistGen: dists.ElephantsMiceGen{
+				Elephants: dists.UniformGen{High: 1200, Low: 8000, Num: 17},
+				Mice:      dists.UniformGen{High: 20, Num: 100},
+			},
 		},
 		{
 			Name:     "eleph_mice-5-1000,3x,1005",
 			Approval: 6_000,
-			MkDist:   mkEleph(usageRange{High: 4000, Low: 2800, Num: 5}, usageRange{High: 2, Num: 1000}),
+			DistGen: dists.ElephantsMiceGen{
+				Elephants: dists.UniformGen{High: 4000, Low: 2800, Num: 5},
+				Mice:      dists.UniformGen{High: 2, Num: 1000},
+			},
 		},
 		{
 			Name:     "eleph_mice-5-1000,2x,1005",
 			Approval: 9_000,
-			MkDist:   mkEleph(usageRange{High: 4000, Low: 2800, Num: 5}, usageRange{High: 2, Num: 1000}),
+			DistGen: dists.ElephantsMiceGen{
+				Elephants: dists.UniformGen{High: 4000, Low: 2800, Num: 5},
+				Mice:      dists.UniformGen{High: 2, Num: 1000},
+			},
 		},
 		{
 			Name:     "eleph_mice-5-1000,1x,1005",
 			Approval: 18_000,
-			MkDist:   mkEleph(usageRange{High: 4000, Low: 2800, Num: 5}, usageRange{High: 2, Num: 1000}),
+			DistGen: dists.ElephantsMiceGen{
+				Elephants: dists.UniformGen{High: 4000, Low: 2800, Num: 5},
+				Mice:      dists.UniformGen{High: 2, Num: 1000},
+			},
 		},
 		{
 			Name:     "eleph_mice-5-1000,0.5x,1005",
 			Approval: 36_000,
-			MkDist:   mkEleph(usageRange{High: 4000, Low: 2800, Num: 5}, usageRange{High: 2, Num: 1000}),
+			DistGen: dists.ElephantsMiceGen{
+				Elephants: dists.UniformGen{High: 4000, Low: 2800, Num: 5},
+				Mice:      dists.UniformGen{High: 2, Num: 1000},
+			},
 		},
 		{
 			Name:     "eleph_mice-5-100000,3x,100005",
 			Approval: 6_00000,
-			MkDist:   mkEleph(usageRange{High: 400000, Low: 280000, Num: 5}, usageRange{High: 2, Num: 100000}),
+			DistGen: dists.ElephantsMiceGen{
+				Elephants: dists.UniformGen{High: 400000, Low: 280000, Num: 5},
+				Mice:      dists.UniformGen{High: 2, Num: 100000},
+			},
 		},
 		{
 			Name:     "eleph_mice-5-100000,2x,100005",
 			Approval: 9_00000,
-			MkDist:   mkEleph(usageRange{High: 400000, Low: 280000, Num: 5}, usageRange{High: 2, Num: 100000}),
+			DistGen: dists.ElephantsMiceGen{
+				Elephants: dists.UniformGen{High: 400000, Low: 280000, Num: 5},
+				Mice:      dists.UniformGen{High: 2, Num: 100000},
+			},
 		},
 		{
 			Name:     "eleph_mice-5-100000,1x,100005",
 			Approval: 18_00000,
-			MkDist:   mkEleph(usageRange{High: 400000, Low: 280000, Num: 5}, usageRange{High: 2, Num: 100000}),
+			DistGen: dists.ElephantsMiceGen{
+				Elephants: dists.UniformGen{High: 400000, Low: 280000, Num: 5},
+				Mice:      dists.UniformGen{High: 2, Num: 100000},
+			},
 		},
 		{
 			Name:     "eleph_mice-5-100000,0.5x,100005",
 			Approval: 36_00000,
-			MkDist:   mkEleph(usageRange{High: 400000, Low: 280000, Num: 5}, usageRange{High: 2, Num: 100000}),
+			DistGen: dists.ElephantsMiceGen{
+				Elephants: dists.UniformGen{High: 400000, Low: 280000, Num: 5},
+				Mice:      dists.UniformGen{High: 2, Num: 100000},
+			},
 		},
 	}
 
@@ -320,7 +315,7 @@ func (c *evalConfig) Eval(rng *rand.Rand, w io.Writer) error {
 	weightedSampler := sampling.NewWeightedSampler(float64(c.TargetNumSamples), c.Approval)
 
 	for i := 0; i < 3; i++ {
-		dist := c.MkDist(rng)
+		dist := c.DistGen.GenDist(rng)
 		uniSampler := sampling.UniformSampler{Prob: math.Min(1, float64(c.TargetNumSamples)/float64(len(dist)))}
 
 		uniResult := evalSampler(rng, dist, uniSampler)
