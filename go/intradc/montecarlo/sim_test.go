@@ -16,6 +16,21 @@ func TestMetricOne(t *testing.T) {
 	assertEq(t, d.P100, 65, "P100")
 }
 
+func TestMetricTwo(t *testing.T) {
+	var m metric
+	m.Record(65)
+	m.Record(45)
+	assertEq(t, m.Mean(), 55, "Mean")
+	d := m.DistPercs()
+	assertEq(t, d.P0, 45, "P0")
+	assertEq(t, d.P5, 45, "P5")
+	assertEq(t, d.P10, 45, "P10")
+	assertEq(t, d.P50, 65, "P50")
+	assertEq(t, d.P90, 65, "P90")
+	assertEq(t, d.P95, 65, "P95")
+	assertEq(t, d.P100, 65, "P100")
+}
+
 func TestMetricTwenty(t *testing.T) {
 	var m metric
 	// write out of order to test m percentiles

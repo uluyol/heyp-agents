@@ -27,9 +27,9 @@ func (m *metric) DistPercs() DistPercs {
 	sort.Float64s(m.vals)
 	return DistPercs{
 		P0:   m.vals[0],
-		P5:   m.vals[(len(m.vals)+18)/20],
-		P10:  m.vals[(len(m.vals)+8)/10],
-		P50:  m.vals[len(m.vals)/2],
+		P5:   m.vals[(len(m.vals)-1+18)/20],
+		P10:  m.vals[(len(m.vals)-1+8)/10],
+		P50:  m.vals[(len(m.vals)-1+1)/2],
 		P90:  m.vals[len(m.vals)-1-len(m.vals)/10],
 		P95:  m.vals[len(m.vals)-1-len(m.vals)/20],
 		P100: m.vals[len(m.vals)-1],
