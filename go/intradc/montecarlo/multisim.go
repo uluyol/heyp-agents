@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"runtime"
 )
 
@@ -20,17 +21,16 @@ func EvalMultiToJSON(insts []Instance, numRuns int, w io.Writer) error {
 	go func() {
 		sem := make(chan struct{}, runtime.NumCPU())
 		for _, inst := range insts {
-			sem <- struct{}{}
-			go func(inst Instance) {
-				rchan <- EvalInstance(inst, numRuns)
-				<-sem
-			}(inst)
+			EvalInstance(inst, numRuns, sem, rchan)
 		}
 	}()
 
 	enc := json.NewEncoder(w)
+	numDone := 0
 	for range insts {
+		numDone++
 		result := <-rchan
+		log.Printf("finished %d/%d instances", numDone, len(insts))
 		if err := enc.Encode(result); err != nil {
 			return fmt.Errorf("error writing result: %w", err)
 		}

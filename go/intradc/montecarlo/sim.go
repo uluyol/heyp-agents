@@ -15,6 +15,12 @@ type metric struct {
 	vals []float64
 }
 
+func (m *metric) MergeFrom(o *metric) {
+	m.sum += o.sum
+	m.num += o.num
+	m.vals = append(m.vals, o.vals...)
+}
+
 func (m *metric) Record(v float64) {
 	m.sum += v
 	m.num++
@@ -36,72 +42,118 @@ func (m *metric) DistPercs() DistPercs {
 	}
 }
 
-// EvalInstance performs monte-carlo simulations.
+type Token = struct{}
+
+type samplerData struct {
+	usageErrorFrac     metric
+	downgradeFracError metric
+	numSamples         metric
+
+	exactUsageSum  float64
+	approxUsageSum float64
+}
+
+type perSysData struct {
+	sampler samplerData
+}
+
+func (r *perSysData) MergeFrom(o *perSysData) {
+	r.sampler.usageErrorFrac.MergeFrom(&o.sampler.usageErrorFrac)
+	r.sampler.downgradeFracError.MergeFrom(&o.sampler.downgradeFracError)
+	r.sampler.numSamples.MergeFrom(&o.sampler.numSamples)
+
+	r.sampler.exactUsageSum += o.sampler.exactUsageSum
+	r.sampler.approxUsageSum += o.sampler.approxUsageSum
+}
+
+// EvalInstance performs monte-carlo simulations with numRuns iterations
+// and return non-determistic stats on res.
 //
-// It runs each Sys numRuns times and generates non-deterministic stats.
-func EvalInstance(inst Instance, numRuns int) InstanceResult {
-	samplerResults := make([]struct {
-		usageErrorFrac     metric
-		downgradeFracError metric
-		numSamples         metric
-
-		exactUsageSum  float64
-		approxUsageSum float64
-	}, len(inst.Sys))
-
+// EvalInstance may start multiple shards of work in parallel after writing to sem,
+// and it will return once all shards have been started.
+func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- InstanceResult) {
 	approval := inst.ApprovalOverExpectedUsage * inst.HostUsages.DistMean()
 
-	// This simulation is non-deterministic, should be fine
-	rng := rand.New(rand.NewSource(uint64(time.Now().UnixNano())))
-	for run := 0; run < numRuns; run++ {
-		usages := inst.HostUsages.GenDist(rng)
-
-		var exactUsage float64
-		for _, v := range usages {
-			exactUsage += v
+	shardData := make(chan []perSysData, 1)
+	const shardSize = 100
+	numShards := 0
+	for shardStart := 0; shardStart < numRuns; shardStart += shardSize {
+		numShards++
+		sem <- Token{}
+		shardRuns := shardSize
+		if t := numRuns - shardStart; t < shardRuns {
+			shardRuns = t
 		}
+		go func(shardRuns int) {
+			defer func() {
+				<-sem
+			}()
+			data := make([]perSysData, len(inst.Sys))
 
-		exactDowngradeFrac := downgradeFrac(exactUsage, approval)
+			// This simulation is non-deterministic, should be fine
+			rng := rand.New(rand.NewSource(uint64(time.Now().UnixNano())))
+			for run := 0; run < shardRuns; run++ {
+				usages := inst.HostUsages.GenDist(rng)
 
-		for sysi, sys := range inst.Sys {
-			approxUsage, numSamples := estimateUsage(rng, sys.Sampler, usages)
-			approxDowngradeFrac := downgradeFrac(approxUsage, approval)
+				var exactUsage float64
+				for _, v := range usages {
+					exactUsage += v
+				}
 
-			usageErrorFrac := (exactUsage - approxUsage) / exactUsage
+				exactDowngradeFrac := downgradeFrac(exactUsage, approval)
 
-			samplerResults[sysi].usageErrorFrac.Record(usageErrorFrac)
-			samplerResults[sysi].downgradeFracError.Record(exactDowngradeFrac - approxDowngradeFrac)
-			samplerResults[sysi].numSamples.Record(numSamples)
-			samplerResults[sysi].exactUsageSum += exactUsage
-			samplerResults[sysi].approxUsageSum += approxUsage
-		}
+				for sysi, sys := range inst.Sys {
+					approxUsage, numSamples := estimateUsage(rng, sys.Sampler, usages)
+					approxDowngradeFrac := downgradeFrac(approxUsage, approval)
+
+					usageErrorFrac := (exactUsage - approxUsage) / exactUsage
+
+					data[sysi].sampler.usageErrorFrac.Record(usageErrorFrac)
+					data[sysi].sampler.downgradeFracError.Record(exactDowngradeFrac - approxDowngradeFrac)
+					data[sysi].sampler.numSamples.Record(numSamples)
+					data[sysi].sampler.exactUsageSum += exactUsage
+					data[sysi].sampler.approxUsageSum += approxUsage
+				}
+			}
+
+			shardData <- data
+		}(shardRuns)
 	}
 
-	sysResults := make([]SysResult, len(inst.Sys))
-	for i := range sysResults {
-		sysResults[i] = SysResult{
-			SamplerName:   inst.Sys[i].Sampler.Name(),
-			NumDataPoints: numRuns,
-			SamplerSummary: SamplerSummary{
-				MeanExactUsage:         samplerResults[i].exactUsageSum / float64(numRuns),
-				MeanApproxUsage:        samplerResults[i].approxUsageSum / float64(numRuns),
-				MeanUsageErrorFrac:     samplerResults[i].usageErrorFrac.Mean(),
-				MeanDowngradeFracError: samplerResults[i].downgradeFracError.Mean(),
-				MeanNumSamples:         samplerResults[i].numSamples.Mean(),
-				UsageErrorFracPerc:     samplerResults[i].usageErrorFrac.DistPercs(),
-				DowngradeFracErrorPerc: samplerResults[i].downgradeFracError.DistPercs(),
-				NumSamplesPerc:         samplerResults[i].numSamples.DistPercs(),
-			},
+	go func() {
+		data := make([]perSysData, len(inst.Sys))
+		for shard := 0; shard < numShards; shard++ {
+			t := <-shardData
+			for i := range data {
+				data[i].MergeFrom(&t[i])
+			}
 		}
-	}
+		sysResults := make([]SysResult, len(inst.Sys))
+		for i := range sysResults {
+			sysResults[i] = SysResult{
+				SamplerName:   inst.Sys[i].Sampler.Name(),
+				NumDataPoints: numRuns,
+				SamplerSummary: SamplerSummary{
+					MeanExactUsage:         data[i].sampler.exactUsageSum / float64(numRuns),
+					MeanApproxUsage:        data[i].sampler.approxUsageSum / float64(numRuns),
+					MeanUsageErrorFrac:     data[i].sampler.usageErrorFrac.Mean(),
+					MeanDowngradeFracError: data[i].sampler.downgradeFracError.Mean(),
+					MeanNumSamples:         data[i].sampler.numSamples.Mean(),
+					UsageErrorFracPerc:     data[i].sampler.usageErrorFrac.DistPercs(),
+					DowngradeFracErrorPerc: data[i].sampler.downgradeFracError.DistPercs(),
+					NumSamplesPerc:         data[i].sampler.numSamples.DistPercs(),
+				},
+			}
+		}
 
-	return InstanceResult{
-		HostUsagesGen:             inst.HostUsages.ShortName(),
-		NumHosts:                  inst.HostUsages.NumHosts(),
-		ApprovalOverExpectedUsage: inst.ApprovalOverExpectedUsage,
-		NumSamplesAtApproval:      inst.NumSamplesAtApproval,
-		Sys:                       sysResults,
-	}
+		res <- InstanceResult{
+			HostUsagesGen:             inst.HostUsages.ShortName(),
+			NumHosts:                  inst.HostUsages.NumHosts(),
+			ApprovalOverExpectedUsage: inst.ApprovalOverExpectedUsage,
+			NumSamplesAtApproval:      inst.NumSamplesAtApproval,
+			Sys:                       sysResults,
+		}
+	}()
 }
 
 // estimateUsage applies the sampler to the usage data and estimates the aggregate usage.
