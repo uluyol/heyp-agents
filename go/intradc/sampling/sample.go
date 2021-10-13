@@ -17,12 +17,14 @@ type AggUsageEstimator interface {
 type Sampler interface {
 	ShouldInclude(rng *rand.Rand, usage float64) bool
 	NewAggUsageEstimator() AggUsageEstimator
+	Name() string
 }
 
 // UniformSampler picks hosts to sample usage data from with uniform probability.
 //
 // The number of samples collected is proportional to the number of hosts.
 type UniformSampler struct {
+	_    struct{}
 	Prob float64
 }
 
@@ -31,6 +33,7 @@ func (s UniformSampler) ShouldInclude(rng *rand.Rand, usage float64) bool {
 }
 
 func (s UniformSampler) ProbOf(usage float64) float64 { return s.Prob }
+func (s UniformSampler) Name() string                 { return "uniform" }
 
 type uniformAggUsageEstimator struct {
 	sum float64
@@ -61,6 +64,8 @@ type WeightedSampler struct {
 	approval float64
 	d        float64 // d = numSamplesAtApproval / approval
 }
+
+func (s WeightedSampler) Name() string { return "weighted" }
 
 func NewWeightedSampler(numSamplesAtApproval float64, approval float64) WeightedSampler {
 	return WeightedSampler{approval, numSamplesAtApproval / approval}

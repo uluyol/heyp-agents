@@ -13,7 +13,7 @@ func TestUniformSampler(t *testing.T) {
 
 	rng := rand.New(rand.NewSource(uint64(time.Now().UnixNano())))
 	for _, prob := range probs {
-		s := UniformSampler{prob}
+		s := UniformSampler{Prob: prob}
 
 		if aggUsage := s.NewAggUsageEstimator().EstUsage(0); aggUsage != 0 {
 			t.Errorf("prob %v: aggUsage = %g (expected = 0)", prob, aggUsage)
