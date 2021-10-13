@@ -1,6 +1,7 @@
 package montecarlo
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/uluyol/heyp-agents/go/intradc/dists"
@@ -15,20 +16,32 @@ type Config struct {
 }
 
 func (c *Config) Validate() error {
+	if len(c.HostUsages) == 0 {
+		return errors.New("HostUsages is empty")
+	}
 	for i, dg := range c.HostUsages {
 		if dg.Gen == nil {
 			return fmt.Errorf("HostUsages[%d] is nil", i)
 		}
+	}
+	if len(c.NumHosts) == 0 {
+		return errors.New("NumHosts is empty")
 	}
 	for i, numHosts := range c.NumHosts {
 		if numHosts <= 0 {
 			return fmt.Errorf("NumHosts[%d] must be positive (found %d)", i, numHosts)
 		}
 	}
+	if len(c.ApprovalOverExpectedUsage) == 0 {
+		return errors.New("ApprovalOverExpectedUsage is empty")
+	}
 	for i, aod := range c.ApprovalOverExpectedUsage {
 		if aod <= 0 {
 			return fmt.Errorf("ApprovalOverExpectedUsage[%d] must be positive (found %g)", i, aod)
 		}
+	}
+	if len(c.NumSamplesAtApproval) == 0 {
+		return errors.New("NumSamplesAtApproval is empty")
 	}
 	for i, numSamples := range c.NumSamplesAtApproval {
 		if numSamples <= 0 {
