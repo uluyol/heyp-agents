@@ -58,7 +58,9 @@ func (c *Config) Enumerate() []Instance {
 			distGen := dg.Gen.WithNumHosts(numHosts)
 			for _, aod := range c.ApprovalOverExpectedUsage {
 				for _, numSamples := range c.NumSamplesAtApproval {
+					id := ID(len(instances))
 					instances = append(instances, Instance{
+						ID:                        id,
 						HostUsages:                distGen,
 						ApprovalOverExpectedUsage: aod,
 						NumSamplesAtApproval:      numSamples,
@@ -83,7 +85,10 @@ type Sys struct {
 	// TODO: add flow selection
 }
 
+type ID int
+
 type Instance struct {
+	ID                        ID
 	HostUsages                dists.DistGen
 	ApprovalOverExpectedUsage float64
 	NumSamplesAtApproval      int
@@ -120,9 +125,10 @@ type SysResult struct {
 }
 
 type InstanceResult struct {
-	HostUsagesGen             string      `json:"hostUsagesGen"`
-	NumHosts                  int         `json:"numHosts"`
-	ApprovalOverExpectedUsage float64     `json:"approvalOverExpectedUsage"`
-	NumSamplesAtApproval      int         `json:"numSamplesAtApproval"`
-	Sys                       []SysResult `json:"sys"`
+	InstanceID                ID        `json:"instanceID"`
+	HostUsagesGen             string    `json:"hostUsagesGen"`
+	NumHosts                  int       `json:"numHosts"`
+	ApprovalOverExpectedUsage float64   `json:"approvalOverExpectedUsage"`
+	NumSamplesAtApproval      int       `json:"numSamplesAtApproval"`
+	Sys                       SysResult `json:"sys"`
 }

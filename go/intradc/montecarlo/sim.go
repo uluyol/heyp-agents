@@ -71,7 +71,7 @@ func (r *perSysData) MergeFrom(o *perSysData) {
 //
 // EvalInstance may start multiple shards of work in parallel after writing to sem,
 // and it will return once all shards have been started.
-func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- InstanceResult) {
+func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []InstanceResult) {
 	approval := inst.ApprovalOverExpectedUsage * inst.HostUsages.DistMean()
 
 	shardData := make(chan []perSysData, 1)
@@ -128,31 +128,35 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- Instanc
 				data[i].MergeFrom(&t[i])
 			}
 		}
-		sysResults := make([]SysResult, len(inst.Sys))
-		for i := range sysResults {
-			sysResults[i] = SysResult{
-				SamplerName:   inst.Sys[i].Sampler.Name(),
-				NumDataPoints: numRuns,
-				SamplerSummary: SamplerSummary{
-					MeanExactUsage:         data[i].sampler.exactUsageSum / float64(numRuns),
-					MeanApproxUsage:        data[i].sampler.approxUsageSum / float64(numRuns),
-					MeanUsageErrorFrac:     data[i].sampler.usageErrorFrac.Mean(),
-					MeanDowngradeFracError: data[i].sampler.downgradeFracError.Mean(),
-					MeanNumSamples:         data[i].sampler.numSamples.Mean(),
-					UsageErrorFracPerc:     data[i].sampler.usageErrorFrac.DistPercs(),
-					DowngradeFracErrorPerc: data[i].sampler.downgradeFracError.DistPercs(),
-					NumSamplesPerc:         data[i].sampler.numSamples.DistPercs(),
+		results := make([]InstanceResult, len(inst.Sys))
+		hostUsagesGen := inst.HostUsages.ShortName()
+		numHosts := inst.HostUsages.NumHosts()
+
+		for i := range results {
+			results[i] = InstanceResult{
+				InstanceID:                inst.ID,
+				HostUsagesGen:             hostUsagesGen,
+				NumHosts:                  numHosts,
+				ApprovalOverExpectedUsage: inst.ApprovalOverExpectedUsage,
+				NumSamplesAtApproval:      inst.NumSamplesAtApproval,
+				Sys: SysResult{
+					SamplerName:   inst.Sys[i].Sampler.Name(),
+					NumDataPoints: numRuns,
+					SamplerSummary: SamplerSummary{
+						MeanExactUsage:         data[i].sampler.exactUsageSum / float64(numRuns),
+						MeanApproxUsage:        data[i].sampler.approxUsageSum / float64(numRuns),
+						MeanUsageErrorFrac:     data[i].sampler.usageErrorFrac.Mean(),
+						MeanDowngradeFracError: data[i].sampler.downgradeFracError.Mean(),
+						MeanNumSamples:         data[i].sampler.numSamples.Mean(),
+						UsageErrorFracPerc:     data[i].sampler.usageErrorFrac.DistPercs(),
+						DowngradeFracErrorPerc: data[i].sampler.downgradeFracError.DistPercs(),
+						NumSamplesPerc:         data[i].sampler.numSamples.DistPercs(),
+					},
 				},
 			}
 		}
 
-		res <- InstanceResult{
-			HostUsagesGen:             inst.HostUsages.ShortName(),
-			NumHosts:                  inst.HostUsages.NumHosts(),
-			ApprovalOverExpectedUsage: inst.ApprovalOverExpectedUsage,
-			NumSamplesAtApproval:      inst.NumSamplesAtApproval,
-			Sys:                       sysResults,
-		}
+		res <- results
 	}()
 }
 
