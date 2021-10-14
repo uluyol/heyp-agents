@@ -4,8 +4,8 @@
 #
 # Prereqs: TOOLCHAIN must be defined (see ENV-VARS)
 
-LLVM_VERSION=12.0.0
-BAZEL_VERSION=4.0.0
+LLVM_VERSION=13.0.0
+BAZEL_VERSION=4.2.1
 
 set -e -o pipefail
 

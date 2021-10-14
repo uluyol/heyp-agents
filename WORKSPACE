@@ -15,9 +15,9 @@ http_archive(
 
 http_archive(
     name = "com_google_absl",
-    sha256 = "f8db92e5d3b9a880797b5f04839b36e1880253a97fd590db534f2efa5560fe43",
-    strip_prefix = "abseil-cpp-732c6540c19610d2653ce73c09eb6cb66da15f42",
-    urls = ["https://github.com/abseil/abseil-cpp/archive/732c6540c19610d2653ce73c09eb6cb66da15f42.zip"],
+    sha256 = "6583df554e55613564707506346e4e5441347b9a63aad155169d743114a60d31",
+    strip_prefix = "abseil-cpp-d6f40f4e1f424677a88eee1dade4f3ae2ea5f743",
+    urls = ["https://github.com/abseil/abseil-cpp/archive/d6f40f4e1f424677a88eee1dade4f3ae2ea5f743.zip"],
 )
 
 http_archive(
@@ -112,10 +112,21 @@ load("@rules_foreign_cc//foreign_cc:repositories.bzl", "rules_foreign_cc_depende
 rules_foreign_cc_dependencies()
 
 http_archive(
+    name = "rules_fuzzing",
+    sha256 = "a5734cb42b1b69395c57e0bbd32ade394d5c3d6afbfe782b24816a96da24660d",
+    strip_prefix = "rules_fuzzing-0.1.1",
+    urls = ["https://github.com/bazelbuild/rules_fuzzing/archive/v0.1.1.zip"],
+)
+
+load("@rules_fuzzing//fuzzing:repositories.bzl", "rules_fuzzing_dependencies")
+
+rules_fuzzing_dependencies()
+
+http_archive(
     name = "com_google_tcmalloc",
-    sha256 = "1b806acb7abef750d1cbf50aa2cbd7600b51565fbffd5431d7bd4b0ff2285b83",
-    strip_prefix = "tcmalloc-c1938e80cb0d3610d6b4469c6a032076ceeafb7a",
-    url = "https://github.com/google/tcmalloc/archive/c1938e80cb0d3610d6b4469c6a032076ceeafb7a.zip",
+    sha256 = "7b72dc68b76c0084cc66c5e984866bcab163024ca0ce425351969998f3a17697",
+    strip_prefix = "tcmalloc-0cd26a48c6b21cbb7156660300ee3fb7092b37c9",
+    url = "https://github.com/google/tcmalloc/archive/0cd26a48c6b21cbb7156660300ee3fb7092b37c9.zip",
 )
 
 http_archive(
