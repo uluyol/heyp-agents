@@ -1,7 +1,23 @@
 load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+load("//bazel:cc_static_library.bzl", "cc_static_library")
 
 package(
     default_visibility = ["//heyp:__subpackages__"],
+)
+
+cc_static_library(
+    name = "export_bundle",
+    deps = [":export"],
+)
+
+cc_library(
+    name = "export",
+    srcs = ["export.cc"],
+    visibility = ["//visibility:private"],
+    deps = [
+        "@com_github_uluyol_routing_algos//routing-algos/alg:max-min-fairness",
+        "@com_google_ortools//ortools/algorithms:knapsack_solver_lib",
+    ],
 )
 
 cc_library(
