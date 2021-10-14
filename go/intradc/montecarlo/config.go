@@ -69,7 +69,7 @@ func (c *Config) Enumerate() []Instance {
 								Sampler: sampling.UniformSampler{Prob: float64(numSamples) / float64(numHosts)},
 							},
 							{
-								Sampler: sampling.NewWeightedSampler(float64(numSamples), distGen.DistMean()*aod),
+								Sampler: sampling.NewWeightedSampler(float64(numSamples), float64(numHosts)*distGen.DistMean()*aod),
 							},
 						},
 					})
