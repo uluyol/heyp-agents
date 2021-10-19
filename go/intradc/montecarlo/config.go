@@ -109,19 +109,31 @@ type SamplerSummary struct {
 	MeanExactUsage  float64 `json:"meanExactUsage"`
 	MeanApproxUsage float64 `json:"meanApproxUsage"`
 
-	MeanUsageErrorFrac     float64 `json:"meanUsageErrorFrac"`
-	MeanDowngradeFracError float64 `json:"meanDowngradeFracError"`
-	MeanNumSamples         float64 `json:"meanNumSamples"`
+	MeanApproxOverExactUsage float64 `json:"meanApproxOverExactUsage"`
+	MeanNumSamples           float64 `json:"meanNumSamples"`
 
-	UsageErrorFracPerc     DistPercs `json:"usageErrorFracPerc"`
-	DowngradeFracErrorPerc DistPercs `json:"downgradeFracErrorPerc"`
-	NumSamplesPerc         DistPercs `json:"numSamplesPerc"`
+	ApproxOverExactUsagePerc DistPercs `json:"approxOverExactUsagePerc"`
+	NumSamplesPerc           DistPercs `json:"numSamplesPerc"`
+}
+
+type DowngradeSummary struct {
+	MeanIntendedFracError    float64   `json:"meanIntendedFracError"`
+	MeanIntendedFracAbsError float64   `json:"meanIntendedFracAbsError"`
+	IntendedFracErrorPerc    DistPercs `json:"intendedFracErrorPerc"`
+	IntendedFracAbsErrorPerc DistPercs `json:"intendedFracAbsErrorPerc"`
+}
+
+type RateLimitSummary struct {
+	MeanApproxOverExactHostLimit float64   `json:"meanApproxOverExactHostLimit"`
+	ApproxOverExactHostLimitPerc DistPercs `json:"approxOverExactHostLimitPerc"`
 }
 
 type SysResult struct {
-	SamplerName    string         `json:"samplerName"`
-	NumDataPoints  int            `json:"numDataPoints"`
-	SamplerSummary SamplerSummary `json:"samplerSummary"`
+	SamplerName      string           `json:"samplerName"`
+	NumDataPoints    int              `json:"numDataPoints"`
+	SamplerSummary   SamplerSummary   `json:"samplerSummary"`
+	DowngradeSummary DowngradeSummary `json:"downgradeSummary"`
+	RateLimitSummary RateLimitSummary `json:"rateLimitSummary"`
 }
 
 type InstanceResult struct {

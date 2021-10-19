@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/uluyol/heyp-agents/go/intradc/alloc"
 	"golang.org/x/exp/rand"
 )
 
@@ -14,9 +15,15 @@ type AggUsageEstimator interface {
 	EstUsage(numHosts int) float64
 }
 
+type UsageDistEstimator interface {
+	RecordSample(usage float64)
+	EstDist(numHosts int) []alloc.ValCount
+}
+
 type Sampler interface {
 	ShouldInclude(rng *rand.Rand, usage float64) bool
 	NewAggUsageEstimator() AggUsageEstimator
+	NewUsageDistEstimator() UsageDistEstimator
 	Name() string
 }
 
@@ -51,6 +58,29 @@ func (e *uniformAggUsageEstimator) EstUsage(numHosts int) float64 {
 
 func (s UniformSampler) NewAggUsageEstimator() AggUsageEstimator {
 	return new(uniformAggUsageEstimator)
+}
+
+type uniformUsageDistEstimator struct {
+	data map[float64]int
+	num  float64
+}
+
+func (e *uniformUsageDistEstimator) RecordSample(usage float64) {
+	e.data[usage]++
+	e.num++
+}
+
+func (e *uniformUsageDistEstimator) EstDist(numHosts int) []alloc.ValCount {
+	k := float64(numHosts) / e.num
+	dist := make([]alloc.ValCount, 0, len(e.data))
+	for v, c := range e.data {
+		dist = append(dist, alloc.ValCount{Val: v, ExpectedCount: k * float64(c)})
+	}
+	return dist
+}
+
+func (s UniformSampler) NewUsageDistEstimator() UsageDistEstimator {
+	return &uniformUsageDistEstimator{data: make(map[float64]int)}
 }
 
 var _ Sampler = UniformSampler{}
@@ -103,6 +133,29 @@ func (e *weightedAggUsageEstimator) EstUsage(numHosts int) float64 { return e.es
 
 func (s WeightedSampler) NewAggUsageEstimator() AggUsageEstimator {
 	return &weightedAggUsageEstimator{s: s}
+}
+
+type weightedUsageDistEstimator struct {
+	s    WeightedSampler
+	data map[float64]int
+}
+
+func (e *weightedUsageDistEstimator) RecordSample(usage float64) { e.data[usage]++ }
+
+func (e *weightedUsageDistEstimator) EstDist(numHosts int) []alloc.ValCount {
+	dist := make([]alloc.ValCount, 0, len(e.data))
+	for v, c := range e.data {
+		prob := e.s.ProbOf(v)
+		dist = append(dist, alloc.ValCount{Val: v, ExpectedCount: float64(c) / prob})
+	}
+	return dist
+}
+
+func (s WeightedSampler) NewUsageDistEstimator() UsageDistEstimator {
+	return &weightedUsageDistEstimator{
+		s: s,
+		data: make(map[float64]int),
+	}
 }
 
 var _ Sampler = WeightedSampler{}

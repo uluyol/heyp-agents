@@ -47,16 +47,15 @@ StatMyecdf <- ggproto("StatMyecdf", Stat,
                     required_aes = c("x")
 )
 
-PlotDowngradeFracError <- function(subset, metric, output) {
+PlotDowngradeFracError <- function(subset, mult.lb, metric.name, metric, output) {
     pdf(output, height=2.5, width=5)
     p <- ggplot(data=subset, aes_string(
-            x=paste0("sys.samplerSummary.", metric),
+            x=paste0("sys.downgradeSummary.", metric),
             color="sys.samplerName")) +
         stat_myecdf(size=1) +
-        xlab("Downgrade Frac with Exact Demand - Frac With Estimate") +
+        xlab(paste0(metric.name, " downgrade frac w/ exact demand - w/ estimate")) +
         ylab("CDF across instances") +
-        coord_cartesian(xlim=c(-0.05, 0.05), ylim=c(0, 1)) +
-        scale_x_continuous(breaks=seq(-0.05, 0.05, by=0.025)) +
+        coord_cartesian(xlim=c(0.05 * mult.lb, 0.05), ylim=c(0, 1)) +
         scale_y_continuous(breaks=seq(0, 1, by=0.2)) +
         theme_bw() +
         guides(color=guide_legend(ncol=3), linetype=guide_legend(ncol=3)) +
@@ -83,17 +82,16 @@ PlotDowngradeFracError <- function(subset, metric, output) {
     .junk <- dev.off()
 }
 
-PlotDowngradeFracErrorByHostUsagesGen <- function(subset, metric, output) {
+PlotDowngradeFracErrorByHostUsagesGen <- function(subset, mult.lb, metric.name, metric, output) {
     pdf(output, height=4.5, width=5)
     p <- ggplot(data=subset, aes_string(
-            x=paste0("sys.samplerSummary.", metric),
+            x=paste0("sys.downgradeSummary.", metric),
             color="sys.samplerName")) +
         stat_myecdf(size=1) +
-        xlab("Downgrade Frac with Exact Demand - Frac With Estimate") +
+        xlab(paste0(metric.name, " downgrade frac w/ exact demand - w/ estimate")) +
         ylab("CDF across instances") +
         facet_wrap(~ hostUsagesGen, ncol=2) +
-        coord_cartesian(xlim=c(-0.05, 0.05), ylim=c(0, 1)) +
-        scale_x_continuous(breaks=seq(-0.05, 0.05, by=0.025)) +
+        coord_cartesian(xlim=c(0.05 * mult.lb, 0.05), ylim=c(0, 1)) +
         scale_y_continuous(breaks=seq(0, 1, by=0.2)) +
         theme_bw() +
         guides(color=guide_legend(ncol=3), linetype=guide_legend(ncol=3)) +
@@ -120,87 +118,16 @@ PlotDowngradeFracErrorByHostUsagesGen <- function(subset, metric, output) {
     .junk <- dev.off()
 }
 
-PlotUsageErrorFrac <- function(subset, metric, output) {
-    pdf(output, height=2.5, width=5)
-    p <- ggplot(data=subset, aes_string(
-            x=paste0("sys.samplerSummary.", metric),
-            color="sys.samplerName")) +
-        stat_myecdf(size=1) +
-        xlab("(Exact - Estimate Usage) / Exact") +
-        ylab("CDF across instances") +
-        coord_cartesian(xlim=c(-0.2, 0.2), ylim=c(0, 1)) +
-        scale_y_continuous(breaks=seq(0, 1, by=0.2)) +
-        theme_bw() +
-        guides(color=guide_legend(ncol=3), linetype=guide_legend(ncol=3)) +
-        theme(
-            legend.title=element_blank(),
-            legend.position="top",
-            legend.margin=margin(0, 0, 0, 0),
-            legend.box.margin=margin(-4, -4, -8, 0),
-            legend.background=element_rect(color="black", fill="white", linetype="blank", size=0),
-            legend.direction="horizontal",
-            legend.key=element_blank(),
-            legend.key.height=unit(11, "points"),
-            legend.key.width=unit(25, "points"),
-            legend.spacing.x=unit(1, "points"),
-            legend.spacing.y=unit(0, "points"),
-            legend.text=element_text(size=11, margin=margin(r=10)),
-            strip.background=element_rect(color="white", fill="white"),
-            strip.text=element_text(size=12),
-            plot.margin=unit(c(5.5, 8.5, 5.5, 5.5), "points"),
-            axis.text=element_text(color="black", size=11),
-            axis.title.y=element_text(size=12, margin=margin(0, 3, 0, 0)),
-            axis.title.x=element_text(size=12, margin=margin(3, 0, 0, 0)))
-    print(p)
-    .junk <- dev.off()
-}
-
-PlotUsageErrorFracByHostUsagesGen <- function(subset, metric, output) {
+PlotApproxOverExactUsageByHostUsagesGen <- function(subset, metric.name, metric, output) {
     pdf(output, height=4.5, width=5)
     p <- ggplot(data=subset, aes_string(
             x=paste0("sys.samplerSummary.", metric),
             color="sys.samplerName")) +
         stat_myecdf(size=1) +
         facet_wrap(~ hostUsagesGen, ncol=2) +
-        xlab("(Exact - Estimate Usage) / Exact") +
+        xlab(paste0(metric.name, " estimated / exact usage")) +
         ylab("CDF across instances") +
-        coord_cartesian(xlim=c(-0.5, 0.5), ylim=c(0, 1)) +
-        scale_y_continuous(breaks=seq(0, 1, by=0.2)) +
-        theme_bw() +
-        guides(color=guide_legend(ncol=3), linetype=guide_legend(ncol=3)) +
-        theme(
-            legend.title=element_blank(),
-            legend.position="top",
-            legend.margin=margin(0, 0, 0, 0),
-            legend.box.margin=margin(-4, -4, -8, 0),
-            legend.background=element_rect(color="black", fill="white", linetype="blank", size=0),
-            legend.direction="horizontal",
-            legend.key=element_blank(),
-            legend.key.height=unit(11, "points"),
-            legend.key.width=unit(25, "points"),
-            legend.spacing.x=unit(1, "points"),
-            legend.spacing.y=unit(0, "points"),
-            legend.text=element_text(size=11, margin=margin(r=10)),
-            strip.background=element_rect(color="white", fill="white"),
-            strip.text=element_text(size=12),
-            plot.margin=unit(c(5.5, 8.5, 5.5, 5.5), "points"),
-            axis.text=element_text(color="black", size=11),
-            axis.title.y=element_text(size=12, margin=margin(0, 3, 0, 0)),
-            axis.title.x=element_text(size=12, margin=margin(3, 0, 0, 0)))
-    print(p)
-    .junk <- dev.off()
-}
-
-PlotUsageErrorFracByAOD <- function(subset, metric, output) {
-    pdf(output, height=4.5, width=5)
-    p <- ggplot(data=subset, aes_string(
-            x=paste0("sys.samplerSummary.", metric),
-            color="sys.samplerName")) +
-        stat_myecdf(size=1) +
-        facet_wrap(~ approvalOverExpectedUsage, ncol=2) +
-        xlab("(Exact - Estimate Usage) / Exact") +
-        ylab("CDF across instances") +
-        coord_cartesian(xlim=c(-0.5, 0.5), ylim=c(0, 1)) +
+        coord_cartesian(xlim=c(0, 2), ylim=c(0, 1)) +
         scale_y_continuous(breaks=seq(0, 1, by=0.2)) +
         theme_bw() +
         guides(color=guide_legend(ncol=3), linetype=guide_legend(ncol=3)) +
@@ -237,7 +164,7 @@ PlotMeanNumSamplesByRequested <- function(subset, output) {
     pdf(output, height=4.5, width=5)
     p <- ggplot(data=data, aes(x=num, color=kind)) +
         stat_myecdf(size=1) +
-        xlab("Number of samples") +
+        xlab("Mean number of samples") +
         ylab("CDF across instances") +
         facet_wrap(~ numHosts, ncol=2) +
         coord_cartesian(ylim=c(0, 1)) +
@@ -321,25 +248,23 @@ con <- file(simresults, open="r")
 data <- stream_in(con, flatten=TRUE, verbose=FALSE)
 close(con)
 
-PlotUsageErrorFrac(data, "meanUsageErrorFrac", file.path(outdir, "usage-error-frac-mean.pdf"))
-PlotUsageErrorFrac(data, "usageErrorFracPerc.p5", file.path(outdir, "usage-error-frac-p5.pdf"))
-PlotUsageErrorFrac(data, "usageErrorFracPerc.p95", file.path(outdir, "usage-error-frac-p95.pdf"))
+# PlotApproxOverExactUsage(data, "meanApproxOverExactUsage", file.path(outdir, "aoe-usage-mean.pdf"))
+# PlotApproxOverExactUsage(data, "approxOverExactUsagePerc.p5", file.path(outdir, "aoe-usage-p5.pdf"))
+# PlotApproxOverExactUsage(data, "approxOverExactUsagePerc.p95", file.path(outdir, "aoe-usage-p95.pdf"))
 
-PlotUsageErrorFracByHostUsagesGen(data, "meanUsageErrorFrac", file.path(outdir, "usage-error-frac-hug-mean.pdf"))
-PlotUsageErrorFracByHostUsagesGen(data, "usageErrorFracPerc.p5", file.path(outdir, "usage-error-frac-hug-p5.pdf"))
-PlotUsageErrorFracByHostUsagesGen(data, "usageErrorFracPerc.p95", file.path(outdir, "usage-error-frac-hug-p95.pdf"))
+PlotApproxOverExactUsageByHostUsagesGen(data, "Mean", "meanApproxOverExactUsage", file.path(outdir, "aoe-usage-hug-mean.pdf"))
+PlotApproxOverExactUsageByHostUsagesGen(data, "5%ile", "approxOverExactUsagePerc.p5", file.path(outdir, "aoe-usage-hug-p5.pdf"))
+PlotApproxOverExactUsageByHostUsagesGen(data, "95%ile", "approxOverExactUsagePerc.p95", file.path(outdir, "aoe-usage-hug-p95.pdf"))
 
-PlotUsageErrorFracByAOD(data, "meanUsageErrorFrac", file.path(outdir, "usage-error-frac-aod-mean.pdf"))
-PlotUsageErrorFracByAOD(data, "usageErrorFracPerc.p5", file.path(outdir, "usage-error-frac-aod-p5.pdf"))
-PlotUsageErrorFracByAOD(data, "usageErrorFracPerc.p95", file.path(outdir, "usage-error-frac-aod-p95.pdf"))
+PlotDowngradeFracError(data, 0, "Mean abs", "meanIntendedFracAbsError", file.path(outdir, "downgrade-frac-abs-error-mean.pdf"))
+PlotDowngradeFracError(data, 0, "95%ile abs", "intendedFracAbsErrorPerc.p95", file.path(outdir, "downgrade-frac-abs-error-p95.pdf"))
 
-PlotDowngradeFracError(data, "meanDowngradeFracError", file.path(outdir, "downgrade-frac-error-mean.pdf"))
-PlotDowngradeFracError(data, "downgradeFracErrorPerc.p5", file.path(outdir, "downgrade-frac-error-p5.pdf"))
-PlotDowngradeFracError(data, "downgradeFracErrorPerc.p95", file.path(outdir, "downgrade-frac-error-p95.pdf"))
+PlotDowngradeFracErrorByHostUsagesGen(data, -1, "Mean", "meanIntendedFracError", file.path(outdir, "downgrade-frac-error-hug-mean.pdf"))
+PlotDowngradeFracErrorByHostUsagesGen(data, -1, "5%ile", "intendedFracErrorPerc.p5", file.path(outdir, "downgrade-frac-error-hug-p5.pdf"))
+PlotDowngradeFracErrorByHostUsagesGen(data, -1, "95%ile", "intendedFracErrorPerc.p95", file.path(outdir, "downgrade-frac-error-hug-p95.pdf"))
 
-PlotDowngradeFracErrorByHostUsagesGen(data, "meanDowngradeFracError", file.path(outdir, "downgrade-frac-error-hug-mean.pdf"))
-PlotDowngradeFracErrorByHostUsagesGen(data, "downgradeFracErrorPerc.p5", file.path(outdir, "downgrade-frac-error-hug-p5.pdf"))
-PlotDowngradeFracErrorByHostUsagesGen(data, "downgradeFracErrorPerc.p95", file.path(outdir, "downgrade-frac-error-hug-p95.pdf"))
+PlotDowngradeFracErrorByHostUsagesGen(data, 0, "Mean abs", "meanIntendedFracAbsError", file.path(outdir, "downgrade-frac-abs-error-hug-mean.pdf"))
+PlotDowngradeFracErrorByHostUsagesGen(data, 0, "95%ile abs", "intendedFracAbsErrorPerc.p95", file.path(outdir, "downgrade-frac-abs-error-hug-p95.pdf"))
 
 PlotMeanNumSamplesOverExpected(data, file.path(outdir, "num-samples-over-expected-mean.pdf"))
 PlotMeanNumSamplesByRequested(data, file.path(outdir, "num-samples-by-req.pdf"))
