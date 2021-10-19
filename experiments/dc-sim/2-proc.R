@@ -47,6 +47,29 @@ StatMyecdf <- ggproto("StatMyecdf", Stat,
                     required_aes = c("x")
 )
 
+my_theme <- function() {
+    theme_bw() +
+    theme(
+        legend.title=element_blank(),
+        legend.position="top",
+        legend.margin=margin(0, 0, 0, 0),
+        legend.box.margin=margin(-4, -4, -8, 0),
+        legend.background=element_rect(color="black", fill="white", linetype="blank", size=0),
+        legend.direction="horizontal",
+        legend.key=element_blank(),
+        legend.key.height=unit(11, "points"),
+        legend.key.width=unit(25, "points"),
+        legend.spacing.x=unit(1, "points"),
+        legend.spacing.y=unit(0, "points"),
+        legend.text=element_text(size=11, margin=margin(r=10)),
+        strip.background=element_rect(color="white", fill="white"),
+        strip.text=element_text(size=12),
+        plot.margin=unit(c(5.5, 8.5, 5.5, 5.5), "points"),
+        axis.text=element_text(color="black", size=11),
+        axis.title.y=element_text(size=12, margin=margin(0, 5, 0, 0)),
+        axis.title.x=element_text(size=12, margin=margin(5, 0, 0, 0)))
+}
+
 PlotDowngradeFracError <- function(subset, mult.lb, metric.name, metric, output) {
     pdf(output, height=2.5, width=5)
     p <- ggplot(data=subset, aes_string(
@@ -57,27 +80,8 @@ PlotDowngradeFracError <- function(subset, mult.lb, metric.name, metric, output)
         ylab("CDF across instances") +
         coord_cartesian(xlim=c(0.05 * mult.lb, 0.05), ylim=c(0, 1)) +
         scale_y_continuous(breaks=seq(0, 1, by=0.2)) +
-        theme_bw() +
         guides(color=guide_legend(ncol=3), linetype=guide_legend(ncol=3)) +
-        theme(
-            legend.title=element_blank(),
-            legend.position="top",
-            legend.margin=margin(0, 0, 0, 0),
-            legend.box.margin=margin(-4, -4, -8, 0),
-            legend.background=element_rect(color="black", fill="white", linetype="blank", size=0),
-            legend.direction="horizontal",
-            legend.key=element_blank(),
-            legend.key.height=unit(11, "points"),
-            legend.key.width=unit(25, "points"),
-            legend.spacing.x=unit(1, "points"),
-            legend.spacing.y=unit(0, "points"),
-            legend.text=element_text(size=11, margin=margin(r=10)),
-            strip.background=element_rect(color="white", fill="white"),
-            strip.text=element_text(size=12),
-            plot.margin=unit(c(5.5, 8.5, 5.5, 5.5), "points"),
-            axis.text=element_text(color="black", size=11),
-            axis.title.y=element_text(size=12, margin=margin(0, 3, 0, 0)),
-            axis.title.x=element_text(size=12, margin=margin(3, 0, 0, 0)))
+        my_theme()
     print(p)
     .junk <- dev.off()
 }
@@ -93,27 +97,8 @@ PlotDowngradeFracErrorByHostUsagesGen <- function(subset, mult.lb, metric.name, 
         facet_wrap(~ hostUsagesGen, ncol=2) +
         coord_cartesian(xlim=c(0.05 * mult.lb, 0.05), ylim=c(0, 1)) +
         scale_y_continuous(breaks=seq(0, 1, by=0.2)) +
-        theme_bw() +
         guides(color=guide_legend(ncol=3), linetype=guide_legend(ncol=3)) +
-        theme(
-            legend.title=element_blank(),
-            legend.position="top",
-            legend.margin=margin(0, 0, 0, 0),
-            legend.box.margin=margin(-4, -4, -8, 0),
-            legend.background=element_rect(color="black", fill="white", linetype="blank", size=0),
-            legend.direction="horizontal",
-            legend.key=element_blank(),
-            legend.key.height=unit(11, "points"),
-            legend.key.width=unit(25, "points"),
-            legend.spacing.x=unit(1, "points"),
-            legend.spacing.y=unit(0, "points"),
-            legend.text=element_text(size=11, margin=margin(r=10)),
-            strip.background=element_rect(color="white", fill="white"),
-            strip.text=element_text(size=12),
-            plot.margin=unit(c(5.5, 8.5, 5.5, 5.5), "points"),
-            axis.text=element_text(color="black", size=11),
-            axis.title.y=element_text(size=12, margin=margin(0, 3, 0, 0)),
-            axis.title.x=element_text(size=12, margin=margin(3, 0, 0, 0)))
+        my_theme()
     print(p)
     .junk <- dev.off()
 }
@@ -129,27 +114,25 @@ PlotApproxOverExactUsageByHostUsagesGen <- function(subset, metric.name, metric,
         ylab("CDF across instances") +
         coord_cartesian(xlim=c(0, 2), ylim=c(0, 1)) +
         scale_y_continuous(breaks=seq(0, 1, by=0.2)) +
-        theme_bw() +
         guides(color=guide_legend(ncol=3), linetype=guide_legend(ncol=3)) +
-        theme(
-            legend.title=element_blank(),
-            legend.position="top",
-            legend.margin=margin(0, 0, 0, 0),
-            legend.box.margin=margin(-4, -4, -8, 0),
-            legend.background=element_rect(color="black", fill="white", linetype="blank", size=0),
-            legend.direction="horizontal",
-            legend.key=element_blank(),
-            legend.key.height=unit(11, "points"),
-            legend.key.width=unit(25, "points"),
-            legend.spacing.x=unit(1, "points"),
-            legend.spacing.y=unit(0, "points"),
-            legend.text=element_text(size=11, margin=margin(r=10)),
-            strip.background=element_rect(color="white", fill="white"),
-            strip.text=element_text(size=12),
-            plot.margin=unit(c(5.5, 8.5, 5.5, 5.5), "points"),
-            axis.text=element_text(color="black", size=11),
-            axis.title.y=element_text(size=12, margin=margin(0, 3, 0, 0)),
-            axis.title.x=element_text(size=12, margin=margin(3, 0, 0, 0)))
+        my_theme()
+    print(p)
+    .junk <- dev.off()
+}
+
+PlotApproxOverExactHostLimitByHostUsagesGen <- function(subset, metric.name, metric, output) {
+    pdf(output, height=4.5, width=5)
+    p <- ggplot(data=subset, aes_string(
+            x=paste0("sys.rateLimitSummary.", metric),
+            color="sys.samplerName")) +
+        stat_myecdf(size=1) +
+        facet_wrap(~ hostUsagesGen, ncol=2) +
+        xlab(paste0(metric.name, " host limit with estimated usage / with exact usage")) +
+        ylab("CDF across instances") +
+        coord_cartesian(xlim=c(0, 2), ylim=c(0, 1)) +
+        scale_y_continuous(breaks=seq(0, 1, by=0.2)) +
+        guides(color=guide_legend(ncol=3), linetype=guide_legend(ncol=3)) +
+        my_theme()
     print(p)
     .junk <- dev.off()
 }
@@ -169,27 +152,8 @@ PlotMeanNumSamplesByRequested <- function(subset, output) {
         facet_wrap(~ numHosts, ncol=2) +
         coord_cartesian(ylim=c(0, 1)) +
         scale_y_continuous(breaks=seq(0, 1, by=0.2)) +
-        theme_bw() +
         guides(color=guide_legend(ncol=3), linetype=guide_legend(ncol=3)) +
-        theme(
-            legend.title=element_blank(),
-            legend.position="top",
-            legend.margin=margin(0, 0, 0, 0),
-            legend.box.margin=margin(-4, -4, -8, 0),
-            legend.background=element_rect(color="black", fill="white", linetype="blank", size=0),
-            legend.direction="horizontal",
-            legend.key=element_blank(),
-            legend.key.height=unit(11, "points"),
-            legend.key.width=unit(25, "points"),
-            legend.spacing.x=unit(1, "points"),
-            legend.spacing.y=unit(0, "points"),
-            legend.text=element_text(size=11, margin=margin(r=10)),
-            strip.background=element_rect(color="white", fill="white"),
-            strip.text=element_text(size=12),
-            plot.margin=unit(c(5.5, 8.5, 5.5, 5.5), "points"),
-            axis.text=element_text(color="black", size=11),
-            axis.title.y=element_text(size=12, margin=margin(0, 3, 0, 0)),
-            axis.title.x=element_text(size=12, margin=margin(3, 0, 0, 0)))
+        my_theme()
     print(p)
     .junk <- dev.off()
 }
@@ -207,27 +171,8 @@ PlotMeanNumSamplesOverExpected <- function(subset, output) {
         ylab("CDF across instances") +
         coord_cartesian(ylim=c(0, 1)) +
         scale_y_continuous(breaks=seq(0, 1, by=0.2)) +
-        theme_bw() +
         guides(color=guide_legend(ncol=3), linetype=guide_legend(ncol=3)) +
-        theme(
-            legend.title=element_blank(),
-            legend.position="top",
-            legend.margin=margin(0, 0, 0, 0),
-            legend.box.margin=margin(-4, -4, -8, 0),
-            legend.background=element_rect(color="black", fill="white", linetype="blank", size=0),
-            legend.direction="horizontal",
-            legend.key=element_blank(),
-            legend.key.height=unit(11, "points"),
-            legend.key.width=unit(25, "points"),
-            legend.spacing.x=unit(1, "points"),
-            legend.spacing.y=unit(0, "points"),
-            legend.text=element_text(size=11, margin=margin(r=10)),
-            strip.background=element_rect(color="white", fill="white"),
-            strip.text=element_text(size=12),
-            plot.margin=unit(c(5.5, 8.5, 5.5, 5.5), "points"),
-            axis.text=element_text(color="black", size=11),
-            axis.title.y=element_text(size=12, margin=margin(0, 3, 0, 0)),
-            axis.title.x=element_text(size=12, margin=margin(3, 0, 0, 0)))
+        my_theme()
     print(p)
     .junk <- dev.off()
 }
@@ -265,6 +210,10 @@ PlotDowngradeFracErrorByHostUsagesGen(data, -1, "95%ile", "intendedFracErrorPerc
 
 PlotDowngradeFracErrorByHostUsagesGen(data, 0, "Mean abs", "meanIntendedFracAbsError", file.path(outdir, "downgrade-frac-abs-error-hug-mean.pdf"))
 PlotDowngradeFracErrorByHostUsagesGen(data, 0, "95%ile abs", "intendedFracAbsErrorPerc.p95", file.path(outdir, "downgrade-frac-abs-error-hug-p95.pdf"))
+
+PlotApproxOverExactHostLimitByHostUsagesGen(data, "Mean", "meanApproxOverExactHostLimit", file.path(outdir, "aoe-host-limit-hug-mean.pdf"))
+PlotApproxOverExactHostLimitByHostUsagesGen(data, "5%ile", "approxOverExactHostLimitPerc.p5", file.path(outdir, "aoe-host-limit-hug-p5.pdf"))
+PlotApproxOverExactHostLimitByHostUsagesGen(data, "95%ile", "approxOverExactHostLimitPerc.p95", file.path(outdir, "aoe-host-limit-hug-p95.pdf"))
 
 PlotMeanNumSamplesOverExpected(data, file.path(outdir, "num-samples-over-expected-mean.pdf"))
 PlotMeanNumSamplesByRequested(data, file.path(outdir, "num-samples-by-req.pdf"))
