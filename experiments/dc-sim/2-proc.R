@@ -269,7 +269,7 @@ PlotMeanNumSamplesByRequested <- function(subset, output) {
 
 PlotMeanNumSamplesOverExpected <- function(subset, output) {
     data <- rbind(
-        data.frame(x=subset$sys.samplerSummary.meanNumSamples / subset$numSamplesAtApproval,
+        data.frame(x=subset$sys.samplerSummary.meanNumSamples / pmin(subset$numSamplesAtApproval, subset$numHosts),
                    kind=subset$sys.samplerName),
         data.frame(x=subset$approvalOverExpectedUsage[subset$sys.samplerName == "weighted"],
                    kind=rep.int("weighted (expected)", sum(subset$sys.samplerName == "weighted"))))
@@ -333,13 +333,13 @@ PlotUsageErrorFracByAOD(data, "meanUsageErrorFrac", file.path(outdir, "usage-err
 PlotUsageErrorFracByAOD(data, "usageErrorFracPerc.p5", file.path(outdir, "usage-error-frac-aod-p5.pdf"))
 PlotUsageErrorFracByAOD(data, "usageErrorFracPerc.p95", file.path(outdir, "usage-error-frac-aod-p95.pdf"))
 
-PlotDowngradeFracError(data, "meanDowngradeFracError", file.path(outdir, "downgrade-frac-error-hug-mean.pdf"))
-PlotDowngradeFracError(data, "downgradeFracErrorPerc.p5", file.path(outdir, "downgrade-frac-error-hug-p5.pdf"))
-PlotDowngradeFracError(data, "downgradeFracErrorPerc.p95", file.path(outdir, "downgrade-frac-error-hug-p95.pdf"))
+PlotDowngradeFracError(data, "meanDowngradeFracError", file.path(outdir, "downgrade-frac-error-mean.pdf"))
+PlotDowngradeFracError(data, "downgradeFracErrorPerc.p5", file.path(outdir, "downgrade-frac-error-p5.pdf"))
+PlotDowngradeFracError(data, "downgradeFracErrorPerc.p95", file.path(outdir, "downgrade-frac-error-p95.pdf"))
 
-PlotDowngradeFracErrorByHostUsagesGen(data, "meanDowngradeFracError", file.path(outdir, "downgrade-frac-error-mean.pdf"))
-PlotDowngradeFracErrorByHostUsagesGen(data, "downgradeFracErrorPerc.p5", file.path(outdir, "downgrade-frac-error-p5.pdf"))
-PlotDowngradeFracErrorByHostUsagesGen(data, "downgradeFracErrorPerc.p95", file.path(outdir, "downgrade-frac-error-p95.pdf"))
+PlotDowngradeFracErrorByHostUsagesGen(data, "meanDowngradeFracError", file.path(outdir, "downgrade-frac-error-hug-mean.pdf"))
+PlotDowngradeFracErrorByHostUsagesGen(data, "downgradeFracErrorPerc.p5", file.path(outdir, "downgrade-frac-error-hug-p5.pdf"))
+PlotDowngradeFracErrorByHostUsagesGen(data, "downgradeFracErrorPerc.p95", file.path(outdir, "downgrade-frac-error-hug-p95.pdf"))
 
 PlotMeanNumSamplesOverExpected(data, file.path(outdir, "num-samples-over-expected-mean.pdf"))
 PlotMeanNumSamplesByRequested(data, file.path(outdir, "num-samples-by-req.pdf"))
