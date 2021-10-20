@@ -2,11 +2,10 @@ package montecarlo
 
 import (
 	"math"
-	"sort"
 	"time"
 
 	"github.com/uluyol/heyp-agents/go/intradc/alloc"
-	"github.com/uluyol/heyp-agents/go/intradc/sampling"
+	"github.com/uluyol/heyp-agents/go/intradc/f64sort"
 	"golang.org/x/exp/rand"
 )
 
@@ -32,7 +31,7 @@ func (m *metric) Record(v float64) {
 func (m *metric) Mean() float64 { return m.sum / m.num }
 
 func (m *metric) DistPercs() DistPercs {
-	sort.Float64s(m.vals)
+	f64sort.Float64s(m.vals)
 	return DistPercs{
 		P0:   m.vals[0],
 		P5:   m.vals[(len(m.vals)-1+18)/20],
@@ -200,21 +199,7 @@ func divideByExpected(approx, expected float64) float64 {
 	return approx / expected
 }
 
-// estimateUsage applies the sampler to the usage data and estimates the aggregate usage.
-func estimateUsage(rng *rand.Rand, sampler sampling.Sampler, usages []float64) (approxUsage float64, approxDist []alloc.ValCount, numSamples float64) {
-	aggEst := sampler.NewAggUsageEstimator()
-	distEst := sampler.NewUsageDistEstimator()
-	for _, v := range usages {
-		if sampler.ShouldInclude(rng, v) {
-			numSamples++
-			aggEst.RecordSample(v)
-			distEst.RecordSample(v)
-		}
-	}
-	approxUsage = aggEst.EstUsage(len(usages))
-	approxDist = distEst.EstDist(len(usages))
-	return approxUsage, approxDist, numSamples
-}
+//go:generate go run gen_estusage.go
 
 func downgradeFrac(aggUsage, approval float64) float64 {
 	if aggUsage <= approval {
