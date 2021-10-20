@@ -1,0 +1,2 @@
+The contents of this package were taken from the Go 1.17.2 standard library and
+specialized (i.e. interface / indirection was removed) for performance.
