@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"runtime"
+	"runtime/pprof"
 
 	"github.com/ghodss/yaml"
 	"github.com/uluyol/heyp-agents/go/intradc/montecarlo"
@@ -47,13 +49,40 @@ func main() {
 		configPath = flag.String("c", "config.yaml", "path to input config")
 		outPath    = flag.String("o", "sim-results.json", "path to write results")
 		numRuns    = flag.Int("runs", 100, "number of iterations to run for monte-carlo simulations")
+
+		cpuProfile = flag.String("cpuprofile", "", "write cpu profile to `file`")
+		memProfile = flag.String("memprofile", "", "write memory profile to `file`")
 	)
 
 	log.SetPrefix("dc-control-sim: ")
 	log.SetFlags(0)
 	flag.Parse()
 
+	if *cpuProfile != "" {
+		f, err := os.Create(*cpuProfile)
+		if err != nil {
+			log.Fatal("could not create CPU profile: ", err)
+		}
+		defer f.Close()
+		if err := pprof.StartCPUProfile(f); err != nil {
+			log.Fatal("could not start CPU profile: ", err)
+		}
+		defer pprof.StopCPUProfile()
+	}
+
 	if err := RunConfig(*configPath, *outPath, *numRuns); err != nil {
 		log.Fatal(err)
+	}
+
+	if *memProfile != "" {
+		f, err := os.Create(*memProfile)
+		if err != nil {
+			log.Fatal("could not create memory profile: ", err)
+		}
+		defer f.Close()
+		runtime.GC()
+		if err := pprof.WriteHeapProfile(f); err != nil {
+			log.Fatal("could not write memory profile: ", err)
+		}
 	}
 }
