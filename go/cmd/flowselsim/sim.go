@@ -18,8 +18,8 @@ import (
 	"time"
 
 	"github.com/uluyol/heyp-agents/go/intradc/alloc"
+	"github.com/uluyol/heyp-agents/go/intradc/f64sort"
 	"golang.org/x/exp/rand"
-
 	"gonum.org/v1/gonum/stat"
 	"gonum.org/v1/gonum/stat/sampleuv"
 )
@@ -398,13 +398,13 @@ func runSim(numFlows int, c SimConfig) simRunResult {
 
 	sb := new(strings.Builder)
 	for i := range results {
-		sort.Float64s(results[i].SplitErr)
-		sort.Float64s(results[i].AbsSplitErr)
-		sort.Float64s(results[i].AggUnadmittedBW)
-		sort.Float64s(results[i].UnadmittedBW)
-		sort.Float64s(results[i].UnadmittedFrac)
-		sort.Float64s(results[i].DemandfulUnadmittedBW)
-		sort.Float64s(results[i].DemandfulUnadmittedFrac)
+		f64sort.Float64s(results[i].SplitErr)
+		f64sort.Float64s(results[i].AbsSplitErr)
+		f64sort.Float64s(results[i].AggUnadmittedBW)
+		f64sort.Float64s(results[i].UnadmittedBW)
+		f64sort.Float64s(results[i].UnadmittedFrac)
+		f64sort.Float64s(results[i].DemandfulUnadmittedBW)
+		f64sort.Float64s(results[i].DemandfulUnadmittedFrac)
 
 		trimEmpty(&results[i].DemandfulUnadmittedBW, -1)
 		trimEmpty(&results[i].DemandfulUnadmittedFrac, -1)
