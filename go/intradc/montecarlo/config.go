@@ -129,10 +129,21 @@ type DowngradeSummary struct {
 
 type RateLimitSummary struct {
 	// Norm error = (approximate - exact host limit) / exact host limit
-	MeanNormError    float64   `json:"meanNormError"`
-	MeanAbsNormError float64   `json:"meanAbsNormError"`
-	NormErrorPerc    DistPercs `json:"normErrorPerc"`
-	AbsNormErrorPerc DistPercs `json:"absNormErrorPerc"`
+	// Frac throttled error = frac hosts throttled with approx limit - frac throttled w/ exact limit
+	// Num throttled norm error = (# hosts throttled with approx limit - w/ exact limit) / # with exact limit
+	MeanNormError                float64 `json:"meanNormError"`
+	MeanAbsNormError             float64 `json:"meanAbsNormError"`
+	MeanFracThrottledError       float64 `json:"meanFracThrottledError"`
+	MeanFracThrottledAbsError    float64 `json:"meanFracThrottledAbsError"`
+	MeanNumThrottledNormError    float64 `json:"meanNumThrottledNormError"`
+	MeanNumThrottledAbsNormError float64 `json:"meanNumThrottledAbsNormError"`
+
+	NormErrorPerc                DistPercs `json:"normErrorPerc"`
+	AbsNormErrorPerc             DistPercs `json:"absNormErrorPerc"`
+	FracThrottledErrorPerc       DistPercs `json:"fracThrottledErrorPerc"`
+	FracThrottledAbsErrorPerc    DistPercs `json:"fracThrottledAbsErrorPerc"`
+	NumThrottledNormErrorPerc    DistPercs `json:"numThrottledNormErrorPerc"`
+	NumThrottledAbsNormErrorPerc DistPercs `json:"numThrottledAbsNormErrorPerc"`
 }
 
 type SysResult struct {

@@ -71,7 +71,9 @@ type perSysData struct {
 		intendedFracError metricWithAbsVal
 	}
 	rateLimit struct {
-		normError metricWithAbsVal
+		normError             metricWithAbsVal
+		fracThrottledError    metricWithAbsVal
+		numThrottledNormError metricWithAbsVal
 	}
 }
 
@@ -85,6 +87,8 @@ func (r *perSysData) MergeFrom(o *perSysData) {
 	r.downgrade.intendedFracError.MergeFrom(&o.downgrade.intendedFracError)
 
 	r.rateLimit.normError.MergeFrom(&o.rateLimit.normError)
+	r.rateLimit.fracThrottledError.MergeFrom(&o.rateLimit.fracThrottledError)
+	r.rateLimit.numThrottledNormError.MergeFrom(&o.rateLimit.numThrottledNormError)
 }
 
 // EvalInstance performs monte-carlo simulations with numRuns iterations
@@ -123,11 +127,13 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 
 				exactDowngradeFrac := downgradeFrac(exactUsage, approval)
 				exactHostLimit := exactFairHostRateLimit(usages, approval)
+				exactNumHostsThrottled, exactFracHostsThrottled := numAndFracHostsThrottled(usages, exactHostLimit)
 
 				for sysi, sys := range inst.Sys {
 					approxUsage, approxDist, numSamples := estimateUsage(rng, sys.Sampler, usages)
 					approxDowngradeFrac := downgradeFrac(approxUsage, approval)
 					approxHostLimit := fairHostRateLimit(approxDist, approxUsage, approval, len(usages))
+					approxNumHostsThrottled, approxFracHostsThrottled := numAndFracHostsThrottled(usages, approxHostLimit)
 
 					data[sysi].sampler.usageNormError.Record(normByExpected(approxUsage-exactUsage, exactUsage))
 					data[sysi].sampler.numSamples.Record(numSamples)
@@ -135,6 +141,8 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 					data[sysi].sampler.approxUsageSum += approxUsage
 					data[sysi].downgrade.intendedFracError.Record(approxDowngradeFrac - exactDowngradeFrac)
 					data[sysi].rateLimit.normError.Record(normByExpected(approxHostLimit-exactHostLimit, exactHostLimit))
+					data[sysi].rateLimit.fracThrottledError.Record(approxFracHostsThrottled - exactFracHostsThrottled)
+					data[sysi].rateLimit.numThrottledNormError.Record(normByExpected(approxNumHostsThrottled-exactNumHostsThrottled, exactNumHostsThrottled))
 				}
 			}
 
@@ -181,10 +189,18 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 						IntendedFracAbsErrorPerc: data[i].downgrade.intendedFracError.Abs.DistPercs(),
 					},
 					RateLimitSummary: RateLimitSummary{
-						MeanNormError:    data[i].rateLimit.normError.Raw.Mean(),
-						MeanAbsNormError: data[i].rateLimit.normError.Abs.Mean(),
-						NormErrorPerc:    data[i].rateLimit.normError.Raw.DistPercs(),
-						AbsNormErrorPerc: data[i].rateLimit.normError.Abs.DistPercs(),
+						MeanNormError:                data[i].rateLimit.normError.Raw.Mean(),
+						MeanAbsNormError:             data[i].rateLimit.normError.Abs.Mean(),
+						MeanFracThrottledError:       data[i].rateLimit.fracThrottledError.Raw.Mean(),
+						MeanFracThrottledAbsError:    data[i].rateLimit.fracThrottledError.Abs.Mean(),
+						MeanNumThrottledNormError:    data[i].rateLimit.numThrottledNormError.Raw.Mean(),
+						MeanNumThrottledAbsNormError: data[i].rateLimit.numThrottledNormError.Abs.Mean(),
+						NormErrorPerc:                data[i].rateLimit.normError.Raw.DistPercs(),
+						AbsNormErrorPerc:             data[i].rateLimit.normError.Abs.DistPercs(),
+						FracThrottledErrorPerc:       data[i].rateLimit.fracThrottledError.Raw.DistPercs(),
+						FracThrottledAbsErrorPerc:    data[i].rateLimit.fracThrottledError.Abs.DistPercs(),
+						NumThrottledNormErrorPerc:    data[i].rateLimit.numThrottledNormError.Raw.DistPercs(),
+						NumThrottledAbsNormErrorPerc: data[i].rateLimit.numThrottledNormError.Abs.DistPercs(),
 					},
 				},
 			}
@@ -194,11 +210,22 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 	}()
 }
 
-// normByExpected returns 1 if approx == expected and approx / expected.
+// normByExpected returns 1 if approx == expected and approx / expected otherwise.
+//
 // Notably, this means that we return 1 if both approx and expected are 0.
+//
+// To avoid returning Infs (sigh JSON), we use math.MinInt32 / math.MaxInt32 when
+// dividing a non-zero value by 0.
 func normByExpected(approx, expected float64) float64 {
-	if approx == expected && expected == 0 {
-		return 1
+	if expected == 0 {
+		if approx == expected {
+			return 1
+		} else if approx >= 0 {
+			return math.MaxInt32
+		} else {
+			// approx < 0
+			return math.MinInt32
+		}
 	}
 	return approx / expected
 }
@@ -210,6 +237,19 @@ func downgradeFrac(aggUsage, approval float64) float64 {
 		return 0
 	}
 	return (aggUsage - approval) / aggUsage
+}
+
+func numAndFracHostsThrottled(wantUsages []float64, limit float64) (num, frac float64) {
+	if len(wantUsages) == 0 {
+		return 0, 0
+	}
+	var count float64
+	for _, u := range wantUsages {
+		if limit < u {
+			count++
+		}
+	}
+	return count, count / float64(len(wantUsages))
 }
 
 func exactFairHostRateLimit(usages []float64, approval float64) float64 {
