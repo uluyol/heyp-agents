@@ -5,7 +5,8 @@ go 1.16
 require (
 	fortio.org/fortio v1.16.1
 	github.com/HdrHistogram/hdrhistogram-go v1.1.0
-	github.com/ghodss/yaml v1.0.0 // indirect
+	github.com/cespare/xxhash/v2 v2.1.2
+	github.com/ghodss/yaml v1.0.0
 	github.com/google/renameio v1.0.1
 	github.com/google/subcommands v1.2.0
 	github.com/google/uuid v1.2.0
