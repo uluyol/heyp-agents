@@ -5,6 +5,8 @@ import (
 	"math"
 
 	xxhash "github.com/cespare/xxhash/v2"
+	"github.com/uluyol/heyp-agents/go/calg"
+	"github.com/uluyol/heyp-agents/go/intradc/convif"
 )
 
 type SampledUsages struct {
@@ -21,10 +23,7 @@ type Selector interface {
 }
 
 type HashSelector struct{}
-
-type hashMatcher struct {
-	thresh uint32
-}
+type hashMatcher struct{ thresh uint32 }
 
 func sum32(b []byte) uint32 {
 	var t uint64 = xxhash.Sum64(b[:])
@@ -46,10 +45,33 @@ func (m hashMatcher) MatchHosts(usages []float64) ([]int, float64) {
 	return matched, matchedUsage
 }
 
-func (hs HashSelector) NewMatcher(matchFrac float64, data SampledUsages) Matcher {
+func (HashSelector) NewMatcher(matchFrac float64, data SampledUsages) Matcher {
 	return hashMatcher{
 		thresh: uint32(float64(math.MaxUint32) * matchFrac),
 	}
 }
 
 var _ Selector = HashSelector{}
+
+type KnapsackSelector struct{}
+type knapsackMatcher struct{ frac float64 }
+
+func (m knapsackMatcher) MatchHosts(usages []float64) ([]int, float64) {
+	usagesInt, _ := convif.ToInt64Demands(usages, 1)
+	matched, _ := calg.KnapsackUsageLOPRI(usagesInt, m.frac)
+	return matched, sumUsage(usages, matched)
+}
+
+func sumUsage(usages []float64, ids []int) float64 {
+	var sum float64
+	for _, id := range ids {
+		sum += usages[id]
+	}
+	return sum
+}
+
+func (KnapsackSelector) NewMatcher(matchFrac float64, data SampledUsages) Matcher {
+	return knapsackMatcher{matchFrac}
+}
+
+var _ Selector = KnapsackSelector{}
