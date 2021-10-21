@@ -93,7 +93,7 @@ func (r *perSysData) MergeFrom(o *perSysData) {
 // EvalInstance may start multiple shards of work in parallel after writing to sem,
 // and it will return once all shards have been started.
 func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []InstanceResult) {
-	approval := inst.ApprovalOverExpectedUsage * inst.HostUsages.DistMean()
+	approval := inst.ApprovalOverExpectedUsage * float64(inst.HostUsages.NumHosts()) * inst.HostUsages.DistMean()
 
 	shardData := make(chan []perSysData, 1)
 	const shardSize = 100
