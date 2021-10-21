@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/uluyol/heyp-agents/go/intradc/dists"
+	"github.com/uluyol/heyp-agents/go/intradc/flowsel"
 	"github.com/uluyol/heyp-agents/go/intradc/sampling"
 )
 
@@ -64,12 +65,13 @@ func (c *Config) Enumerate() []Instance {
 						HostUsages:                distGen,
 						ApprovalOverExpectedUsage: aod,
 						NumSamplesAtApproval:      numSamples,
-						Sys: []Sys{
-							{
-								Sampler: sampling.UniformSampler{Prob: float64(numSamples) / float64(numHosts)},
+						Sys: Sys{
+							Samplers: []sampling.Sampler{
+								sampling.UniformSampler{Prob: float64(numSamples) / float64(numHosts)},
+								sampling.NewWeightedSampler(float64(numSamples), float64(numHosts)*distGen.DistMean()*aod),
 							},
-							{
-								Sampler: sampling.NewWeightedSampler(float64(numSamples), float64(numHosts)*distGen.DistMean()*aod),
+							HostSelectors: []flowsel.Selector{
+								flowsel.HashSelector{},
 							},
 						},
 					})
@@ -81,9 +83,18 @@ func (c *Config) Enumerate() []Instance {
 }
 
 type Sys struct {
-	Sampler sampling.Sampler
-	// TODO: add flow selection
+	Samplers      []sampling.Sampler
+	HostSelectors []flowsel.Selector
 }
+
+func (s *Sys) Num() int { return len(s.Samplers) * len(s.HostSelectors) }
+
+func (s *Sys) SysID(samplerID, hostSelectorID int) int {
+	return samplerID*len(s.HostSelectors) + hostSelectorID
+}
+
+func (s *Sys) SamplerID(sysID int) int      { return sysID / len(s.HostSelectors) }
+func (s *Sys) HostSelectorID(sysID int) int { return sysID % len(s.HostSelectors) }
 
 type ID int
 
@@ -92,7 +103,7 @@ type Instance struct {
 	HostUsages                dists.DistGen
 	ApprovalOverExpectedUsage float64
 	NumSamplesAtApproval      int
-	Sys                       []Sys
+	Sys                       Sys
 }
 
 type DistPercs struct {
@@ -123,8 +134,12 @@ type DowngradeSummary struct {
 	// Intended frac error = approximate intended frac - exact
 	MeanIntendedFracError    float64   `json:"meanIntendedFracError"`
 	MeanIntendedFracAbsError float64   `json:"meanIntendedFracAbsError"`
+	MeanRealizedFracError    float64   `json:"meanRealizedFracError"`
+	MeanRealizedFracAbsError float64   `json:"meanRealizedFracAbsError"`
 	IntendedFracErrorPerc    DistPercs `json:"intendedFracErrorPerc"`
 	IntendedFracAbsErrorPerc DistPercs `json:"intendedFracAbsErrorPerc"`
+	RealizedFracErrorPerc    DistPercs `json:"realizedFracErrorPerc"`
+	RealizedFracAbsErrorPerc DistPercs `json:"realizedFracAbsErrorPerc"`
 }
 
 type RateLimitSummary struct {
@@ -148,6 +163,7 @@ type RateLimitSummary struct {
 
 type SysResult struct {
 	SamplerName      string           `json:"samplerName"`
+	HostSelectorName string           `json:"hostSelectorName"`
 	NumDataPoints    int              `json:"numDataPoints"`
 	SamplerSummary   SamplerSummary   `json:"samplerSummary"`
 	DowngradeSummary DowngradeSummary `json:"downgradeSummary"`

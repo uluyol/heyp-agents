@@ -20,6 +20,7 @@ type Matcher interface {
 
 type Selector interface {
 	NewMatcher(matchFrac float64, data SampledUsages) Matcher
+	Name() string
 }
 
 type HashSelector struct{}
@@ -51,6 +52,8 @@ func (HashSelector) NewMatcher(matchFrac float64, data SampledUsages) Matcher {
 	}
 }
 
+func (HashSelector) Name() string { return "hash" }
+
 var _ Selector = HashSelector{}
 
 type KnapsackSelector struct{}
@@ -73,5 +76,7 @@ func sumUsage(usages []float64, ids []int) float64 {
 func (KnapsackSelector) NewMatcher(matchFrac float64, data SampledUsages) Matcher {
 	return knapsackMatcher{matchFrac}
 }
+
+func (KnapsackSelector) Name() string { return "knapsack" }
 
 var _ Selector = KnapsackSelector{}
