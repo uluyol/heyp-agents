@@ -61,8 +61,8 @@ type Token = struct{}
 
 type perSysData struct {
 	sampler struct {
-		approxOverExactUsage metric
-		numSamples           metric
+		usageNormError metricWithAbsVal
+		numSamples     metric
 
 		exactUsageSum  float64
 		approxUsageSum float64
@@ -71,12 +71,12 @@ type perSysData struct {
 		intendedFracError metricWithAbsVal
 	}
 	rateLimit struct {
-		approxOverExactHostLimit metric
+		normError metricWithAbsVal
 	}
 }
 
 func (r *perSysData) MergeFrom(o *perSysData) {
-	r.sampler.approxOverExactUsage.MergeFrom(&o.sampler.approxOverExactUsage)
+	r.sampler.usageNormError.MergeFrom(&o.sampler.usageNormError)
 	r.sampler.numSamples.MergeFrom(&o.sampler.numSamples)
 
 	r.sampler.exactUsageSum += o.sampler.exactUsageSum
@@ -84,7 +84,7 @@ func (r *perSysData) MergeFrom(o *perSysData) {
 
 	r.downgrade.intendedFracError.MergeFrom(&o.downgrade.intendedFracError)
 
-	r.rateLimit.approxOverExactHostLimit.MergeFrom(&o.rateLimit.approxOverExactHostLimit)
+	r.rateLimit.normError.MergeFrom(&o.rateLimit.normError)
 }
 
 // EvalInstance performs monte-carlo simulations with numRuns iterations
@@ -129,12 +129,12 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 					approxDowngradeFrac := downgradeFrac(approxUsage, approval)
 					approxHostLimit := fairHostRateLimit(approxDist, approxUsage, approval, len(usages))
 
-					data[sysi].sampler.approxOverExactUsage.Record(divideByExpected(approxUsage, exactUsage))
+					data[sysi].sampler.usageNormError.Record(normByExpected(approxUsage-exactUsage, exactUsage))
 					data[sysi].sampler.numSamples.Record(numSamples)
 					data[sysi].sampler.exactUsageSum += exactUsage
 					data[sysi].sampler.approxUsageSum += approxUsage
-					data[sysi].downgrade.intendedFracError.Record(exactDowngradeFrac - approxDowngradeFrac)
-					data[sysi].rateLimit.approxOverExactHostLimit.Record(divideByExpected(approxHostLimit, exactHostLimit))
+					data[sysi].downgrade.intendedFracError.Record(approxDowngradeFrac - exactDowngradeFrac)
+					data[sysi].rateLimit.normError.Record(normByExpected(approxHostLimit-exactHostLimit, exactHostLimit))
 				}
 			}
 
@@ -165,12 +165,14 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 					SamplerName:   inst.Sys[i].Sampler.Name(),
 					NumDataPoints: numRuns,
 					SamplerSummary: SamplerSummary{
-						MeanExactUsage:           data[i].sampler.exactUsageSum / float64(numRuns),
-						MeanApproxUsage:          data[i].sampler.approxUsageSum / float64(numRuns),
-						MeanApproxOverExactUsage: data[i].sampler.approxOverExactUsage.Mean(),
-						MeanNumSamples:           data[i].sampler.numSamples.Mean(),
-						ApproxOverExactUsagePerc: data[i].sampler.approxOverExactUsage.DistPercs(),
-						NumSamplesPerc:           data[i].sampler.numSamples.DistPercs(),
+						MeanExactUsage:        data[i].sampler.exactUsageSum / float64(numRuns),
+						MeanApproxUsage:       data[i].sampler.approxUsageSum / float64(numRuns),
+						MeanUsageNormError:    data[i].sampler.usageNormError.Raw.Mean(),
+						MeanUsageAbsNormError: data[i].sampler.usageNormError.Abs.Mean(),
+						MeanNumSamples:        data[i].sampler.numSamples.Mean(),
+						UsageNormErrorPerc:    data[i].sampler.usageNormError.Raw.DistPercs(),
+						UsageAbsNormErrorPerc: data[i].sampler.usageNormError.Abs.DistPercs(),
+						NumSamplesPerc:        data[i].sampler.numSamples.DistPercs(),
 					},
 					DowngradeSummary: DowngradeSummary{
 						MeanIntendedFracError:    data[i].downgrade.intendedFracError.Raw.Mean(),
@@ -179,8 +181,10 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 						IntendedFracAbsErrorPerc: data[i].downgrade.intendedFracError.Abs.DistPercs(),
 					},
 					RateLimitSummary: RateLimitSummary{
-						MeanApproxOverExactHostLimit: data[i].rateLimit.approxOverExactHostLimit.Mean(),
-						ApproxOverExactHostLimitPerc: data[i].rateLimit.approxOverExactHostLimit.DistPercs(),
+						MeanNormError:    data[i].rateLimit.normError.Raw.Mean(),
+						MeanAbsNormError: data[i].rateLimit.normError.Abs.Mean(),
+						NormErrorPerc:    data[i].rateLimit.normError.Raw.DistPercs(),
+						AbsNormErrorPerc: data[i].rateLimit.normError.Abs.DistPercs(),
 					},
 				},
 			}
@@ -190,10 +194,10 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 	}()
 }
 
-// divideByExpected returns 1 if approx == expected and approx / expected.
+// normByExpected returns 1 if approx == expected and approx / expected.
 // Notably, this means that we return 1 if both approx and expected are 0.
-func divideByExpected(approx, expected float64) float64 {
-	if approx == expected {
+func normByExpected(approx, expected float64) float64 {
+	if approx == expected && expected == 0 {
 		return 1
 	}
 	return approx / expected

@@ -103,16 +103,16 @@ PlotDowngradeFracErrorByHostUsagesGen <- function(subset, mult.lb, metric.name, 
     .junk <- dev.off()
 }
 
-PlotApproxOverExactUsageByHostUsagesGen <- function(subset, metric.name, metric, output) {
+PlotUsageNormErrorByHostUsagesGen <- function(subset, metric.name, metric, output) {
     pdf(output, height=4.5, width=5)
     p <- ggplot(data=subset, aes_string(
             x=paste0("sys.samplerSummary.", metric),
             color="sys.samplerName")) +
         stat_myecdf(size=1) +
         facet_wrap(~ hostUsagesGen, ncol=2) +
-        xlab(paste0(metric.name, " estimated / exact usage")) +
+        xlab(paste0(metric.name, " (estimated - exact usage) / exact usage")) +
         ylab("CDF across instances") +
-        coord_cartesian(xlim=c(0, 2), ylim=c(0, 1)) +
+        coord_cartesian(xlim=c(-1, 1), ylim=c(0, 1)) +
         scale_y_continuous(breaks=seq(0, 1, by=0.2)) +
         guides(color=guide_legend(ncol=3), linetype=guide_legend(ncol=3)) +
         my_theme()
@@ -120,16 +120,16 @@ PlotApproxOverExactUsageByHostUsagesGen <- function(subset, metric.name, metric,
     .junk <- dev.off()
 }
 
-PlotApproxOverExactHostLimitByHostUsagesGen <- function(subset, metric.name, metric, output) {
+PlotRateLimitNormErrorByHostUsagesGen <- function(subset, metric.name, metric, output) {
     pdf(output, height=4.5, width=5)
     p <- ggplot(data=subset, aes_string(
             x=paste0("sys.rateLimitSummary.", metric),
             color="sys.samplerName")) +
         stat_myecdf(size=1) +
         facet_wrap(~ hostUsagesGen, ncol=2) +
-        xlab(paste0(metric.name, " host limit with estimated usage / with exact usage")) +
+        xlab(paste0(metric.name, " (host limit with estimated usage - with exact usage) / with exact usage")) +
         ylab("CDF across instances") +
-        coord_cartesian(xlim=c(0, 2), ylim=c(0, 1)) +
+        coord_cartesian(xlim=c(-1, 1), ylim=c(0, 1)) +
         scale_y_continuous(breaks=seq(0, 1, by=0.2)) +
         guides(color=guide_legend(ncol=3), linetype=guide_legend(ncol=3)) +
         my_theme()
@@ -193,13 +193,9 @@ con <- file(simresults, open="r")
 data <- stream_in(con, flatten=TRUE, verbose=FALSE)
 close(con)
 
-# PlotApproxOverExactUsage(data, "meanApproxOverExactUsage", file.path(outdir, "aoe-usage-mean.pdf"))
-# PlotApproxOverExactUsage(data, "approxOverExactUsagePerc.p5", file.path(outdir, "aoe-usage-p5.pdf"))
-# PlotApproxOverExactUsage(data, "approxOverExactUsagePerc.p95", file.path(outdir, "aoe-usage-p95.pdf"))
-
-PlotApproxOverExactUsageByHostUsagesGen(data, "Mean", "meanApproxOverExactUsage", file.path(outdir, "aoe-usage-hug-mean.pdf"))
-PlotApproxOverExactUsageByHostUsagesGen(data, "5%ile", "approxOverExactUsagePerc.p5", file.path(outdir, "aoe-usage-hug-p5.pdf"))
-PlotApproxOverExactUsageByHostUsagesGen(data, "95%ile", "approxOverExactUsagePerc.p95", file.path(outdir, "aoe-usage-hug-p95.pdf"))
+PlotUsageNormErrorByHostUsagesGen(data, "Mean", "meanUsageAbsNormError", file.path(outdir, "usage-abs-norm-error-hug-mean.pdf"))
+PlotUsageNormErrorByHostUsagesGen(data, "5%ile", "usageAbsNormErrorPerc.p5", file.path(outdir, "usage-abs-norm-error-hug-p5.pdf"))
+PlotUsageNormErrorByHostUsagesGen(data, "95%ile", "usageAbsNormErrorPerc.p95", file.path(outdir, "usage-abs-norm-error-hug-p95.pdf"))
 
 PlotDowngradeFracError(data, 0, "Mean abs", "meanIntendedFracAbsError", file.path(outdir, "downgrade-frac-abs-error-mean.pdf"))
 PlotDowngradeFracError(data, 0, "95%ile abs", "intendedFracAbsErrorPerc.p95", file.path(outdir, "downgrade-frac-abs-error-p95.pdf"))
@@ -211,9 +207,9 @@ PlotDowngradeFracErrorByHostUsagesGen(data, -1, "95%ile", "intendedFracErrorPerc
 PlotDowngradeFracErrorByHostUsagesGen(data, 0, "Mean abs", "meanIntendedFracAbsError", file.path(outdir, "downgrade-frac-abs-error-hug-mean.pdf"))
 PlotDowngradeFracErrorByHostUsagesGen(data, 0, "95%ile abs", "intendedFracAbsErrorPerc.p95", file.path(outdir, "downgrade-frac-abs-error-hug-p95.pdf"))
 
-PlotApproxOverExactHostLimitByHostUsagesGen(data, "Mean", "meanApproxOverExactHostLimit", file.path(outdir, "aoe-host-limit-hug-mean.pdf"))
-PlotApproxOverExactHostLimitByHostUsagesGen(data, "5%ile", "approxOverExactHostLimitPerc.p5", file.path(outdir, "aoe-host-limit-hug-p5.pdf"))
-PlotApproxOverExactHostLimitByHostUsagesGen(data, "95%ile", "approxOverExactHostLimitPerc.p95", file.path(outdir, "aoe-host-limit-hug-p95.pdf"))
+PlotRateLimitNormErrorByHostUsagesGen(data, "Mean", "meanNormError", file.path(outdir, "host-limit-norm-error-hug-mean.pdf"))
+PlotRateLimitNormErrorByHostUsagesGen(data, "5%ile", "normErrorPerc.p5", file.path(outdir, "host-limit-norm-error-hug-p5.pdf"))
+PlotRateLimitNormErrorByHostUsagesGen(data, "95%ile", "normErrorPerc.p95", file.path(outdir, "host-limit-norm-error-hug-p95.pdf"))
 
 PlotMeanNumSamplesOverExpected(data, file.path(outdir, "num-samples-over-expected-mean.pdf"))
 PlotMeanNumSamplesByRequested(data, file.path(outdir, "num-samples-by-req.pdf"))
