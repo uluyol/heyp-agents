@@ -1,6 +1,6 @@
 module github.com/uluyol/heyp-agents
 
-go 1.16
+go 1.17
 
 require (
 	fortio.org/fortio v1.16.1
@@ -16,4 +16,10 @@ require (
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	gonum.org/v1/gonum v0.9.1
 	google.golang.org/protobuf v1.26.0
+)
+
+require (
+	golang.org/x/sys v0.0.0-20210423082822-04245dca01da // indirect
+	golang.org/x/text v0.3.6 // indirect
+	gopkg.in/yaml.v2 v2.2.2 // indirect
 )

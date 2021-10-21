@@ -11,7 +11,7 @@
 
 extern "C" {
 int64_t HeypKnapsackUsageLOPRI(int64_t* demands, size_t num_demands,
-                               double want_frac_lopri) {
+                               double want_frac_lopri, uint8_t* out_is_lopri) {
   std::optional<operations_research::KnapsackSolver> solver;
 
   if (num_demands <= 64) {
@@ -28,7 +28,15 @@ int64_t HeypKnapsackUsageLOPRI(int64_t* demands, size_t num_demands,
   }
   int64_t want_demand = want_frac_lopri * total_demand;
   solver->Init(demands_vec, {demands_vec}, {want_demand});
-  return solver->Solve();
+  int64_t ret = solver->Solve();
+  for (size_t i = 0; i < demands_vec.size(); ++i) {
+    uint8_t picked = 0;
+    if (solver->BestSolutionContains(i)) {
+      picked = 1;
+    }
+    out_is_lopri[i] = picked;
+  }
+  return ret;
 }
 
 int64_t HeypMaxMinFairWaterlevel(int64_t admission, int64_t* demands,
