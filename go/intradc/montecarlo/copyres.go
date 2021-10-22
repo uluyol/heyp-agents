@@ -47,20 +47,24 @@ func populateSummary(summaryOut interface{}, resultStruct interface{}) interface
 	resultFields := resultVal.NumField()
 	summary := reflect.ValueOf(summaryOut).Elem()
 	for fieldID := 0; fieldID < resultFields; fieldID++ {
+		fieldType := resultElem.Field(fieldID)
+		if !fieldType.IsExported() {
+			continue
+		}
+
 		field := resultVal.Field(fieldID)
-		fieldName := resultElem.Field(fieldID).Name
 
 		metricData, isMetric := field.Interface().(metric)
 		metricWithAbsValData, isMetricWithAbsVal := field.Interface().(metricWithAbsVal)
 
 		if isMetric {
-			field := summary.FieldByName(fieldName)
+			field := summary.FieldByName(fieldType.Name)
 			field.Set(reflect.ValueOf(metricData.Stats()))
 		} else if isMetricWithAbsVal {
-			rawField := summary.FieldByName(fieldName)
+			rawField := summary.FieldByName(fieldType.Name)
 			rawField.Set(reflect.ValueOf(metricWithAbsValData.Raw.Stats()))
 
-			absField := summary.FieldByName("Abs" + fieldName)
+			absField := summary.FieldByName("Abs" + fieldType.Name)
 			absField.Set(reflect.ValueOf(metricWithAbsValData.Abs.Stats()))
 		}
 	}
