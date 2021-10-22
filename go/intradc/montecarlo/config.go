@@ -134,53 +134,38 @@ type SamplerSummary struct {
 	MeanApproxUsage float64 `json:"meanApproxUsage"`
 
 	// Usage norm error = (approximate - exact usage) / exact usage
-	MeanUsageNormError    float64 `json:"meanUsageNormError"`
-	MeanUsageAbsNormError float64 `json:"meanUsageAbsNormError"`
-	MeanNumSamples        float64 `json:"meanNumSamples"`
-
-	UsageNormErrorPerc    DistPercs `json:"usageNormErrorPerc"`
-	UsageAbsNormErrorPerc DistPercs `json:"usageAbsNormErrorPerc"`
-	NumSamplesPerc        DistPercs `json:"numSamplesPerc"`
+	UsageNormError    Stats `json:"usageNormError"`
+	AbsUsageNormError Stats `json:"absUsageNormError"`
+	NumSamples        Stats `json:"numSamples"`
 }
 
 type DowngradeSummary struct {
 	// Intended frac error = approximate intended frac - exact
-	MeanIntendedFracError    float64   `json:"meanIntendedFracError"`
-	MeanIntendedFracAbsError float64   `json:"meanIntendedFracAbsError"`
-	MeanRealizedFracError    float64   `json:"meanRealizedFracError"`
-	MeanRealizedFracAbsError float64   `json:"meanRealizedFracAbsError"`
-	IntendedFracErrorPerc    DistPercs `json:"intendedFracErrorPerc"`
-	IntendedFracAbsErrorPerc DistPercs `json:"intendedFracAbsErrorPerc"`
-	RealizedFracErrorPerc    DistPercs `json:"realizedFracErrorPerc"`
-	RealizedFracAbsErrorPerc DistPercs `json:"realizedFracAbsErrorPerc"`
+	IntendedFracError    Stats `json:"intendedFracError"`
+	AbsIntendedFracError Stats `json:"absIntendedFracError"`
+	RealizedFracError    Stats `json:"realizedFracError"`
+	AbsRealizedFracError Stats `json:"absRealizedFracError"`
 }
 
 type RateLimitSummary struct {
 	// Norm error = (approximate - exact host limit) / exact host limit
 	// Frac throttled error = frac hosts throttled with approx limit - frac throttled w/ exact limit
 	// Num throttled norm error = (# hosts throttled with approx limit - w/ exact limit) / # with exact limit
-	MeanNormError                float64 `json:"meanNormError"`
-	MeanAbsNormError             float64 `json:"meanAbsNormError"`
-	MeanFracThrottledError       float64 `json:"meanFracThrottledError"`
-	MeanFracThrottledAbsError    float64 `json:"meanFracThrottledAbsError"`
-	MeanNumThrottledNormError    float64 `json:"meanNumThrottledNormError"`
-	MeanNumThrottledAbsNormError float64 `json:"meanNumThrottledAbsNormError"`
-
-	NormErrorPerc                DistPercs `json:"normErrorPerc"`
-	AbsNormErrorPerc             DistPercs `json:"absNormErrorPerc"`
-	FracThrottledErrorPerc       DistPercs `json:"fracThrottledErrorPerc"`
-	FracThrottledAbsErrorPerc    DistPercs `json:"fracThrottledAbsErrorPerc"`
-	NumThrottledNormErrorPerc    DistPercs `json:"numThrottledNormErrorPerc"`
-	NumThrottledAbsNormErrorPerc DistPercs `json:"numThrottledAbsNormErrorPerc"`
+	NormError                Stats `json:"normError"`
+	AbsNormError             Stats `json:"absNormError"`
+	FracThrottledError       Stats `json:"fracThrottledError"`
+	AbsFracThrottledError    Stats `json:"absFracThrottledError"`
+	NumThrottledNormError    Stats `json:"numThrottledNormError"`
+	AbsNumThrottledNormError Stats `json:"absNumThrottledNormError"`
 }
 
 type SysResult struct {
-	SamplerName      string           `json:"samplerName"`
-	HostSelectorName string           `json:"hostSelectorName"`
-	NumDataPoints    int              `json:"numDataPoints"`
-	SamplerSummary   SamplerSummary   `json:"samplerSummary"`
-	DowngradeSummary DowngradeSummary `json:"downgradeSummary"`
-	RateLimitSummary RateLimitSummary `json:"rateLimitSummary"`
+	SamplerName      string            `json:"samplerName"`
+	HostSelectorName string            `json:"hostSelectorName"`
+	NumDataPoints    int               `json:"numDataPoints"`
+	SamplerSummary   *SamplerSummary   `json:"samplerSummary"`
+	DowngradeSummary *DowngradeSummary `json:"downgradeSummary"`
+	RateLimitSummary *RateLimitSummary `json:"rateLimitSummary"`
 }
 
 type InstanceResult struct {

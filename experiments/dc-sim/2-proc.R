@@ -138,11 +138,11 @@ PlotRateLimitNormErrorByHostUsagesGen <- function(subset, metric.name, metric, o
 }
 
 PlotMeanNumSamplesByRequested <- function(subset, output) {
-    measured <- subset[, c("numHosts", "sys.samplerName", "sys.samplerSummary.meanNumSamples")]
+    measured <- subset[, c("numHosts", "sys.samplerName", "sys.samplerSummary.numSamples.mean")]
     intended <- unique(subset[, c("instanceID", "numHosts", "numSamplesAtApproval")])
     intended$numSamplesAtApproval <- pmin(intended$numSamplesAtApproval, intended$numHosts)
     data <- rbind(
-        data.frame(numHosts=measured$numHosts, kind=measured$sys.samplerName, num=measured$sys.samplerSummary.meanNumSamples),
+        data.frame(numHosts=measured$numHosts, kind=measured$sys.samplerName, num=measured$sys.samplerSummary.numSamples.mean),
         data.frame(numHosts=intended$numHosts, kind=rep.int("wantAtApproval", nrow(intended)), num=intended$numSamplesAtApproval))
     pdf(output, height=4.5, width=5)
     p <- ggplot(data=data, aes(x=num, color=kind)) +
@@ -160,7 +160,7 @@ PlotMeanNumSamplesByRequested <- function(subset, output) {
 
 PlotMeanNumSamplesOverExpected <- function(subset, output) {
     data <- rbind(
-        data.frame(x=subset$sys.samplerSummary.meanNumSamples / pmin(subset$numSamplesAtApproval, subset$numHosts),
+        data.frame(x=subset$sys.samplerSummary.numSamples.mean / pmin(subset$numSamplesAtApproval, subset$numHosts),
                    kind=subset$sys.samplerName),
         data.frame(x=subset$approvalOverExpectedUsage[subset$sys.samplerName == "weighted"],
                    kind=rep.int("weighted (expected)", sum(subset$sys.samplerName == "weighted"))))
@@ -193,23 +193,23 @@ con <- file(simresults, open="r")
 data <- stream_in(con, flatten=TRUE, verbose=FALSE)
 close(con)
 
-PlotUsageNormErrorByHostUsagesGen(data, "Mean", "meanUsageAbsNormError", file.path(outdir, "usage-abs-norm-error-hug-mean.pdf"))
-PlotUsageNormErrorByHostUsagesGen(data, "5%ile", "usageAbsNormErrorPerc.p5", file.path(outdir, "usage-abs-norm-error-hug-p5.pdf"))
-PlotUsageNormErrorByHostUsagesGen(data, "95%ile", "usageAbsNormErrorPerc.p95", file.path(outdir, "usage-abs-norm-error-hug-p95.pdf"))
+PlotUsageNormErrorByHostUsagesGen(data, "Mean", "absUsageNormError.mean", file.path(outdir, "usage-abs-norm-error-hug-mean.pdf"))
+PlotUsageNormErrorByHostUsagesGen(data, "5%ile", "absUsageNormError.p5", file.path(outdir, "usage-abs-norm-error-hug-p5.pdf"))
+PlotUsageNormErrorByHostUsagesGen(data, "95%ile", "absUsageNormError.p95", file.path(outdir, "usage-abs-norm-error-hug-p95.pdf"))
 
-PlotDowngradeFracError(data, 0, "Mean abs", "meanIntendedFracAbsError", file.path(outdir, "downgrade-frac-abs-error-mean.pdf"))
-PlotDowngradeFracError(data, 0, "95%ile abs", "intendedFracAbsErrorPerc.p95", file.path(outdir, "downgrade-frac-abs-error-p95.pdf"))
+PlotDowngradeFracError(data, 0, "Mean abs", "absIntendedFracError.mean", file.path(outdir, "downgrade-frac-abs-error-mean.pdf"))
+PlotDowngradeFracError(data, 0, "95%ile abs", "absIntendedFracError.p95", file.path(outdir, "downgrade-frac-abs-error-p95.pdf"))
 
-PlotDowngradeFracErrorByHostUsagesGen(data, -1, "Mean", "meanIntendedFracError", file.path(outdir, "downgrade-frac-error-hug-mean.pdf"))
-PlotDowngradeFracErrorByHostUsagesGen(data, -1, "5%ile", "intendedFracErrorPerc.p5", file.path(outdir, "downgrade-frac-error-hug-p5.pdf"))
-PlotDowngradeFracErrorByHostUsagesGen(data, -1, "95%ile", "intendedFracErrorPerc.p95", file.path(outdir, "downgrade-frac-error-hug-p95.pdf"))
+PlotDowngradeFracErrorByHostUsagesGen(data, -1, "Mean", "intendedFracError.mean", file.path(outdir, "downgrade-frac-error-hug-mean.pdf"))
+PlotDowngradeFracErrorByHostUsagesGen(data, -1, "5%ile", "intendedFracError.p5", file.path(outdir, "downgrade-frac-error-hug-p5.pdf"))
+PlotDowngradeFracErrorByHostUsagesGen(data, -1, "95%ile", "intendedFracError.p95", file.path(outdir, "downgrade-frac-error-hug-p95.pdf"))
 
-PlotDowngradeFracErrorByHostUsagesGen(data, 0, "Mean abs", "meanIntendedFracAbsError", file.path(outdir, "downgrade-frac-abs-error-hug-mean.pdf"))
-PlotDowngradeFracErrorByHostUsagesGen(data, 0, "95%ile abs", "intendedFracAbsErrorPerc.p95", file.path(outdir, "downgrade-frac-abs-error-hug-p95.pdf"))
+PlotDowngradeFracErrorByHostUsagesGen(data, 0, "Mean abs", "absIntendedFracError.mean", file.path(outdir, "downgrade-frac-abs-error-hug-mean.pdf"))
+PlotDowngradeFracErrorByHostUsagesGen(data, 0, "95%ile abs", "absIntendedFracError.p95", file.path(outdir, "downgrade-frac-abs-error-hug-p95.pdf"))
 
-PlotRateLimitNormErrorByHostUsagesGen(data, "Mean", "meanNormError", file.path(outdir, "host-limit-norm-error-hug-mean.pdf"))
-PlotRateLimitNormErrorByHostUsagesGen(data, "5%ile", "normErrorPerc.p5", file.path(outdir, "host-limit-norm-error-hug-p5.pdf"))
-PlotRateLimitNormErrorByHostUsagesGen(data, "95%ile", "normErrorPerc.p95", file.path(outdir, "host-limit-norm-error-hug-p95.pdf"))
+PlotRateLimitNormErrorByHostUsagesGen(data, "Mean", "normError.mean", file.path(outdir, "host-limit-norm-error-hug-mean.pdf"))
+PlotRateLimitNormErrorByHostUsagesGen(data, "5%ile", "normError.p5", file.path(outdir, "host-limit-norm-error-hug-p5.pdf"))
+PlotRateLimitNormErrorByHostUsagesGen(data, "95%ile", "normError.p95", file.path(outdir, "host-limit-norm-error-hug-p95.pdf"))
 
 PlotMeanNumSamplesOverExpected(data, file.path(outdir, "num-samples-over-expected-mean.pdf"))
 PlotMeanNumSamplesByRequested(data, file.path(outdir, "num-samples-by-req.pdf"))
