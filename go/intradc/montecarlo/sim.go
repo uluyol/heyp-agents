@@ -44,6 +44,20 @@ func (m *metric) DistPercs() DistPercs {
 	}
 }
 
+func (m *metric) Stats() Stats {
+	f64sort.Float64s(m.vals)
+	return Stats{
+		Mean: m.Mean(),
+		P0:   m.vals[0],
+		P5:   m.vals[(len(m.vals)-1+18)/20],
+		P10:  m.vals[(len(m.vals)-1+8)/10],
+		P50:  m.vals[(len(m.vals)-1+1)/2],
+		P90:  m.vals[len(m.vals)-1-len(m.vals)/10],
+		P95:  m.vals[len(m.vals)-1-len(m.vals)/20],
+		P100: m.vals[len(m.vals)-1],
+	}
+}
+
 type metricWithAbsVal struct {
 	Raw, Abs metric
 }
@@ -62,36 +76,36 @@ type Token = struct{}
 
 type perSysData struct {
 	sampler struct {
-		usageNormError metricWithAbsVal
-		numSamples     metric
+		UsageNormError metricWithAbsVal
+		NumSamples     metric
 
 		exactUsageSum  float64
 		approxUsageSum float64
 	}
 	downgrade struct {
-		intendedFracError metricWithAbsVal
-		realizedFracError metricWithAbsVal
+		IntendedFracError metricWithAbsVal
+		RealizedFracError metricWithAbsVal
 	}
 	rateLimit struct {
-		normError             metricWithAbsVal
-		fracThrottledError    metricWithAbsVal
-		numThrottledNormError metricWithAbsVal
+		NormError             metricWithAbsVal
+		FracThrottledError    metricWithAbsVal
+		NumThrottledNormError metricWithAbsVal
 	}
 }
 
 func (r *perSysData) MergeFrom(o *perSysData) {
-	r.sampler.usageNormError.MergeFrom(&o.sampler.usageNormError)
-	r.sampler.numSamples.MergeFrom(&o.sampler.numSamples)
+	r.sampler.UsageNormError.MergeFrom(&o.sampler.UsageNormError)
+	r.sampler.NumSamples.MergeFrom(&o.sampler.NumSamples)
 
 	r.sampler.exactUsageSum += o.sampler.exactUsageSum
 	r.sampler.approxUsageSum += o.sampler.approxUsageSum
 
-	r.downgrade.intendedFracError.MergeFrom(&o.downgrade.intendedFracError)
-	r.downgrade.realizedFracError.MergeFrom(&o.downgrade.realizedFracError)
+	r.downgrade.IntendedFracError.MergeFrom(&o.downgrade.IntendedFracError)
+	r.downgrade.RealizedFracError.MergeFrom(&o.downgrade.RealizedFracError)
 
-	r.rateLimit.normError.MergeFrom(&o.rateLimit.normError)
-	r.rateLimit.fracThrottledError.MergeFrom(&o.rateLimit.fracThrottledError)
-	r.rateLimit.numThrottledNormError.MergeFrom(&o.rateLimit.numThrottledNormError)
+	r.rateLimit.NormError.MergeFrom(&o.rateLimit.NormError)
+	r.rateLimit.FracThrottledError.MergeFrom(&o.rateLimit.FracThrottledError)
+	r.rateLimit.NumThrottledNormError.MergeFrom(&o.rateLimit.NumThrottledNormError)
 }
 
 // EvalInstance performs monte-carlo simulations with numRuns iterations
@@ -144,15 +158,15 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 							usages, exactUsage)
 
 						sysID := inst.Sys.SysID(samplerID, hostSelID)
-						data[sysID].sampler.usageNormError.Record(normByExpected(approxUsage-exactUsage, exactUsage))
-						data[sysID].sampler.numSamples.Record(numSamples)
+						data[sysID].sampler.UsageNormError.Record(normByExpected(approxUsage-exactUsage, exactUsage))
+						data[sysID].sampler.NumSamples.Record(numSamples)
 						data[sysID].sampler.exactUsageSum += exactUsage
 						data[sysID].sampler.approxUsageSum += approxUsage
-						data[sysID].downgrade.intendedFracError.Record(approxDowngradeFrac - exactDowngradeFrac)
-						data[sysID].downgrade.realizedFracError.Record(approxRealizedDowngradeFrac - exactDowngradeFrac)
-						data[sysID].rateLimit.normError.Record(normByExpected(approxHostLimit-exactHostLimit, exactHostLimit))
-						data[sysID].rateLimit.fracThrottledError.Record(approxFracHostsThrottled - exactFracHostsThrottled)
-						data[sysID].rateLimit.numThrottledNormError.Record(normByExpected(approxNumHostsThrottled-exactNumHostsThrottled, exactNumHostsThrottled))
+						data[sysID].downgrade.IntendedFracError.Record(approxDowngradeFrac - exactDowngradeFrac)
+						data[sysID].downgrade.RealizedFracError.Record(approxRealizedDowngradeFrac - exactDowngradeFrac)
+						data[sysID].rateLimit.NormError.Record(normByExpected(approxHostLimit-exactHostLimit, exactHostLimit))
+						data[sysID].rateLimit.FracThrottledError.Record(approxFracHostsThrottled - exactFracHostsThrottled)
+						data[sysID].rateLimit.NumThrottledNormError.Record(normByExpected(approxNumHostsThrottled-exactNumHostsThrottled, exactNumHostsThrottled))
 					}
 				}
 			}
@@ -189,36 +203,36 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 					SamplerSummary: SamplerSummary{
 						MeanExactUsage:        data[sysID].sampler.exactUsageSum / float64(numRuns),
 						MeanApproxUsage:       data[sysID].sampler.approxUsageSum / float64(numRuns),
-						MeanUsageNormError:    data[sysID].sampler.usageNormError.Raw.Mean(),
-						MeanUsageAbsNormError: data[sysID].sampler.usageNormError.Abs.Mean(),
-						MeanNumSamples:        data[sysID].sampler.numSamples.Mean(),
-						UsageNormErrorPerc:    data[sysID].sampler.usageNormError.Raw.DistPercs(),
-						UsageAbsNormErrorPerc: data[sysID].sampler.usageNormError.Abs.DistPercs(),
-						NumSamplesPerc:        data[sysID].sampler.numSamples.DistPercs(),
+						MeanUsageNormError:    data[sysID].sampler.UsageNormError.Raw.Mean(),
+						MeanUsageAbsNormError: data[sysID].sampler.UsageNormError.Abs.Mean(),
+						MeanNumSamples:        data[sysID].sampler.NumSamples.Mean(),
+						UsageNormErrorPerc:    data[sysID].sampler.UsageNormError.Raw.DistPercs(),
+						UsageAbsNormErrorPerc: data[sysID].sampler.UsageNormError.Abs.DistPercs(),
+						NumSamplesPerc:        data[sysID].sampler.NumSamples.DistPercs(),
 					},
 					DowngradeSummary: DowngradeSummary{
-						MeanIntendedFracError:    data[sysID].downgrade.intendedFracError.Raw.Mean(),
-						MeanIntendedFracAbsError: data[sysID].downgrade.intendedFracError.Abs.Mean(),
-						MeanRealizedFracError:    data[sysID].downgrade.realizedFracError.Raw.Mean(),
-						MeanRealizedFracAbsError: data[sysID].downgrade.realizedFracError.Abs.Mean(),
-						IntendedFracErrorPerc:    data[sysID].downgrade.intendedFracError.Raw.DistPercs(),
-						IntendedFracAbsErrorPerc: data[sysID].downgrade.intendedFracError.Abs.DistPercs(),
-						RealizedFracErrorPerc:    data[sysID].downgrade.realizedFracError.Raw.DistPercs(),
-						RealizedFracAbsErrorPerc: data[sysID].downgrade.realizedFracError.Abs.DistPercs(),
+						MeanIntendedFracError:    data[sysID].downgrade.IntendedFracError.Raw.Mean(),
+						MeanIntendedFracAbsError: data[sysID].downgrade.IntendedFracError.Abs.Mean(),
+						MeanRealizedFracError:    data[sysID].downgrade.RealizedFracError.Raw.Mean(),
+						MeanRealizedFracAbsError: data[sysID].downgrade.RealizedFracError.Abs.Mean(),
+						IntendedFracErrorPerc:    data[sysID].downgrade.IntendedFracError.Raw.DistPercs(),
+						IntendedFracAbsErrorPerc: data[sysID].downgrade.IntendedFracError.Abs.DistPercs(),
+						RealizedFracErrorPerc:    data[sysID].downgrade.RealizedFracError.Raw.DistPercs(),
+						RealizedFracAbsErrorPerc: data[sysID].downgrade.RealizedFracError.Abs.DistPercs(),
 					},
 					RateLimitSummary: RateLimitSummary{
-						MeanNormError:                data[sysID].rateLimit.normError.Raw.Mean(),
-						MeanAbsNormError:             data[sysID].rateLimit.normError.Abs.Mean(),
-						MeanFracThrottledError:       data[sysID].rateLimit.fracThrottledError.Raw.Mean(),
-						MeanFracThrottledAbsError:    data[sysID].rateLimit.fracThrottledError.Abs.Mean(),
-						MeanNumThrottledNormError:    data[sysID].rateLimit.numThrottledNormError.Raw.Mean(),
-						MeanNumThrottledAbsNormError: data[sysID].rateLimit.numThrottledNormError.Abs.Mean(),
-						NormErrorPerc:                data[sysID].rateLimit.normError.Raw.DistPercs(),
-						AbsNormErrorPerc:             data[sysID].rateLimit.normError.Abs.DistPercs(),
-						FracThrottledErrorPerc:       data[sysID].rateLimit.fracThrottledError.Raw.DistPercs(),
-						FracThrottledAbsErrorPerc:    data[sysID].rateLimit.fracThrottledError.Abs.DistPercs(),
-						NumThrottledNormErrorPerc:    data[sysID].rateLimit.numThrottledNormError.Raw.DistPercs(),
-						NumThrottledAbsNormErrorPerc: data[sysID].rateLimit.numThrottledNormError.Abs.DistPercs(),
+						MeanNormError:                data[sysID].rateLimit.NormError.Raw.Mean(),
+						MeanAbsNormError:             data[sysID].rateLimit.NormError.Abs.Mean(),
+						MeanFracThrottledError:       data[sysID].rateLimit.FracThrottledError.Raw.Mean(),
+						MeanFracThrottledAbsError:    data[sysID].rateLimit.FracThrottledError.Abs.Mean(),
+						MeanNumThrottledNormError:    data[sysID].rateLimit.NumThrottledNormError.Raw.Mean(),
+						MeanNumThrottledAbsNormError: data[sysID].rateLimit.NumThrottledNormError.Abs.Mean(),
+						NormErrorPerc:                data[sysID].rateLimit.NormError.Raw.DistPercs(),
+						AbsNormErrorPerc:             data[sysID].rateLimit.NormError.Abs.DistPercs(),
+						FracThrottledErrorPerc:       data[sysID].rateLimit.FracThrottledError.Raw.DistPercs(),
+						FracThrottledAbsErrorPerc:    data[sysID].rateLimit.FracThrottledError.Abs.DistPercs(),
+						NumThrottledNormErrorPerc:    data[sysID].rateLimit.NumThrottledNormError.Raw.DistPercs(),
+						NumThrottledAbsNormErrorPerc: data[sysID].rateLimit.NumThrottledNormError.Abs.DistPercs(),
 					},
 				},
 			}
