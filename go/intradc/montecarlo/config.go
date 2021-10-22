@@ -119,16 +119,6 @@ type Stats struct {
 	P100 float64 `json:"p100"`
 }
 
-type DistPercs struct {
-	P0   float64 `json:"p0"`
-	P5   float64 `json:"p5"`
-	P10  float64 `json:"p10"`
-	P50  float64 `json:"p50"`
-	P90  float64 `json:"p90"`
-	P95  float64 `json:"p95"`
-	P100 float64 `json:"p100"`
-}
-
 type SamplerSummary struct {
 	MeanExactUsage  float64 `json:"meanExactUsage"`
 	MeanApproxUsage float64 `json:"meanApproxUsage"`

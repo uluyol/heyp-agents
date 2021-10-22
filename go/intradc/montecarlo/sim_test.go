@@ -5,8 +5,8 @@ import "testing"
 func TestMetricOne(t *testing.T) {
 	var m metric
 	m.Record(65)
-	assertEq(t, m.Mean(), 65, "Mean")
-	d := m.DistPercs()
+	d := m.Stats()
+	assertEq(t, d.Mean, 65, "Mean")
 	assertEq(t, d.P0, 65, "P0")
 	assertEq(t, d.P5, 65, "P5")
 	assertEq(t, d.P10, 65, "P10")
@@ -20,8 +20,8 @@ func TestMetricTwo(t *testing.T) {
 	var m metric
 	m.Record(65)
 	m.Record(45)
-	assertEq(t, m.Mean(), 55, "Mean")
-	d := m.DistPercs()
+	d := m.Stats()
+	assertEq(t, d.Mean, 55, "Mean")
 	assertEq(t, d.P0, 45, "P0")
 	assertEq(t, d.P5, 45, "P5")
 	assertEq(t, d.P10, 45, "P10")
@@ -42,8 +42,8 @@ func TestMetricTwenty(t *testing.T) {
 	for _, v := range vals {
 		m.Record(v)
 	}
-	assertEq(t, m.Mean(), -0.5, "Mean")
-	d := m.DistPercs()
+	d := m.Stats()
+	assertEq(t, d.Mean, -0.5, "Mean")
 	assertEq(t, d.P0, -10, "P0")
 	assertEq(t, d.P5, -9, "P5")
 	assertEq(t, d.P10, -8, "P10")
