@@ -59,12 +59,21 @@ func populateSummary(summaryOut interface{}, resultStruct interface{}) interface
 
 		if isMetric {
 			field := summary.FieldByName(fieldType.Name)
+			if !field.IsValid() {
+				panic(fmt.Errorf("%T has no field named %q", summaryOut, fieldType.Name))
+			}
 			field.Set(reflect.ValueOf(metricData.Stats()))
 		} else if isMetricWithAbsVal {
 			rawField := summary.FieldByName(fieldType.Name)
+			if !field.IsValid() {
+				panic(fmt.Errorf("%T has no field named %q", summaryOut, fieldType.Name))
+			}
 			rawField.Set(reflect.ValueOf(metricWithAbsValData.Raw.Stats()))
 
 			absField := summary.FieldByName("Abs" + fieldType.Name)
+			if !field.IsValid() {
+				panic(fmt.Errorf("%T has no field named %q", summaryOut, "Abs"+fieldType.Name))
+			}
 			absField.Set(reflect.ValueOf(metricWithAbsValData.Abs.Stats()))
 		}
 	}
