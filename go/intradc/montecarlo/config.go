@@ -131,10 +131,14 @@ type SamplerSummary struct {
 
 type DowngradeSummary struct {
 	// Intended frac error = approximate intended frac - exact
-	IntendedFracError    Stats `json:"intendedFracError"`
-	AbsIntendedFracError Stats `json:"absIntendedFracError"`
-	RealizedFracError    Stats `json:"realizedFracError"`
-	AbsRealizedFracError Stats `json:"absRealizedFracError"`
+	IntendedFracError      Stats `json:"intendedFracError"`
+	AbsIntendedFracError   Stats `json:"absIntendedFracError"`
+	RealizedFracError      Stats `json:"realizedFracError"`
+	AbsRealizedFracError   Stats `json:"absRealizedFracError"`
+	IntendedOverOrShortage Stats `json:"intendedOverOrShortage"`
+	RealizedOverage        Stats `json:"realizedOverage"`
+	RealizedShortage       Stats `json:"realizedShortage"`
+	RealizedOverOrShortage Stats `json:"realizedOverOrShortage"`
 }
 
 type RateLimitSummary struct {
@@ -143,6 +147,9 @@ type RateLimitSummary struct {
 	// Num throttled norm error = (# hosts throttled with approx limit - w/ exact limit) / # with exact limit
 	NormError                Stats `json:"normError"`
 	AbsNormError             Stats `json:"absNormError"`
+	Overage                  Stats `json:"overage"`
+	Shortage                 Stats `json:"shortage"`
+	OverOrShortage           Stats `json:"overOrShortage"`
 	FracThrottledError       Stats `json:"fracThrottledError"`
 	AbsFracThrottledError    Stats `json:"absFracThrottledError"`
 	NumThrottledNormError    Stats `json:"numThrottledNormError"`

@@ -70,11 +70,18 @@ type perSysData struct {
 		approxUsageSum float64
 	}
 	downgrade struct {
-		IntendedFracError metricWithAbsVal
-		RealizedFracError metricWithAbsVal
+		IntendedFracError      metricWithAbsVal
+		RealizedFracError      metricWithAbsVal
+		IntendedOverOrShortage metric
+		RealizedOverage        metric
+		RealizedShortage       metric
+		RealizedOverOrShortage metric
 	}
 	rateLimit struct {
 		NormError             metricWithAbsVal
+		Overage               metric
+		Shortage              metric
+		OverOrShortage        metric
 		FracThrottledError    metricWithAbsVal
 		NumThrottledNormError metricWithAbsVal
 	}
@@ -89,8 +96,15 @@ func (r *perSysData) MergeFrom(o *perSysData) {
 
 	r.downgrade.IntendedFracError.MergeFrom(&o.downgrade.IntendedFracError)
 	r.downgrade.RealizedFracError.MergeFrom(&o.downgrade.RealizedFracError)
+	r.downgrade.IntendedOverOrShortage.MergeFrom(&o.downgrade.IntendedOverOrShortage)
+	r.downgrade.RealizedOverage.MergeFrom(&o.downgrade.RealizedOverage)
+	r.downgrade.RealizedShortage.MergeFrom(&o.downgrade.RealizedShortage)
+	r.downgrade.RealizedOverOrShortage.MergeFrom(&o.downgrade.RealizedOverOrShortage)
 
 	r.rateLimit.NormError.MergeFrom(&o.rateLimit.NormError)
+	r.rateLimit.Overage.MergeFrom(&o.rateLimit.Overage)
+	r.rateLimit.Shortage.MergeFrom(&o.rateLimit.Shortage)
+	r.rateLimit.OverOrShortage.MergeFrom(&o.rateLimit.OverOrShortage)
 	r.rateLimit.FracThrottledError.MergeFrom(&o.rateLimit.FracThrottledError)
 	r.rateLimit.NumThrottledNormError.MergeFrom(&o.rateLimit.NumThrottledNormError)
 }
@@ -138,11 +152,22 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 					approxDowngradeFrac := downgradeFrac(approxUsage, approval)
 					approxHostLimit := fairHostRateLimit(approxDist, approxUsage, approval, len(usages))
 					approxNumHostsThrottled, approxFracHostsThrottled := numAndFracHostsThrottled(usages, approxHostLimit)
+					approxAggAdmitted := aggAdmittedDemand(usages, approxHostLimit)
+
+					rlError := normByExpected(approxAggAdmitted-approval, approval)
+					rlOverage := math.Max(0, rlError)
+					rlShortage := -math.Min(0, rlError)
+
+					intendedError := ((1-approxDowngradeFrac)*exactUsage - approval) / approval
 
 					for hostSelID, hostSel := range inst.Sys.HostSelectors {
 						approxRealizedDowngradeFrac := downgradeFracAfterHostSel(
 							hostSel.NewMatcher(approxDowngradeFrac, flowsel.SampledUsages{ /* TODO fill in */ }),
 							usages, exactUsage)
+
+						realizedError := ((1-approxRealizedDowngradeFrac)*exactUsage - approval) / approval
+						realizedOverage := math.Max(0, realizedError)
+						realizedShortage := -math.Min(0, realizedError)
 
 						sysID := inst.Sys.SysID(samplerID, hostSelID)
 						data[sysID].sampler.UsageNormError.Record(normByExpected(approxUsage-exactUsage, exactUsage))
@@ -151,7 +176,14 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 						data[sysID].sampler.approxUsageSum += approxUsage
 						data[sysID].downgrade.IntendedFracError.Record(approxDowngradeFrac - exactDowngradeFrac)
 						data[sysID].downgrade.RealizedFracError.Record(approxRealizedDowngradeFrac - exactDowngradeFrac)
+						data[sysID].downgrade.IntendedOverOrShortage.Record(math.Abs(intendedError))
+						data[sysID].downgrade.RealizedOverage.Record(realizedOverage)
+						data[sysID].downgrade.RealizedShortage.Record(realizedShortage)
+						data[sysID].downgrade.RealizedOverOrShortage.Record(math.Abs(realizedError))
 						data[sysID].rateLimit.NormError.Record(normByExpected(approxHostLimit-exactHostLimit, exactHostLimit))
+						data[sysID].rateLimit.Overage.Record(rlOverage)
+						data[sysID].rateLimit.Shortage.Record(rlShortage)
+						data[sysID].rateLimit.OverOrShortage.Record(math.Abs(rlError))
 						data[sysID].rateLimit.FracThrottledError.Record(approxFracHostsThrottled - exactFracHostsThrottled)
 						data[sysID].rateLimit.NumThrottledNormError.Record(normByExpected(approxNumHostsThrottled-exactNumHostsThrottled, exactNumHostsThrottled))
 					}
@@ -278,4 +310,12 @@ func fairHostRateLimit(hostUsageDist []alloc.ValCount, aggUsage, approval float6
 	// distribute leftover
 	leftover := math.Max(0, approval-allowedDemandGrowth*aggUsage)
 	return waterlevel + leftover/float64(numHosts)
+}
+
+func aggAdmittedDemand(usages []float64, hostLimit float64) float64 {
+	var sum float64
+	for _, u := range usages {
+		sum += math.Min(u, hostLimit)
+	}
+	return sum
 }
