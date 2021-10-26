@@ -3,6 +3,7 @@
 library(methods)
 library(ggplot2)
 library(jsonlite)
+library(parallel)
 
 # Derived from https://github.com/tidyverse/ggplot2/issues/1467#issuecomment-169763396
 stat_myecdf <- function(mapping = NULL, data = NULL, geom = "step",
@@ -223,35 +224,74 @@ con <- file(simresults, open="r")
 data <- stream_in(con, flatten=TRUE, verbose=FALSE)
 close(con)
 
-PlotOverOrShortageVersusSamples(data[data$sys.samplerName == "weighted",],
-    "mean", file.path(outdir, "samples-vs-error-weightedsampler-mean.pdf"))
-PlotOverOrShortageVersusSamples(data[data$sys.samplerName == "weighted",],
-    "p95", file.path(outdir, "samples-vs-error-weightedsampler-p95.pdf"))
 
-PlotOverOrShortageVersusSamples(data[data$sys.samplerName == "weighted" & data$hostUsagesGen == "uniform",],
-    "p95", file.path(outdir, "samples-vs-error-weightedsampler-p95-uni.pdf"))
-PlotOverOrShortageVersusSamples(data[data$sys.samplerName == "weighted" & data$hostUsagesGen == "elephantsMice-10",],
-    "p95", file.path(outdir, "samples-vs-error-weightedsampler-p95-em.pdf"))
-PlotOverOrShortageVersusSamples(data[data$sys.samplerName == "weighted" & data$hostUsagesGen == "exponential",],
-    "p95", file.path(outdir, "samples-vs-error-weightedsampler-p95-exp.pdf"))
+tasks <- list(
+    # OverOrShortage
+    parallel::mcparallel(
+        PlotOverOrShortageVersusSamples(data[data$sys.samplerName == "weighted",],
+            "mean", file.path(outdir, "samples-vs-error-weightedsampler-mean.pdf"))),
+    parallel::mcparallel(
+        PlotOverOrShortageVersusSamples(data[data$sys.samplerName == "weighted",],
+            "p95", file.path(outdir, "samples-vs-error-weightedsampler-p95.pdf"))),
+    # OverOrShortage (HUG)
+    parallel::mcparallel(
+        PlotOverOrShortageVersusSamples(data[data$sys.samplerName == "weighted" & data$hostUsagesGen == "uniform",],
+            "p95", file.path(outdir, "samples-vs-error-weightedsampler-p95-uni.pdf"))),
+    parallel::mcparallel(
+        PlotOverOrShortageVersusSamples(data[data$sys.samplerName == "weighted" & data$hostUsagesGen == "elephantsMice-10",],
+            "p95", file.path(outdir, "samples-vs-error-weightedsampler-p95-em.pdf"))),
+    parallel::mcparallel(
+        PlotOverOrShortageVersusSamples(data[data$sys.samplerName == "weighted" & data$hostUsagesGen == "exponential",],
+            "p95", file.path(outdir, "samples-vs-error-weightedsampler-p95-exp.pdf"))),
+    # UsageNormError (HUG)
+    parallel::mcparallel(
+        PlotUsageNormErrorByHostUsagesGen(data, "Mean", "absUsageNormError.mean",
+            file.path(outdir, "usage-abs-norm-error-hug-mean.pdf"))),
+    parallel::mcparallel(
+        PlotUsageNormErrorByHostUsagesGen(data, "5%ile", "absUsageNormError.p5",
+            file.path(outdir, "usage-abs-norm-error-hug-p5.pdf"))),
+    parallel::mcparallel(
+        PlotUsageNormErrorByHostUsagesGen(data, "95%ile", "absUsageNormError.p95",
+            file.path(outdir, "usage-abs-norm-error-hug-p95.pdf"))),
+    # IntendedFracError
+    parallel::mcparallel(
+        PlotDowngradeFracError(data, 0, "Mean abs", "absIntendedFracError.mean",
+            file.path(outdir, "downgrade-frac-abs-error-mean.pdf"))),
+    parallel::mcparallel(
+        PlotDowngradeFracError(data, 0, "95%ile abs", "absIntendedFracError.p95",
+            file.path(outdir, "downgrade-frac-abs-error-p95.pdf"))),
+    # IntededFracError (HUG)
+    parallel::mcparallel(
+        PlotDowngradeFracErrorByHostUsagesGen(data, -1, "Mean", "intendedFracError.mean",
+            file.path(outdir, "downgrade-frac-error-hug-mean.pdf"))),
+    parallel::mcparallel(
+        PlotDowngradeFracErrorByHostUsagesGen(data, -1, "5%ile", "intendedFracError.p5",
+            file.path(outdir, "downgrade-frac-error-hug-p5.pdf"))),
+    parallel::mcparallel(
+        PlotDowngradeFracErrorByHostUsagesGen(data, -1, "95%ile", "intendedFracError.p95",
+            file.path(outdir, "downgrade-frac-error-hug-p95.pdf"))),
+    parallel::mcparallel(
+        PlotDowngradeFracErrorByHostUsagesGen(data, 0, "Mean abs", "absIntendedFracError.mean",
+            file.path(outdir, "downgrade-frac-abs-error-hug-mean.pdf"))),
+    parallel::mcparallel(
+        PlotDowngradeFracErrorByHostUsagesGen(data, 0, "95%ile abs", "absIntendedFracError.p95",
+            file.path(outdir, "downgrade-frac-abs-error-hug-p95.pdf"))),
+    # RateLimitNormError
+    parallel::mcparallel(
+        PlotRateLimitNormErrorByHostUsagesGen(data, "Mean", "normError.mean",
+            file.path(outdir, "host-limit-norm-error-hug-mean.pdf"))),
+    parallel::mcparallel(
+        PlotRateLimitNormErrorByHostUsagesGen(data, "5%ile", "normError.p5",
+            file.path(outdir, "host-limit-norm-error-hug-p5.pdf"))),
+    parallel::mcparallel(
+        PlotRateLimitNormErrorByHostUsagesGen(data, "95%ile", "normError.p95",
+            file.path(outdir, "host-limit-norm-error-hug-p95.pdf"))),
+    # NumSamples
+    parallel::mcparallel(
+        PlotMeanNumSamplesOverExpected(data,
+            file.path(outdir, "num-samples-over-expected-mean.pdf"))),
+    parallel::mcparallel(
+        PlotMeanNumSamplesByRequested(data,
+            file.path(outdir, "num-samples-by-req.pdf"))))
 
-PlotUsageNormErrorByHostUsagesGen(data, "Mean", "absUsageNormError.mean", file.path(outdir, "usage-abs-norm-error-hug-mean.pdf"))
-PlotUsageNormErrorByHostUsagesGen(data, "5%ile", "absUsageNormError.p5", file.path(outdir, "usage-abs-norm-error-hug-p5.pdf"))
-PlotUsageNormErrorByHostUsagesGen(data, "95%ile", "absUsageNormError.p95", file.path(outdir, "usage-abs-norm-error-hug-p95.pdf"))
-
-PlotDowngradeFracError(data, 0, "Mean abs", "absIntendedFracError.mean", file.path(outdir, "downgrade-frac-abs-error-mean.pdf"))
-PlotDowngradeFracError(data, 0, "95%ile abs", "absIntendedFracError.p95", file.path(outdir, "downgrade-frac-abs-error-p95.pdf"))
-
-PlotDowngradeFracErrorByHostUsagesGen(data, -1, "Mean", "intendedFracError.mean", file.path(outdir, "downgrade-frac-error-hug-mean.pdf"))
-PlotDowngradeFracErrorByHostUsagesGen(data, -1, "5%ile", "intendedFracError.p5", file.path(outdir, "downgrade-frac-error-hug-p5.pdf"))
-PlotDowngradeFracErrorByHostUsagesGen(data, -1, "95%ile", "intendedFracError.p95", file.path(outdir, "downgrade-frac-error-hug-p95.pdf"))
-
-PlotDowngradeFracErrorByHostUsagesGen(data, 0, "Mean abs", "absIntendedFracError.mean", file.path(outdir, "downgrade-frac-abs-error-hug-mean.pdf"))
-PlotDowngradeFracErrorByHostUsagesGen(data, 0, "95%ile abs", "absIntendedFracError.p95", file.path(outdir, "downgrade-frac-abs-error-hug-p95.pdf"))
-
-PlotRateLimitNormErrorByHostUsagesGen(data, "Mean", "normError.mean", file.path(outdir, "host-limit-norm-error-hug-mean.pdf"))
-PlotRateLimitNormErrorByHostUsagesGen(data, "5%ile", "normError.p5", file.path(outdir, "host-limit-norm-error-hug-p5.pdf"))
-PlotRateLimitNormErrorByHostUsagesGen(data, "95%ile", "normError.p95", file.path(outdir, "host-limit-norm-error-hug-p95.pdf"))
-
-PlotMeanNumSamplesOverExpected(data, file.path(outdir, "num-samples-over-expected-mean.pdf"))
-PlotMeanNumSamplesByRequested(data, file.path(outdir, "num-samples-by-req.pdf"))
+.junk <- parallel::mccollect(tasks)
