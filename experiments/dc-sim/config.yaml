@@ -1,16 +1,16 @@
 hostUsages:
-    - uniform:
-          high: 12000
-    - exponential:
-          mean: 6000
-          max: 1000000
-    - elephantsMice:
-          elephants:
-              high: 1200000
-              low: 800000
-              num: 10
-          mice:
-              high: 2000
-numHosts: [20, 200, 2_000, 20_000, 200_000]
+        - uniform:
+                  high: 12000
+        - exponential:
+                  mean: 6000
+                  max: 1000000
+        - elephantsMice:
+                  elephants:
+                          high: 1200000
+                          low: 800000
+                          num: 10
+                  mice:
+                          high: 2000
+numHosts: [200, 2_000, 20_000, 200_000]
 approvalOverExpectedUsage: [0.5, 0.9, 1, 1.1, 1.5]
-numSamplesAtApproval: [50, 100, 200, 400, 800, 1600]
+numSamplesAtApproval: [200, 400, 800, 1600, 3200, 6400]
