@@ -208,12 +208,13 @@ PlotMeanNumSamplesOverExpected <- function(subset, output) {
 
 args <- commandArgs(trailingOnly=TRUE)
 
-if (length(args) != 2) {
-    stop("usage: ./2-proc.R data.json outdir")
+if (length(args) != 1) {
+    stop("usage: ./2-proc.R resdir")
 }
 
-simresults <- args[1]
-outdir <- args[2]
+resdir <- args[1]
+simresults <- file.path(resdir, "sim-data.json")
+outdir <- file.path(resdir, "proc")
 
 unlink(outdir, recursive=TRUE)
 dir.create(outdir, recursive=TRUE)
