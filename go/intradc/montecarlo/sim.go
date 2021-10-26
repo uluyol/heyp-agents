@@ -146,6 +146,7 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 				exactDowngradeFrac := downgradeFrac(exactUsage, approval)
 				exactHostLimit := exactFairHostRateLimit(usages, approval)
 				exactNumHostsThrottled, exactFracHostsThrottled := numAndFracHostsThrottled(usages, exactHostLimit)
+				exactApprovedDemand := math.Min(approval, exactUsage)
 
 				for samplerID, sampler := range inst.Sys.Samplers {
 					approxUsage, approxDist, numSamples := estimateUsage(rng, sampler, usages)
@@ -154,18 +155,18 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 					approxNumHostsThrottled, approxFracHostsThrottled := numAndFracHostsThrottled(usages, approxHostLimit)
 					approxAggAdmitted := aggAdmittedDemand(usages, approxHostLimit)
 
-					rlError := normByExpected(approxAggAdmitted-approval, approval)
+					rlError := normByExpected(approxAggAdmitted-exactApprovedDemand, exactApprovedDemand)
 					rlOverage := math.Max(0, rlError)
 					rlShortage := -math.Min(0, rlError)
 
-					intendedError := ((1-approxDowngradeFrac)*exactUsage - approval) / approval
+					intendedError := normByExpected((1-approxDowngradeFrac)*exactUsage-exactApprovedDemand, exactApprovedDemand)
 
 					for hostSelID, hostSel := range inst.Sys.HostSelectors {
 						approxRealizedDowngradeFrac := downgradeFracAfterHostSel(
 							hostSel.NewMatcher(approxDowngradeFrac, flowsel.SampledUsages{ /* TODO fill in */ }),
 							usages, exactUsage)
 
-						realizedError := ((1-approxRealizedDowngradeFrac)*exactUsage - approval) / approval
+						realizedError := normByExpected((1-approxRealizedDowngradeFrac)*exactUsage-exactApprovedDemand, exactApprovedDemand)
 						realizedOverage := math.Max(0, realizedError)
 						realizedShortage := -math.Min(0, realizedError)
 
