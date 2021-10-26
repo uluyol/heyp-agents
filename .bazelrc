@@ -13,6 +13,7 @@ build --action_env=CXXFLAGS=-fno-omit-frame-pointer
 
 # Unhelpful warning: warns if we copy a pair of ints instead of taking a reference
 build --action_env=CFLAGS=-Wno-range-loop-construct
+build --action_env=CXXFLAGS=-Wno-range-loop-construct
 
 build:libc++ --action_env=BAZEL_COMPILER=clang
 build:libc++ --linkopt=-fuse-ld=lld
