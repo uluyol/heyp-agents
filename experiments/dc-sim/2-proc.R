@@ -137,6 +137,35 @@ PlotRateLimitNormErrorByHostUsagesGen <- function(subset, metric.name, metric, o
     .junk <- dev.off()
 }
 
+PlotOverOrShortageVersusSamples <- function(subset, metric.name, output) {
+    long <- rbind(
+        data.frame(
+            Kind=rep.int("QD-Intended", nrow(subset)),
+            NumSamples=subset$numSamplesAtApproval,
+            OverOrShortage=subset[[paste0("sys.downgradeSummary.intendedOverOrShortage.", metric.name)]]),
+        data.frame(
+            Kind=rep.int("QD-Realized", nrow(subset)),
+            NumSamples=subset$numSamplesAtApproval,
+            OverOrShortage=subset[[paste0("sys.downgradeSummary.realizedOverOrShortage.", metric.name)]]),
+        data.frame(
+            Kind=rep.int("RateLimit", nrow(subset)),
+            NumSamples=subset$numSamplesAtApproval,
+            OverOrShortage=subset[[paste0("sys.rateLimitSummary.overOrShortage.", metric.name)]]))
+
+    pdf(output, height=4.5, width=5)
+    p <- ggplot(data=long, aes(x=OverOrShortage, color=Kind)) + 
+        stat_myecdf(size=1) +
+        facet_wrap(~ NumSamples, ncol=2) +
+        xlab(paste0(metric.name, " |got - want| / want")) +
+        ylab("CDF across instances") +
+        coord_cartesian(xlim=c(0, 0.2), ylim=c(0, 1)) +
+        scale_y_continuous(breaks=seq(0, 1, by=0.2)) +
+        guides(color=guide_legend(ncol=3), linetype=guide_legend(ncol=3)) +
+        my_theme()
+    print(p)
+    .junk <- dev.off()
+}
+
 PlotMeanNumSamplesByRequested <- function(subset, output) {
     measured <- subset[, c("numHosts", "sys.samplerName", "sys.samplerSummary.numSamples.mean")]
     intended <- unique(subset[, c("instanceID", "numHosts", "numSamplesAtApproval")])
@@ -192,6 +221,18 @@ dir.create(outdir, recursive=TRUE)
 con <- file(simresults, open="r")
 data <- stream_in(con, flatten=TRUE, verbose=FALSE)
 close(con)
+
+PlotOverOrShortageVersusSamples(data[data$sys.samplerName == "weighted",],
+    "mean", file.path(outdir, "samples-vs-error-weightedsampler-mean.pdf"))
+PlotOverOrShortageVersusSamples(data[data$sys.samplerName == "weighted",],
+    "p95", file.path(outdir, "samples-vs-error-weightedsampler-p95.pdf"))
+
+PlotOverOrShortageVersusSamples(data[data$sys.samplerName == "weighted" & data$hostUsagesGen == "uniform",],
+    "p95", file.path(outdir, "samples-vs-error-weightedsampler-p95-uni.pdf"))
+PlotOverOrShortageVersusSamples(data[data$sys.samplerName == "weighted" & data$hostUsagesGen == "elephantsMice-10",],
+    "p95", file.path(outdir, "samples-vs-error-weightedsampler-p95-em.pdf"))
+PlotOverOrShortageVersusSamples(data[data$sys.samplerName == "weighted" & data$hostUsagesGen == "exponential",],
+    "p95", file.path(outdir, "samples-vs-error-weightedsampler-p95-exp.pdf"))
 
 PlotUsageNormErrorByHostUsagesGen(data, "Mean", "absUsageNormError.mean", file.path(outdir, "usage-abs-norm-error-hug-mean.pdf"))
 PlotUsageNormErrorByHostUsagesGen(data, "5%ile", "absUsageNormError.p5", file.path(outdir, "usage-abs-norm-error-hug-p5.pdf"))
