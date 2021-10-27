@@ -58,7 +58,7 @@ def GenWorkloadStagesStatic(
             "run_dur": run_dur,
         }],
         num_shards_per_backend = NumShards(AA_bps),
-        num_servers_per_backend_host = 2,
+        num_servers_per_backend_host = 1,
         name_prefix = "AA_",
         envoy_group_name = "AA",
         starting_port = AA_FORTIO_STARTING_PORT,
@@ -75,7 +75,7 @@ def GenWorkloadStagesStatic(
             "run_dur": run_dur,
         }],
         num_shards_per_backend = NumShards(WA_bps),
-        num_servers_per_backend_host = 4,
+        num_servers_per_backend_host = 2,
         name_prefix = "WA_",
         envoy_group_name = "WA",
         starting_port = WA_FORTIO_STARTING_PORT,
@@ -503,7 +503,8 @@ def GenConfig(
         admission_controlled_envoy_groups = list(),
         shard_key = "",
         node_counts = _DEFAULT_NODE_COUNTS,
-        host_agent_log_fine_grained_stats = False):
+        host_agent_log_fine_grained_stats = False,
+        cluster_control_period = "5s"):
     nodes = []
     clusters = {
         "EDGE": {
@@ -651,7 +652,7 @@ def GenConfig(
             },
             "allocator": ca_allocator,
             "server": {
-                "control_period": "5s",
+                "control_period": cluster_control_period,
             },
         },
         host_agent_template = {
@@ -1363,48 +1364,50 @@ def AddConfigsFlipQoS(configs):
         # (30, 50, 90),
         (100, 120, 210),
         # (100, 120, 310),
-        # (200, 220, 310),
+        (200, 220, 310),
         # (200, 220, 410),
         # (300, 220, 410),
     ]
 
-    for AA_lat, WA_lat, AA_lopri_lat in latencies:
-        for WA_demand_gbps in [4]:
-            WA_demand = int(Gbps(WA_demand_gbps))
-            kwargs_lr = dict({
-                "AA_lopri_is_longer": True,
-                "AA_approved_bps": AA_approval,
-                "AA_surplus_bps": AA_approval,
-                "WA_approved_bps": WA_demand,
-                "AA_prop_delay_ms": AA_lat,
-                "WA_prop_delay_ms": WA_lat,
-                "AA_prop_delay_ms_extra_lopri": AA_lopri_lat - AA_lat,
-                "shard_key": "qflip_lat_{0}_{1}_{2}".format(AA_lat, WA_lat, AA_lopri_lat),
-                "node_counts": {
-                    "EDGE": 2,
-                    "AA": 8,
-                    "WA": 2,
-                    "CLIENT": 2,
-                },
-            }, **GenWorkloadStagesStatic(
-                AA_bps = 2 * AA_approval,
-                WA_bps = WA_demand,
-                AA_lb_policy = "ROUND_ROBIN",
-                WA_lb_policy = "ROUND_ROBIN",
-                AA_avg_prop_delay_ms = AA_lopri_lat,
-                AA_max_prop_delay_ms = (AA_lat + AA_lopri_lat) // 2,
-                WA_prop_delay_ms = WA_lat,
-                run_dur = "150s",
-            ))
-            # "admission_controlled_envoy_groups": ["AA"],
-            # enable_timeout = True,
+    for cp in ["500ms", "1s", "2s", "4s"]:
+        for AA_lat, WA_lat, AA_lopri_lat in latencies:
+            for WA_demand_gbps in [6, 8]:
+                WA_demand = int(Gbps(WA_demand_gbps))
+                kwargs_rr = dict({
+                    "AA_lopri_is_longer": True,
+                    "AA_approved_bps": AA_approval,
+                    "AA_surplus_bps": AA_approval,
+                    "WA_approved_bps": WA_demand,
+                    "AA_prop_delay_ms": AA_lat,
+                    "WA_prop_delay_ms": WA_lat,
+                    "AA_prop_delay_ms_extra_lopri": AA_lopri_lat - AA_lat,
+                    "shard_key": "qflip_lat_{0}_{1}_{2}".format(AA_lat, WA_lat, AA_lopri_lat),
+                    "node_counts": {
+                        "EDGE": 2,
+                        "AA": 8,
+                        "WA": 2,
+                        "CLIENT": 2,
+                    },
+                    "cluster_control_period": cp,
+                }, **GenWorkloadStagesStatic(
+                    AA_bps = 2 * AA_approval,
+                    WA_bps = WA_demand,
+                    AA_lb_policy = "ROUND_ROBIN",
+                    WA_lb_policy = "ROUND_ROBIN",
+                    AA_avg_prop_delay_ms = AA_lopri_lat,
+                    AA_max_prop_delay_ms = (AA_lat + AA_lopri_lat) // 2,
+                    WA_prop_delay_ms = WA_lat,
+                    run_dur = "150s",
+                ))
+                # "admission_controlled_envoy_groups": ["AA"],
+                # enable_timeout = True,
 
-            prefix = "qflip_lat_{0}_{1}_{2}_bg{3}".format(AA_lat, WA_lat, AA_lopri_lat, WA_demand_gbps)
+                prefix = "qflip_cp_{0}_lat_{1}_{2}_{3}_bg{4}".format(cp, AA_lat, WA_lat, AA_lopri_lat, WA_demand_gbps)
 
-            configs[prefix + "-hipri"] = FixedHostPatternHIPRIConfig(**kwargs_lr)
-            configs[prefix + "-lopri"] = FixedHostPatternLOPRIConfig(**kwargs_lr)
-            configs[prefix + "-flipflop"] = FixedHostPatternAlternatingQoSConfig(**kwargs_lr)
-            configs[prefix + "-stableqos"] = FixedHostPatternStableQoSConfig(**kwargs_lr)
+                configs[prefix + "-hipri"] = FixedHostPatternHIPRIConfig(**kwargs_rr)
+                configs[prefix + "-lopri"] = FixedHostPatternLOPRIConfig(**kwargs_rr)
+                configs[prefix + "-flipflop"] = FixedHostPatternAlternatingQoSConfig(**kwargs_rr)
+                configs[prefix + "-stableqos"] = FixedHostPatternStableQoSConfig(**kwargs_rr)
 
 def AddConfigsTestAdmissionControl(configs):
     # for aa_bps in [int(Gbps(1)), int(Gbps(4)), int(Gbps(5)), int(Gbps(6)), int(Gbps(7)), int(Gbps(8)), int(Gbps(9))]:
