@@ -19,6 +19,7 @@ require (
 )
 
 require (
+	github.com/planetscale/vtprotobuf v0.2.1-0.20211020080541-088be8c8c872 // indirect
 	golang.org/x/sys v0.0.0-20210423082822-04245dca01da // indirect
 	golang.org/x/text v0.3.6 // indirect
 	gopkg.in/yaml.v2 v2.2.2 // indirect
