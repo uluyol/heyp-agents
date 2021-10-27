@@ -19,15 +19,11 @@ ClusterController::ClusterController(std::unique_ptr<FlowAggregator> aggregator,
 ClusterController::Listener::Listener() : host_id_(0), lis_id_(0), controller_(nullptr) {}
 
 ClusterController::Listener::~Listener() {
-  bundle_q_.Close();
-  if (write_thread_.joinable()) {
-    write_thread_.join();
-  }
   if (controller_ != nullptr && host_id_ != 0) {
     absl::MutexLock l(&controller_->broadcasting_mu_);
-    ABSL_ASSERT(controller_->new_bundle_qs_.contains(host_id_));
-    ABSL_ASSERT(controller_->new_bundle_qs_.at(host_id_).contains(lis_id_));
-    controller_->new_bundle_qs_.at(host_id_).erase(lis_id_);
+    ABSL_ASSERT(controller_->new_bundle_funcs_.contains(host_id_));
+    ABSL_ASSERT(controller_->new_bundle_funcs_.at(host_id_).contains(lis_id_));
+    controller_->new_bundle_funcs_.at(host_id_).erase(lis_id_);
   }
   host_id_ = 0;
   lis_id_ = 0;
@@ -35,28 +31,23 @@ ClusterController::Listener::~Listener() {
 }
 
 std::unique_ptr<ClusterController::Listener> ClusterController::RegisterListener(
-    int64_t host_id, const std::function<void(proto::AllocBundle)>& on_new_bundle_func) {
+    int64_t host_id,
+    const std::function<void(const proto::AllocBundle&)>& on_new_bundle_func) {
   auto lis = absl::WrapUnique(new Listener());
   lis->host_id_ = host_id;
   lis->controller_ = this;
-  LossyQueue<Listener::Mesg>* bundle_q = &lis->bundle_q_;
-  lis->write_thread_ = std::thread([this, bundle_q, on_new_bundle_func] {
-    while (true) {
-      std::optional<Listener::Mesg> got = bundle_q->Read();
-      if (!got.has_value()) {
-        return;
-      }
-      on_new_bundle_func(std::move(got->b));
-      if (got->wait_completion_enabled) {
-        absl::MutexLock l(&this->broadcast_wait_mu_);
-        ++this->num_broadcast_completed_;
-        std::cerr << "inc num_broadcast_completed_\n";
-      }
-    }
-  });
   absl::MutexLock l(&broadcasting_mu_);
   lis->lis_id_ = next_lis_id_;
-  new_bundle_qs_[host_id][next_lis_id_] = bundle_q;
+  new_bundle_funcs_[host_id][next_lis_id_] = [this, on_new_bundle_func](
+                                                 const proto::AllocBundle& alloc,
+                                                 bool wait_completion_enabled) {
+    on_new_bundle_func(alloc);
+    if (wait_completion_enabled) {
+      absl::MutexLock l(&this->broadcast_wait_mu_);
+      ++this->num_broadcast_completed_;
+      std::cerr << "inc num_broadcast_completed_\n";
+    }
+  };
   next_lis_id_++;
   return lis;
 }
@@ -95,10 +86,10 @@ void ClusterController::ComputeAndBroadcast() {
     num_broadcast_completed_ = 0;
   }
   for (auto& [host, bundle] : alloc_bundles) {
-    auto iter = new_bundle_qs_.find(host);
-    if (iter != new_bundle_qs_.end()) {
-      for (auto& [id, q] : iter->second) {
-        q->Write({bundle, enable_wait_for_broadcast_completion_});
+    auto iter = new_bundle_funcs_.find(host);
+    if (iter != new_bundle_funcs_.end()) {
+      for (auto& [id, func] : iter->second) {
+        func(bundle, enable_wait_for_broadcast_completion_);
         ++num;
       }
     }

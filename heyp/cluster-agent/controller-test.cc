@@ -149,55 +149,6 @@ TEST(ClusterControllerTest, RemoveListener) {
   EXPECT_EQ(num_broadcast_3, 0);
 }
 
-TEST(ClusterControllerTest, BroadcastIsAsync) {
-  auto controller = MakeClusterController();
-
-  int num_broadcast_1 = 0;
-  int num_broadcast_2 = 0;
-
-  std::unique_ptr<ClusterController::Listener> lis1 =
-      controller.RegisterListener(1, [&](const proto::AllocBundle&) {
-        absl::SleepFor(absl::Seconds(1));
-        ++num_broadcast_1;
-      });
-
-  std::unique_ptr<ClusterController::Listener> lis2 = controller.RegisterListener(
-      2, [&](const proto::AllocBundle&) { ++num_broadcast_2; });
-
-  // Update some infos
-
-  controller.UpdateInfo(ParseTextProto<proto::InfoBundle>(R"(
-    bundler { host_id: 1 }
-    timestamp { seconds: 1 }
-    flow_infos {
-      flow { src_dc: "chicago" dst_dc: "detroit" job: "UNSET" host_id: 1 }
-      predicted_demand_bps: 1000
-      ewma_usage_bps: 1000
-      currently_lopri: true
-    }
-    flow_infos {
-      flow { src_dc: "chicago" dst_dc: "new_york" job: "UNSET" host_id: 1 }
-      predicted_demand_bps: 1000
-      ewma_usage_bps: 1000
-    }
-  )"));
-  controller.UpdateInfo(ParseTextProto<proto::InfoBundle>(R"(
-    bundler { host_id: 2 }
-    timestamp { seconds: 1 }
-    flow_infos {
-      flow { src_dc: "chicago" dst_dc: "detroit" job: "UNSET" host_id: 2 }
-      predicted_demand_bps: 1000
-      ewma_usage_bps: 1000
-    }
-  )"));
-
-  auto start = std::chrono::steady_clock::now();
-  controller.ComputeAndBroadcast();
-  auto end = std::chrono::steady_clock::now();
-  absl::Duration elapsed = absl::FromChrono(end - start);
-  EXPECT_LE(elapsed, absl::Milliseconds(100));
-}
-
 TEST(ClusterControllerTest, PlumbsDataCompletely) {
   auto controller = MakeClusterController();
 
