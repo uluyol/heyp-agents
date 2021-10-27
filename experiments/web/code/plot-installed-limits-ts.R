@@ -40,9 +40,13 @@ Plot <- function(subset, output) {
 
   summed <- aggregate(LimitGbps ~ Timestamp + Kind, FUN=sum, data=subset)
 
+  minT <- min(summed$Timestamp)
+  maxT <- max(summed$Timestamp)
+
   pdf(output, height=2.5, width=5)
   p <- ggplot(summed, aes(x=Timestamp, y=LimitGbps, fill=Kind)) +
       geom_area(position="stack", alpha=0.8) +
+      geom_vline(xintercept=seq(minT, maxT, by=5), size=0.25) +
       xlab("Time (sec)") +
       ylab("Limit (Gbps)") +
       scale_fill_manual(values=colors) +
