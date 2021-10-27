@@ -111,3 +111,17 @@ cc_test(
         "//heyp/proto:testing",
     ],
 )
+
+cc_test(
+    name = "server-test",
+    srcs = ["server-test.cc"],
+    deps = [
+        ":server",
+        "//heyp/host-agent:cluster-agent-channel",
+        "//heyp/init:test-main",
+        "//heyp/proto:constructors",
+        "//heyp/proto:parse-text",
+        "//heyp/proto:testing",
+        "@com_github_grpc_grpc//:grpc++",
+    ],
+)
