@@ -2,9 +2,11 @@
 
 set -e
 
+TOOLCHAIN=${TOOLCHAIN:-/w/uluyol/fp-toolchain}
+
 mkdir -p bin
 wd=$PWD
 cd ../..
-go build -o "$wd/bin" ./go/cmd/...
+env CGO_LDFLAGS=-L$TOOLCHAIN/clang+llvm/lib go build -o "$wd/bin" ./go/cmd/...
 cd "$wd"
 bin/deploy-heyp mk-bundle -bin ../../bazel-bin -auxbin ../../aux-bin
