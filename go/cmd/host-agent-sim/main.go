@@ -26,7 +26,7 @@ func main() {
 	)
 
 	flag.Var(&runDur, "dur", "run duration")
-	flag.Var(&startTime, "start", "start time")
+	flag.Var(&startTime, "start-time", "start time")
 
 	log.SetPrefix("fake-host-agent: ")
 	log.SetFlags(0)
