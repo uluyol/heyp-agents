@@ -12,15 +12,18 @@ require (
 	github.com/google/uuid v1.2.0
 	go.starlark.net v0.0.0-20210602144842-1cdb82c9e17a
 	golang.org/x/exp v0.0.0-20191030013958-a1ab85dbe136
-	golang.org/x/net v0.0.0-20210503060351-7fd8e65b6420
+	golang.org/x/net v0.0.0-20211020060615-d418f374d309
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	gonum.org/v1/gonum v0.9.1
-	google.golang.org/protobuf v1.26.0
+	google.golang.org/protobuf v1.27.1
 )
 
 require (
+	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/planetscale/vtprotobuf v0.2.1-0.20211020080541-088be8c8c872 // indirect
-	golang.org/x/sys v0.0.0-20210423082822-04245dca01da // indirect
-	golang.org/x/text v0.3.6 // indirect
-	gopkg.in/yaml.v2 v2.2.2 // indirect
+	golang.org/x/sys v0.0.0-20211025201205-69cdffdb9359 // indirect
+	golang.org/x/text v0.3.7 // indirect
+	google.golang.org/genproto v0.0.0-20211027162914-98a5263abeca // indirect
+	google.golang.org/grpc v1.41.0 // indirect
+	gopkg.in/yaml.v2 v2.2.3 // indirect
 )

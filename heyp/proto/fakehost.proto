@@ -1,0 +1,28 @@
+// This file contains definitions of all configuration protos.
+// These messages should only be stored in textual or in-memory form (i.e. not
+// the binary format), so feed free to change any field numbers.
+
+syntax = "proto2";
+
+package heyp.proto;
+
+option go_package = "github.com/uluyol/heyp-agents/go/pb";
+
+message FakeFG {
+    optional string src_dc = 1;
+    optional string dst_dc = 2;
+    optional string job = 3;
+
+    optional int64 min_host_usage = 4;
+    optional int64 max_host_usage = 5;
+}
+
+message FakeHost {
+    optional uint64 host_id = 1;
+    repeated FakeFG fgs = 2;
+}
+
+message HostSimulatorConfig {
+    repeated FakeHost hosts = 1;
+    optional string report_dur = 2 [default = "3s"];
+}
