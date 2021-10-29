@@ -76,10 +76,10 @@ func main() {
 	var wg sync.WaitGroup
 	wg.Add(len(fakeHosts))
 	for _, h := range fakeHosts {
-		go func() {
+		go func(h *SimulatedHost) {
 			defer wg.Done()
 			h.RunLoop(ctx, client, reportDur)
-		}()
+		}(h)
 	}
 
 	time.Sleep(runDur.D)
