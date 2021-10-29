@@ -21,7 +21,7 @@ const defaultStartEndWorkloadFlag startEndWorkloadFlag = "fortio"
 
 func (f *startEndWorkloadFlag) Set(s string) error {
 	switch s {
-	case "fortio", "testlopri":
+	case "fortio", "host-agent-sim", "testlopri":
 		*f = startEndWorkloadFlag(s)
 		return nil
 	default:
@@ -33,10 +33,12 @@ func (f startEndWorkloadFlag) String() string { return string(f) }
 
 func getStartEnd(wl startEndWorkloadFlag, fsys fs.FS) (start time.Time, end time.Time, err error) {
 	switch wl {
-	case "testlopri":
-		start, end, err = proc.GetStartEndTestLopri(fsys)
 	case "fortio":
 		start, end, err = proc.GetStartEndFortio(fsys)
+	case "host-agent-sim":
+		start, end, err = proc.GetStartEndHostAgentSim(fsys)
+	case "testlopri":
+		start, end, err = proc.GetStartEndTestLopri(fsys)
 	default:
 		err = fmt.Errorf("impossible workload %q", wl)
 	}

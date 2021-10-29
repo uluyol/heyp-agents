@@ -71,6 +71,7 @@ func main() {
 	time.Sleep(time.Until(startTime.T))
 
 	log.Print("starting run")
+	log.Printf("start-time: %s start-time-unix-ms: %d", startTime.T.In(time.UTC).Format(time.RFC3339Nano), unixMillis(startTime.T.In(time.UTC)))
 
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
@@ -88,6 +89,8 @@ func main() {
 
 	wg.Wait()
 	log.Print("finished run")
+	endTime := time.Now()
+	log.Printf("end-time: %s end-time-unix-ms: %d", endTime.In(time.UTC).Format(time.RFC3339Nano), unixMillis(endTime.In(time.UTC)))
 
 	f, err := os.Create(*outPath)
 	if err != nil {
@@ -114,4 +117,8 @@ func main() {
 	if err := f.Close(); err != nil {
 		log.Fatalf("failed to close output: %v", err)
 	}
+}
+
+func unixMillis(t time.Time) int64 {
+	return t.Unix()*1000 + int64(t.Nanosecond()/1e6)
 }
