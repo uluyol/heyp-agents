@@ -20,13 +20,25 @@ type FGStats struct {
 }
 
 type SimulatedHost struct {
-	Config  *pb.FakeHost
+	HostID  uint64
+	FGs     []*pb.FakeFG
 	FGStats map[FG]*FGStats
 }
 
-func NewSimulatedHost(c *pb.FakeHost) *SimulatedHost {
+func NewSimulatedHost(c *pb.FakeHost, allFGs []*pb.FakeFG) *SimulatedHost {
+	var fgs []*pb.FakeFG
+	if len(c.FgIds) == 1 && c.FgIds[0] == -1 {
+		fgs = allFGs
+	} else {
+		fgs = make([]*pb.FakeFG, len(c.FgIds))
+		for i := range fgs {
+			fgs[i] = allFGs[c.FgIds[i]]
+		}
+	}
+
 	return &SimulatedHost{
-		Config:  c,
+		HostID:  c.GetHostId(),
+		FGs:     fgs,
 		FGStats: make(map[FG]*FGStats),
 	}
 }
@@ -47,11 +59,11 @@ func (h *SimulatedHost) RunLoop(ctx context.Context,
 	for {
 		stream, err := client.RegisterHost(context.Background())
 		if err != nil {
-			log.Printf("host %d: error connecting to cluster agent: %v", h.Config.GetHostId(), err)
+			log.Printf("host %d: error connecting to cluster agent: %v", h.HostID, err)
 			time.Sleep(100 * time.Millisecond)
 			continue
 		}
-		log.Printf("host %d: connected to cluster agent", h.Config.GetHostId())
+		log.Printf("host %d: connected to cluster agent", h.HostID)
 
 		isDone := make(chan struct{})
 		go h.runInformLoop(ctx, isDone, stream, reportDur)
@@ -122,20 +134,18 @@ func (h *SimulatedHost) runInformLoop(ctx context.Context, isDone chan<- struct{
 
 func (h *SimulatedHost) populateInfo(rng *rand.Rand, b *pb.InfoBundle, now time.Time) {
 	if b.Bundler == nil {
-		hostID := h.Config.GetHostId()
-
 		b.Bundler = &pb.FlowMarker{
-			HostId: hostID,
+			HostId: h.HostID,
 		}
 
-		b.FlowInfos = make([]*pb.FlowInfo, len(h.Config.Fgs))
-		for i, fg := range h.Config.Fgs {
+		b.FlowInfos = make([]*pb.FlowInfo, len(h.FGs))
+		for i, fg := range h.FGs {
 			b.FlowInfos[i] = &pb.FlowInfo{
 				Flow: &pb.FlowMarker{
 					SrcDc:  fg.GetSrcDc(),
 					DstDc:  fg.GetDstDc(),
 					Job:    fg.GetJob(),
-					HostId: hostID,
+					HostId: h.HostID,
 				},
 			}
 		}
@@ -143,7 +153,7 @@ func (h *SimulatedHost) populateInfo(rng *rand.Rand, b *pb.InfoBundle, now time.
 
 	b.Timestamp = timestamppb.New(now)
 
-	for i, fg := range h.Config.Fgs {
+	for i, fg := range h.FGs {
 		usage := fg.GetMinHostUsage() + rng.Int63n(fg.GetMaxHostUsage()-fg.GetMinHostUsage())
 		usageBytes := usage / 8
 		usage = usageBytes * 8

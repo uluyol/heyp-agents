@@ -118,21 +118,23 @@ func RunHostAgentSims(c *pb.DeploymentConfig, remoteTopdir string, showOut bool)
 		}
 
 		const startHostID = 100001
-		numHosts := 0
+		numHosts := int32(0)
 		hostsPerNode := (int(c.C.GetNumHostsPerFg()) + len(c.Nodes) - 1) / len(c.Nodes)
 		for _, n := range c.Nodes {
 			n := n
 
-			hostSimConfig := new(pb.HostSimulatorConfig)
-			hostSimConfig.ReportDur = c.C.ReportDur
-			hostSimConfig.Hosts = make([]*pb.FakeHost, 0, hostsPerNode)
+			hostSimConfig := &pb.HostSimulatorConfig{
+				Fgs:       fakeFGs,
+				Hosts:     make([]*pb.FakeHost, 0, hostsPerNode),
+				ReportDur: c.C.ReportDur,
+			}
 			for numMyHosts := 0; numMyHosts < hostsPerNode; numMyHosts++ {
-				if numHosts >= len(c.Nodes) {
+				if numHosts >= c.C.GetNumHostsPerFg() {
 					break
 				}
 				hostSimConfig.Hosts = append(hostSimConfig.Hosts, &pb.FakeHost{
 					HostId: proto.Uint64(uint64(numHosts) + startHostID),
-					Fgs:    fakeFGs,
+					FgIds:  []int32{-1},
 				})
 				numHosts++
 			}

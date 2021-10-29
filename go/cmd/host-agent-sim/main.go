@@ -65,7 +65,7 @@ func main() {
 	// make hosts
 	fakeHosts := make([]*SimulatedHost, len(config.Hosts))
 	for i, hc := range config.Hosts {
-		fakeHosts[i] = NewSimulatedHost(hc)
+		fakeHosts[i] = NewSimulatedHost(hc, config.Fgs)
 	}
 
 	time.Sleep(time.Until(startTime.T))
@@ -95,7 +95,7 @@ func main() {
 	}
 	bw := bufio.NewWriter(f)
 	for _, h := range fakeHosts {
-		hostID := h.Config.GetHostId()
+		hostID := h.HostID
 		for fg, fgStats := range h.FGStats {
 			for _, dur := range fgStats.Durs {
 				_, err := fmt.Fprintf(bw, "%d,%s_TO_%s_JOB_%s,%f\n",

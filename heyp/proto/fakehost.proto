@@ -19,10 +19,11 @@ message FakeFG {
 
 message FakeHost {
     optional uint64 host_id = 1;
-    repeated FakeFG fgs = 2;
+    repeated int32 fg_ids = 2; // [-1] indicates use all fgs
 }
 
 message HostSimulatorConfig {
-    repeated FakeHost hosts = 1;
-    optional string report_dur = 2 [default = "3s"];
+    repeated FakeFG fgs = 1;
+    repeated FakeHost hosts = 2;
+    optional string report_dur = 3 [default = "3s"];
 }
