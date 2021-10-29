@@ -94,7 +94,7 @@ for shard in "$outdir"/shards/*; do
         echo "[shard $shardi] config sys"
         bin/deploy-heyp config-sys -c $c -cc bbr -debugmon
         echo "[shard $shardi] roughly measure per-QoS BW w/ congestion (info only)"
-        bin/deploy-heyp report-pri-bw -c $c
+        bin/deploy-heyp report-pri-bw -c $c || true
         echo "[shard $shardi] install bundle"
         bin/deploy-heyp install-bundle -c $c
         first=0
