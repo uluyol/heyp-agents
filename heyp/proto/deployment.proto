@@ -20,6 +20,7 @@ message DeployedNode {
   // Valid roles:
   // - host-agent
   // - cluster-agent
+  // - host-agent-sim
   // - hipri-[DSCP VALUE]
   // - lopri-[DSCP VALUE]
   // - testlopri-[name]-server
@@ -87,6 +88,21 @@ message DeployedFortioConfig {
   repeated DeployedFortioInstance instances = 4;
 }
 
+message DeployedHostAgentSimConfig {
+  message FakeFGConfig {
+    optional string dst_dc = 1;
+    optional string job = 2;
+
+    optional int64 min_fg_usage = 3;
+    optional int64 max_fg_usage = 4;
+  }
+
+  repeated FakeFGConfig fake_fgs = 1;
+  optional int32 num_hosts_per_fg = 2; // will be spread across host simulators
+  optional string report_dur = 3 [default = "3s"];
+  optional string run_dur = 4 [default = "30s"];
+}
+
 message DeploymentConfig {
   repeated DeployedNode nodes = 1;
   repeated DeployedCluster clusters = 2;
@@ -105,4 +121,6 @@ message DeploymentConfig {
   // Workloads to run (all are run in parallel).
   repeated DeployedTestLopriInstance testlopri_instances = 13;
   optional DeployedFortioConfig fortio = 14;
+
+  optional DeployedHostAgentSimConfig host_agent_sim = 15;
 }

@@ -307,6 +307,31 @@ var testLOPRIRunClientsCmd = &runClientsCmd{
 	},
 }
 
+type hostAgentSimRun struct {
+	configPath string
+	remDir     string
+	showOut    bool
+}
+
+func (c *hostAgentSimRun) Name() string     { return "host-agent-sim-run" }
+func (c *hostAgentSimRun) Synopsis() string { return "run simulated host agents" }
+func (*hostAgentSimRun) Usage() string      { return "" }
+
+func (c *hostAgentSimRun) SetFlags(fs *flag.FlagSet) {
+	configVar(&c.configPath, fs)
+	remdirVar(&c.remDir, fs)
+	fs.BoolVar(&c.showOut, "verbose", false, "show command output")
+}
+
+func (c *hostAgentSimRun) Execute(ctx context.Context, fs *flag.FlagSet,
+	args ...interface{}) subcommands.ExitStatus {
+	err := actions.RunHostAgentSims(parseConfig(c.configPath), c.remDir, c.showOut)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return subcommands.ExitSuccess
+}
+
 type fortioStartServersCmd struct {
 	configPath    string
 	remDir        string
@@ -638,6 +663,7 @@ func main() {
 	subcommands.Register(new(installBundleCmd), "")
 	subcommands.Register(new(configureSysCmd), "")
 	subcommands.Register(new(startHEYPAgentsCmd), "")
+	subcommands.Register(new(hostAgentSimRun), "")
 	subcommands.Register(testLOPRIStartServersCmd, "testlopri")
 	subcommands.Register(testLOPRIRunClientsCmd, "testlopri")
 	subcommands.Register(new(fortioStartServersCmd), "fortio")
