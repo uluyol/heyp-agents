@@ -53,6 +53,7 @@ func MakeCodeBundle(binDir, auxBinDir, tarballPath string) error {
 		"fortio-client",
 		"fortio",
 		"graceful-stop",
+		"host-agent-sim",
 	}
 
 	for _, b := range auxBins {
@@ -181,15 +182,17 @@ func GetAndValidateHEYPNodeConfigs(c *pb.DeploymentConfig) (HEYPNodeConfigs, err
 	var nodeConfigs HEYPNodeConfigs
 	nodeConfigs.DCMapperConfig = new(pb.StaticDCMapperConfig)
 
-	for _, dcPair := range c.GetHostAgentTemplate().GetSimulatedWan().DcPairs {
-		if dcPair.Netem != nil {
-			if err := checkNetem(dcPair, dcPair.Netem, "netem"); err != nil {
-				return nodeConfigs, err
+	if hostAgentTmpl := c.GetHostAgentTemplate(); hostAgentTmpl != nil {
+		for _, dcPair := range hostAgentTmpl.GetSimulatedWan().DcPairs {
+			if dcPair.Netem != nil {
+				if err := checkNetem(dcPair, dcPair.Netem, "netem"); err != nil {
+					return nodeConfigs, err
+				}
 			}
-		}
-		if dcPair.NetemLopri != nil {
-			if err := checkNetem(dcPair, dcPair.NetemLopri, "netem_lopri"); err != nil {
-				return nodeConfigs, err
+			if dcPair.NetemLopri != nil {
+				if err := checkNetem(dcPair, dcPair.NetemLopri, "netem_lopri"); err != nil {
+					return nodeConfigs, err
+				}
 			}
 		}
 	}
