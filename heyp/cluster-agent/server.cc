@@ -28,6 +28,7 @@ class HostReactor
   void DoReadLoop() { StartRead(&info_); }
 
   void OnReadDone(bool ok) override {
+    absl::MutexLock l(&mu_);
     if (finished_) {
       return;
     }
@@ -40,22 +41,36 @@ class HostReactor
                        info_.flow_infos_size());
 
     if (lis_ == nullptr) {
+      // Unlock mu_ to avoid a lock cycle.
+      // Here, we can acquire mu_, then a lock in ClusterController.
+      // Later, when ClusterController calls UpdateAlloc, it is holding its own lock then
+      // aquiring mu_.
+      //
+      // This isn't really a problem for us because ClusterController can't call into us
+      // until after we call RegisterListener, and we never acquire the
+      // ClusterController's lock until teardown (at which point, we hold no locks).
+      //
+      // But it's fine to release the lock here and silence this TSan warning.
+      // If lis_ is null, then we know that only one read was issued (the first) and no
+      // writes, so it's impossible for concurrent operations to take place.
+      mu_.Unlock();
       lis_ = service_->controller_.RegisterListener(
-          info_.bundler().host_id(), [this](proto::AllocBundle alloc) {
+          info_.bundler().host_id(), [this](const proto::AllocBundle& alloc) {
             SPDLOG_LOGGER_INFO(&service_->logger_, "sending allocs for {} FGs to {}",
                                alloc.flow_allocs_size(), peer_);
             UpdateAlloc(alloc);
           });
+      mu_.Lock();
     }
 
     service_->controller_.UpdateInfo(info_);
     DoReadLoop();
   }
 
-  void UpdateAlloc(proto::AllocBundle alloc) {
-    absl::MutexLock l(&write_mu_);
+  void UpdateAlloc(const proto::AllocBundle& alloc) {
+    absl::MutexLock l(&mu_);
     *staged_alloc_ = alloc;
-    if (!wip_write_) {
+    if (!wip_write_ && !finished_) {
       SendAlloc();
     } else {
       has_staged_ = true;
@@ -70,9 +85,9 @@ class HostReactor
       return;
       // since wip_write_ is still true, we will block all writes
     }
-    absl::MutexLock l(&write_mu_);
+    absl::MutexLock l(&mu_);
     wip_write_ = false;
-    if (has_staged_) {
+    if (has_staged_ && !finished_) {
       has_staged_ = false;
       SendAlloc();
     }
@@ -81,7 +96,7 @@ class HostReactor
   void OnDone() override { delete this; }
 
  private:
-  void SendAlloc() ABSL_EXCLUSIVE_LOCKS_REQUIRED(write_mu_) {
+  void SendAlloc() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mu_) {
     proto::AllocBundle* t = staged_alloc_;
     staged_alloc_ = wip_write_alloc_;
     wip_write_alloc_ = t;
@@ -93,15 +108,15 @@ class HostReactor
   ClusterAgentService* service_;
   proto::InfoBundle info_;
 
-  absl::Mutex write_mu_;
-  proto::AllocBundle b1_ ABSL_GUARDED_BY(write_mu_);
-  proto::AllocBundle b2_ ABSL_GUARDED_BY(write_mu_);
+  absl::Mutex mu_;
+  proto::AllocBundle b1_ ABSL_GUARDED_BY(mu_);
+  proto::AllocBundle b2_ ABSL_GUARDED_BY(mu_);
 
   // Write state
-  proto::AllocBundle* staged_alloc_ ABSL_GUARDED_BY(write_mu_);
-  proto::AllocBundle* wip_write_alloc_ ABSL_GUARDED_BY(write_mu_);
-  bool wip_write_ ABSL_GUARDED_BY(write_mu_);
-  bool has_staged_ ABSL_GUARDED_BY(write_mu_);
+  proto::AllocBundle* staged_alloc_ ABSL_GUARDED_BY(mu_);
+  proto::AllocBundle* wip_write_alloc_ ABSL_GUARDED_BY(mu_);
+  bool wip_write_ ABSL_GUARDED_BY(mu_);
+  bool has_staged_ ABSL_GUARDED_BY(mu_);
 
   bool finished_;  // only read/written in event loop
 
