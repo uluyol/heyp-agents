@@ -148,7 +148,7 @@ func RunHostAgentSims(c *pb.DeploymentConfig, remoteTopdir string, showOut bool)
 				cmd := TracingCommand(
 					LogWithPrefix("run-host-agent-sims: "),
 					"ssh", n.GetExternalAddr(),
-					fmt.Sprintf("cat > %[1]s/configs/host-agent-sim.textproto && "+
+					fmt.Sprintf("cat > %[1]s/configs/host-agent-sim.textproto && mkdir -p %[1]s/logs && "+
 						"%[1]s/aux/host-agent-sim -c %[1]s/configs/host-agent-sim.textproto -o %[1]s/logs/host-agent-sim.csv -cluster-agent-addr %[2]s -start-time %[3]s -dur %[4]s 2>&1 | tee %[1]s/logs/host-agent-sim.log; exit ${PIPESTATUS[0]}",
 						remoteTopdir, c.ClusterAgentAddr, startTimestamp, c.C.GetRunDur()))
 				cmd.SetStdin("host-agent-sim.textproto", bytes.NewReader(hostSimConfigBytes))
