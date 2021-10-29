@@ -29,6 +29,17 @@ mkdir -p "$procdir/cluster-alloc"
     >> "$procdir/global-host-ts.csv"
 ) &
 
+HOST_AGENT_SIM_PATH=logs/host-agent-sim.csv
+(
+  echo HostID,FG,TimeSinceLastAllocSec
+  for zipf in "$outdir"/*.zip; do
+    if zipinfo -1 "$zipf" "$HOST_AGENT_SIM_PATH" &>/dev/null; then
+      # have sim output
+      unzip -p "$zipf" "$HOST_AGENT_SIM_PATH"
+    fi
+  done
+) > "$procdir/host-agent-sim.csv"
+
 ret=0
 for p in `jobs -p`; do
   wait $p || ret=1
@@ -44,6 +55,8 @@ done
   "$procdir/global-host-loss-ts-" &
 ./code/plot-host-role-summary.R "$procdir/host-stats-summary.csv" \
   "$procdir/host-role-summary-" &
+./code/plot-reaction-time-cdf.R "$procdir/host-agent-sim.csv" \
+  "$procdir/host-agent-sim-time-between-enforcements.pdf" &
 
 # ret=0
 for p in `jobs -p`; do
