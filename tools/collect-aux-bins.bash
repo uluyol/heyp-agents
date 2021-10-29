@@ -19,15 +19,17 @@ for cmd in $TOINSTALL; do
     ;;
   fortio)
     GOOS=linux GOARCH=amd64 GOBIN=$PWD/aux-bin go install fortio.org/fortio@v1.16.0
-    GOOS=linux GOARCH=amd64 go build -o $PWD/aux-bin ./go/cmd/fortio-client
+    GOOS=linux GOARCH=amd64 ./wrapgo.bash build -o $PWD/aux-bin ./go/cmd/fortio-client
     ;;
   collect-host-stats)
-    GOOS=linux GOARCH=amd64 go build -o $PWD/aux-bin ./go/cmd/collect-host-stats
+    GOOS=linux GOARCH=amd64 ./wrapgo.bash build -o $PWD/aux-bin ./go/cmd/collect-host-stats
     ;;
   graceful-stop)
-    GOOS=linux GOARCH=amd64 go build -o $PWD/aux-bin ./go/cmd/graceful-stop
+    GOOS=linux GOARCH=amd64 ./wrapgo.bash build -o $PWD/aux-bin ./go/cmd/graceful-stop
     ;;
-  *)
+  host-agent-sim)
+    GOOS=linux GOARCH=amd64 ./wrapgo.bash build -o $PWD/aux-bin ./go/cmd/host-agent-sim
+    ;;  *)
     echo "unknown cmd $cmd"
     exit 2
     ;;
