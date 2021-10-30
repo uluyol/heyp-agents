@@ -21,6 +21,19 @@ class ABSL_LOCKABLE TimedMutex {
     return mu_.try_lock_for(absl::ToChronoNanoseconds(dur));
   }
 
+  void Lock(
+      absl::Duration long_dur, spdlog::logger* logger, absl::string_view lock_name,
+      absl::FunctionRef<void(int count)> on_long = [](int count) {})
+      ABSL_EXCLUSIVE_LOCK_FUNCTION() {
+    int count = 0;
+    while (!TryLockFor(long_dur)) {
+      count++;
+      SPDLOG_LOGGER_WARN(logger, "waiting to acquire {}: took more than {} (so far)",
+                         lock_name, absl::FormatDuration(count * long_dur));
+      on_long(count);
+    }
+  }
+
   void Unlock() ABSL_UNLOCK_FUNCTION() { mu_.unlock(); }
 
  private:
