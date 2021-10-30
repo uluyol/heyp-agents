@@ -39,6 +39,17 @@ cc_library(
 )
 
 cc_library(
+    name = "par-indexed-map",
+    hdrs = ["par-indexed-map.h"],
+    deps = [
+        "//heyp/log:spdlog",
+        "@com_google_absl//absl/functional:function_ref",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/synchronization",
+    ],
+)
+
+cc_library(
     name = "waitgroup",
     srcs = ["waitgroup.cc"],
     hdrs = ["waitgroup.h"],
@@ -56,6 +67,17 @@ cc_test(
     deps = [
         ":executor",
         "//heyp/init:test-main",
+    ],
+)
+
+cc_test(
+    name = "par-indexed-map-test",
+    srcs = ["par-indexed-map-test.cc"],
+    deps = [
+        ":par-indexed-map",
+        "//heyp/init:test-main",
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/random",
     ],
 )
 
