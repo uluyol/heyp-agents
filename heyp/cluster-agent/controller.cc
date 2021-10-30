@@ -9,6 +9,9 @@
 
 namespace heyp {
 
+static constexpr absl::Duration kLongBcastLockDur = absl::Milliseconds(50);
+static constexpr absl::Duration kLongStateLockDur = absl::Milliseconds(100);
+
 ClusterController::ClusterController(std::unique_ptr<FlowAggregator> aggregator,
                                      std::unique_ptr<ClusterAllocator> allocator)
     : aggregator_(std::move(aggregator)),
@@ -20,7 +23,8 @@ ClusterController::Listener::Listener() : host_id_(0), lis_id_(0), controller_(n
 
 ClusterController::Listener::~Listener() {
   if (controller_ != nullptr && host_id_ != 0) {
-    absl::MutexLock l(&controller_->broadcasting_mu_);
+    MutexLockWarnLong l(&controller_->broadcasting_mu_, kLongBcastLockDur,
+                        &controller_->logger_, "broadcasting_mu_ in ~Listenener");
     ABSL_ASSERT(controller_->new_bundle_funcs_.contains(host_id_));
     ABSL_ASSERT(controller_->new_bundle_funcs_.at(host_id_).contains(lis_id_));
     controller_->new_bundle_funcs_.at(host_id_).erase(lis_id_);
@@ -36,7 +40,8 @@ std::unique_ptr<ClusterController::Listener> ClusterController::RegisterListener
   auto lis = absl::WrapUnique(new Listener());
   lis->host_id_ = host_id;
   lis->controller_ = this;
-  absl::MutexLock l(&broadcasting_mu_);
+  MutexLockWarnLong l(&broadcasting_mu_, kLongBcastLockDur, &logger_,
+                      "broadcasting_mu_ in RegisterListener");
   lis->lis_id_ = next_lis_id_;
   new_bundle_funcs_[host_id][next_lis_id_] = [this, on_new_bundle_func](
                                                  const proto::AllocBundle& alloc,
@@ -53,13 +58,13 @@ std::unique_ptr<ClusterController::Listener> ClusterController::RegisterListener
 }
 
 void ClusterController::UpdateInfo(const proto::InfoBundle& info) {
-  absl::MutexLock l(&state_mu_);
+  MutexLockWarnLong l(&state_mu_, kLongStateLockDur, &logger_, "state_mu_ in UpdateInfo");
   aggregator_->Update(info);
 }
 
 void ClusterController::ComputeAndBroadcast() {
   const bool should_debug = DebugQosAndRateLimitSelection();
-  state_mu_.Lock();
+  state_mu_.Lock(kLongStateLockDur, &logger_, "state_mu_ in ComputeAndBroadcast");
   allocator_->Reset();
   {
     ClusterAllocator* alloc = allocator_.get();
@@ -80,7 +85,8 @@ void ClusterController::ComputeAndBroadcast() {
   absl::flat_hash_map<int64_t, proto::AllocBundle> alloc_bundles =
       BundleByHost(std::move(allocs));
 
-  broadcasting_mu_.Lock();
+  broadcasting_mu_.Lock(kLongBcastLockDur, &logger_,
+                        "broadcasting_mu_ in ComputeAndBroadcast");
   int num = 0;
   if (enable_wait_for_broadcast_completion_) {
     num_broadcast_completed_ = 0;

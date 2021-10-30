@@ -7,6 +7,7 @@
 #include "heyp/cluster-agent/allocator.h"
 #include "heyp/flows/aggregator.h"
 #include "heyp/proto/heyp.pb.h"
+#include "heyp/threads/mutex-helpers.h"
 #include "spdlog/spdlog.h"
 
 namespace heyp {
@@ -47,12 +48,12 @@ class ClusterController {
   };
 
  private:
-  absl::Mutex state_mu_;
+  TimedMutex state_mu_;
   std::unique_ptr<FlowAggregator> aggregator_ ABSL_GUARDED_BY(state_mu_);
   std::unique_ptr<ClusterAllocator> allocator_ ABSL_GUARDED_BY(state_mu_);
   spdlog::logger logger_;
 
-  absl::Mutex broadcasting_mu_;
+  TimedMutex broadcasting_mu_;
   uint64_t next_lis_id_ ABSL_GUARDED_BY(broadcasting_mu_);
   absl::flat_hash_map<
       int64_t,

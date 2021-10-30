@@ -7,6 +7,7 @@
 #include "heyp/cluster-agent/controller.h"
 #include "heyp/log/spdlog.h"
 #include "heyp/proto/heyp.pb.h"
+#include "heyp/threads/mutex-helpers.h"
 
 namespace heyp {
 
@@ -28,7 +29,7 @@ class HostReactor
   void DoReadLoop() { StartRead(&info_); }
 
   void OnReadDone(bool ok) override {
-    absl::MutexLock l(&mu_);
+    MutexLockWarnLong l(&mu_, kLongLockDur, &service_->logger_, "HostReactor.mu_");
     if (finished_) {
       return;
     }
@@ -60,7 +61,7 @@ class HostReactor
                                alloc.flow_allocs_size(), peer_);
             UpdateAlloc(alloc);
           });
-      mu_.Lock();
+      mu_.Lock(kLongLockDur, &service_->logger_, "HostReactor.mu_");
     }
 
     service_->controller_.UpdateInfo(info_);
@@ -68,7 +69,7 @@ class HostReactor
   }
 
   void UpdateAlloc(const proto::AllocBundle& alloc) {
-    absl::MutexLock l(&mu_);
+    MutexLockWarnLong l(&mu_, kLongLockDur, &service_->logger_, "HostReactor.mu_");
     *staged_alloc_ = alloc;
     if (!wip_write_ && !finished_) {
       SendAlloc();
@@ -85,7 +86,7 @@ class HostReactor
       return;
       // since wip_write_ is still true, we will block all writes
     }
-    absl::MutexLock l(&mu_);
+    MutexLockWarnLong l(&mu_, kLongLockDur, &service_->logger_, "HostReactor.mu_");
     wip_write_ = false;
     if (has_staged_ && !finished_) {
       has_staged_ = false;
@@ -96,6 +97,8 @@ class HostReactor
   void OnDone() override { delete this; }
 
  private:
+  static constexpr absl::Duration kLongLockDur = absl::Milliseconds(5);
+
   void SendAlloc() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mu_) {
     proto::AllocBundle* t = staged_alloc_;
     staged_alloc_ = wip_write_alloc_;
@@ -108,7 +111,7 @@ class HostReactor
   ClusterAgentService* service_;
   proto::InfoBundle info_;
 
-  absl::Mutex mu_;
+  TimedMutex mu_;
   proto::AllocBundle b1_ ABSL_GUARDED_BY(mu_);
   proto::AllocBundle b2_ ABSL_GUARDED_BY(mu_);
 
