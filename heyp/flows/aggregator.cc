@@ -151,10 +151,8 @@ void FlowAggregator::ForEachAgg(
   // analysis can't read into callbacks.
   // We're still holding the lock when we execute the code in ForEach.
   FlowMap<AggWIP>* agg_wips = &agg_wips_;
-  std::cerr << "num_ids = " << bundle_states_.NumIDs() << "\n";
   bundle_states_.ForEach(
       0, bundle_states_.NumIDs(), [&](ParID bundler_id, BundleState& bs) {
-        std::cerr << "HERE\n";
         for (const auto& flow_time_info : bs.active) {
           AggWIP* wip = GetAggWIP(config_, flow_time_info.first, agg_wips);
           wip->oldest_active_time =
