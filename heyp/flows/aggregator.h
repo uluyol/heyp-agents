@@ -53,10 +53,6 @@ class FlowAggregator {
 
  private:
   struct AggWIP {
-    // Updated in ForEachAgg but needs to persist to track historical usage.
-    AggState state;
-
-    // Reset and used only in ForEachAgg.
     absl::Time oldest_active_time = absl::InfiniteFuture();
     absl::Time newest_dead_time = absl::InfinitePast();
     int64_t cum_hipri_usage_bytes = 0;
@@ -77,14 +73,17 @@ class FlowAggregator {
 
   static AggWIP* GetAggWIP(const Config& config, const proto::FlowMarker& child,
                            FlowMap<AggWIP>* wips);
+  static AggState* GetAggState(const proto::FlowMarker& agg_flow,
+                               FlowMap<AggState>* states);
 
   const Config config_;
   const std::unique_ptr<DemandPredictor> agg_demand_predictor_;
   spdlog::logger logger_;
 
-  TimedMutex mu_;
-  FlowMap<AggWIP> agg_wips_ ABSL_GUARDED_BY(mu_);
   BundleStatesMap bundle_states_;
+
+  TimedMutex mu_;
+  FlowMap<AggState> agg_states_ ABSL_GUARDED_BY(mu_);
   // For debugging
   FlowMap<AggWIP> prev_agg_wips_ ABSL_GUARDED_BY(mu_);
   std::unique_ptr<BundleStatesMap> prev_bundle_states_ ABSL_GUARDED_BY(mu_);

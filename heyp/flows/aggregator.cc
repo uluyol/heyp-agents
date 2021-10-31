@@ -137,24 +137,15 @@ void FlowAggregator::ForEachAgg(
     absl::FunctionRef<void(absl::Time, const proto::AggInfo&)> func) {
   MutexLockWarnLong l(&mu_, absl::Seconds(1), &logger_, "mu_");
 
-  for (auto& p : agg_wips_) {
-    AggWIP& wip = p.second;
-    wip.oldest_active_time = absl::InfiniteFuture();
-    wip.newest_dead_time = absl::InfinitePast();
-    wip.cum_hipri_usage_bytes = 0;
-    wip.cum_lopri_usage_bytes = 0;
-    wip.sum_ewma_usage_bps = 0;
-    wip.children.clear();
-  }
+  FlowMap<AggWIP> agg_wips;
 
   // Get a pointer to agg_wips_ here, while we have the lock since clang's thread-safety
   // analysis can't read into callbacks.
   // We're still holding the lock when we execute the code in ForEach.
-  FlowMap<AggWIP>* agg_wips = &agg_wips_;
   bundle_states_.ForEach(
       0, bundle_states_.NumIDs(), [&](ParID bundler_id, BundleState& bs) {
         for (const auto& flow_time_info : bs.active) {
-          AggWIP* wip = GetAggWIP(config_, flow_time_info.first, agg_wips);
+          AggWIP* wip = GetAggWIP(config_, flow_time_info.first, &agg_wips);
           wip->oldest_active_time =
               std::min(wip->oldest_active_time, flow_time_info.second.first);
           wip->cum_hipri_usage_bytes +=
@@ -166,7 +157,7 @@ void FlowAggregator::ForEachAgg(
         }
 
         for (const auto& flow_time_info : bs.dead) {
-          AggWIP* wip = GetAggWIP(config_, flow_time_info.first, agg_wips);
+          AggWIP* wip = GetAggWIP(config_, flow_time_info.first, &agg_wips);
           wip->newest_dead_time =
               std::max(wip->newest_dead_time, flow_time_info.second.first);
           wip->cum_hipri_usage_bytes +=
@@ -204,8 +195,10 @@ void FlowAggregator::ForEachAgg(
     return absl::StrJoin(lines, "\n");
   };
 
-  for (auto& p : agg_wips_) {
+  for (auto& p : agg_wips) {
     AggWIP& wip = p.second;
+    AggState* agg_state = GetAggState(p.first, &agg_states_);
+
     absl::Time time = absl::UnixEpoch();
     if (wip.oldest_active_time != absl::InfiniteFuture()) {
       time = wip.oldest_active_time;
@@ -214,9 +207,9 @@ void FlowAggregator::ForEachAgg(
     } else {
       SPDLOG_LOGGER_ERROR(&logger_,
                           "AggWIP for {} has no oldest active or newest dead time",
-                          wip.state.flow().ShortDebugString());
+                          agg_state->flow().ShortDebugString());
     }
-    wip.state.UpdateUsage(
+    agg_state->UpdateUsage(
         {
             .time = time,
             .sum_child_usage_bps = wip.sum_ewma_usage_bps,
@@ -226,7 +219,7 @@ void FlowAggregator::ForEachAgg(
         config_.usage_history_window, *agg_demand_predictor_);
 
     proto::AggInfo agg_info;
-    *agg_info.mutable_parent() = wip.state.cur();
+    *agg_info.mutable_parent() = agg_state->cur();
     *agg_info.mutable_children() = {wip.children.begin(), wip.children.end()};
 
     func(time, agg_info);
@@ -254,7 +247,7 @@ void FlowAggregator::ForEachAgg(
   }
 
   if (kDebugSpikes) {
-    prev_agg_wips_ = agg_wips_;
+    prev_agg_wips_ = agg_wips;
     prev_bundle_states_ = bundle_states_.BestEffortCopy();
   }
 }
@@ -265,7 +258,16 @@ FlowAggregator::AggWIP* FlowAggregator::GetAggWIP(const Config& config,
   proto::FlowMarker m = config.get_agg_flow_fn(child);
   auto iter = wips->find(m);
   if (iter == wips->end()) {
-    iter = wips->insert({m, AggWIP{.state = AggState(m, false)}}).first;
+    iter = wips->insert({m, AggWIP{}}).first;
+  }
+  return &iter->second;
+}
+
+AggState* FlowAggregator::GetAggState(const proto::FlowMarker& agg_flow,
+                                      FlowMap<AggState>* states) {
+  auto iter = states->find(agg_flow);
+  if (iter == states->end()) {
+    iter = states->insert({agg_flow, AggState(agg_flow, false)}).first;
   }
   return &iter->second;
 }
