@@ -142,7 +142,7 @@ void ParIndexedMap<Key, Value, KeyToIDMap>::ForEach(
   H_ASSERT_LE(end, len_.load());
 
   int start_span = start / kSpanSize;
-  int end_span = NumSpans(end - 1) - 1;
+  int end_span = (end - 1) / kSpanSize;
   ParID cur_id = start;
   for (int si = start_span; si <= end_span; ++si) {
     Span* s = spans_[si].load();
