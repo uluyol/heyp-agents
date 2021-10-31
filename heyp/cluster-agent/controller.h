@@ -17,7 +17,7 @@ class ClusterController {
   ClusterController(std::unique_ptr<FlowAggregator> aggregator,
                     std::unique_ptr<ClusterAllocator> allocator);
 
-  void UpdateInfo(const proto::InfoBundle& info);
+  void UpdateInfo(ParID bundler_id, const proto::InfoBundle& info);
   void ComputeAndBroadcast();
   void EnableWaitForBroadcastCompletion();
   void WaitForBroadcastCompletion();
@@ -28,6 +28,8 @@ class ClusterController {
   std::unique_ptr<Listener> RegisterListener(
       int64_t host_id,
       const std::function<void(const proto::AllocBundle&)>& on_new_bundle_func);
+
+  ParID GetBundlerID(const proto::FlowMarker& bundler);
 
   class Listener {
    public:
@@ -48,8 +50,8 @@ class ClusterController {
   };
 
  private:
+  std::unique_ptr<FlowAggregator> aggregator_;
   TimedMutex state_mu_;
-  std::unique_ptr<FlowAggregator> aggregator_ ABSL_GUARDED_BY(state_mu_);
   std::unique_ptr<ClusterAllocator> allocator_ ABSL_GUARDED_BY(state_mu_);
   spdlog::logger logger_;
 

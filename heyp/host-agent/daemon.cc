@@ -110,6 +110,8 @@ void HostDaemon::CollectStats(absl::Duration period, bool force_run,
 
   SPDLOG_LOGGER_INFO(&logger, "will collect stats once every ", period);
 
+  bool created_bundler_id = false;
+
   // Wait the first time since Run() refreshes once
   while (force_run || !FlaggedOrWaitFor(period, should_exit)) {
     absl::Duration elapsed =
@@ -152,7 +154,12 @@ void HostDaemon::CollectStats(absl::Duration period, bool force_run,
 
     // Step 3: aggregate socket-level flows to host-level.
     SPDLOG_LOGGER_INFO(&logger, "aggregate info to host-level");
-    socket_to_host_aggregator_->Update(bundle);
+    if (!created_bundler_id) {
+      ParID id = socket_to_host_aggregator_->GetBundlerID(bundle.bundler());
+      H_SPDLOG_CHECK_EQ(&logger, id, 0);
+      created_bundler_id = true;
+    }
+    socket_to_host_aggregator_->Update(0, bundle);
 
     // Step 3.5: log all src/dst DC-level flows on the host, if requested.
     if (flow_state_logger->should_log()) {

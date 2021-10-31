@@ -61,10 +61,11 @@ class HostReactor
                                alloc.flow_allocs_size(), peer_);
             UpdateAlloc(alloc);
           });
+      bundler_id_ = service_->controller_.GetBundlerID(info_.bundler());
       mu_.Lock(kLongLockDur, &service_->logger_, "HostReactor.mu_");
     }
 
-    service_->controller_.UpdateInfo(info_);
+    service_->controller_.UpdateInfo(bundler_id_, info_);
     DoReadLoop();
   }
 
@@ -124,6 +125,7 @@ class HostReactor
   bool finished_;  // only read/written in event loop
 
   std::unique_ptr<ClusterController::Listener> lis_;
+  ParID bundler_id_ = -1;
 };
 
 ClusterAgentService::ClusterAgentService(std::unique_ptr<FlowAggregator> aggregator,

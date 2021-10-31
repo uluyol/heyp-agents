@@ -57,9 +57,12 @@ std::unique_ptr<ClusterController::Listener> ClusterController::RegisterListener
   return lis;
 }
 
-void ClusterController::UpdateInfo(const proto::InfoBundle& info) {
-  MutexLockWarnLong l(&state_mu_, kLongStateLockDur, &logger_, "state_mu_ in UpdateInfo");
-  aggregator_->Update(info);
+void ClusterController::UpdateInfo(ParID bundler_id, const proto::InfoBundle& info) {
+  aggregator_->Update(bundler_id, info);
+}
+
+ParID ClusterController::GetBundlerID(const proto::FlowMarker& bundler) {
+  return aggregator_->GetBundlerID(bundler);
 }
 
 void ClusterController::ComputeAndBroadcast() {

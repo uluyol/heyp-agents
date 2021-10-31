@@ -14,6 +14,7 @@
 #include "heyp/proto/alg.h"
 #include "heyp/proto/heyp.pb.h"
 #include "heyp/threads/mutex-helpers.h"
+#include "heyp/threads/par-indexed-map.h"
 #include "spdlog/spdlog.h"
 
 namespace heyp {
@@ -44,14 +45,13 @@ class FlowAggregator {
   //
   // The bundler is expected to be permanently responsible for the provided
   // flows (i.e. the same flow should only ever be reported by one bundler).
-  void Update(const proto::InfoBundle& bundle);
+  void Update(ParID bundler_id, const proto::InfoBundle& bundle);
+
+  ParID GetBundlerID(const proto::FlowMarker& bundler);
 
   void ForEachAgg(absl::FunctionRef<void(absl::Time, const proto::AggInfo&)> func);
 
  private:
-  template <typename ValueType>
-  using FlowMap = absl::flat_hash_map<proto::FlowMarker, ValueType, HashFlow, EqFlow>;
-
   struct AggWIP {
     // Updated in ForEachAgg but needs to persist to track historical usage.
     AggState state;
@@ -65,13 +65,18 @@ class FlowAggregator {
     std::vector<proto::FlowInfo> children;
   };
 
+  template <typename ValueType>
+  using FlowMap = absl::flat_hash_map<proto::FlowMarker, ValueType, HashFlow, EqFlow>;
+
   struct BundleState {
     absl::Time last_updated = absl::InfinitePast();
     FlowMap<std::pair<absl::Time, proto::FlowInfo>> active;
     FlowMap<std::pair<absl::Time, proto::FlowInfo>> dead;
   };
+  using BundleStatesMap = ParIndexedMap<proto::FlowMarker, BundleState, FlowMap<ParID>>;
 
-  AggWIP& GetAggWIP(const proto::FlowMarker& child) ABSL_EXCLUSIVE_LOCKS_REQUIRED(mu_);
+  static AggWIP* GetAggWIP(const Config& config, const proto::FlowMarker& child,
+                           FlowMap<AggWIP>* wips);
 
   const Config config_;
   const std::unique_ptr<DemandPredictor> agg_demand_predictor_;
@@ -79,10 +84,10 @@ class FlowAggregator {
 
   TimedMutex mu_;
   FlowMap<AggWIP> agg_wips_ ABSL_GUARDED_BY(mu_);
-  FlowMap<BundleState> bundle_states_ ABSL_GUARDED_BY(mu_);
+  BundleStatesMap bundle_states_;
   // For debugging
   FlowMap<AggWIP> prev_agg_wips_ ABSL_GUARDED_BY(mu_);
-  FlowMap<BundleState> prev_bundle_states_ ABSL_GUARDED_BY(mu_);
+  std::unique_ptr<BundleStatesMap> prev_bundle_states_ ABSL_GUARDED_BY(mu_);
 };
 
 }  // namespace heyp

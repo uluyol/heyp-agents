@@ -14,6 +14,7 @@ cc_library(
         "//heyp/proto:constructors",
         "//heyp/proto:heyp_cc_proto",
         "//heyp/threads:mutex-helpers",
+        "//heyp/threads:par-indexed-map",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/time",
     ],

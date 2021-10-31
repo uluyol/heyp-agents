@@ -95,36 +95,40 @@ FlowAggregator::FlowAggregator(std::unique_ptr<DemandPredictor> agg_demand_predi
       agg_demand_predictor_(std::move(agg_demand_predictor)),
       logger_(MakeLogger("flow-aggregator")) {}
 
-void FlowAggregator::Update(const proto::InfoBundle& bundle) {
+ParID FlowAggregator::GetBundlerID(const proto::FlowMarker& bundler) {
+  return bundle_states_.GetID(bundler);
+}
+
+void FlowAggregator::Update(ParID bundler_id, const proto::InfoBundle& bundle) {
   const absl::Time timestamp = FromProtoTimestamp(bundle.timestamp());
 
-  MutexLockWarnLong l(&mu_, absl::Seconds(1), &logger_, "mu_");
-  BundleState& bs = bundle_states_[bundle.bundler()];
-  for (const proto::FlowInfo& fi : bundle.flow_infos()) {
-    if (config_.is_valid_child != nullptr) {
-      H_SPDLOG_CHECK_MESG(&logger_, config_.is_valid_child(fi.flow()),
-                          fi.flow().ShortDebugString());
-    }
+  bundle_states_.OnID(bundler_id, [&](BundleState& bs) {
+    for (const proto::FlowInfo& fi : bundle.flow_infos()) {
+      if (config_.is_valid_child != nullptr) {
+        H_SPDLOG_CHECK_MESG(&logger_, config_.is_valid_child(fi.flow()),
+                            fi.flow().ShortDebugString());
+      }
 
-    auto iter = bs.active.find(fi.flow());
-    if (iter == bs.active.end()) {
-      // Remove from the dead map (in case it exists)
-      bs.dead.erase(fi.flow());
-      bs.active[fi.flow()] = {timestamp, fi};
-    } else {
-      iter->second = {timestamp, fi};
+      auto iter = bs.active.find(fi.flow());
+      if (iter == bs.active.end()) {
+        // Remove from the dead map (in case it exists)
+        bs.dead.erase(fi.flow());
+        bs.active[fi.flow()] = {timestamp, fi};
+      } else {
+        iter->second = {timestamp, fi};
+      }
     }
-  }
-  std::vector<proto::FlowMarker> to_erase;
-  for (const auto& iter : bs.active) {
-    if (iter.second.first + config_.usage_history_window < timestamp) {
-      to_erase.push_back(iter.first);
+    std::vector<proto::FlowMarker> to_erase;
+    for (const auto& iter : bs.active) {
+      if (iter.second.first + config_.usage_history_window < timestamp) {
+        to_erase.push_back(iter.first);
+      }
     }
-  }
-  for (const proto::FlowMarker& m : to_erase) {
-    bs.dead[m] = {timestamp, bs.active[m].second};
-    bs.active.erase(m);
-  }
+    for (const proto::FlowMarker& m : to_erase) {
+      bs.dead[m] = {timestamp, bs.active[m].second};
+      bs.active.erase(m);
+    }
+  });
 }
 
 constexpr bool kDebugSpikes = false;
@@ -143,50 +147,61 @@ void FlowAggregator::ForEachAgg(
     wip.children.clear();
   }
 
-  for (const auto& bundle_pair : bundle_states_) {
-    const BundleState& bs = bundle_pair.second;
+  // Get a pointer to agg_wips_ here, while we have the lock since clang's thread-safety
+  // analysis can't read into callbacks.
+  // We're still holding the lock when we execute the code in ForEach.
+  FlowMap<AggWIP>* agg_wips = &agg_wips_;
+  std::cerr << "num_ids = " << bundle_states_.NumIDs() << "\n";
+  bundle_states_.ForEach(
+      0, bundle_states_.NumIDs(), [&](ParID bundler_id, BundleState& bs) {
+        std::cerr << "HERE\n";
+        for (const auto& flow_time_info : bs.active) {
+          AggWIP* wip = GetAggWIP(config_, flow_time_info.first, agg_wips);
+          wip->oldest_active_time =
+              std::min(wip->oldest_active_time, flow_time_info.second.first);
+          wip->cum_hipri_usage_bytes +=
+              flow_time_info.second.second.cum_hipri_usage_bytes();
+          wip->cum_lopri_usage_bytes +=
+              flow_time_info.second.second.cum_lopri_usage_bytes();
+          wip->sum_ewma_usage_bps += flow_time_info.second.second.ewma_usage_bps();
+          wip->children.push_back(flow_time_info.second.second);
+        }
 
-    for (const auto& flow_time_info : bs.active) {
-      AggWIP& wip = GetAggWIP(flow_time_info.first);
-      wip.oldest_active_time =
-          std::min(wip.oldest_active_time, flow_time_info.second.first);
-      wip.cum_hipri_usage_bytes += flow_time_info.second.second.cum_hipri_usage_bytes();
-      wip.cum_lopri_usage_bytes += flow_time_info.second.second.cum_lopri_usage_bytes();
-      wip.sum_ewma_usage_bps += flow_time_info.second.second.ewma_usage_bps();
-      wip.children.push_back(flow_time_info.second.second);
-    }
-
-    for (const auto& flow_time_info : bs.dead) {
-      AggWIP& wip = GetAggWIP(flow_time_info.first);
-      wip.newest_dead_time = std::max(wip.newest_dead_time, flow_time_info.second.first);
-      wip.cum_hipri_usage_bytes += flow_time_info.second.second.cum_hipri_usage_bytes();
-      wip.cum_lopri_usage_bytes += flow_time_info.second.second.cum_lopri_usage_bytes();
-    }
-  }
+        for (const auto& flow_time_info : bs.dead) {
+          AggWIP* wip = GetAggWIP(config_, flow_time_info.first, agg_wips);
+          wip->newest_dead_time =
+              std::max(wip->newest_dead_time, flow_time_info.second.first);
+          wip->cum_hipri_usage_bytes +=
+              flow_time_info.second.second.cum_hipri_usage_bytes();
+          wip->cum_lopri_usage_bytes +=
+              flow_time_info.second.second.cum_lopri_usage_bytes();
+        }
+      });
 
   auto bundle_state_to_string = [this](
-                                    const FlowMap<BundleState>& states,
+                                    BundleStatesMap& states,
                                     const proto::FlowMarker& wanted_agg) -> std::string {
     std::vector<std::string> lines;
     lines.push_back("active: [");
-    for (auto& bundler_bundle : states) {
-      for (auto& flow_time_info : bundler_bundle.second.active) {
+    ParID num_ids = states.NumIDs();
+    states.ForEach(0, num_ids, [&](ParID bundler_id, BundleState& bs) {
+      for (auto& flow_time_info : bs.active) {
         if (IsSameFlow(config_.get_agg_flow_fn(flow_time_info.second.second.flow()),
                        wanted_agg)) {
           lines.push_back("\t" + flow_time_info.second.second.ShortDebugString());
         }
       }
-    }
+    });
     lines.push_back("]");
     lines.push_back("dead: [");
-    for (auto& bundler_bundle : states) {
-      for (auto& flow_time_info : bundler_bundle.second.dead) {
+    states.ForEach(0, num_ids, [&](ParID bundler_id, BundleState& bs) {
+      for (auto& flow_time_info : bs.dead) {
         if (IsSameFlow(config_.get_agg_flow_fn(flow_time_info.second.second.flow()),
                        wanted_agg)) {
           lines.push_back("\t" + flow_time_info.second.second.ShortDebugString());
         }
       }
-    }
+    });
     lines.push_back("]");
     return absl::StrJoin(lines, "\n");
   };
@@ -234,7 +249,7 @@ void FlowAggregator::ForEachAgg(
                            last.sum_ewma_usage_bps, wip.sum_ewma_usage_bps,
                            last.cum_hipri_usage_bytes + last.cum_lopri_usage_bytes,
                            wip.cum_hipri_usage_bytes + wip.cum_lopri_usage_bytes,
-                           bundle_state_to_string(prev_bundle_states_, p.first),
+                           bundle_state_to_string(*prev_bundle_states_, p.first),
                            bundle_state_to_string(bundle_states_, p.first));
       }
     }
@@ -242,17 +257,19 @@ void FlowAggregator::ForEachAgg(
 
   if (kDebugSpikes) {
     prev_agg_wips_ = agg_wips_;
-    prev_bundle_states_ = bundle_states_;
+    prev_bundle_states_ = bundle_states_.BestEffortCopy();
   }
 }
 
-FlowAggregator::AggWIP& FlowAggregator::GetAggWIP(const proto::FlowMarker& child) {
-  proto::FlowMarker m = config_.get_agg_flow_fn(child);
-  auto iter = agg_wips_.find(m);
-  if (iter == agg_wips_.end()) {
-    iter = agg_wips_.insert({m, AggWIP{.state = AggState(m, false)}}).first;
+FlowAggregator::AggWIP* FlowAggregator::GetAggWIP(const Config& config,
+                                                  const proto::FlowMarker& child,
+                                                  FlowMap<AggWIP>* wips) {
+  proto::FlowMarker m = config.get_agg_flow_fn(child);
+  auto iter = wips->find(m);
+  if (iter == wips->end()) {
+    iter = wips->insert({m, AggWIP{.state = AggState(m, false)}}).first;
   }
-  return iter->second;
+  return &iter->second;
 }
 
 }  // namespace heyp

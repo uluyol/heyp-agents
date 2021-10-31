@@ -3,6 +3,7 @@
 #include "gmock/gmock.h"
 #include "google/protobuf/util/message_differencer.h"
 #include "gtest/gtest.h"
+#include "heyp/proto/heyp.pb.h"
 #include "heyp/proto/parse-text.h"
 
 namespace heyp {
@@ -67,75 +68,80 @@ bool operator==(const AggResult& lhs, const AggResult& rhs) {
 
 absl::Time TUnix(int64_t sec) { return absl::FromUnixSeconds(sec); }
 
+void UpdateFlowAgg(FlowAggregator* flow_agg, const proto::InfoBundle& b) {
+  ParID id = flow_agg->GetBundlerID(b.bundler());
+  flow_agg->Update(id, b);
+}
+
 TEST(ConnToHostAggregatorTest, OneBundleOneTime) {
   const absl::Duration window = absl::Seconds(30);
   auto flow_agg = NewConnToHostAggregator(
       absl::make_unique<BweDemandPredictor>(window, 1.2, 100), window);
 
-  flow_agg->Update(ParseTextProto<proto::InfoBundle>(R"(
-    bundler { host_id: 1 }
-    timestamp { seconds: 10 }
-    flow_infos {
-      flow {
-        src_dc: "east-us"
-        dst_dc: "west-us"
-        job: "UNSET"
-        host_id: 1
-        src_addr: "10.0.0.1"
-        dst_addr: "10.2.0.2"
-        protocol: TCP
-        src_port: 5321
-        dst_port: 80
-        seqnum: 1
-      }
-      predicted_demand_bps: 999
-      ewma_usage_bps: 600
-      cum_usage_bytes: 12000
-      cum_hipri_usage_bytes: 10000
-      cum_lopri_usage_bytes: 2000
-      currently_lopri: true
-    }
-    flow_infos {
-      flow {
-        src_dc: "east-us"
-        dst_dc: "west-us"
-        job: "UNSET"
-        host_id: 1
-        src_addr: "10.0.0.1"
-        dst_addr: "10.2.0.3"
-        protocol: TCP
-        src_port: 12
-        dst_port: 22
-        seqnum: 2
-      }
-      predicted_demand_bps: 211
-      ewma_usage_bps: 200
-      cum_usage_bytes: 90000
-      cum_hipri_usage_bytes: 90000
-      cum_lopri_usage_bytes: 0
-      currently_lopri: false
-    }
-    flow_infos {
-      flow {
-        src_dc: "east-us"
-        dst_dc: "central-us"
-        job: "UNSET"
-        host_id: 1
-        src_addr: "10.0.0.1"
-        dst_addr: "10.1.0.245"
-        protocol: UDP
-        src_port: 99
-        dst_port: 10
-        seqnum: 196
-      }
-      predicted_demand_bps: 0
-      ewma_usage_bps: 10
-      cum_usage_bytes: 90000
-      cum_hipri_usage_bytes: 0
-      cum_lopri_usage_bytes: 90000
-      currently_lopri: true
-    }
-  )"));
+  UpdateFlowAgg(flow_agg.get(), ParseTextProto<proto::InfoBundle>(R"(
+                  bundler { host_id: 1 }
+                  timestamp { seconds: 10 }
+                  flow_infos {
+                    flow {
+                      src_dc: "east-us"
+                      dst_dc: "west-us"
+                      job: "UNSET"
+                      host_id: 1
+                      src_addr: "10.0.0.1"
+                      dst_addr: "10.2.0.2"
+                      protocol: TCP
+                      src_port: 5321
+                      dst_port: 80
+                      seqnum: 1
+                    }
+                    predicted_demand_bps: 999
+                    ewma_usage_bps: 600
+                    cum_usage_bytes: 12000
+                    cum_hipri_usage_bytes: 10000
+                    cum_lopri_usage_bytes: 2000
+                    currently_lopri: true
+                  }
+                  flow_infos {
+                    flow {
+                      src_dc: "east-us"
+                      dst_dc: "west-us"
+                      job: "UNSET"
+                      host_id: 1
+                      src_addr: "10.0.0.1"
+                      dst_addr: "10.2.0.3"
+                      protocol: TCP
+                      src_port: 12
+                      dst_port: 22
+                      seqnum: 2
+                    }
+                    predicted_demand_bps: 211
+                    ewma_usage_bps: 200
+                    cum_usage_bytes: 90000
+                    cum_hipri_usage_bytes: 90000
+                    cum_lopri_usage_bytes: 0
+                    currently_lopri: false
+                  }
+                  flow_infos {
+                    flow {
+                      src_dc: "east-us"
+                      dst_dc: "central-us"
+                      job: "UNSET"
+                      host_id: 1
+                      src_addr: "10.0.0.1"
+                      dst_addr: "10.1.0.245"
+                      protocol: UDP
+                      src_port: 99
+                      dst_port: 10
+                      seqnum: 196
+                    }
+                    predicted_demand_bps: 0
+                    ewma_usage_bps: 10
+                    cum_usage_bytes: 90000
+                    cum_hipri_usage_bytes: 0
+                    cum_lopri_usage_bytes: 90000
+                    currently_lopri: true
+                  }
+                )"));
 
   EXPECT_EQ(
       GetResult(*flow_agg),
@@ -230,30 +236,30 @@ TEST(ConnToHostAggregatorTest, AliveThenDead) {
   auto flow_agg = NewConnToHostAggregator(
       absl::make_unique<BweDemandPredictor>(window, 1.2, 100), window);
 
-  flow_agg->Update(ParseTextProto<proto::InfoBundle>(R"(
-    bundler { host_id: 1 }
-    timestamp { seconds: 10 }
-    flow_infos {
-      flow {
-        src_dc: "east-us"
-        dst_dc: "west-us"
-        job: "UNSET"
-        host_id: 1
-        src_addr: "10.0.0.1"
-        dst_addr: "10.2.0.2"
-        protocol: TCP
-        src_port: 5321
-        dst_port: 80
-        seqnum: 1
-      }
-      predicted_demand_bps: 999
-      ewma_usage_bps: 600
-      cum_usage_bytes: 12000
-      cum_hipri_usage_bytes: 10000
-      cum_lopri_usage_bytes: 2000
-      currently_lopri: true
-    }
-  )"));
+  UpdateFlowAgg(flow_agg.get(), ParseTextProto<proto::InfoBundle>(R"(
+                  bundler { host_id: 1 }
+                  timestamp { seconds: 10 }
+                  flow_infos {
+                    flow {
+                      src_dc: "east-us"
+                      dst_dc: "west-us"
+                      job: "UNSET"
+                      host_id: 1
+                      src_addr: "10.0.0.1"
+                      dst_addr: "10.2.0.2"
+                      protocol: TCP
+                      src_port: 5321
+                      dst_port: 80
+                      seqnum: 1
+                    }
+                    predicted_demand_bps: 999
+                    ewma_usage_bps: 600
+                    cum_usage_bytes: 12000
+                    cum_hipri_usage_bytes: 10000
+                    cum_lopri_usage_bytes: 2000
+                    currently_lopri: true
+                  }
+                )"));
 
   EXPECT_EQ(GetResult(*flow_agg),
             AggResult({
@@ -289,10 +295,10 @@ TEST(ConnToHostAggregatorTest, AliveThenDead) {
                  )")},
             }));
 
-  flow_agg->Update(ParseTextProto<proto::InfoBundle>(R"(
-    bundler { host_id: 1 }
-    timestamp { seconds: 41 }
-  )"));
+  UpdateFlowAgg(flow_agg.get(), ParseTextProto<proto::InfoBundle>(R"(
+                  bundler { host_id: 1 }
+                  timestamp { seconds: 41 }
+                )"));
 
   EXPECT_EQ(GetResult(*flow_agg),
             AggResult({
@@ -314,42 +320,43 @@ TEST(HostToClusterAggregatorTest, Unaligned) {
   auto flow_agg = NewHostToClusterAggregator(
       absl::make_unique<BweDemandPredictor>(window, 1.1, 50), window);
 
-  flow_agg->Update(ParseTextProto<proto::InfoBundle>(R"(
-    bundler { host_id: 2 }
-    timestamp { seconds: 12 }
-    flow_infos {
-      flow { src_dc: "east-us" dst_dc: "west-us" job: "UNSET" host_id: 2 }
-      predicted_demand_bps: 211
-      ewma_usage_bps: 200
-      cum_usage_bytes: 90000
-      cum_hipri_usage_bytes: 90000
-      cum_lopri_usage_bytes: 0
-      currently_lopri: false
-    }
-  )"));
+  UpdateFlowAgg(flow_agg.get(), ParseTextProto<proto::InfoBundle>(R"(
+                  bundler { host_id: 2 }
+                  timestamp { seconds: 12 }
+                  flow_infos {
+                    flow { src_dc: "east-us" dst_dc: "west-us" job: "UNSET" host_id: 2 }
+                    predicted_demand_bps: 211
+                    ewma_usage_bps: 200
+                    cum_usage_bytes: 90000
+                    cum_hipri_usage_bytes: 90000
+                    cum_lopri_usage_bytes: 0
+                    currently_lopri: false
+                  }
+                )"));
 
-  flow_agg->Update(ParseTextProto<proto::InfoBundle>(R"(
-    bundler { host_id: 1 }
-    timestamp { seconds: 10 }
-    flow_infos {
-      flow { src_dc: "east-us" dst_dc: "west-us" job: "UNSET" host_id: 1 }
-      predicted_demand_bps: 999
-      ewma_usage_bps: 600
-      cum_usage_bytes: 12000
-      cum_hipri_usage_bytes: 10000
-      cum_lopri_usage_bytes: 2000
-      currently_lopri: true
-    }
-    flow_infos {
-      flow { src_dc: "east-us" dst_dc: "central-us" job: "UNSET" host_id: 1 }
-      predicted_demand_bps: 0
-      ewma_usage_bps: 10
-      cum_usage_bytes: 90000
-      cum_hipri_usage_bytes: 0
-      cum_lopri_usage_bytes: 90000
-      currently_lopri: true
-    }
-  )"));
+  UpdateFlowAgg(
+      flow_agg.get(), ParseTextProto<proto::InfoBundle>(R"(
+        bundler { host_id: 1 }
+        timestamp { seconds: 10 }
+        flow_infos {
+          flow { src_dc: "east-us" dst_dc: "west-us" job: "UNSET" host_id: 1 }
+          predicted_demand_bps: 999
+          ewma_usage_bps: 600
+          cum_usage_bytes: 12000
+          cum_hipri_usage_bytes: 10000
+          cum_lopri_usage_bytes: 2000
+          currently_lopri: true
+        }
+        flow_infos {
+          flow { src_dc: "east-us" dst_dc: "central-us" job: "UNSET" host_id: 1 }
+          predicted_demand_bps: 0
+          ewma_usage_bps: 10
+          cum_usage_bytes: 90000
+          cum_hipri_usage_bytes: 0
+          cum_lopri_usage_bytes: 90000
+          currently_lopri: true
+        }
+      )"));
 
   EXPECT_EQ(
       GetResult(*flow_agg),

@@ -10,6 +10,7 @@
 #include "heyp/cluster-agent/allocator.h"
 #include "heyp/log/spdlog.h"
 #include "heyp/proto/config.pb.h"
+#include "heyp/proto/heyp.pb.h"
 #include "heyp/proto/parse-text.h"
 #include "heyp/proto/testing.h"
 #include "routing-algos/alg/max-min-fairness.h"
@@ -54,6 +55,11 @@ ClusterController MakeClusterController() {
           .value());
 }
 
+void UpdateInfo(ClusterController* c, const proto::InfoBundle& b) {
+  ParID id = c->GetBundlerID(b.bundler());
+  c->UpdateInfo(id, b);
+}
+
 TEST(ClusterControllerTest, RemoveListener) {
   auto controller = MakeClusterController();
 
@@ -73,7 +79,7 @@ TEST(ClusterControllerTest, RemoveListener) {
 
   // Update some infos
 
-  controller.UpdateInfo(ParseTextProto<proto::InfoBundle>(R"(
+  UpdateInfo(&controller, ParseTextProto<proto::InfoBundle>(R"(
     bundler { host_id: 1 }
     timestamp { seconds: 1 }
     flow_infos {
@@ -88,7 +94,7 @@ TEST(ClusterControllerTest, RemoveListener) {
       ewma_usage_bps: 1000
     }
   )"));
-  controller.UpdateInfo(ParseTextProto<proto::InfoBundle>(R"(
+  UpdateInfo(&controller, ParseTextProto<proto::InfoBundle>(R"(
     bundler { host_id: 2 }
     timestamp { seconds: 1 }
     flow_infos {
@@ -114,7 +120,7 @@ TEST(ClusterControllerTest, RemoveListener) {
 
   // Update infos again
 
-  controller.UpdateInfo(ParseTextProto<proto::InfoBundle>(R"(
+  UpdateInfo(&controller, ParseTextProto<proto::InfoBundle>(R"(
     bundler { host_id: 1 }
     timestamp { seconds: 1 }
     flow_infos {
@@ -129,7 +135,7 @@ TEST(ClusterControllerTest, RemoveListener) {
       ewma_usage_bps: 1000
     }
   )"));
-  controller.UpdateInfo(ParseTextProto<proto::InfoBundle>(R"(
+  UpdateInfo(&controller, ParseTextProto<proto::InfoBundle>(R"(
     bundler { host_id: 2 }
     timestamp { seconds: 1 }
     flow_infos {
@@ -176,7 +182,7 @@ TEST(ClusterControllerTest, PlumbsDataCompletely) {
     ++call_count;
   });
 
-  controller.UpdateInfo(ParseTextProto<proto::InfoBundle>(R"(
+  UpdateInfo(&controller, ParseTextProto<proto::InfoBundle>(R"(
     bundler { host_id: 1 }
     timestamp { seconds: 1 }
     flow_infos {
@@ -191,7 +197,7 @@ TEST(ClusterControllerTest, PlumbsDataCompletely) {
       ewma_usage_bps: 1000
     }
   )"));
-  controller.UpdateInfo(ParseTextProto<proto::InfoBundle>(R"(
+  UpdateInfo(&controller, ParseTextProto<proto::InfoBundle>(R"(
     bundler { host_id: 2 }
     timestamp { seconds: 1 }
     flow_infos {
@@ -251,7 +257,7 @@ class SingleFGAllocBundleCollector {
       fi->set_cum_hipri_usage_bytes(got.cum_hipri_usage_bytes);
       fi->set_cum_lopri_usage_bytes(got.cum_lopri_usage_bytes);
       fi->set_currently_lopri(got.currently_lopri);
-      controller_->UpdateInfo(b);
+      UpdateInfo(controller_, b);
     }
   }
 
