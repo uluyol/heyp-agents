@@ -7,6 +7,7 @@ import (
 	"os"
 	"runtime"
 	"runtime/pprof"
+	"time"
 
 	"github.com/ghodss/yaml"
 	"github.com/uluyol/heyp-agents/go/intradc/montecarlo"
@@ -70,9 +71,12 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
+	start := time.Now()
 	if err := RunConfig(*configPath, *outPath, *numRuns); err != nil {
 		log.Fatal(err)
 	}
+	elapsed := time.Since(start)
+	log.Printf("run time = %v", elapsed)
 
 	if *memProfile != "" {
 		f, err := os.Create(*memProfile)
