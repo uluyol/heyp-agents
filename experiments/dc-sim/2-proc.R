@@ -169,11 +169,15 @@ PlotOverOrShortageVersusSamples <- function(subset, metric.name, output) {
 
 PlotMeanNumSamplesByRequested <- function(subset, output) {
     measured <- subset[, c("numHosts", "sys.samplerName", "sys.samplerSummary.numSamples.mean")]
-    intended <- unique(subset[, c("instanceID", "numHosts", "numSamplesAtApproval")])
-    intended$numSamplesAtApproval <- pmin(intended$numSamplesAtApproval, intended$numHosts)
-    data <- rbind(
-        data.frame(numHosts=measured$numHosts, kind=measured$sys.samplerName, num=measured$sys.samplerSummary.numSamples.mean),
-        data.frame(numHosts=intended$numHosts, kind=rep.int("wantAtApproval", nrow(intended)), num=intended$numSamplesAtApproval))
+    # intended <- unique(subset[, c("instanceID", "numHosts", "numSamplesAtApproval")])
+    # intended$numSamplesAtApproval <- pmin(intended$numSamplesAtApproval, intended$numHosts)
+    # intended.weighted <- unique(subset[, c("instanceID", "approvalOverExpectedUsage", "numHosts", "numSamplesAtApproval")])
+    # intended.weighted$numSamples <- pmin(intended.weighted$approvalOverExpectedUsage * intended$numSamplesAtApproval, intended$numHosts)
+    data <- data.frame(numHosts=measured$numHosts, kind=measured$sys.samplerName, num=measured$sys.samplerSummary.numSamples.mean)
+    # data <- rbind(
+    #     data.frame(numHosts=measured$numHosts, kind=measured$sys.samplerName, num=measured$sys.samplerSummary.numSamples.mean),
+    #     data.frame(numHosts=intended.weighted$numHosts, kind=rep.int("wantWeighted", nrow(intended.weighted)), num=intended.weighted$numSamples),
+    #     data.frame(numHosts=intended$numHosts, kind=rep.int("wantAtApproval", nrow(intended)), num=intended$numSamplesAtApproval))
     pdf(output, height=4.5, width=5)
     p <- ggplot(data=data, aes(x=num, color=kind)) +
         stat_myecdf(size=1) +
@@ -189,11 +193,18 @@ PlotMeanNumSamplesByRequested <- function(subset, output) {
 }
 
 PlotMeanNumSamplesOverExpected <- function(subset, output) {
-    data <- rbind(
-        data.frame(x=subset$sys.samplerSummary.numSamples.mean / pmin(subset$numSamplesAtApproval, subset$numHosts),
-                   kind=subset$sys.samplerName),
-        data.frame(x=subset$approvalOverExpectedUsage[subset$sys.samplerName == "weighted"],
-                   kind=rep.int("weighted (expected)", sum(subset$sys.samplerName == "weighted"))))
+    isWeightedSamplerMask <- subset$sys.samplerName == "weighted"
+    wantSamplesAtApproval <- pmin(subset$numSamplesAtApproval, subset$numHosts)
+    numSamplesWantWeighted <- pmin(subset$numHosts[isWeightedSamplerMask],
+        subset$approvalOverExpectedUsage[isWeightedSamplerMask] * subset$numSamplesAtApproval[isWeightedSamplerMask])
+    numSamplesWantWeightedOverRequested <- numSamplesWantWeighted / wantSamplesAtApproval[isWeightedSamplerMask]
+
+    data <- data.frame(x=subset$sys.samplerSummary.numSamples.mean / wantSamplesAtApproval, kind=subset$sys.samplerName)
+    # data <- rbind(
+    #     data.frame(x=subset$sys.samplerSummary.numSamples.mean / wantSamplesAtApproval,
+    #                kind=subset$sys.samplerName),
+    #     data.frame(x=subset$sys.samplerSummary.wantNumSamples.mean / wantSamplesAtApproval,
+    #                kind=paste0(subset$sys.samplerName, " (wanted)")))
     pdf(output, height=2.5, width=5)
     p <- ggplot(data=data, aes(x=x, color=kind)) +
         stat_myecdf(size=1) +
