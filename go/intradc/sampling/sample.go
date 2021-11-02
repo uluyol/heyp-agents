@@ -22,6 +22,7 @@ type UsageDistEstimator interface {
 
 type Sampler interface {
 	ShouldInclude(rng *rand.Rand, usage float64) bool
+	IdealNumSamples(usages []float64) float64
 	NewAggUsageEstimator() AggUsageEstimator
 	NewUsageDistEstimator() UsageDistEstimator
 	Name() string
@@ -37,6 +38,10 @@ type UniformSampler struct {
 
 func (s UniformSampler) ShouldInclude(rng *rand.Rand, usage float64) bool {
 	return rng.Float64() < s.Prob
+}
+
+func (s UniformSampler) IdealNumSamples(usages []float64) float64 {
+	return math.Min(s.Prob, 1) * float64(len(usages))
 }
 
 func (s UniformSampler) ProbOf(usage float64) float64 { return s.Prob }
@@ -112,6 +117,14 @@ func (s WeightedSampler) ShouldInclude(rng *rand.Rand, usage float64) bool {
 	return rng.Float64() < p
 }
 
+func (s WeightedSampler) IdealNumSamples(usages []float64) float64 {
+	var sumProb float64
+	for _, u := range usages {
+		sumProb += s.ProbOf(u)
+	}
+	return sumProb
+}
+
 func (s WeightedSampler) ProbOf(usage float64) float64 {
 	if s.approval == 0 {
 		return 1
@@ -153,7 +166,7 @@ func (e *weightedUsageDistEstimator) EstDist(numHosts int) []alloc.ValCount {
 
 func (s WeightedSampler) NewUsageDistEstimator() UsageDistEstimator {
 	return &weightedUsageDistEstimator{
-		s: s,
+		s:    s,
 		data: make(map[float64]int),
 	}
 }
