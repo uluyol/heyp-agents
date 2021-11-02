@@ -177,32 +177,46 @@ def Gbps(x):
     return x * 1024 * 1024 * 1024
 
 def AddConfigsRLSweep(configs):
-    limits = []
-    fake_fgs = []
+    def MkArgs(period, num_fg, num_hosts_per_fg):
+        limits = []
+        fake_fgs = []
 
-    for i in range(10):
-        limit = Gbps(i + 1)
-        dst_dc = "DST" + str(i + 1)
-        limits.append((dst_dc, limit, 0))
-        fake_fgs.append({
-            "dst_dc": dst_dc,
-            "job": "app",
-            "min_fg_usage": limit,
-            "max_fg_usage": 3 * limit,
-        })
+        for i in range(num_fg):
+            limit = Gbps(i + 1)
+            dst_dc = "DST" + str(i + 1)
+            limits.append((dst_dc, limit, 0))
+            fake_fgs.append({
+                "dst_dc": dst_dc,
+                "job": "app",
+                "min_fg_usage": limit,
+                "max_fg_usage": 3 * limit,
+            })
 
-    kwargs = {
-        "host_agent_sim": {
-            "fake_fgs": fake_fgs,
-            "num_hosts_per_fg": 1000,
-            "report_dur": "500ms",
-            "run_dur": "30s",
-        },
-        "limits": limits,
-        "cluster_control_period": "500ms",
-    }
+        return {
+            "host_agent_sim": {
+                "fake_fgs": fake_fgs,
+                "num_hosts_per_fg": num_hosts_per_fg,
+                "report_dur": period,
+                "run_dur": "30s",
+            },
+            "limits": limits,
+            "cluster_control_period": period,
+        }
 
-    configs["rlsweep-0.5s-10fg-1000h"] = RateLimitConfig(**kwargs)
+    tuples = [
+        ("0.4s", 10, 10000),
+        # ("0.2s", 10, 10000),
+        # ("0.1s", 10, 10000),
+        # ("0.4s", 50, 10000),
+        # ("0.2s", 50, 10000),
+        # ("0.1s", 50, 10000),
+    ]
+
+    for period, num_fg, num_hosts_per_fg in tuples:
+        configs["rlsweep-{0}-{1}fg-{2}h".format(period, num_fg, num_hosts_per_fg)] = RateLimitConfig(
+            **MkArgs(period, num_fg, num_hosts_per_fg)
+        )
+    return None
 
 def GenConfigs():
     generators = {
