@@ -8,9 +8,34 @@ hostUsages:
                   elephants:
                           high: 1200000
                           low: 800000
-                          num: 10
+                          num: 100
                   mice:
                           high: 2000
-numHosts: [200, 2_000, 20_000, 200_000]
+        - elephantsMice:
+                  elephants:
+                          high: 1200000
+                          low: 800000
+                          num: 1000
+                  mice:
+                          high: 2000
+# numHosts: [200, 2_000, 20_000, 200_000]
+numHosts: [2_000_000]
 approvalOverExpectedUsage: [0.5, 0.9, 1, 1.1, 1.5]
-numSamplesAtApproval: [200, 400, 800, 1600, 3200, 6400]
+numSamplesAtApproval:
+        [
+                128,
+                256,
+                512,
+                1024,
+                2048,
+                4096,
+                8192,
+                16_384,
+                32_768,
+                65_536,
+                131_072,
+                262_144,
+                524_288,
+                1_048_576,
+                2_097_152,
+        ]
