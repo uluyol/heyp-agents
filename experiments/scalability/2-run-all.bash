@@ -39,7 +39,7 @@ run_one() {
   bin/deploy-heyp delete-logs -c $c || return 1
 
   echo "[$HEYP_RUN_NAME] start HEYP agents"
-  bin/deploy-heyp start-heyp-agents -c $c || return 1
+  bin/deploy-heyp start-heyp-agents -log-cluster-alloc-state=false -c $c || return 1
   sleep 10
   echo "[$HEYP_RUN_NAME] start collecting host stats"
   bin/deploy-heyp collect-host-stats -c $c || return 1
