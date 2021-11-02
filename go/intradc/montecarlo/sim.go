@@ -65,6 +65,7 @@ type perSysData struct {
 	sampler struct {
 		UsageNormError metricWithAbsVal
 		NumSamples     metric
+		WantNumSamples metric
 
 		exactUsageSum  float64
 		approxUsageSum float64
@@ -90,6 +91,7 @@ type perSysData struct {
 func (r *perSysData) MergeFrom(o *perSysData) {
 	r.sampler.UsageNormError.MergeFrom(&o.sampler.UsageNormError)
 	r.sampler.NumSamples.MergeFrom(&o.sampler.NumSamples)
+	r.sampler.WantNumSamples.MergeFrom(&o.sampler.WantNumSamples)
 
 	r.sampler.exactUsageSum += o.sampler.exactUsageSum
 	r.sampler.approxUsageSum += o.sampler.approxUsageSum
@@ -149,9 +151,9 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 				exactApprovedDemand := math.Min(approval, exactUsage)
 
 				for samplerID, sampler := range inst.Sys.Samplers {
-					approxUsage, approxDist, numSamples := estimateUsage(rng, sampler, usages)
-					approxDowngradeFrac := downgradeFrac(approxUsage, approval)
-					approxHostLimit := fairHostRateLimit(approxDist, approxUsage, approval, len(usages))
+					approxUsage := estimateUsage(rng, sampler, usages)
+					approxDowngradeFrac := downgradeFrac(approxUsage.Sum, approval)
+					approxHostLimit := fairHostRateLimit(approxUsage.Dist, approxUsage.Sum, approval, len(usages))
 					approxNumHostsThrottled, approxFracHostsThrottled := numAndFracHostsThrottled(usages, approxHostLimit)
 					approxAggAdmitted := aggAdmittedDemand(usages, approxHostLimit)
 
@@ -171,10 +173,11 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 						realizedShortage := -math.Min(0, realizedError)
 
 						sysID := inst.Sys.SysID(samplerID, hostSelID)
-						data[sysID].sampler.UsageNormError.Record(normByExpected(approxUsage-exactUsage, exactUsage))
-						data[sysID].sampler.NumSamples.Record(numSamples)
+						data[sysID].sampler.UsageNormError.Record(normByExpected(approxUsage.Sum-exactUsage, exactUsage))
+						data[sysID].sampler.NumSamples.Record(approxUsage.NumSamples)
+						data[sysID].sampler.WantNumSamples.Record(approxUsage.WantNumSamples)
 						data[sysID].sampler.exactUsageSum += exactUsage
-						data[sysID].sampler.approxUsageSum += approxUsage
+						data[sysID].sampler.approxUsageSum += approxUsage.Sum
 						data[sysID].downgrade.IntendedFracError.Record(approxDowngradeFrac - exactDowngradeFrac)
 						data[sysID].downgrade.RealizedFracError.Record(approxRealizedDowngradeFrac - exactDowngradeFrac)
 						data[sysID].downgrade.IntendedOverOrShortage.Record(math.Abs(intendedError))
@@ -252,6 +255,13 @@ func normByExpected(approx, expected float64) float64 {
 		}
 	}
 	return approx / expected
+}
+
+type usageEstimate struct {
+	Sum            float64
+	Dist           []alloc.ValCount
+	NumSamples     float64
+	WantNumSamples float64
 }
 
 //go:generate go run gen_estusage.go

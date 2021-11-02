@@ -127,6 +127,8 @@ type SamplerSummary struct {
 	UsageNormError    Stats `json:"usageNormError"`
 	AbsUsageNormError Stats `json:"absUsageNormError"`
 	NumSamples        Stats `json:"numSamples"`
+
+	WantNumSamples Stats `json:"wantNumSamples"`
 }
 
 type DowngradeSummary struct {

@@ -14,9 +14,10 @@ import (
 
 const templ = `
 // estimateUsage applies the sampler to the usage data and estimates the aggregate usage.
-func estimateUsage%%variant%%(rng *rand.Rand, sampler %%sampler%%, usages []float64) (approxUsage float64, approxDist []alloc.ValCount, numSamples float64) {
+func estimateUsage%%variant%%(rng *rand.Rand, sampler %%sampler%%, usages []float64) usageEstimate {
 	aggEst := sampler.NewAggUsageEstimator()
 	distEst := sampler.NewUsageDistEstimator()
+	var numSamples float64
 	for _, v := range usages {
 		if sampler.ShouldInclude(rng, v) {
 			numSamples++
@@ -24,9 +25,12 @@ func estimateUsage%%variant%%(rng *rand.Rand, sampler %%sampler%%, usages []floa
 			distEst.RecordSample(v)
 		}
 	}
-	approxUsage = aggEst.EstUsage(len(usages))
-	approxDist = distEst.EstDist(len(usages))
-	return approxUsage, approxDist, numSamples
+	return usageEstimate{
+		Sum: aggEst.EstUsage(len(usages)),
+		Dist: distEst.EstDist(len(usages)),
+		NumSamples: numSamples,
+		WantNumSamples: sampler.IdealNumSamples(usages),
+	}
 }
 `
 
@@ -44,7 +48,6 @@ func genOut() []byte {
 	buf.WriteString("// Code generated using gen_estusage.go.go; DO NOT EDIT.\n\npackage montecarlo\n\n")
 
 	buf.WriteString("import (\n")
-	buf.WriteString("\t\"github.com/uluyol/heyp-agents/go/intradc/alloc\"\n")
 	buf.WriteString("\t\"github.com/uluyol/heyp-agents/go/intradc/sampling\"\n")
 	buf.WriteString("\t\"golang.org/x/exp/rand\"\n")
 	buf.WriteString(")\n")
@@ -55,7 +58,7 @@ func genOut() []byte {
 		buf.WriteString(x)
 	}
 
-	buf.WriteString("\nfunc estimateUsage(rng *rand.Rand, sampler sampling.Sampler, usages []float64) (approxUsage float64, approxDist []alloc.ValCount, numSamples float64) {\n")
+	buf.WriteString("\nfunc estimateUsage(rng *rand.Rand, sampler sampling.Sampler, usages []float64) usageEstimate {\n")
 	buf.WriteString("switch sampler := sampler.(type) {")
 	for _, variant := range variants {
 		if variant.name == "Generic" {
