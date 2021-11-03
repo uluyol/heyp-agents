@@ -1,6 +1,55 @@
 package montecarlo
 
-import "testing"
+import (
+	"testing"
+	"time"
+
+	"github.com/uluyol/heyp-agents/go/intradc/sampling"
+	"golang.org/x/exp/rand"
+)
+
+func approxEq(a, b, margin float64) bool {
+	return a-margin <= b && b <= a+margin
+}
+
+func TestExactFairHostRateLimit(t *testing.T) {
+	testCases := []struct {
+		usages   []float64
+		approval float64
+		alloc    float64
+	}{
+		{[]float64{100, 100, 10}, 200, 94.5},
+		{[]float64{3, 10, 100}, 200, 135.233},
+	}
+
+	for testi, test := range testCases {
+		alloc := exactFairHostRateLimit(test.usages, test.approval)
+		if !approxEq(alloc, test.alloc, 0.001) {
+			t.Errorf("case %d: got %f want %f", testi, alloc, test.alloc)
+		}
+	}
+}
+
+func TestApproxFairHostRateLimitFullSample(t *testing.T) {
+	testCases := []struct {
+		usages   []float64
+		approval float64
+		alloc    float64
+	}{
+		{[]float64{100, 100, 10}, 200, 94.5},
+		{[]float64{3, 10, 100}, 200, 135.233},
+	}
+
+	for testi, test := range testCases {
+		rng := rand.New(rand.NewSource(uint64(time.Now().UnixNano())))
+		approxUsage := estimateUsage(rng, sampling.UniformSampler{Prob: 2}, test.usages)
+
+		alloc := fairHostRateLimit(approxUsage.Dist, approxUsage.Sum, test.approval, len(test.usages))
+		if !approxEq(alloc, test.alloc, 0.001) {
+			t.Errorf("case %d: got %f want %f", testi, alloc, test.alloc)
+		}
+	}
+}
 
 func TestMetricOne(t *testing.T) {
 	var m metric

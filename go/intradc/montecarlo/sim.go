@@ -154,6 +154,7 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 					approxUsage := estimateUsage(rng, sampler, usages)
 					approxDowngradeFrac := downgradeFrac(approxUsage.Sum, approval)
 					approxHostLimit := fairHostRateLimit(approxUsage.Dist, approxUsage.Sum, approval, len(usages))
+					approxUsage.Dist = nil // overwritten by fairHostRateLimit
 					approxNumHostsThrottled, approxFracHostsThrottled := numAndFracHostsThrottled(usages, approxHostLimit)
 					approxAggAdmitted := aggAdmittedDemand(usages, approxHostLimit)
 
