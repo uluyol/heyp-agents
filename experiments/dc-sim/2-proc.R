@@ -139,6 +139,12 @@ PlotRateLimitNormErrorByHostUsagesGen <- function(subset, metric.name, metric, o
 }
 
 PlotOverOrShortageVersusSamples <- function(subset, metric.name, output) {
+    x <- aggregate(sys.samplerSummary.numSamples.mean ~ numSamplesAtApproval, data=subset, FUN=sum)
+    if (nrow(x) != nrow(subset)) {
+        print(subset)
+        stop(paste0("found ", nrow(subset) - nrow(x), " duplicate entries in data"))
+    }
+
     long <- rbind(
         data.frame(
             Kind=rep.int("QD-Intended", nrow(subset)),
@@ -154,17 +160,43 @@ PlotOverOrShortageVersusSamples <- function(subset, metric.name, output) {
             OverOrShortage=subset[[paste0("sys.rateLimitSummary.overOrShortage.", metric.name)]]))
 
     pdf(output, height=4.5, width=5)
-    p <- ggplot(data=long, aes(x=OverOrShortage, color=Kind)) + 
-        stat_myecdf(size=1) +
-        facet_wrap(~ NumSamples, ncol=2) +
-        xlab(paste0(metric.name, " |got - want| / want")) +
-        ylab("CDF across instances") +
-        coord_cartesian(xlim=c(0, 0.2), ylim=c(0, 1)) +
-        scale_y_continuous(breaks=seq(0, 1, by=0.2)) +
+    p <- ggplot(data=long, aes(x=NumSamples, y=OverOrShortage, color=Kind)) +
+        geom_line(size=1) +
+        ylab(paste0(metric.name, " |got - want| / want")) +
+        xlab("# of samples collected at approval (powers of two)") +
+        scale_x_continuous(trans="log1p",
+            breaks=c(0, 8, 64, 512, 4096, 32768, 262144, 2097152),
+            labels=c("0", "8", "64", "512", "4K", "32K", "256K", "2M"),
+            limits=c(0, NA)) +
+        coord_cartesian(ylim=c(0, 0.2)) +
         guides(color=guide_legend(ncol=3), linetype=guide_legend(ncol=3)) +
         my_theme()
     print(p)
     .junk <- dev.off()
+}
+
+AppendAllPlotOverOrShortageVersusSamples <- function(tasklist, subset, metric.name, outdir) {
+    dir.create(outdir, recursive=TRUE)
+    for (nhosts in unique(subset$numHosts)) {
+        for (hug in unique(subset$hostUsagesGen)) {
+            for (aoe in unique(subset$approvalOverExpectedUsage)) {
+                # PlotOverOrShortageVersusSamples(
+                #         subset[
+                #             subset$numHosts == nhosts &
+                #             subset$hostUsagesGen == hug &
+                #             subset$approvalOverExpectedUsage == aoe,],
+                #         metric.name, file.path(outdir, paste0("nhosts:", nhosts, ":hug:", hug, ":aoe:", aoe, ".pdf")))
+                tasklist <- append(tasklist, parallel::mcparallel(
+                    PlotOverOrShortageVersusSamples(
+                        subset[
+                            subset$numHosts == nhosts &
+                            subset$hostUsagesGen == hug &
+                            subset$approvalOverExpectedUsage == aoe,],
+                        metric.name, file.path(outdir, paste0("nhosts:", nhosts, ":hug:", hug, ":aoe:", aoe, ".pdf")))))
+            }
+        }
+    }
+    tasklist
 }
 
 PlotMeanNumSamplesVersusRequested <- function(subset, output) {
@@ -250,25 +282,7 @@ con <- file(simresults, open="r")
 data <- stream_in(con, flatten=TRUE, verbose=FALSE)
 close(con)
 
-
 tasks <- list(
-    # OverOrShortage
-    parallel::mcparallel(
-        PlotOverOrShortageVersusSamples(data[data$sys.samplerName == "weighted",],
-            "mean", file.path(outdir, "samples-vs-error-weightedsampler-mean.pdf"))),
-    parallel::mcparallel(
-        PlotOverOrShortageVersusSamples(data[data$sys.samplerName == "weighted",],
-            "p95", file.path(outdir, "samples-vs-error-weightedsampler-p95.pdf"))),
-    # OverOrShortage (HUG)
-    parallel::mcparallel(
-        PlotOverOrShortageVersusSamples(data[data$sys.samplerName == "weighted" & data$hostUsagesGen == "uniform",],
-            "p95", file.path(outdir, "samples-vs-error-weightedsampler-p95-uni.pdf"))),
-    parallel::mcparallel(
-        PlotOverOrShortageVersusSamples(data[data$sys.samplerName == "weighted" & data$hostUsagesGen == "elephantsMice-10",],
-            "p95", file.path(outdir, "samples-vs-error-weightedsampler-p95-em.pdf"))),
-    parallel::mcparallel(
-        PlotOverOrShortageVersusSamples(data[data$sys.samplerName == "weighted" & data$hostUsagesGen == "exponential",],
-            "p95", file.path(outdir, "samples-vs-error-weightedsampler-p95-exp.pdf"))),
     # UsageNormError (HUG)
     parallel::mcparallel(
         PlotUsageNormErrorByHostUsagesGen(data, "Mean", "absUsageNormError.mean",
@@ -323,4 +337,20 @@ tasks <- list(
         PlotMeanNumSamplesByRequested(data,
             file.path(outdir, "num-samples-by-req.pdf"))))
 
-.junk <- parallel::mccollect(tasks)
+tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
+    data[data$sys.samplerName == "weighted",],
+    "mean", file.path(outdir, "samples-vs-error-weightedsampler-mean"))
+
+tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
+    data[data$sys.samplerName == "weighted",],
+    "p95", file.path(outdir, "samples-vs-error-weightedsampler-p95"))
+
+tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
+    data[data$sys.samplerName == "uniform",],
+    "mean", file.path(outdir, "samples-vs-error-uniformsampler-mean"))
+
+tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
+    data[data$sys.samplerName == "uniform",],
+    "p95", file.path(outdir, "samples-vs-error-uniformsampler-p95"))
+
+.junk <- parallel::mccollect()
