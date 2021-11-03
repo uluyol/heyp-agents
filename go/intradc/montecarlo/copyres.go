@@ -52,6 +52,18 @@ func populateSummary(summaryOut interface{}, resultStruct interface{}) interface
 			continue
 		}
 
+		// Format of this tag = dist:"collect"
+		// If the value is empty or unspecified, a dist will not be collected
+		distTagVal := fieldType.Tag.Get("dist")
+		collectDist := false
+		if distTagVal != "" {
+			if distTagVal == "collect" {
+				collectDist = true
+			} else {
+				panic(fmt.Errorf("field %s has invalid dist tag: wanted \"collect\", value was %q", fieldType.Name, distTagVal))
+			}
+		}
+
 		field := resultVal.Field(fieldID)
 
 		metricData, isMetric := field.Interface().(metric)
@@ -62,19 +74,19 @@ func populateSummary(summaryOut interface{}, resultStruct interface{}) interface
 			if !field.IsValid() {
 				panic(fmt.Errorf("%T has no field named %q", summaryOut, fieldType.Name))
 			}
-			field.Set(reflect.ValueOf(metricData.Stats()))
+			field.Set(reflect.ValueOf(metricData.Stats(collectDist)))
 		} else if isMetricWithAbsVal {
 			rawField := summary.FieldByName(fieldType.Name)
 			if !field.IsValid() {
 				panic(fmt.Errorf("%T has no field named %q", summaryOut, fieldType.Name))
 			}
-			rawField.Set(reflect.ValueOf(metricWithAbsValData.Raw.Stats()))
+			rawField.Set(reflect.ValueOf(metricWithAbsValData.Raw.Stats(collectDist)))
 
 			absField := summary.FieldByName("Abs" + fieldType.Name)
 			if !field.IsValid() {
 				panic(fmt.Errorf("%T has no field named %q", summaryOut, "Abs"+fieldType.Name))
 			}
-			absField.Set(reflect.ValueOf(metricWithAbsValData.Abs.Stats()))
+			absField.Set(reflect.ValueOf(metricWithAbsValData.Abs.Stats(collectDist)))
 		}
 	}
 	return summaryOut

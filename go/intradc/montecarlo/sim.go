@@ -31,8 +31,13 @@ func (m *metric) Record(v float64) {
 
 func (m *metric) Mean() float64 { return m.sum / m.num }
 
-func (m *metric) Stats() Stats {
+func (m *metric) Stats(collectDist bool) Stats {
 	f64sort.Float64s(m.vals)
+	var dist []float64
+	if collectDist {
+		dist = make([]float64, len(m.vals))
+		copy(dist, m.vals)
+	}
 	return Stats{
 		Mean: m.Mean(),
 		P0:   m.vals[0],
@@ -42,6 +47,7 @@ func (m *metric) Stats() Stats {
 		P90:  m.vals[len(m.vals)-1-len(m.vals)/10],
 		P95:  m.vals[len(m.vals)-1-len(m.vals)/20],
 		P100: m.vals[len(m.vals)-1],
+		Dist: dist,
 	}
 }
 

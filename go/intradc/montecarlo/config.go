@@ -117,6 +117,9 @@ type Stats struct {
 	P90  float64 `json:"p90"`
 	P95  float64 `json:"p95"`
 	P100 float64 `json:"p100"`
+
+	// Full distribution
+	Dist []float64 `json:"dist,omitempty"`
 }
 
 type SamplerSummary struct {

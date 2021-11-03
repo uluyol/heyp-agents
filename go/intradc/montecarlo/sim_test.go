@@ -1,6 +1,7 @@
 package montecarlo
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
@@ -54,7 +55,7 @@ func TestApproxFairHostRateLimitFullSample(t *testing.T) {
 func TestMetricOne(t *testing.T) {
 	var m metric
 	m.Record(65)
-	d := m.Stats()
+	d := m.Stats(false)
 	assertEq(t, d.Mean, 65, "Mean")
 	assertEq(t, d.P0, 65, "P0")
 	assertEq(t, d.P5, 65, "P5")
@@ -69,7 +70,7 @@ func TestMetricTwo(t *testing.T) {
 	var m metric
 	m.Record(65)
 	m.Record(45)
-	d := m.Stats()
+	d := m.Stats(false)
 	assertEq(t, d.Mean, 55, "Mean")
 	assertEq(t, d.P0, 45, "P0")
 	assertEq(t, d.P5, 45, "P5")
@@ -80,7 +81,7 @@ func TestMetricTwo(t *testing.T) {
 	assertEq(t, d.P100, 65, "P100")
 }
 
-func TestMetricTwenty(t *testing.T) {
+func TestMetricTwentyWithDist(t *testing.T) {
 	var m metric
 	// write out of order to test m percentiles
 	vals := []float64{
@@ -91,7 +92,7 @@ func TestMetricTwenty(t *testing.T) {
 	for _, v := range vals {
 		m.Record(v)
 	}
-	d := m.Stats()
+	d := m.Stats(true)
 	assertEq(t, d.Mean, -0.5, "Mean")
 	assertEq(t, d.P0, -10, "P0")
 	assertEq(t, d.P5, -9, "P5")
@@ -100,6 +101,13 @@ func TestMetricTwenty(t *testing.T) {
 	assertEq(t, d.P90, 7, "P90")
 	assertEq(t, d.P95, 8, "P95")
 	assertEq(t, d.P100, 9, "P100")
+	wantDist := []float64{
+		-10, -9, -8, -7, -6, -5, -4, -3, -2, -1,
+		0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+	}
+	if !reflect.DeepEqual(wantDist, d.Dist) {
+		t.Errorf("Dist")
+	}
 }
 
 func assertEq(t *testing.T, got, want float64, name string) {
