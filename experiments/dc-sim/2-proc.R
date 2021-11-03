@@ -167,6 +167,20 @@ PlotOverOrShortageVersusSamples <- function(subset, metric.name, output) {
     .junk <- dev.off()
 }
 
+PlotMeanNumSamplesVersusRequested <- function(subset, output) {
+    measured <- subset[, c("numSamplesAtApproval", "sys.samplerName", "sys.samplerSummary.numSamples.mean")]
+    means <- aggregate(sys.samplerSummary.numSamples.mean ~ numSamplesAtApproval + sys.samplerName, data=subset, FUN=mean)
+    pdf(output, height=2.5, width=5)
+    p <- ggplot(data=means, aes(x=numSamplesAtApproval, y=sys.samplerSummary.numSamples.mean, color=sys.samplerName)) +
+        geom_line(size=1) +
+        xlab("Configured # of samples at approval") +
+        ylab("Mean # of samples collected") +
+        guides(color=guide_legend(ncol=3)) +
+        my_theme()
+    print(p)
+    .junk <- dev.off()
+}
+
 PlotMeanNumSamplesByRequested <- function(subset, output) {
     measured <- subset[, c("numHosts", "sys.samplerName", "sys.samplerSummary.numSamples.mean")]
     # intended <- unique(subset[, c("instanceID", "numHosts", "numSamplesAtApproval")])
@@ -192,6 +206,7 @@ PlotMeanNumSamplesByRequested <- function(subset, output) {
     .junk <- dev.off()
 }
 
+# Disabled. Hard to interpret. See PlotMeanNumSamplesVersusRequested for something more intuitive.
 PlotMeanNumSamplesOverExpected <- function(subset, output) {
     isWeightedSamplerMask <- subset$sys.samplerName == "weighted"
     wantSamplesAtApproval <- pmin(subset$numSamplesAtApproval, subset$numHosts)
@@ -298,9 +313,12 @@ tasks <- list(
         PlotRateLimitNormErrorByHostUsagesGen(data, "95%ile", "normError.p95",
             file.path(outdir, "host-limit-norm-error-hug-p95.pdf"))),
     # NumSamples
+    # parallel::mcparallel(
+    #     PlotMeanNumSamplesOverExpected(data,
+    #         file.path(outdir, "num-samples-over-expected-mean.pdf"))),
     parallel::mcparallel(
-        PlotMeanNumSamplesOverExpected(data,
-            file.path(outdir, "num-samples-over-expected-mean.pdf"))),
+        PlotMeanNumSamplesVersusRequested(data,
+            file.path(outdir, "num-samples-vs-req.pdf"))),
     parallel::mcparallel(
         PlotMeanNumSamplesByRequested(data,
             file.path(outdir, "num-samples-by-req.pdf"))))
