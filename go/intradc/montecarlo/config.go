@@ -3,6 +3,7 @@ package montecarlo
 import (
 	"errors"
 	"fmt"
+	"math"
 
 	"github.com/uluyol/heyp-agents/go/intradc/dists"
 	"github.com/uluyol/heyp-agents/go/intradc/flowsel"
@@ -67,7 +68,7 @@ func (c *Config) Enumerate() []Instance {
 						NumSamplesAtApproval:      numSamples,
 						Sys: Sys{
 							Samplers: []sampling.Sampler{
-								sampling.UniformSampler{Prob: float64(numSamples) / float64(numHosts)},
+								sampling.UniformSampler{Prob: math.Min(1, float64(numSamples)/float64(numHosts))},
 								sampling.NewWeightedSampler(float64(numSamples), float64(numHosts)*distGen.DistMean()*aod),
 							},
 							HostSelectors: []flowsel.Selector{
