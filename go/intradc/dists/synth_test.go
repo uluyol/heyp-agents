@@ -16,6 +16,11 @@ func checkMean(t *testing.T, g DistGen, errorFrac float64) {
 	for i := 0; i < numDistSamples; i++ {
 		d := g.GenDist(rng)
 		count += float64(len(d))
+
+		if len(d) != g.NumHosts() {
+			t.Errorf("wrong number of hosts: got %d want %d", len(d), g.NumHosts())
+		}
+
 		for _, v := range d {
 			sum += v
 		}
