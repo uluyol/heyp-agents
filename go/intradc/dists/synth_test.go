@@ -28,7 +28,7 @@ func checkMean(t *testing.T, g DistGen, errorFrac float64) {
 	}
 }
 
-const typicalErrFrac = 0.025
+const typicalErrFrac = 0.1
 
 func TestUniformGen(t *testing.T) {
 	checkMean(t, UniformGen{Low: 100, High: 99999, Num: 100}, typicalErrFrac)
@@ -40,7 +40,7 @@ func TestElephantsMiceGen(t *testing.T) {
 	checkMean(t, ElephantsMiceGen{Elephants: UniformGen{Low: 100, High: 99999, Num: 3}, Mice: UniformGen{High: 10, Num: 100}}, 0.1) // higher error because there are few elephants
 	checkMean(t, ElephantsMiceGen{Elephants: UniformGen{Low: 11200, High: 1120011, Num: 100}, Mice: UniformGen{High: 10, Num: 10}}, typicalErrFrac)
 	checkMean(t, ElephantsMiceGen{Elephants: UniformGen{Low: 11200, High: 1120011, Num: 100}, Mice: UniformGen{High: 10, Num: 0}}, typicalErrFrac)
-	checkMean(t, ElephantsMiceGen{Elephants: UniformGen{Low: 11200, High: 1120011, Num: 0}, Mice: UniformGen{High: 10, Num: 2}}, typicalErrFrac)
+	checkMean(t, ElephantsMiceGen{Elephants: UniformGen{Low: 11200, High: 1120011, Num: 0}, Mice: UniformGen{High: 10, Num: 20}}, typicalErrFrac)
 	checkMean(t, ElephantsMiceGen{Elephants: UniformGen{Low: 11200, High: 1120011, Num: 0}, Mice: UniformGen{High: 10, Num: 0}}, typicalErrFrac)
 }
 
