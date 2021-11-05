@@ -5,12 +5,79 @@ import (
 	"testing"
 	"time"
 
+	"github.com/uluyol/heyp-agents/go/intradc/dists"
+	"github.com/uluyol/heyp-agents/go/intradc/flowsel"
 	"github.com/uluyol/heyp-agents/go/intradc/sampling"
 	"golang.org/x/exp/rand"
 )
 
 func approxEq(a, b, margin float64) bool {
 	return a-margin <= b && b <= a+margin
+}
+
+func TestEvalFullSampleConfig(t *testing.T) {
+	inst := Instance{
+		ID:                        0,
+		HostUsages:                dists.ExponentialGen{Mean: 6000, Max: 1000000, Num: 1000},
+		ApprovalOverExpectedUsage: 1,
+		NumSamplesAtApproval:      1024,
+		Sys: Sys{
+			Samplers: []sampling.Sampler{
+				sampling.UniformSampler{Prob: 1024.0 / 1000},
+			},
+			HostSelectors: []flowsel.Selector{
+				flowsel.HashSelector{},
+			},
+		},
+	}
+
+	sem := make(chan Token, 4)
+	resChan := make(chan []InstanceResult)
+	EvalInstance(inst, 100, sem, resChan)
+
+	res := <-resChan
+
+	if res[0].Sys.RateLimitSummary.AbsNormError.P100 != 0 {
+		t.Errorf("rate limit error > 0 with no sampling:\nsampler: %+v\ndowngrade: %+v\nrate limit: %+v", res[0].Sys.SamplerSummary, res[0].Sys.DowngradeSummary, res[0].Sys.RateLimitSummary)
+	}
+}
+
+func TestCompareExactWithApproxFairHostRateLimitFullSample(t *testing.T) {
+	const (
+		minNumHosts = 4
+		maxNumHosts = 1000
+		numIter     = 50
+	)
+
+	genTmpl := dists.ExponentialGen{Mean: 6000, Max: 1000000}
+
+	rng := rand.New(rand.NewSource(uint64(time.Now().UnixNano())))
+	for iter := 0; iter < numIter; iter++ {
+		numHosts := minNumHosts + rng.Intn(maxNumHosts-minNumHosts)
+		gen := genTmpl.WithNumHosts(numHosts)
+
+		approval := gen.DistMean()
+		sampler := sampling.UniformSampler{Prob: 1.1}
+		distEst := sampler.NewUsageDistEstimator()
+		aggEst := sampler.NewAggUsageEstimator()
+		usages := gen.GenDist(rng)
+		for _, u := range usages {
+			if sampler.ShouldInclude(rng, u) {
+				aggEst.RecordSample(u)
+				distEst.RecordSample(u)
+			}
+		}
+		approxUsageSum := aggEst.EstUsage(len(usages))
+		approxUsages := distEst.EstDist(len(usages))
+
+		exactLimit := exactFairHostRateLimit(usages, approval)
+		approxLimit := fairHostRateLimit(approxUsages, approxUsageSum, approval, len(usages))
+		approxUsages = nil // consumed by fairHostRateLimit
+
+		if exactLimit != approxLimit {
+			t.Errorf("limits differ: (approx) %v != %v (exact)", approxLimit, exactLimit)
+		}
+	}
 }
 
 func TestExactFairHostRateLimit(t *testing.T) {
