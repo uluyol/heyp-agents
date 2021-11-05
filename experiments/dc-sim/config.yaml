@@ -18,6 +18,7 @@ hostUsages:
                           num: 1000
                   mice:
                           high: 2000
+        - fb15: {}
 # numHosts: [200, 2_000, 20_000, 200_000]
 numHosts: [2_000_000]
 approvalOverExpectedUsage: [0.5, 0.9, 1, 1.1, 1.5]
