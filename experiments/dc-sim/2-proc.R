@@ -138,7 +138,9 @@ PlotRateLimitNormErrorByHostUsagesGen <- function(subset, metric.name, metric, o
     .junk <- dev.off()
 }
 
-PlotOverOrShortageVersusSamples <- function(subset, metric.name, output) {
+PlotOverOrShortageVersusSamplesImpl <- function(
+    dg.intended.metric, dg.realized.metric, rl.metric, metric.axis.label,
+    subset, metric.name, output) {
     x <- aggregate(sys.samplerSummary.numSamples.mean ~ numSamplesAtApproval, data=subset, FUN=sum)
     if (nrow(x) != nrow(subset)) {
         print(subset)
@@ -149,20 +151,20 @@ PlotOverOrShortageVersusSamples <- function(subset, metric.name, output) {
         data.frame(
             Kind=rep.int("QD-Intended", nrow(subset)),
             NumSamples=subset$numSamplesAtApproval,
-            OverOrShortage=subset[[paste0("sys.downgradeSummary.intendedOverOrShortage.", metric.name)]]),
+            OverOrShortage=subset[[paste0("sys.downgradeSummary.", dg.intended.metric, ".", metric.name)]]),
         data.frame(
             Kind=rep.int("QD-Realized", nrow(subset)),
             NumSamples=subset$numSamplesAtApproval,
-            OverOrShortage=subset[[paste0("sys.downgradeSummary.realizedOverOrShortage.", metric.name)]]),
+            OverOrShortage=subset[[paste0("sys.downgradeSummary.", dg.realized.metric, ".", metric.name)]]),
         data.frame(
             Kind=rep.int("RateLimit", nrow(subset)),
             NumSamples=subset$numSamplesAtApproval,
-            OverOrShortage=subset[[paste0("sys.rateLimitSummary.overOrShortage.", metric.name)]]))
+            OverOrShortage=subset[[paste0("sys.rateLimitSummary.", rl.metric, ".", metric.name)]]))
 
-    pdf(output, height=4.5, width=5)
+    pdf(output, height=2.5, width=5)
     p <- ggplot(data=long, aes(x=NumSamples, y=OverOrShortage, color=Kind)) +
         geom_line(size=1) +
-        ylab(paste0(metric.name, " |got - want| / want")) +
+        ylab(paste0(metric.name, " ", metric.axis.label)) +
         xlab("# of samples collected at approval (powers of two)") +
         scale_x_continuous(trans="log1p",
             breaks=c(0, 8, 64, 512, 4096, 32768, 262144, 2097152),
@@ -175,19 +177,46 @@ PlotOverOrShortageVersusSamples <- function(subset, metric.name, output) {
     .junk <- dev.off()
 }
 
-AppendAllPlotOverOrShortageVersusSamples <- function(tasklist, subset, metric.name, outdir) {
+PlotOverOrShortageVersusSamples <- function(subset, metric.name, output) {
+    PlotOverOrShortageVersusSamplesImpl(
+        "intendedOverOrShortage",
+        "realizedOverOrShortage",
+        "overOrShortage",
+        "|got - want| / want",
+        subset, metric.name, output)
+}
+
+PlotOverageVersusSamples <- function(subset, metric.name, output) {
+    PlotOverOrShortageVersusSamplesImpl(
+        "intendedOverage",
+        "realizedOverage",
+        "overage",
+        "overage (max[0, got - want] / want)",
+        subset, metric.name, output)
+}
+
+PlotShortageVersusSamples <- function(subset, metric.name, output) {
+    PlotOverOrShortageVersusSamplesImpl(
+        "intendedShortage",
+        "realizedShortage",
+        "shortage",
+        "shortage (max[0, want - got] / want)",
+        subset, metric.name, output)
+}
+
+AppendAllPlotOverOrShortageVersusSamples <- function(tasklist, plot.fn, subset, metric.name, outdir) {
     dir.create(outdir, recursive=TRUE)
     for (nhosts in unique(subset$numHosts)) {
         for (hug in unique(subset$hostUsagesGen)) {
             for (aoe in unique(subset$approvalOverExpectedUsage)) {
-                # PlotOverOrShortageVersusSamples(
-                #         subset[
-                #             subset$numHosts == nhosts &
-                #             subset$hostUsagesGen == hug &
-                #             subset$approvalOverExpectedUsage == aoe,],
-                #         metric.name, file.path(outdir, paste0("nhosts:", nhosts, ":hug:", hug, ":aoe:", aoe, ".pdf")))
+                plot.fn(
+                        subset[
+                            subset$numHosts == nhosts &
+                            subset$hostUsagesGen == hug &
+                            subset$approvalOverExpectedUsage == aoe,],
+                        metric.name, file.path(outdir, paste0("nhosts:", nhosts, ":hug:", hug, ":aoe:", aoe, ".pdf")))
                 tasklist <- append(tasklist, parallel::mcparallel(
-                    PlotOverOrShortageVersusSamples(
+                    plot.fn(
                         subset[
                             subset$numHosts == nhosts &
                             subset$hostUsagesGen == hug &
@@ -338,19 +367,63 @@ tasks <- list(
             file.path(outdir, "num-samples-by-req.pdf"))))
 
 tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
+    PlotOverOrShortageVersusSamples,
     data[data$sys.samplerName == "weighted",],
     "mean", file.path(outdir, "samples-vs-error-weightedsampler-mean"))
 
 tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
+    PlotOverOrShortageVersusSamples,
     data[data$sys.samplerName == "weighted",],
     "p95", file.path(outdir, "samples-vs-error-weightedsampler-p95"))
 
 tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
+    PlotOverOrShortageVersusSamples,
     data[data$sys.samplerName == "uniform",],
     "mean", file.path(outdir, "samples-vs-error-uniformsampler-mean"))
 
 tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
+    PlotOverOrShortageVersusSamples,
     data[data$sys.samplerName == "uniform",],
     "p95", file.path(outdir, "samples-vs-error-uniformsampler-p95"))
+
+tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
+    PlotOverageVersusSamples,
+    data[data$sys.samplerName == "weighted",],
+    "mean", file.path(outdir, "samples-vs-overage-weightedsampler-mean"))
+
+tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
+    PlotOverageVersusSamples,
+    data[data$sys.samplerName == "weighted",],
+    "p95", file.path(outdir, "samples-vs-overage-weightedsampler-p95"))
+
+tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
+    PlotOverageVersusSamples,
+    data[data$sys.samplerName == "uniform",],
+    "mean", file.path(outdir, "samples-vs-overage-uniformsampler-mean"))
+
+tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
+    PlotOverageVersusSamples,
+    data[data$sys.samplerName == "uniform",],
+    "p95", file.path(outdir, "samples-vs-overage-uniformsampler-p95"))
+
+tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
+    PlotShortageVersusSamples,
+    data[data$sys.samplerName == "weighted",],
+    "mean", file.path(outdir, "samples-vs-shortage-weightedsampler-mean"))
+
+tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
+    PlotShortageVersusSamples,
+    data[data$sys.samplerName == "weighted",],
+    "p95", file.path(outdir, "samples-vs-shortage-weightedsampler-p95"))
+
+tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
+    PlotShortageVersusSamples,
+    data[data$sys.samplerName == "uniform",],
+    "mean", file.path(outdir, "samples-vs-shortage-uniformsampler-mean"))
+
+tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
+    PlotShortageVersusSamples,
+    data[data$sys.samplerName == "uniform",],
+    "p95", file.path(outdir, "samples-vs-shortage-uniformsampler-p95"))
 
 .junk <- parallel::mccollect()

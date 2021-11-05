@@ -140,6 +140,8 @@ type DowngradeSummary struct {
 	AbsIntendedFracError   Stats `json:"absIntendedFracError"`
 	RealizedFracError      Stats `json:"realizedFracError"`
 	AbsRealizedFracError   Stats `json:"absRealizedFracError"`
+	IntendedOverage        Stats `json:"intendedOverage"`
+	IntendedShortage       Stats `json:"intendedShortage"`
 	IntendedOverOrShortage Stats `json:"intendedOverOrShortage"`
 	RealizedOverage        Stats `json:"realizedOverage"`
 	RealizedShortage       Stats `json:"realizedShortage"`

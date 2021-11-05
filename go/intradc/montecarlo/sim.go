@@ -79,6 +79,8 @@ type perSysData struct {
 	downgrade struct {
 		IntendedFracError      metricWithAbsVal
 		RealizedFracError      metricWithAbsVal
+		IntendedOverage        metric
+		IntendedShortage       metric
 		IntendedOverOrShortage metric
 		RealizedOverage        metric
 		RealizedShortage       metric
@@ -104,6 +106,8 @@ func (r *perSysData) MergeFrom(o *perSysData) {
 
 	r.downgrade.IntendedFracError.MergeFrom(&o.downgrade.IntendedFracError)
 	r.downgrade.RealizedFracError.MergeFrom(&o.downgrade.RealizedFracError)
+	r.downgrade.IntendedOverage.MergeFrom(&o.downgrade.IntendedOverage)
+	r.downgrade.IntendedShortage.MergeFrom(&o.downgrade.IntendedShortage)
 	r.downgrade.IntendedOverOrShortage.MergeFrom(&o.downgrade.IntendedOverOrShortage)
 	r.downgrade.RealizedOverage.MergeFrom(&o.downgrade.RealizedOverage)
 	r.downgrade.RealizedShortage.MergeFrom(&o.downgrade.RealizedShortage)
@@ -169,6 +173,8 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 					rlShortage := -math.Min(0, rlError)
 
 					intendedError := normByExpected((1-approxDowngradeFrac)*exactUsage-exactApprovedDemand, exactApprovedDemand)
+					intendedOverage := math.Max(0, intendedError)
+					intendedShortage := -math.Min(0, intendedError)
 
 					for hostSelID, hostSel := range inst.Sys.HostSelectors {
 						approxRealizedDowngradeFrac := downgradeFracAfterHostSel(
@@ -187,6 +193,8 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 						data[sysID].sampler.approxUsageSum += approxUsage.Sum
 						data[sysID].downgrade.IntendedFracError.Record(approxDowngradeFrac - exactDowngradeFrac)
 						data[sysID].downgrade.RealizedFracError.Record(approxRealizedDowngradeFrac - exactDowngradeFrac)
+						data[sysID].downgrade.IntendedOverage.Record(intendedOverage)
+						data[sysID].downgrade.IntendedShortage.Record(intendedShortage)
 						data[sysID].downgrade.IntendedOverOrShortage.Record(math.Abs(intendedError))
 						data[sysID].downgrade.RealizedOverage.Record(realizedOverage)
 						data[sysID].downgrade.RealizedShortage.Record(realizedShortage)
