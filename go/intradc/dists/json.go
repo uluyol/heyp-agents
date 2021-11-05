@@ -14,6 +14,7 @@ type jsonDistGenImpl struct {
 	Uniform       *UniformGen       `json:"uniform,omitempty"`
 	ElephantsMice *ElephantsMiceGen `json:"elephantsMice,omitempty"`
 	Exponential   *ExponentialGen   `json:"exponential,omitempty"`
+	FB15          *FB15Gen          `json:"fb15,omitempty"`
 }
 
 func (g *ConfigDistGen) MarshalJSON() ([]byte, error) {
@@ -25,6 +26,8 @@ func (g *ConfigDistGen) MarshalJSON() ([]byte, error) {
 		st.ElephantsMice = &gen
 	case ExponentialGen:
 		st.Exponential = &gen
+	case FB15Gen:
+		st.FB15 = &gen
 	case nil:
 		// do nothing
 	default:
@@ -50,6 +53,10 @@ func (g *ConfigDistGen) UnmarshalJSON(data []byte) error {
 	if st.Exponential != nil {
 		g.Gen = *st.Exponential
 		foundDists = append(foundDists, "exponential")
+	}
+	if st.FB15 != nil {
+		g.Gen = *st.FB15
+		foundDists = append(foundDists, "fb15")
 	}
 	if len(foundDists) > 1 {
 		return fmt.Errorf("expected at most one dist, found multiple [%s]",
