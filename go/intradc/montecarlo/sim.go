@@ -330,33 +330,42 @@ type fairLimitResult struct {
 func exactFairHostRateLimit(usages []float64, approval float64) fairLimitResult {
 	demands := append([]float64(nil), usages...)
 	const allowedDemandGrowth = 1.1
-	var demandSum float64
+	var usageSum float64
 	for i := range demands {
+		usageSum += demands[i]
 		demands[i] *= allowedDemandGrowth
-		demandSum += demands[i]
 	}
 	// now demands represents demands
+	demandSum := allowedDemandGrowth * usageSum
 
-	waterlevel := alloc.MaxMinFairWaterlevel(approval, demands)
+	dWaterlevel := alloc.MaxMinFairWaterlevel(approval, demands)
+	uWaterlevel := alloc.MaxMinFairWaterlevel(approval, usages)
 	// distribute leftover
-	leftover := math.Max(0, approval-demandSum)
+	dLeftover := math.Max(0, approval-demandSum)
+	uLeftover := math.Max(0, approval-usageSum)
 	return fairLimitResult{
-		FromDemand: waterlevel + leftover/float64(len(usages)),
+		FromUsage:  uWaterlevel + uLeftover/float64(len(usages)),
+		FromDemand: dWaterlevel + dLeftover/float64(len(usages)),
 	}
 }
 
 func fairHostRateLimit(hostUsageDist []alloc.ValCount, aggUsage, approval float64, numHosts int) fairLimitResult {
 	const allowedDemandGrowth = 1.1
-	for i := range hostUsageDist {
-		hostUsageDist[i].Val *= allowedDemandGrowth
+	hostDemandDist := append([]alloc.ValCount(nil), hostUsageDist...)
+	for i := range hostDemandDist {
+		hostDemandDist[i].Val *= allowedDemandGrowth
 	}
 	// now hostUsageDist represents demands
+	aggDemand := allowedDemandGrowth * aggUsage
 
-	waterlevel := alloc.MaxMinFairWaterlevelDist(approval, hostUsageDist)
+	dWaterlevel := alloc.MaxMinFairWaterlevelDist(approval, hostDemandDist)
+	uWaterlevel := alloc.MaxMinFairWaterlevelDist(approval, hostUsageDist)
 	// distribute leftover
-	leftover := math.Max(0, approval-allowedDemandGrowth*aggUsage)
+	uLeftover := math.Max(0, approval-aggUsage)
+	dLeftover := math.Max(0, approval-aggDemand)
 	return fairLimitResult{
-		FromDemand: waterlevel + leftover/float64(numHosts),
+		FromUsage:  uWaterlevel + uLeftover/float64(numHosts),
+		FromDemand: dWaterlevel + dLeftover/float64(numHosts),
 	}
 }
 

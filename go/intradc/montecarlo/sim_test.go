@@ -87,8 +87,8 @@ func TestExactFairHostRateLimit(t *testing.T) {
 		usageAlloc  float64
 		demandAlloc float64
 	}{
-		{[]float64{100, 100, 10}, 200, 0, 94.5},
-		{[]float64{3, 10, 100}, 200, 0, 135.233},
+		{[]float64{100, 100, 10}, 200, 95, 94.5},
+		{[]float64{3, 10, 100}, 200, 129, 135.233},
 	}
 
 	for testi, test := range testCases {
@@ -109,8 +109,8 @@ func TestApproxFairHostRateLimitFullSample(t *testing.T) {
 		usageAlloc  float64
 		demandAlloc float64
 	}{
-		{[]float64{100, 100, 10}, 200, 0, 94.5},
-		{[]float64{3, 10, 100}, 200, 0, 135.233},
+		{[]float64{100, 100, 10}, 200, 95, 94.5},
+		{[]float64{3, 10, 100}, 200, 129, 135.233},
 	}
 
 	for testi, test := range testCases {
