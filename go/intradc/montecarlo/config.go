@@ -164,6 +164,8 @@ type RateLimitSummary struct {
 	AbsNumThrottledNormError Stats `json:"absNumThrottledNormError"`
 }
 
+type FairUsageSummary RateLimitSummary
+
 type SysResult struct {
 	SamplerName      string            `json:"samplerName"`
 	HostSelectorName string            `json:"hostSelectorName"`
@@ -171,6 +173,7 @@ type SysResult struct {
 	SamplerSummary   *SamplerSummary   `json:"samplerSummary"`
 	DowngradeSummary *DowngradeSummary `json:"downgradeSummary"`
 	RateLimitSummary *RateLimitSummary `json:"rateLimitSummary"`
+	FairUsageSummary *FairUsageSummary `json:"fairUsageSummary"`
 }
 
 type InstanceResult struct {

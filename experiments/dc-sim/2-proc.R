@@ -159,7 +159,11 @@ PlotOverOrShortageVersusSamplesImpl <- function(
         data.frame(
             Kind=rep.int("RateLimit", nrow(subset)),
             NumSamples=subset$numSamplesAtApproval,
-            OverOrShortage=subset[[paste0("sys.rateLimitSummary.", rl.metric, ".", metric.name)]]))
+            OverOrShortage=subset[[paste0("sys.rateLimitSummary.", rl.metric, ".", metric.name)]]),
+        data.frame(
+            Kind=rep.int("FairUsage", nrow(subset)),
+            NumSamples=subset$numSamplesAtApproval,
+            OverOrShortage=subset[[paste0("sys.fairUsageSummary.", rl.metric, ".", metric.name)]]))
 
     pdf(output, height=2.5, width=5)
     p <- ggplot(data=long, aes(x=NumSamples, y=OverOrShortage, color=Kind)) +
@@ -209,12 +213,12 @@ AppendAllPlotOverOrShortageVersusSamples <- function(tasklist, plot.fn, subset, 
     for (nhosts in unique(subset$numHosts)) {
         for (hug in unique(subset$hostUsagesGen)) {
             for (aoe in unique(subset$approvalOverExpectedUsage)) {
-                plot.fn(
-                        subset[
-                            subset$numHosts == nhosts &
-                            subset$hostUsagesGen == hug &
-                            subset$approvalOverExpectedUsage == aoe,],
-                        metric.name, file.path(outdir, paste0("nhosts:", nhosts, ":hug:", hug, ":aoe:", aoe, ".pdf")))
+                # plot.fn(
+                #         subset[
+                #             subset$numHosts == nhosts &
+                #             subset$hostUsagesGen == hug &
+                #             subset$approvalOverExpectedUsage == aoe,],
+                #         metric.name, file.path(outdir, paste0("nhosts:", nhosts, ":hug:", hug, ":aoe:", aoe, ".pdf")))
                 tasklist <- append(tasklist, parallel::mcparallel(
                     plot.fn(
                         subset[

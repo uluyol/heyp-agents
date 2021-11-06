@@ -94,6 +94,14 @@ type perSysData struct {
 		FracThrottledError    metricWithAbsVal
 		NumThrottledNormError metricWithAbsVal
 	}
+	fairUsage struct {
+		NormError             metricWithAbsVal
+		Overage               metric
+		Shortage              metric
+		OverOrShortage        metric
+		FracThrottledError    metricWithAbsVal
+		NumThrottledNormError metricWithAbsVal
+	}
 }
 
 func (r *perSysData) MergeFrom(o *perSysData) {
@@ -119,6 +127,13 @@ func (r *perSysData) MergeFrom(o *perSysData) {
 	r.rateLimit.OverOrShortage.MergeFrom(&o.rateLimit.OverOrShortage)
 	r.rateLimit.FracThrottledError.MergeFrom(&o.rateLimit.FracThrottledError)
 	r.rateLimit.NumThrottledNormError.MergeFrom(&o.rateLimit.NumThrottledNormError)
+
+	r.fairUsage.NormError.MergeFrom(&o.fairUsage.NormError)
+	r.fairUsage.Overage.MergeFrom(&o.fairUsage.Overage)
+	r.fairUsage.Shortage.MergeFrom(&o.fairUsage.Shortage)
+	r.fairUsage.OverOrShortage.MergeFrom(&o.fairUsage.OverOrShortage)
+	r.fairUsage.FracThrottledError.MergeFrom(&o.fairUsage.FracThrottledError)
+	r.fairUsage.NumThrottledNormError.MergeFrom(&o.fairUsage.NumThrottledNormError)
 }
 
 // shardSize returns a shard size appropriate for the number of hosts.
@@ -171,7 +186,8 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 				exactDowngradeFrac := downgradeFrac(exactUsage, approval)
 				exactHostLimit := exactFairHostRateLimit(usages, approval)
 				exactNumHostsThrottled, exactFracHostsThrottled := numAndFracHostsThrottled(usages, exactHostLimit.FromDemand)
-				exactApprovedDemand := math.Min(approval, exactUsage)
+				exactApprovedUsage := math.Min(approval, exactUsage)
+				exactFairNumHostsThrottled, exactFairFracHostsThrottled := numAndFracHostsThrottled(usages, exactHostLimit.FromUsage)
 
 				for samplerID, sampler := range inst.Sys.Samplers {
 					approxUsage := estimateUsage(rng, sampler, usages)
@@ -180,12 +196,17 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 					approxUsage.Dist = nil // overwritten by fairHostRateLimit
 					approxNumHostsThrottled, approxFracHostsThrottled := numAndFracHostsThrottled(usages, approxHostLimit.FromDemand)
 					approxAggAdmitted := aggAdmittedDemand(usages, approxHostLimit.FromDemand)
-
-					rlError := normByExpected(approxAggAdmitted-exactApprovedDemand, exactApprovedDemand)
+					rlError := normByExpected(approxAggAdmitted-exactApprovedUsage, exactApprovedUsage)
 					rlOverage := math.Max(0, rlError)
 					rlShortage := -math.Min(0, rlError)
 
-					intendedError := normByExpected((1-approxDowngradeFrac)*exactUsage-exactApprovedDemand, exactApprovedDemand)
+					approxFairNumHostsThrottled, approxFairFracHostsThrottled := numAndFracHostsThrottled(usages, approxHostLimit.FromUsage)
+					approxAggFairAdmitted := aggAdmittedDemand(usages, approxHostLimit.FromUsage)
+					fuError := normByExpected(approxAggFairAdmitted-exactApprovedUsage, exactApprovedUsage)
+					fuOverage := math.Max(0, fuError)
+					fuShortage := -math.Min(0, fuError)
+
+					intendedError := normByExpected((1-approxDowngradeFrac)*exactUsage-exactApprovedUsage, exactApprovedUsage)
 					intendedOverage := math.Max(0, intendedError)
 					intendedShortage := -math.Min(0, intendedError)
 
@@ -194,16 +215,18 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 							hostSel.NewMatcher(approxDowngradeFrac, flowsel.SampledUsages{ /* TODO fill in */ }),
 							usages, exactUsage)
 
-						realizedError := normByExpected((1-approxRealizedDowngradeFrac)*exactUsage-exactApprovedDemand, exactApprovedDemand)
+						realizedError := normByExpected((1-approxRealizedDowngradeFrac)*exactUsage-exactApprovedUsage, exactApprovedUsage)
 						realizedOverage := math.Max(0, realizedError)
 						realizedShortage := -math.Min(0, realizedError)
 
 						sysID := inst.Sys.SysID(samplerID, hostSelID)
+
 						data[sysID].sampler.UsageNormError.Record(normByExpected(approxUsage.Sum-exactUsage, exactUsage))
 						data[sysID].sampler.NumSamples.Record(approxUsage.NumSamples)
 						data[sysID].sampler.WantNumSamples.Record(approxUsage.WantNumSamples)
 						data[sysID].sampler.exactUsageSum += exactUsage
 						data[sysID].sampler.approxUsageSum += approxUsage.Sum
+
 						data[sysID].downgrade.IntendedFracError.Record(approxDowngradeFrac - exactDowngradeFrac)
 						data[sysID].downgrade.RealizedFracError.Record(approxRealizedDowngradeFrac - exactDowngradeFrac)
 						data[sysID].downgrade.IntendedOverage.Record(intendedOverage)
@@ -212,12 +235,20 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 						data[sysID].downgrade.RealizedOverage.Record(realizedOverage)
 						data[sysID].downgrade.RealizedShortage.Record(realizedShortage)
 						data[sysID].downgrade.RealizedOverOrShortage.Record(math.Abs(realizedError))
+
 						data[sysID].rateLimit.NormError.Record(normByExpected(approxHostLimit.FromDemand-exactHostLimit.FromDemand, exactHostLimit.FromDemand))
 						data[sysID].rateLimit.Overage.Record(rlOverage)
 						data[sysID].rateLimit.Shortage.Record(rlShortage)
 						data[sysID].rateLimit.OverOrShortage.Record(math.Abs(rlError))
 						data[sysID].rateLimit.FracThrottledError.Record(approxFracHostsThrottled - exactFracHostsThrottled)
 						data[sysID].rateLimit.NumThrottledNormError.Record(normByExpected(approxNumHostsThrottled-exactNumHostsThrottled, exactNumHostsThrottled))
+
+						data[sysID].fairUsage.NormError.Record(normByExpected(approxHostLimit.FromUsage-exactHostLimit.FromUsage, exactHostLimit.FromUsage))
+						data[sysID].fairUsage.Overage.Record(fuOverage)
+						data[sysID].fairUsage.Shortage.Record(fuShortage)
+						data[sysID].fairUsage.OverOrShortage.Record(math.Abs(fuError))
+						data[sysID].fairUsage.FracThrottledError.Record(approxFairFracHostsThrottled - exactFairFracHostsThrottled)
+						data[sysID].fairUsage.NumThrottledNormError.Record(normByExpected(approxFairNumHostsThrottled-exactFairNumHostsThrottled, exactFairNumHostsThrottled))
 					}
 				}
 			}
@@ -257,6 +288,7 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 					}, &data[sysID].sampler).(*SamplerSummary),
 					DowngradeSummary: populateSummary(&DowngradeSummary{}, &data[sysID].downgrade).(*DowngradeSummary),
 					RateLimitSummary: populateSummary(&RateLimitSummary{}, &data[sysID].rateLimit).(*RateLimitSummary),
+					FairUsageSummary: populateSummary(&FairUsageSummary{}, &data[sysID].fairUsage).(*FairUsageSummary),
 				},
 			}
 		}
