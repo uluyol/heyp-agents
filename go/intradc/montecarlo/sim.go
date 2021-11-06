@@ -121,6 +121,19 @@ func (r *perSysData) MergeFrom(o *perSysData) {
 	r.rateLimit.NumThrottledNormError.MergeFrom(&o.rateLimit.NumThrottledNormError)
 }
 
+// shardSize returns a shard size appropriate for the number of hosts.
+// Thresholds and values somewhat arbitrarily chosen.
+func shardSize(numHosts int) int {
+	switch {
+	case numHosts >= 1e6:
+		return 4
+	case numHosts >= 100e3:
+		return 20
+	default:
+		return 100
+	}
+}
+
 // EvalInstance performs monte-carlo simulations with numRuns iterations
 // and return non-determistic stats on res.
 //
@@ -130,7 +143,7 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 	approval := inst.ApprovalOverExpectedUsage * float64(inst.HostUsages.NumHosts()) * inst.HostUsages.DistMean()
 
 	shardData := make(chan []perSysData, 1)
-	const shardSize = 100
+	shardSize := shardSize(inst.HostUsages.NumHosts())
 	numShards := 0
 	for shardStart := 0; shardStart < numRuns; shardStart += shardSize {
 		numShards++
@@ -157,7 +170,7 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 
 				exactDowngradeFrac := downgradeFrac(exactUsage, approval)
 				exactHostLimit := exactFairHostRateLimit(usages, approval)
-				exactNumHostsThrottled, exactFracHostsThrottled := numAndFracHostsThrottled(usages, exactHostLimit)
+				exactNumHostsThrottled, exactFracHostsThrottled := numAndFracHostsThrottled(usages, exactHostLimit.FromDemand)
 				exactApprovedDemand := math.Min(approval, exactUsage)
 
 				for samplerID, sampler := range inst.Sys.Samplers {
@@ -165,8 +178,8 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 					approxDowngradeFrac := downgradeFrac(approxUsage.Sum, approval)
 					approxHostLimit := fairHostRateLimit(approxUsage.Dist, approxUsage.Sum, approval, len(usages))
 					approxUsage.Dist = nil // overwritten by fairHostRateLimit
-					approxNumHostsThrottled, approxFracHostsThrottled := numAndFracHostsThrottled(usages, approxHostLimit)
-					approxAggAdmitted := aggAdmittedDemand(usages, approxHostLimit)
+					approxNumHostsThrottled, approxFracHostsThrottled := numAndFracHostsThrottled(usages, approxHostLimit.FromDemand)
+					approxAggAdmitted := aggAdmittedDemand(usages, approxHostLimit.FromDemand)
 
 					rlError := normByExpected(approxAggAdmitted-exactApprovedDemand, exactApprovedDemand)
 					rlOverage := math.Max(0, rlError)
@@ -199,7 +212,7 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 						data[sysID].downgrade.RealizedOverage.Record(realizedOverage)
 						data[sysID].downgrade.RealizedShortage.Record(realizedShortage)
 						data[sysID].downgrade.RealizedOverOrShortage.Record(math.Abs(realizedError))
-						data[sysID].rateLimit.NormError.Record(normByExpected(approxHostLimit-exactHostLimit, exactHostLimit))
+						data[sysID].rateLimit.NormError.Record(normByExpected(approxHostLimit.FromDemand-exactHostLimit.FromDemand, exactHostLimit.FromDemand))
 						data[sysID].rateLimit.Overage.Record(rlOverage)
 						data[sysID].rateLimit.Shortage.Record(rlShortage)
 						data[sysID].rateLimit.OverOrShortage.Record(math.Abs(rlError))
@@ -309,7 +322,12 @@ func numAndFracHostsThrottled(wantUsages []float64, limit float64) (num, frac fl
 	return count, count / float64(len(wantUsages))
 }
 
-func exactFairHostRateLimit(usages []float64, approval float64) float64 {
+type fairLimitResult struct {
+	FromUsage  float64
+	FromDemand float64
+}
+
+func exactFairHostRateLimit(usages []float64, approval float64) fairLimitResult {
 	demands := append([]float64(nil), usages...)
 	const allowedDemandGrowth = 1.1
 	var demandSum float64
@@ -322,10 +340,12 @@ func exactFairHostRateLimit(usages []float64, approval float64) float64 {
 	waterlevel := alloc.MaxMinFairWaterlevel(approval, demands)
 	// distribute leftover
 	leftover := math.Max(0, approval-demandSum)
-	return waterlevel + leftover/float64(len(usages))
+	return fairLimitResult{
+		FromDemand: waterlevel + leftover/float64(len(usages)),
+	}
 }
 
-func fairHostRateLimit(hostUsageDist []alloc.ValCount, aggUsage, approval float64, numHosts int) float64 {
+func fairHostRateLimit(hostUsageDist []alloc.ValCount, aggUsage, approval float64, numHosts int) fairLimitResult {
 	const allowedDemandGrowth = 1.1
 	for i := range hostUsageDist {
 		hostUsageDist[i].Val *= allowedDemandGrowth
@@ -335,7 +355,9 @@ func fairHostRateLimit(hostUsageDist []alloc.ValCount, aggUsage, approval float6
 	waterlevel := alloc.MaxMinFairWaterlevelDist(approval, hostUsageDist)
 	// distribute leftover
 	leftover := math.Max(0, approval-allowedDemandGrowth*aggUsage)
-	return waterlevel + leftover/float64(numHosts)
+	return fairLimitResult{
+		FromDemand: waterlevel + leftover/float64(numHosts),
+	}
 }
 
 func aggAdmittedDemand(usages []float64, hostLimit float64) float64 {

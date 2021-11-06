@@ -82,30 +82,35 @@ func TestCompareExactWithApproxFairHostRateLimitFullSample(t *testing.T) {
 
 func TestExactFairHostRateLimit(t *testing.T) {
 	testCases := []struct {
-		usages   []float64
-		approval float64
-		alloc    float64
+		usages      []float64
+		approval    float64
+		usageAlloc  float64
+		demandAlloc float64
 	}{
-		{[]float64{100, 100, 10}, 200, 94.5},
-		{[]float64{3, 10, 100}, 200, 135.233},
+		{[]float64{100, 100, 10}, 200, 0, 94.5},
+		{[]float64{3, 10, 100}, 200, 0, 135.233},
 	}
 
 	for testi, test := range testCases {
 		alloc := exactFairHostRateLimit(test.usages, test.approval)
-		if !approxEq(alloc, test.alloc, 0.001) {
-			t.Errorf("case %d: got %f want %f", testi, alloc, test.alloc)
+		if !approxEq(alloc.FromUsage, test.usageAlloc, 0.001) {
+			t.Errorf("case %d: got %f want %f", testi, alloc.FromUsage, test.usageAlloc)
+		}
+		if !approxEq(alloc.FromDemand, test.demandAlloc, 0.001) {
+			t.Errorf("case %d: got %f want %f", testi, alloc.FromDemand, test.demandAlloc)
 		}
 	}
 }
 
 func TestApproxFairHostRateLimitFullSample(t *testing.T) {
 	testCases := []struct {
-		usages   []float64
-		approval float64
-		alloc    float64
+		usages      []float64
+		approval    float64
+		usageAlloc  float64
+		demandAlloc float64
 	}{
-		{[]float64{100, 100, 10}, 200, 94.5},
-		{[]float64{3, 10, 100}, 200, 135.233},
+		{[]float64{100, 100, 10}, 200, 0, 94.5},
+		{[]float64{3, 10, 100}, 200, 0, 135.233},
 	}
 
 	for testi, test := range testCases {
@@ -113,8 +118,11 @@ func TestApproxFairHostRateLimitFullSample(t *testing.T) {
 		approxUsage := estimateUsage(rng, sampling.UniformSampler{Prob: 2}, test.usages)
 
 		alloc := fairHostRateLimit(approxUsage.Dist, approxUsage.Sum, test.approval, len(test.usages))
-		if !approxEq(alloc, test.alloc, 0.001) {
-			t.Errorf("case %d: got %f want %f", testi, alloc, test.alloc)
+		if !approxEq(alloc.FromUsage, test.usageAlloc, 0.001) {
+			t.Errorf("case %d: got %f want %f", testi, alloc.FromUsage, test.usageAlloc)
+		}
+		if !approxEq(alloc.FromDemand, test.demandAlloc, 0.001) {
+			t.Errorf("case %d: got %f want %f", testi, alloc.FromDemand, test.demandAlloc)
 		}
 	}
 }
