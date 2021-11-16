@@ -90,34 +90,38 @@ func (s UniformSampler) NewUsageDistEstimator() UsageDistEstimator {
 
 var _ Sampler = UniformSampler{}
 
-// WeightedSampler picks hosts to sample usage data with probability proportional
+// ThresholdSampler picks hosts to sample usage data with probability proportional
 // to their current usage.
 //
-// The number of samples collected by this mechanism is proportional to the
+// The max number of samples collected by this mechanism is proportional to the
 // aggregate usage.
-type WeightedSampler struct {
+//
+// A description and analysis of threshold sampling can be found in the paper
+// "Learn More, Sample Less: Control of Volume and Variance in Network Measurement" in
+// IEEE Transactions of Information Theory '05 by Nick Duffield et al.
+type ThresholdSampler struct {
 	approval float64
-	d        float64 // d = numSamplesAtApproval / approval
+	z        float64 // z = numSamplesAtApproval / approval
 }
 
-func (s WeightedSampler) Name() string { return "weighted" }
+func (s ThresholdSampler) Name() string { return "threshold" }
 
-func NewWeightedSampler(numSamplesAtApproval float64, approval float64) WeightedSampler {
-	return WeightedSampler{approval, numSamplesAtApproval / approval}
+func NewThresholdSampler(numSamplesAtApproval float64, approval float64) ThresholdSampler {
+	return ThresholdSampler{approval, numSamplesAtApproval / approval}
 }
 
-func (s WeightedSampler) ShouldInclude(rng *rand.Rand, usage float64) bool {
+func (s ThresholdSampler) ShouldInclude(rng *rand.Rand, usage float64) bool {
 	if s.approval == 0 {
 		return true
 	}
-	p := math.Min(usage*s.d, 1)
+	p := math.Min(usage*s.z, 1)
 	if debug && p < 0 || 1 < p {
-		panic(fmt.Errorf("bad p ( = %g), usage = %g, s.d = %g, s.approval = %g", p, usage, s.d, s.approval))
+		panic(fmt.Errorf("bad p ( = %g), usage = %g, s.z = %g, s.approval = %g", p, usage, s.z, s.approval))
 	}
 	return rng.Float64() < p
 }
 
-func (s WeightedSampler) IdealNumSamples(usages []float64) float64 {
+func (s ThresholdSampler) IdealNumSamples(usages []float64) float64 {
 	var sumProb float64
 	for _, u := range usages {
 		sumProb += s.ProbOf(u)
@@ -125,37 +129,37 @@ func (s WeightedSampler) IdealNumSamples(usages []float64) float64 {
 	return sumProb
 }
 
-func (s WeightedSampler) ProbOf(usage float64) float64 {
+func (s ThresholdSampler) ProbOf(usage float64) float64 {
 	if s.approval == 0 {
 		return 1
 	}
-	return math.Min(usage*s.d, 1)
+	return math.Min(usage*s.z, 1)
 }
 
-type weightedAggUsageEstimator struct {
-	s   WeightedSampler
+type thresholdAggUsageEstimator struct {
+	s   ThresholdSampler
 	est float64
 }
 
-func (e *weightedAggUsageEstimator) RecordSample(usage float64) {
+func (e *thresholdAggUsageEstimator) RecordSample(usage float64) {
 	p := e.s.ProbOf(usage)
 	e.est += usage / p
 }
 
-func (e *weightedAggUsageEstimator) EstUsage(numHosts int) float64 { return e.est }
+func (e *thresholdAggUsageEstimator) EstUsage(numHosts int) float64 { return e.est }
 
-func (s WeightedSampler) NewAggUsageEstimator() AggUsageEstimator {
-	return &weightedAggUsageEstimator{s: s}
+func (s ThresholdSampler) NewAggUsageEstimator() AggUsageEstimator {
+	return &thresholdAggUsageEstimator{s: s}
 }
 
-type weightedUsageDistEstimator struct {
-	s    WeightedSampler
+type thresholdUsageDistEstimator struct {
+	s    ThresholdSampler
 	data map[float64]int
 }
 
-func (e *weightedUsageDistEstimator) RecordSample(usage float64) { e.data[usage]++ }
+func (e *thresholdUsageDistEstimator) RecordSample(usage float64) { e.data[usage]++ }
 
-func (e *weightedUsageDistEstimator) EstDist(numHosts int) []alloc.ValCount {
+func (e *thresholdUsageDistEstimator) EstDist(numHosts int) []alloc.ValCount {
 	dist := make([]alloc.ValCount, 0, len(e.data))
 	for v, c := range e.data {
 		prob := e.s.ProbOf(v)
@@ -164,11 +168,11 @@ func (e *weightedUsageDistEstimator) EstDist(numHosts int) []alloc.ValCount {
 	return dist
 }
 
-func (s WeightedSampler) NewUsageDistEstimator() UsageDistEstimator {
-	return &weightedUsageDistEstimator{
+func (s ThresholdSampler) NewUsageDistEstimator() UsageDistEstimator {
+	return &thresholdUsageDistEstimator{
 		s:    s,
 		data: make(map[float64]int),
 	}
 }
 
-var _ Sampler = WeightedSampler{}
+var _ Sampler = ThresholdSampler{}

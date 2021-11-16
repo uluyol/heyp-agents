@@ -250,12 +250,12 @@ PlotMeanNumSamplesByRequested <- function(subset, output) {
     measured <- subset[, c("numHosts", "sys.samplerName", "sys.samplerSummary.numSamples.mean")]
     # intended <- unique(subset[, c("instanceID", "numHosts", "numSamplesAtApproval")])
     # intended$numSamplesAtApproval <- pmin(intended$numSamplesAtApproval, intended$numHosts)
-    # intended.weighted <- unique(subset[, c("instanceID", "approvalOverExpectedUsage", "numHosts", "numSamplesAtApproval")])
-    # intended.weighted$numSamples <- pmin(intended.weighted$approvalOverExpectedUsage * intended$numSamplesAtApproval, intended$numHosts)
+    # intended.threshold <- unique(subset[, c("instanceID", "approvalOverExpectedUsage", "numHosts", "numSamplesAtApproval")])
+    # intended.threshold$numSamples <- pmin(intended.threshold$approvalOverExpectedUsage * intended$numSamplesAtApproval, intended$numHosts)
     data <- data.frame(numHosts=measured$numHosts, kind=measured$sys.samplerName, num=measured$sys.samplerSummary.numSamples.mean)
     # data <- rbind(
     #     data.frame(numHosts=measured$numHosts, kind=measured$sys.samplerName, num=measured$sys.samplerSummary.numSamples.mean),
-    #     data.frame(numHosts=intended.weighted$numHosts, kind=rep.int("wantWeighted", nrow(intended.weighted)), num=intended.weighted$numSamples),
+    #     data.frame(numHosts=intended.threshold$numHosts, kind=rep.int("wantThreshold", nrow(intended.threshold)), num=intended.threshold$numSamples),
     #     data.frame(numHosts=intended$numHosts, kind=rep.int("wantAtApproval", nrow(intended)), num=intended$numSamplesAtApproval))
     pdf(output, height=4.5, width=5)
     p <- ggplot(data=data, aes(x=num, color=kind)) +
@@ -273,11 +273,11 @@ PlotMeanNumSamplesByRequested <- function(subset, output) {
 
 # Disabled. Hard to interpret. See PlotMeanNumSamplesVersusRequested for something more intuitive.
 PlotMeanNumSamplesOverExpected <- function(subset, output) {
-    isWeightedSamplerMask <- subset$sys.samplerName == "weighted"
+    isThresholdSamplerMask <- subset$sys.samplerName == "threshold"
     wantSamplesAtApproval <- pmin(subset$numSamplesAtApproval, subset$numHosts)
-    numSamplesWantWeighted <- pmin(subset$numHosts[isWeightedSamplerMask],
-        subset$approvalOverExpectedUsage[isWeightedSamplerMask] * subset$numSamplesAtApproval[isWeightedSamplerMask])
-    numSamplesWantWeightedOverRequested <- numSamplesWantWeighted / wantSamplesAtApproval[isWeightedSamplerMask]
+    numSamplesWantThreshold <- pmin(subset$numHosts[isThresholdSamplerMask],
+        subset$approvalOverExpectedUsage[isThresholdSamplerMask] * subset$numSamplesAtApproval[isThresholdSamplerMask])
+    numSamplesWantThresholdOverRequested <- numSamplesWantThreshold / wantSamplesAtApproval[isThresholdSamplerMask]
 
     data <- data.frame(x=subset$sys.samplerSummary.numSamples.mean / wantSamplesAtApproval, kind=subset$sys.samplerName)
     # data <- rbind(
@@ -314,6 +314,10 @@ dir.create(outdir, recursive=TRUE)
 con <- file(simresults, open="r")
 data <- stream_in(con, flatten=TRUE, verbose=FALSE)
 close(con)
+
+# "weighted" sampling is actually threshold sampling.
+# New runs use the correct name, but fix it in older runs.
+data$sys.samplerName[data$sys.samplerName == "weighted"] <- "threshold"
 
 tasks <- list(
     # UsageNormError (HUG)
@@ -372,13 +376,13 @@ tasks <- list(
 
 tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
     PlotOverOrShortageVersusSamples,
-    data[data$sys.samplerName == "weighted",],
-    "mean", file.path(outdir, "samples-vs-error-weightedsampler-mean"))
+    data[data$sys.samplerName == "threshold",],
+    "mean", file.path(outdir, "samples-vs-error-thresholdsampler-mean"))
 
 tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
     PlotOverOrShortageVersusSamples,
-    data[data$sys.samplerName == "weighted",],
-    "p95", file.path(outdir, "samples-vs-error-weightedsampler-p95"))
+    data[data$sys.samplerName == "threshold",],
+    "p95", file.path(outdir, "samples-vs-error-thresholdsampler-p95"))
 
 tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
     PlotOverOrShortageVersusSamples,
@@ -392,13 +396,13 @@ tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
 
 tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
     PlotOverageVersusSamples,
-    data[data$sys.samplerName == "weighted",],
-    "mean", file.path(outdir, "samples-vs-overage-weightedsampler-mean"))
+    data[data$sys.samplerName == "threshold",],
+    "mean", file.path(outdir, "samples-vs-overage-thresholdsampler-mean"))
 
 tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
     PlotOverageVersusSamples,
-    data[data$sys.samplerName == "weighted",],
-    "p95", file.path(outdir, "samples-vs-overage-weightedsampler-p95"))
+    data[data$sys.samplerName == "threshold",],
+    "p95", file.path(outdir, "samples-vs-overage-thresholdsampler-p95"))
 
 tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
     PlotOverageVersusSamples,
@@ -412,13 +416,13 @@ tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
 
 tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
     PlotShortageVersusSamples,
-    data[data$sys.samplerName == "weighted",],
-    "mean", file.path(outdir, "samples-vs-shortage-weightedsampler-mean"))
+    data[data$sys.samplerName == "threshold",],
+    "mean", file.path(outdir, "samples-vs-shortage-thresholdsampler-mean"))
 
 tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
     PlotShortageVersusSamples,
-    data[data$sys.samplerName == "weighted",],
-    "p95", file.path(outdir, "samples-vs-shortage-weightedsampler-p95"))
+    data[data$sys.samplerName == "threshold",],
+    "p95", file.path(outdir, "samples-vs-shortage-thresholdsampler-p95"))
 
 tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
     PlotShortageVersusSamples,

@@ -45,7 +45,7 @@ func TestUniformSampler(t *testing.T) {
 	}
 }
 
-func TestWeightedSamplerAtApproval(t *testing.T) {
+func TestThresholdSamplerAtApproval(t *testing.T) {
 	testConfigs := []struct {
 		approval             float64
 		numSamplesAtApproval float64
@@ -64,7 +64,7 @@ func TestWeightedSamplerAtApproval(t *testing.T) {
 			t.Errorf("approval %v, numSamples %v: "+format, args...)
 		}
 
-		s := NewWeightedSampler(c.numSamplesAtApproval, c.approval)
+		s := NewThresholdSampler(c.numSamplesAtApproval, c.approval)
 
 		// Run each config many times. We test that each individual run
 		// has errors that are not too big, and that the mean error across
@@ -114,7 +114,7 @@ func TestWeightedSamplerAtApproval(t *testing.T) {
 	}
 }
 
-func TestWeightedSamplerAboveApproval(t *testing.T) {
+func TestThresholdSamplerAboveApproval(t *testing.T) {
 	testConfigs := []struct {
 		approval             float64
 		numSamplesAtApproval float64
@@ -133,7 +133,7 @@ func TestWeightedSamplerAboveApproval(t *testing.T) {
 			t.Errorf("approval %v, numSamples %v: "+format, args...)
 		}
 
-		s := NewWeightedSampler(c.numSamplesAtApproval, c.approval)
+		s := NewThresholdSampler(c.numSamplesAtApproval, c.approval)
 
 		// Run each config many times. We test that each individual run
 		// has errors that are not too big, and that the mean error across
@@ -183,7 +183,7 @@ func TestWeightedSamplerAboveApproval(t *testing.T) {
 	}
 }
 
-func TestWeightedSamplerBelowApproval(t *testing.T) {
+func TestThresholdSamplerBelowApproval(t *testing.T) {
 	testConfigs := []struct {
 		approval             float64
 		numSamplesAtApproval float64
@@ -202,7 +202,7 @@ func TestWeightedSamplerBelowApproval(t *testing.T) {
 			t.Errorf("approval %v, numSamples %v: "+format, args...)
 		}
 
-		s := NewWeightedSampler(c.numSamplesAtApproval, c.approval)
+		s := NewThresholdSampler(c.numSamplesAtApproval, c.approval)
 
 		// Run each config many times. We test that each individual run
 		// has errors that are not too big, and that the mean error across

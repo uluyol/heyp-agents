@@ -41,7 +41,7 @@ func genOut() []byte {
 	}{
 		{"Generic", "sampling.Sampler"},
 		{"Uniform", "sampling.UniformSampler"},
-		{"Weighted", "sampling.WeightedSampler"},
+		{"Threshold", "sampling.ThresholdSampler"},
 	}
 
 	var buf bytes.Buffer

@@ -69,7 +69,7 @@ func (c *Config) Enumerate() []Instance {
 						Sys: Sys{
 							Samplers: []sampling.Sampler{
 								sampling.UniformSampler{Prob: math.Min(1, float64(numSamples)/float64(numHosts))},
-								sampling.NewWeightedSampler(float64(numSamples), float64(numHosts)*distGen.DistMean()*aod),
+								sampling.NewThresholdSampler(float64(numSamples), float64(numHosts)*distGen.DistMean()*aod),
 							},
 							HostSelectors: []flowsel.Selector{
 								flowsel.HashSelector{},

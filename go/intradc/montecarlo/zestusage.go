@@ -48,7 +48,7 @@ func estimateUsageUniform(rng *rand.Rand, sampler sampling.UniformSampler, usage
 }
 
 // estimateUsage applies the sampler to the usage data and estimates the aggregate usage.
-func estimateUsageWeighted(rng *rand.Rand, sampler sampling.WeightedSampler, usages []float64) usageEstimate {
+func estimateUsageThreshold(rng *rand.Rand, sampler sampling.ThresholdSampler, usages []float64) usageEstimate {
 	aggEst := sampler.NewAggUsageEstimator()
 	distEst := sampler.NewUsageDistEstimator()
 	var numSamples float64
@@ -71,8 +71,8 @@ func estimateUsage(rng *rand.Rand, sampler sampling.Sampler, usages []float64) u
 	switch sampler := sampler.(type) {
 	case sampling.UniformSampler:
 		return estimateUsageUniform(rng, sampler, usages)
-	case sampling.WeightedSampler:
-		return estimateUsageWeighted(rng, sampler, usages)
+	case sampling.ThresholdSampler:
+		return estimateUsageThreshold(rng, sampler, usages)
 	default:
 		return estimateUsageGeneric(rng, sampler, usages)
 	}
