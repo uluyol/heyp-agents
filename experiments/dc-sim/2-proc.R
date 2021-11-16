@@ -155,18 +155,18 @@ PlotOverOrShortageVersusSamplesImpl <- function(
         data.frame(
             Kind=rep.int("QD-Realized", nrow(subset)),
             NumSamples=subset$numSamplesAtApproval,
-            OverOrShortage=subset[[paste0("sys.downgradeSummary.", dg.realized.metric, ".", metric.name)]]),
-        data.frame(
-            Kind=rep.int("RateLimit", nrow(subset)),
-            NumSamples=subset$numSamplesAtApproval,
-            OverOrShortage=subset[[paste0("sys.rateLimitSummary.", rl.metric, ".", metric.name)]]),
-        data.frame(
-            Kind=rep.int("FairUsage", nrow(subset)),
-            NumSamples=subset$numSamplesAtApproval,
-            OverOrShortage=subset[[paste0("sys.fairUsageSummary.", rl.metric, ".", metric.name)]]))
+            OverOrShortage=subset[[paste0("sys.downgradeSummary.", dg.realized.metric, ".", metric.name)]]))
+        # data.frame(
+        #     Kind=rep.int("RateLimit", nrow(subset)),
+        #     NumSamples=subset$numSamplesAtApproval,
+        #     OverOrShortage=subset[[paste0("sys.rateLimitSummary.", rl.metric, ".", metric.name)]]),
+        # data.frame(
+        #     Kind=rep.int("FairUsage", nrow(subset)),
+        #     NumSamples=subset$numSamplesAtApproval,
+        #     OverOrShortage=subset[[paste0("sys.fairUsageSummary.", rl.metric, ".", metric.name)]]))
 
     pdf(output, height=2.5, width=5)
-    p <- ggplot(data=long, aes(x=NumSamples, y=OverOrShortage, color=Kind)) +
+    p <- ggplot(data=long, aes(x=NumSamples, y=OverOrShortage, color=Kind, linetype=Kind)) +
         geom_line(size=1) +
         ylab(paste0(metric.name, " ", metric.axis.label)) +
         xlab("# of samples collected at approval (powers of two)") +
@@ -174,7 +174,7 @@ PlotOverOrShortageVersusSamplesImpl <- function(
             breaks=c(0, 8, 64, 512, 4096, 32768, 262144, 2097152),
             labels=c("0", "8", "64", "512", "4K", "32K", "256K", "2M"),
             limits=c(0, NA)) +
-        coord_cartesian(ylim=c(0, 0.2)) +
+        coord_cartesian(ylim=c(0, 0.4)) +
         guides(color=guide_legend(ncol=3), linetype=guide_legend(ncol=3)) +
         my_theme()
     print(p)
