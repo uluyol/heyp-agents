@@ -15,6 +15,7 @@ type Config struct {
 	NumHosts                  []int                 `json:"numHosts"`
 	ApprovalOverExpectedUsage []float64             `json:"approvalOverExpectedUsage"`
 	NumSamplesAtApproval      []int                 `json:"numSamplesAtApproval"`
+	NumPastPeriods            []int                 `json:"numPastPeriods"`
 }
 
 func (c *Config) Validate() error {
@@ -50,6 +51,14 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("NumSamplesAtApproval[%d] must be positive (found %d)", i, numSamples)
 		}
 	}
+	if len(c.NumPastPeriods) == 0 {
+		return errors.New("NumPastPeriods is empty")
+	}
+	for i, numPP := range c.NumPastPeriods {
+		if numPP <= 0 {
+			return fmt.Errorf("NumPastPeriods[%d] must be positive (found %d)", i, numPP)
+		}
+	}
 	return nil
 }
 
@@ -60,22 +69,25 @@ func (c *Config) Enumerate() []Instance {
 			distGen := dg.Gen.WithNumHosts(numHosts)
 			for _, aod := range c.ApprovalOverExpectedUsage {
 				for _, numSamples := range c.NumSamplesAtApproval {
-					id := ID(len(instances))
-					instances = append(instances, Instance{
-						ID:                        id,
-						HostUsages:                distGen,
-						ApprovalOverExpectedUsage: aod,
-						NumSamplesAtApproval:      numSamples,
-						Sys: Sys{
-							Samplers: []sampling.Sampler{
-								sampling.UniformSampler{Prob: math.Min(1, float64(numSamples)/float64(numHosts))},
-								sampling.NewThresholdSampler(float64(numSamples), float64(numHosts)*distGen.DistMean()*aod),
+					for _, numPP := range c.NumPastPeriods {
+						id := ID(len(instances))
+						instances = append(instances, Instance{
+							ID:                        id,
+							HostUsages:                distGen,
+							ApprovalOverExpectedUsage: aod,
+							NumSamplesAtApproval:      numSamples,
+							NumPastPeriods:            numPP,
+							Sys: Sys{
+								Samplers: []sampling.Sampler{
+									sampling.UniformSampler{Prob: math.Min(1, float64(numSamples)/float64(numHosts))},
+									sampling.NewThresholdSampler(float64(numSamples), float64(numHosts)*distGen.DistMean()*aod),
+								},
+								HostSelectors: []flowsel.Selector{
+									flowsel.HashSelector{},
+								},
 							},
-							HostSelectors: []flowsel.Selector{
-								flowsel.HashSelector{},
-							},
-						},
-					})
+						})
+					}
 				}
 			}
 		}
@@ -104,6 +116,7 @@ type Instance struct {
 	HostUsages                dists.DistGen
 	ApprovalOverExpectedUsage float64
 	NumSamplesAtApproval      int
+	NumPastPeriods            int
 	Sys                       Sys
 }
 
@@ -137,16 +150,21 @@ type SamplerSummary struct {
 
 type DowngradeSummary struct {
 	// Intended frac error = approximate intended frac - exact
-	IntendedFracError      Stats `json:"intendedFracError"`
-	AbsIntendedFracError   Stats `json:"absIntendedFracError"`
-	RealizedFracError      Stats `json:"realizedFracError"`
-	AbsRealizedFracError   Stats `json:"absRealizedFracError"`
-	IntendedOverage        Stats `json:"intendedOverage"`
-	IntendedShortage       Stats `json:"intendedShortage"`
-	IntendedOverOrShortage Stats `json:"intendedOverOrShortage"`
-	RealizedOverage        Stats `json:"realizedOverage"`
-	RealizedShortage       Stats `json:"realizedShortage"`
-	RealizedOverOrShortage Stats `json:"realizedOverOrShortage"`
+	IntendedFracError         Stats `json:"intendedFracError"`
+	AbsIntendedFracError      Stats `json:"absIntendedFracError"`
+	RealizedFracError         Stats `json:"realizedFracError"`
+	AbsRealizedFracError      Stats `json:"absRealizedFracError"`
+	NTLRealizedFracError      Stats `json:"ntlRealizedFracError"`
+	AbsNTLRealizedFracError   Stats `json:"absNTLRealizedFracError"`
+	IntendedOverage           Stats `json:"intendedOverage"`
+	IntendedShortage          Stats `json:"intendedShortage"`
+	IntendedOverOrShortage    Stats `json:"intendedOverOrShortage"`
+	RealizedOverage           Stats `json:"realizedOverage"`
+	RealizedShortage          Stats `json:"realizedShortage"`
+	RealizedOverOrShortage    Stats `json:"realizedOverOrShortage"`
+	NTLRealizedOverage        Stats `json:"ntlRealizedOverage"`
+	NTLRealizedShortage       Stats `json:"ntlRealizedShortage"`
+	NTLRealizedOverOrShortage Stats `json:"ntlRealizedOverOrShortage"`
 }
 
 type RateLimitSummary struct {
@@ -182,5 +200,6 @@ type InstanceResult struct {
 	NumHosts                  int       `json:"numHosts"`
 	ApprovalOverExpectedUsage float64   `json:"approvalOverExpectedUsage"`
 	NumSamplesAtApproval      int       `json:"numSamplesAtApproval"`
+	NumPastPeriods            int       `json:"numPastPeriods"`
 	Sys                       SysResult `json:"sys"`
 }

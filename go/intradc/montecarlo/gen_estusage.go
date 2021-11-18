@@ -13,7 +13,6 @@ import (
 )
 
 const templ = `
-// estimateUsage applies the sampler to the usage data and estimates the aggregate usage.
 func estimateUsage%%variant%%(rng *rand.Rand, sampler %%sampler%%, usages []float64, tracker *sampleTracker) usageEstimate {
 	aggEst := sampler.NewAggUsageEstimator()
 	distEst := sampler.NewUsageDistEstimator()
@@ -31,6 +30,14 @@ func estimateUsage%%variant%%(rng *rand.Rand, sampler %%sampler%%, usages []floa
 		Dist: distEst.EstDist(len(usages)),
 		NumSamples: numSamples,
 		WantNumSamples: sampler.IdealNumSamples(usages),
+	}
+}
+
+func sampleUsage%%variant%%(rng *rand.Rand, sampler %%sampler%%, usages []float64, tracker *sampleTracker) {
+	for id, v := range usages {
+		if sampler.ShouldInclude(rng, v) {
+			tracker.AddHost(id, v)
+		}
 	}
 }
 `
@@ -58,8 +65,8 @@ func genOut() []byte {
 		x = strings.ReplaceAll(x, "%%sampler%%", variant.samplerType)
 		buf.WriteString(x)
 	}
-
-	buf.WriteString("\nfunc estimateUsage(rng *rand.Rand, sampler sampling.Sampler, usages []float64, t *sampleTracker) usageEstimate {\n")
+	buf.WriteString("\n// estimateUsage applies the sampler to the usage data and estimates the aggregate usage.\n")
+	buf.WriteString("func estimateUsage(rng *rand.Rand, sampler sampling.Sampler, usages []float64, t *sampleTracker) usageEstimate {\n")
 	buf.WriteString("switch sampler := sampler.(type) {")
 	for _, variant := range variants {
 		if variant.name == "Generic" {
@@ -70,6 +77,20 @@ func genOut() []byte {
 	}
 	buf.WriteString("default:\n")
 	buf.WriteString("return estimateUsageGeneric(rng, sampler, usages, t)\n")
+	buf.WriteString("}\n}\n")
+
+	buf.WriteString("\n// sampleUsage applies the sampler to the usage data and tracks the usage of sampled hosts.\n")
+	buf.WriteString("func sampleUsage(rng *rand.Rand, sampler sampling.Sampler, usages []float64, t *sampleTracker) {\n")
+	buf.WriteString("switch sampler := sampler.(type) {")
+	for _, variant := range variants {
+		if variant.name == "Generic" {
+			continue
+		}
+		fmt.Fprintf(&buf, "case %s:\n", variant.samplerType)
+		fmt.Fprintf(&buf, "sampleUsage%s(rng, sampler, usages, t)\n", variant.name)
+	}
+	buf.WriteString("default:\n")
+	buf.WriteString("sampleUsageGeneric(rng, sampler, usages, t)\n")
 	buf.WriteString("}\n}\n")
 
 	return buf.Bytes()

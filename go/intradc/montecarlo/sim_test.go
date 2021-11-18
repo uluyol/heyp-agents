@@ -115,7 +115,7 @@ func TestApproxFairHostRateLimitFullSample(t *testing.T) {
 
 	for testi, test := range testCases {
 		rng := rand.New(rand.NewSource(uint64(time.Now().UnixNano())))
-		approxUsage := estimateUsage(rng, sampling.UniformSampler{Prob: 2}, test.usages)
+		approxUsage := estimateUsage(rng, sampling.UniformSampler{Prob: 2}, test.usages, newSampleTracker())
 
 		alloc := fairHostRateLimit(approxUsage.Dist, approxUsage.Sum, test.approval, len(test.usages))
 		if !approxEq(alloc.FromUsage, test.usageAlloc, 0.001) {

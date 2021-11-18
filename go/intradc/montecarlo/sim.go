@@ -77,14 +77,18 @@ type perSysData struct {
 		approxUsageSum float64
 	}
 	downgrade struct {
-		IntendedFracError      metricWithAbsVal
-		RealizedFracError      metricWithAbsVal
-		IntendedOverage        metric
-		IntendedShortage       metric
-		IntendedOverOrShortage metric
-		RealizedOverage        metric
-		RealizedShortage       metric
-		RealizedOverOrShortage metric
+		IntendedFracError         metricWithAbsVal
+		RealizedFracError         metricWithAbsVal
+		NTLRealizedFracError      metricWithAbsVal
+		IntendedOverage           metric
+		IntendedShortage          metric
+		IntendedOverOrShortage    metric
+		RealizedOverage           metric
+		RealizedShortage          metric
+		RealizedOverOrShortage    metric
+		NTLRealizedOverage        metric
+		NTLRealizedShortage       metric
+		NTLRealizedOverOrShortage metric
 	}
 	rateLimit struct {
 		NormError             metricWithAbsVal
@@ -114,12 +118,16 @@ func (r *perSysData) MergeFrom(o *perSysData) {
 
 	r.downgrade.IntendedFracError.MergeFrom(&o.downgrade.IntendedFracError)
 	r.downgrade.RealizedFracError.MergeFrom(&o.downgrade.RealizedFracError)
+	r.downgrade.NTLRealizedFracError.MergeFrom(&o.downgrade.NTLRealizedFracError)
 	r.downgrade.IntendedOverage.MergeFrom(&o.downgrade.IntendedOverage)
 	r.downgrade.IntendedShortage.MergeFrom(&o.downgrade.IntendedShortage)
 	r.downgrade.IntendedOverOrShortage.MergeFrom(&o.downgrade.IntendedOverOrShortage)
 	r.downgrade.RealizedOverage.MergeFrom(&o.downgrade.RealizedOverage)
 	r.downgrade.RealizedShortage.MergeFrom(&o.downgrade.RealizedShortage)
 	r.downgrade.RealizedOverOrShortage.MergeFrom(&o.downgrade.RealizedOverOrShortage)
+	r.downgrade.NTLRealizedOverage.MergeFrom(&o.downgrade.NTLRealizedOverage)
+	r.downgrade.NTLRealizedShortage.MergeFrom(&o.downgrade.NTLRealizedShortage)
+	r.downgrade.NTLRealizedOverOrShortage.MergeFrom(&o.downgrade.NTLRealizedOverOrShortage)
 
 	r.rateLimit.NormError.MergeFrom(&o.rateLimit.NormError)
 	r.rateLimit.Overage.MergeFrom(&o.rateLimit.Overage)
@@ -175,17 +183,27 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 
 			var (
 				// This simulation is non-deterministic, should be fine
-				rng           = rand.New(rand.NewSource(uint64(time.Now().UnixNano())))
-				usages        []float64
-				sampleTracker = newSampleTracker()
+				rng                      = rand.New(rand.NewSource(uint64(time.Now().UnixNano())))
+				usages                   []float64
+				usagesNoTemporalLocality []float64
+				sampleTracker            = newSampleTracker()
 			)
 
 			for run := 0; run < shardRuns; run++ {
 				sampleTracker.Clear()
 				usages = inst.HostUsages.GenDist(rng, usages)
+				usagesNoTemporalLocality = inst.HostUsages.GenDist(rng, usages)
+				rand.Shuffle(len(usagesNoTemporalLocality), func(i, j int) {
+					usagesNoTemporalLocality[i], usagesNoTemporalLocality[j] = usagesNoTemporalLocality[j], usagesNoTemporalLocality[i]
+				})
 
 				var exactUsage float64
 				for _, v := range usages {
+					exactUsage += v
+				}
+
+				var exactUsageNoTemporalLocality float64
+				for _, v := range usagesNoTemporalLocality {
 					exactUsage += v
 				}
 
@@ -195,8 +213,14 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 				exactApprovedUsage := math.Min(approval, exactUsage)
 				exactFairNumHostsThrottled, exactFairFracHostsThrottled := numAndFracHostsThrottled(usages, exactHostLimit.FromUsage)
 
+				exactDowngradeFracNoTemporalLocality := downgradeFrac(exactUsageNoTemporalLocality, approval)
+				exactApprovedUsageNoTemporalLocality := math.Min(approval, exactUsageNoTemporalLocality)
+
 				for samplerID, sampler := range inst.Sys.Samplers {
 					approxUsage := estimateUsage(rng, sampler, usages, sampleTracker)
+					for i := 0; i < inst.NumPastPeriods; i++ {
+						sampleUsage(rng, sampler, usages, sampleTracker)
+					}
 					approxDowngradeFrac := downgradeFrac(approxUsage.Sum, approval)
 					approxHostLimit := fairHostRateLimit(approxUsage.Dist, approxUsage.Sum, approval, len(usages))
 					approxUsage.Dist = nil // overwritten by fairHostRateLimit
@@ -216,14 +240,25 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 					intendedOverage := math.Max(0, intendedError)
 					intendedShortage := -math.Min(0, intendedError)
 
+					sortedSampledUsages := sampleTracker.GetSortedUsages()
+
 					for hostSelID, hostSel := range inst.Sys.HostSelectors {
 						approxRealizedDowngradeFrac := downgradeFracAfterHostSel(
-							hostSel.NewMatcher(approxDowngradeFrac, flowsel.SampledUsages{ /* TODO fill in */ }),
+							hostSel.NewMatcher(approxDowngradeFrac, sortedSampledUsages),
 							usages, exactUsage)
 
 						realizedError := normByExpected((1-approxRealizedDowngradeFrac)*exactUsage-exactApprovedUsage, exactApprovedUsage)
 						realizedOverage := math.Max(0, realizedError)
 						realizedShortage := -math.Min(0, realizedError)
+
+						// NTL = no temporal locality
+						approxRealizedDowngradeFracNTL := downgradeFracAfterHostSel(
+							hostSel.NewMatcher(approxDowngradeFrac, sortedSampledUsages),
+							usagesNoTemporalLocality, exactUsageNoTemporalLocality)
+
+						realizedErrorNTL := normByExpected((1-approxRealizedDowngradeFracNTL)*exactUsageNoTemporalLocality-exactApprovedUsageNoTemporalLocality, exactApprovedUsageNoTemporalLocality)
+						realizedOverageNTL := math.Max(0, realizedErrorNTL)
+						realizedShortageNTL := -math.Min(0, realizedErrorNTL)
 
 						sysID := inst.Sys.SysID(samplerID, hostSelID)
 
@@ -235,12 +270,16 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 
 						data[sysID].downgrade.IntendedFracError.Record(approxDowngradeFrac - exactDowngradeFrac)
 						data[sysID].downgrade.RealizedFracError.Record(approxRealizedDowngradeFrac - exactDowngradeFrac)
+						data[sysID].downgrade.NTLRealizedFracError.Record(approxRealizedDowngradeFracNTL - exactDowngradeFracNoTemporalLocality)
 						data[sysID].downgrade.IntendedOverage.Record(intendedOverage)
 						data[sysID].downgrade.IntendedShortage.Record(intendedShortage)
 						data[sysID].downgrade.IntendedOverOrShortage.Record(math.Abs(intendedError))
 						data[sysID].downgrade.RealizedOverage.Record(realizedOverage)
 						data[sysID].downgrade.RealizedShortage.Record(realizedShortage)
 						data[sysID].downgrade.RealizedOverOrShortage.Record(math.Abs(realizedError))
+						data[sysID].downgrade.NTLRealizedOverage.Record(realizedOverageNTL)
+						data[sysID].downgrade.NTLRealizedShortage.Record(realizedShortageNTL)
+						data[sysID].downgrade.NTLRealizedOverOrShortage.Record(math.Abs(realizedErrorNTL))
 
 						data[sysID].rateLimit.NormError.Record(normByExpected(approxHostLimit.FromDemand-exactHostLimit.FromDemand, exactHostLimit.FromDemand))
 						data[sysID].rateLimit.Overage.Record(rlOverage)
@@ -284,6 +323,7 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 				NumHosts:                  numHosts,
 				ApprovalOverExpectedUsage: inst.ApprovalOverExpectedUsage,
 				NumSamplesAtApproval:      inst.NumSamplesAtApproval,
+				NumPastPeriods:            inst.NumPastPeriods,
 				Sys: SysResult{
 					SamplerName:      inst.Sys.Samplers[samplerID].Name(),
 					HostSelectorName: inst.Sys.HostSelectors[hostSelID].Name(),
