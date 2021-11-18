@@ -84,6 +84,7 @@ func (c *Config) Enumerate() []Instance {
 								},
 								HostSelectors: []flowsel.Selector{
 									flowsel.HashSelector{},
+									flowsel.HybridSelector{NumRR: 50},
 								},
 							},
 						})

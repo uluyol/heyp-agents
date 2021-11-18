@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"math"
 	"sort"
+	"strconv"
 
 	xxhash "github.com/cespare/xxhash/v2"
 	"github.com/uluyol/heyp-agents/go/calg"
@@ -170,6 +171,6 @@ func (s HybridSelector) NewMatcher(matchFrac float64, data SampledUsages) Matche
 	}
 }
 
-func (s HybridSelector) Name() string { return "hybrid" }
+func (s HybridSelector) Name() string { return "hybrid-" + strconv.Itoa(s.NumRR) }
 
 var _ Selector = HybridSelector{}
