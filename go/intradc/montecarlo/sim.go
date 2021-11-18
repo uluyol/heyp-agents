@@ -173,10 +173,15 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 			}()
 			data := make([]perSysData, inst.Sys.Num())
 
-			// This simulation is non-deterministic, should be fine
-			rng := rand.New(rand.NewSource(uint64(time.Now().UnixNano())))
-			var usages []float64
+			var (
+				// This simulation is non-deterministic, should be fine
+				rng           = rand.New(rand.NewSource(uint64(time.Now().UnixNano())))
+				usages        []float64
+				sampleTracker = newSampleTracker()
+			)
+
 			for run := 0; run < shardRuns; run++ {
+				sampleTracker.Clear()
 				usages = inst.HostUsages.GenDist(rng, usages)
 
 				var exactUsage float64
@@ -191,7 +196,7 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 				exactFairNumHostsThrottled, exactFairFracHostsThrottled := numAndFracHostsThrottled(usages, exactHostLimit.FromUsage)
 
 				for samplerID, sampler := range inst.Sys.Samplers {
-					approxUsage := estimateUsage(rng, sampler, usages)
+					approxUsage := estimateUsage(rng, sampler, usages, sampleTracker)
 					approxDowngradeFrac := downgradeFrac(approxUsage.Sum, approval)
 					approxHostLimit := fairHostRateLimit(approxUsage.Dist, approxUsage.Sum, approval, len(usages))
 					approxUsage.Dist = nil // overwritten by fairHostRateLimit
@@ -316,6 +321,32 @@ func normByExpected(approx, expected float64) float64 {
 		}
 	}
 	return approx / expected
+}
+
+type sampleTracker struct {
+	hostUsage map[int]float64 // host ID -> usage
+}
+
+func newSampleTracker() *sampleTracker { return &sampleTracker{hostUsage: make(map[int]float64)} }
+
+func (t *sampleTracker) Clear() {
+	for k := range t.hostUsage {
+		delete(t.hostUsage, k)
+	}
+}
+
+func (t *sampleTracker) AddHost(hostID int, usage float64) { t.hostUsage[hostID] = usage }
+
+func (t *sampleTracker) GetSortedUsages() flowsel.SampledUsages {
+	var su flowsel.SampledUsages
+	su.Usages = make([]float64, 0, len(t.hostUsage))
+	su.HostIDs = make([]int, 0, len(t.hostUsage))
+	for id, usage := range t.hostUsage {
+		su.Usages = append(su.Usages, usage)
+		su.HostIDs = append(su.HostIDs, id)
+	}
+	su.SortByUsage()
+	return su
 }
 
 type usageEstimate struct {

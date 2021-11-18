@@ -8,15 +8,16 @@ import (
 )
 
 // estimateUsage applies the sampler to the usage data and estimates the aggregate usage.
-func estimateUsageGeneric(rng *rand.Rand, sampler sampling.Sampler, usages []float64) usageEstimate {
+func estimateUsageGeneric(rng *rand.Rand, sampler sampling.Sampler, usages []float64, tracker *sampleTracker) usageEstimate {
 	aggEst := sampler.NewAggUsageEstimator()
 	distEst := sampler.NewUsageDistEstimator()
 	var numSamples float64
-	for _, v := range usages {
+	for id, v := range usages {
 		if sampler.ShouldInclude(rng, v) {
 			numSamples++
 			aggEst.RecordSample(v)
 			distEst.RecordSample(v)
+			tracker.AddHost(id, v)
 		}
 	}
 	return usageEstimate{
@@ -28,15 +29,16 @@ func estimateUsageGeneric(rng *rand.Rand, sampler sampling.Sampler, usages []flo
 }
 
 // estimateUsage applies the sampler to the usage data and estimates the aggregate usage.
-func estimateUsageUniform(rng *rand.Rand, sampler sampling.UniformSampler, usages []float64) usageEstimate {
+func estimateUsageUniform(rng *rand.Rand, sampler sampling.UniformSampler, usages []float64, tracker *sampleTracker) usageEstimate {
 	aggEst := sampler.NewAggUsageEstimator()
 	distEst := sampler.NewUsageDistEstimator()
 	var numSamples float64
-	for _, v := range usages {
+	for id, v := range usages {
 		if sampler.ShouldInclude(rng, v) {
 			numSamples++
 			aggEst.RecordSample(v)
 			distEst.RecordSample(v)
+			tracker.AddHost(id, v)
 		}
 	}
 	return usageEstimate{
@@ -48,15 +50,16 @@ func estimateUsageUniform(rng *rand.Rand, sampler sampling.UniformSampler, usage
 }
 
 // estimateUsage applies the sampler to the usage data and estimates the aggregate usage.
-func estimateUsageThreshold(rng *rand.Rand, sampler sampling.ThresholdSampler, usages []float64) usageEstimate {
+func estimateUsageThreshold(rng *rand.Rand, sampler sampling.ThresholdSampler, usages []float64, tracker *sampleTracker) usageEstimate {
 	aggEst := sampler.NewAggUsageEstimator()
 	distEst := sampler.NewUsageDistEstimator()
 	var numSamples float64
-	for _, v := range usages {
+	for id, v := range usages {
 		if sampler.ShouldInclude(rng, v) {
 			numSamples++
 			aggEst.RecordSample(v)
 			distEst.RecordSample(v)
+			tracker.AddHost(id, v)
 		}
 	}
 	return usageEstimate{
@@ -67,13 +70,13 @@ func estimateUsageThreshold(rng *rand.Rand, sampler sampling.ThresholdSampler, u
 	}
 }
 
-func estimateUsage(rng *rand.Rand, sampler sampling.Sampler, usages []float64) usageEstimate {
+func estimateUsage(rng *rand.Rand, sampler sampling.Sampler, usages []float64, t *sampleTracker) usageEstimate {
 	switch sampler := sampler.(type) {
 	case sampling.UniformSampler:
-		return estimateUsageUniform(rng, sampler, usages)
+		return estimateUsageUniform(rng, sampler, usages, t)
 	case sampling.ThresholdSampler:
-		return estimateUsageThreshold(rng, sampler, usages)
+		return estimateUsageThreshold(rng, sampler, usages, t)
 	default:
-		return estimateUsageGeneric(rng, sampler, usages)
+		return estimateUsageGeneric(rng, sampler, usages, t)
 	}
 }

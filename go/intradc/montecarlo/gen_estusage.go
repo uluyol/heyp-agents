@@ -14,15 +14,16 @@ import (
 
 const templ = `
 // estimateUsage applies the sampler to the usage data and estimates the aggregate usage.
-func estimateUsage%%variant%%(rng *rand.Rand, sampler %%sampler%%, usages []float64) usageEstimate {
+func estimateUsage%%variant%%(rng *rand.Rand, sampler %%sampler%%, usages []float64, tracker *sampleTracker) usageEstimate {
 	aggEst := sampler.NewAggUsageEstimator()
 	distEst := sampler.NewUsageDistEstimator()
 	var numSamples float64
-	for _, v := range usages {
+	for id, v := range usages {
 		if sampler.ShouldInclude(rng, v) {
 			numSamples++
 			aggEst.RecordSample(v)
 			distEst.RecordSample(v)
+			tracker.AddHost(id, v)
 		}
 	}
 	return usageEstimate{
@@ -58,17 +59,17 @@ func genOut() []byte {
 		buf.WriteString(x)
 	}
 
-	buf.WriteString("\nfunc estimateUsage(rng *rand.Rand, sampler sampling.Sampler, usages []float64) usageEstimate {\n")
+	buf.WriteString("\nfunc estimateUsage(rng *rand.Rand, sampler sampling.Sampler, usages []float64, t *sampleTracker) usageEstimate {\n")
 	buf.WriteString("switch sampler := sampler.(type) {")
 	for _, variant := range variants {
 		if variant.name == "Generic" {
 			continue
 		}
 		fmt.Fprintf(&buf, "case %s:\n", variant.samplerType)
-		fmt.Fprintf(&buf, "return estimateUsage%s(rng, sampler, usages)\n", variant.name)
+		fmt.Fprintf(&buf, "return estimateUsage%s(rng, sampler, usages, t)\n", variant.name)
 	}
 	buf.WriteString("default:\n")
-	buf.WriteString("return estimateUsageGeneric(rng, sampler, usages)\n")
+	buf.WriteString("return estimateUsageGeneric(rng, sampler, usages, t)\n")
 	buf.WriteString("}\n}\n")
 
 	return buf.Bytes()
