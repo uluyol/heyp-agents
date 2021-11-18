@@ -72,8 +72,8 @@ func fbNumHosts(n int) [fbNumClusters]int {
 	return numHosts
 }
 
-func (g FB15Gen) GenDist(rng *rand.Rand) []float64 {
-	d := make([]float64, g.Num)
+func (g FB15Gen) GenDist(rng *rand.Rand, space []float64) []float64 {
+	d := resize(space, g.Num)
 	clusterHosts := fbNumHosts(g.Num)
 	clusterDemands := fbClusterDemands()
 

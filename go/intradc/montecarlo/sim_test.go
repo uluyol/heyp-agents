@@ -60,7 +60,7 @@ func TestCompareExactWithApproxFairHostRateLimitFullSample(t *testing.T) {
 		sampler := sampling.UniformSampler{Prob: 1.1}
 		distEst := sampler.NewUsageDistEstimator()
 		aggEst := sampler.NewAggUsageEstimator()
-		usages := gen.GenDist(rng)
+		usages := gen.GenDist(rng, nil)
 		for _, u := range usages {
 			if sampler.ShouldInclude(rng, u) {
 				aggEst.RecordSample(u)

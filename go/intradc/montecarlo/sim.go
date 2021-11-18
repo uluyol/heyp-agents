@@ -175,8 +175,9 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 
 			// This simulation is non-deterministic, should be fine
 			rng := rand.New(rand.NewSource(uint64(time.Now().UnixNano())))
+			var usages []float64
 			for run := 0; run < shardRuns; run++ {
-				usages := inst.HostUsages.GenDist(rng)
+				usages = inst.HostUsages.GenDist(rng, usages)
 
 				var exactUsage float64
 				for _, v := range usages {

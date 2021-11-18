@@ -9,11 +9,20 @@ import (
 
 type DistGen interface {
 	DistMean() float64 // not sample mean
-	GenDist(rng *rand.Rand) []float64
+	GenDist(rng *rand.Rand, space []float64) []float64
 	NumHosts() int
 	WithNumHosts(numHosts int) DistGen
 
 	ShortName() string
+}
+
+func resize(d []float64, n int) []float64 {
+	if cap(d) < n {
+		d = make([]float64, n)
+	} else {
+		d = d[0:n]
+	}
+	return d
 }
 
 type UniformGen struct {
@@ -25,8 +34,8 @@ type UniformGen struct {
 
 var _ DistGen = UniformGen{}
 
-func (g UniformGen) GenDist(rng *rand.Rand) []float64 {
-	d := make([]float64, g.Num)
+func (g UniformGen) GenDist(rng *rand.Rand, space []float64) []float64 {
+	d := resize(space, g.Num)
 	urange := g.High - g.Low
 	for i := range d {
 		d[i] = g.Low + rng.Float64()*urange
@@ -51,8 +60,11 @@ type ElephantsMiceGen struct {
 
 var _ DistGen = ElephantsMiceGen{}
 
-func (g ElephantsMiceGen) GenDist(rng *rand.Rand) []float64 {
-	return append(g.Elephants.GenDist(rng), g.Mice.GenDist(rng)...)
+func (g ElephantsMiceGen) GenDist(rng *rand.Rand, space []float64) []float64 {
+	space = resize(space, g.NumHosts())
+	g.Elephants.GenDist(rng, space[:g.Elephants.Num])
+	g.Mice.GenDist(rng, space[g.Elephants.Num:])
+	return space
 }
 
 func (g ElephantsMiceGen) DistMean() float64 {
@@ -81,8 +93,8 @@ type ExponentialGen struct {
 
 var _ DistGen = ExponentialGen{}
 
-func (g ExponentialGen) GenDist(rng *rand.Rand) []float64 {
-	d := make([]float64, g.Num)
+func (g ExponentialGen) GenDist(rng *rand.Rand, space []float64) []float64 {
+	d := resize(space, g.Num)
 	for i := range d {
 		d[i] = math.Min(g.Max, rng.ExpFloat64()*g.Mean)
 	}

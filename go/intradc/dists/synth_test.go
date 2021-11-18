@@ -14,7 +14,7 @@ func checkMean(t *testing.T, g DistGen, errorFrac float64) {
 	rng := rand.New(rand.NewSource(uint64(time.Now().UnixNano())))
 	var sum, count float64
 	for i := 0; i < numDistSamples; i++ {
-		d := g.GenDist(rng)
+		d := g.GenDist(rng, nil)
 		count += float64(len(d))
 
 		if len(d) != g.NumHosts() {
