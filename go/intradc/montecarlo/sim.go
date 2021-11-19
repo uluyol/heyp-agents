@@ -192,7 +192,7 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 			for run := 0; run < shardRuns; run++ {
 				sampleTracker.Clear()
 				usages = inst.HostUsages.GenDist(rng, usages)
-				usagesNoTemporalLocality = inst.HostUsages.GenDist(rng, usages)
+				usagesNoTemporalLocality = inst.HostUsages.GenDist(rng, usagesNoTemporalLocality)
 				rand.Shuffle(len(usagesNoTemporalLocality), func(i, j int) {
 					usagesNoTemporalLocality[i], usagesNoTemporalLocality[j] = usagesNoTemporalLocality[j], usagesNoTemporalLocality[i]
 				})
