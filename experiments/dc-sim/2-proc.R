@@ -141,21 +141,16 @@ PlotRateLimitNormErrorByHostUsagesGen <- function(subset, metric.name, metric, o
 PlotOverOrShortageVersusSamplesImpl <- function(
     dg.intended.metric, dg.realized.metric, rl.metric, metric.axis.label,
     subset, metric.name, output) {
-    x <- aggregate(sys.samplerSummary.numSamples.mean ~ numSamplesAtApproval, data=subset, FUN=sum)
-    if (nrow(x) != nrow(subset)) {
-        print(subset)
-        stop(paste0("found ", nrow(subset) - nrow(x), " duplicate entries in data"))
-    }
 
-    long <- rbind(
-        data.frame(
-            Kind=rep.int("QD-Intended", nrow(subset)),
-            NumSamples=subset$numSamplesAtApproval,
-            OverOrShortage=subset[[paste0("sys.downgradeSummary.", dg.intended.metric, ".", metric.name)]]),
-        data.frame(
-            Kind=rep.int("QD-Realized", nrow(subset)),
-            NumSamples=subset$numSamplesAtApproval,
-            OverOrShortage=subset[[paste0("sys.downgradeSummary.", dg.realized.metric, ".", metric.name)]]))
+    debug <- FALSE
+
+    host.selectors <- unique(subset$sys.hostSelectorName)
+    realized.err <- subset[[paste0("sys.downgradeSummary.", dg.realized.metric, ".", metric.name)]]
+
+    long <- unique(data.frame(
+                Kind=rep.int("QD-Intended", nrow(subset)),
+                NumSamples=subset$numSamplesAtApproval,
+                OverOrShortage=subset[[paste0("sys.downgradeSummary.", dg.intended.metric, ".", metric.name)]]))
         # data.frame(
         #     Kind=rep.int("RateLimit", nrow(subset)),
         #     NumSamples=subset$numSamplesAtApproval,
@@ -164,6 +159,36 @@ PlotOverOrShortageVersusSamplesImpl <- function(
         #     Kind=rep.int("FairUsage", nrow(subset)),
         #     NumSamples=subset$numSamplesAtApproval,
         #     OverOrShortage=subset[[paste0("sys.fairUsageSummary.", rl.metric, ".", metric.name)]]))
+
+    if (debug) {
+        cat("intended\n")
+        print(subset[, c(
+            "instanceID", "hostUsagesGen", "numHosts", "approvalOverExpectedUsage",
+            "numSamplesAtApproval", "numPastPeriods", "sys.samplerName",
+            "sys.hostSelectorName", paste0("sys.downgradeSummary.", dg.intended.metric, ".", metric.name))])
+        cat("\n")
+    }
+
+    for (hsel in host.selectors) {
+        if (debug) {
+            cat(paste0("hsel = ", hsel, "\n"))
+            print(subset[subset$sys.hostSelectorName == hsel, c(
+                "instanceID", "hostUsagesGen", "numHosts", "approvalOverExpectedUsage",
+                "numSamplesAtApproval", "numPastPeriods", "sys.samplerName",
+                "sys.hostSelectorName")])
+            cat("\n")
+        }
+        long <- rbind(
+            long,
+            data.frame(
+                Kind=rep.int(paste0("QD-Realized-", hsel), sum(subset$sys.hostSelectorName == hsel)),
+                NumSamples=subset$numSamplesAtApproval[subset$sys.hostSelectorName == hsel],
+                OverOrShortage=realized.err[subset$sys.hostSelectorName == hsel]))
+    }
+
+    if (debug) {
+        print(long)
+    }
 
     pdf(output, height=2.5, width=5)
     p <- ggplot(data=long, aes(x=NumSamples, y=OverOrShortage, color=Kind, linetype=Kind)) +
@@ -174,7 +199,7 @@ PlotOverOrShortageVersusSamplesImpl <- function(
             breaks=c(0, 8, 64, 512, 4096, 32768, 262144, 2097152),
             labels=c("0", "8", "64", "512", "4K", "32K", "256K", "2M"),
             limits=c(0, NA)) +
-        coord_cartesian(ylim=c(0, 0.4)) +
+        coord_cartesian(ylim=c(0, 0.5)) +
         guides(color=guide_legend(ncol=3), linetype=guide_legend(ncol=3)) +
         my_theme()
     print(p)
