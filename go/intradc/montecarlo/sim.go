@@ -73,8 +73,8 @@ type perSysData struct {
 		NumSamples     metric
 		WantNumSamples metric
 
-		exactUsageSum  float64
-		approxUsageSum float64
+		ExactUsageSum  float64
+		ApproxUsageSum float64
 	}
 	downgrade struct {
 		IntendedFracError         metricWithAbsVal
@@ -109,39 +109,10 @@ type perSysData struct {
 }
 
 func (r *perSysData) MergeFrom(o *perSysData) {
-	r.sampler.UsageNormError.MergeFrom(&o.sampler.UsageNormError)
-	r.sampler.NumSamples.MergeFrom(&o.sampler.NumSamples)
-	r.sampler.WantNumSamples.MergeFrom(&o.sampler.WantNumSamples)
-
-	r.sampler.exactUsageSum += o.sampler.exactUsageSum
-	r.sampler.approxUsageSum += o.sampler.approxUsageSum
-
-	r.downgrade.IntendedFracError.MergeFrom(&o.downgrade.IntendedFracError)
-	r.downgrade.RealizedFracError.MergeFrom(&o.downgrade.RealizedFracError)
-	r.downgrade.NTLRealizedFracError.MergeFrom(&o.downgrade.NTLRealizedFracError)
-	r.downgrade.IntendedOverage.MergeFrom(&o.downgrade.IntendedOverage)
-	r.downgrade.IntendedShortage.MergeFrom(&o.downgrade.IntendedShortage)
-	r.downgrade.IntendedOverOrShortage.MergeFrom(&o.downgrade.IntendedOverOrShortage)
-	r.downgrade.RealizedOverage.MergeFrom(&o.downgrade.RealizedOverage)
-	r.downgrade.RealizedShortage.MergeFrom(&o.downgrade.RealizedShortage)
-	r.downgrade.RealizedOverOrShortage.MergeFrom(&o.downgrade.RealizedOverOrShortage)
-	r.downgrade.NTLRealizedOverage.MergeFrom(&o.downgrade.NTLRealizedOverage)
-	r.downgrade.NTLRealizedShortage.MergeFrom(&o.downgrade.NTLRealizedShortage)
-	r.downgrade.NTLRealizedOverOrShortage.MergeFrom(&o.downgrade.NTLRealizedOverOrShortage)
-
-	r.rateLimit.NormError.MergeFrom(&o.rateLimit.NormError)
-	r.rateLimit.Overage.MergeFrom(&o.rateLimit.Overage)
-	r.rateLimit.Shortage.MergeFrom(&o.rateLimit.Shortage)
-	r.rateLimit.OverOrShortage.MergeFrom(&o.rateLimit.OverOrShortage)
-	r.rateLimit.FracThrottledError.MergeFrom(&o.rateLimit.FracThrottledError)
-	r.rateLimit.NumThrottledNormError.MergeFrom(&o.rateLimit.NumThrottledNormError)
-
-	r.fairUsage.NormError.MergeFrom(&o.fairUsage.NormError)
-	r.fairUsage.Overage.MergeFrom(&o.fairUsage.Overage)
-	r.fairUsage.Shortage.MergeFrom(&o.fairUsage.Shortage)
-	r.fairUsage.OverOrShortage.MergeFrom(&o.fairUsage.OverOrShortage)
-	r.fairUsage.FracThrottledError.MergeFrom(&o.fairUsage.FracThrottledError)
-	r.fairUsage.NumThrottledNormError.MergeFrom(&o.fairUsage.NumThrottledNormError)
+	mergeMetricsInto(&o.sampler, &r.sampler)
+	mergeMetricsInto(&o.downgrade, &r.downgrade)
+	mergeMetricsInto(&o.rateLimit, &r.rateLimit)
+	mergeMetricsInto(&o.fairUsage, &r.fairUsage)
 }
 
 // shardSize returns a shard size appropriate for the number of hosts.
@@ -265,8 +236,8 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 						data[sysID].sampler.UsageNormError.Record(normByExpected(approxUsage.Sum-exactUsage, exactUsage))
 						data[sysID].sampler.NumSamples.Record(approxUsage.NumSamples)
 						data[sysID].sampler.WantNumSamples.Record(approxUsage.WantNumSamples)
-						data[sysID].sampler.exactUsageSum += exactUsage
-						data[sysID].sampler.approxUsageSum += approxUsage.Sum
+						data[sysID].sampler.ExactUsageSum += exactUsage
+						data[sysID].sampler.ApproxUsageSum += approxUsage.Sum
 
 						data[sysID].downgrade.IntendedFracError.Record(approxDowngradeFrac - exactDowngradeFrac)
 						data[sysID].downgrade.RealizedFracError.Record(approxRealizedDowngradeFrac - exactDowngradeFrac)
@@ -329,8 +300,8 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 					HostSelectorName: inst.Sys.HostSelectors[hostSelID].Name(),
 					NumDataPoints:    numRuns,
 					SamplerSummary: populateSummary(&SamplerSummary{
-						MeanExactUsage:  data[sysID].sampler.exactUsageSum / float64(numRuns),
-						MeanApproxUsage: data[sysID].sampler.approxUsageSum / float64(numRuns),
+						MeanExactUsage:  data[sysID].sampler.ExactUsageSum / float64(numRuns),
+						MeanApproxUsage: data[sysID].sampler.ApproxUsageSum / float64(numRuns),
 					}, &data[sysID].sampler).(*SamplerSummary),
 					DowngradeSummary: populateSummary(&DowngradeSummary{}, &data[sysID].downgrade).(*DowngradeSummary),
 					RateLimitSummary: populateSummary(&RateLimitSummary{}, &data[sysID].rateLimit).(*RateLimitSummary),
