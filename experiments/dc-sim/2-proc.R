@@ -199,11 +199,20 @@ PlotOverOrShortageVersusSamplesImpl <- function(
             breaks=c(0, 8, 64, 512, 4096, 32768, 262144, 2097152),
             labels=c("0", "8", "64", "512", "4K", "32K", "256K", "2M"),
             limits=c(0, NA)) +
-        coord_cartesian(ylim=c(0, 0.5)) +
+        coord_cartesian(ylim=c(0, 0.65)) +
         guides(color=guide_legend(ncol=3), linetype=guide_legend(ncol=3)) +
         my_theme()
     print(p)
     .junk <- dev.off()
+}
+
+PlotNTLOverOrShortageVersusSamples <- function(subset, metric.name, output) {
+    PlotOverOrShortageVersusSamplesImpl(
+        "intendedOverOrShortage",
+        "ntlRealizedOverOrShortage",
+        "overOrShortage",
+        "|got - want| / want",
+        subset, metric.name, output)
 }
 
 PlotOverOrShortageVersusSamples <- function(subset, metric.name, output) {
@@ -400,6 +409,16 @@ tasks <- list(
             file.path(outdir, "num-samples-by-req.pdf"))))
 
 tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
+    PlotNTLOverOrShortageVersusSamples,
+    data[data$sys.samplerName == "threshold",],
+    "mean", file.path(outdir, "ntl-samples-vs-error-thresholdsampler-mean"))
+
+tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
+    PlotNTLOverOrShortageVersusSamples,
+    data[data$sys.samplerName == "threshold",],
+    "p95", file.path(outdir, "ntl-samples-vs-error-thresholdsampler-p95"))
+
+tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
     PlotOverOrShortageVersusSamples,
     data[data$sys.samplerName == "threshold",],
     "mean", file.path(outdir, "samples-vs-error-thresholdsampler-mean"))
@@ -409,15 +428,15 @@ tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
     data[data$sys.samplerName == "threshold",],
     "p95", file.path(outdir, "samples-vs-error-thresholdsampler-p95"))
 
-tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
-    PlotOverOrShortageVersusSamples,
-    data[data$sys.samplerName == "uniform",],
-    "mean", file.path(outdir, "samples-vs-error-uniformsampler-mean"))
+# tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
+#     PlotOverOrShortageVersusSamples,
+#     data[data$sys.samplerName == "uniform",],
+#     "mean", file.path(outdir, "samples-vs-error-uniformsampler-mean"))
 
-tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
-    PlotOverOrShortageVersusSamples,
-    data[data$sys.samplerName == "uniform",],
-    "p95", file.path(outdir, "samples-vs-error-uniformsampler-p95"))
+# tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
+#     PlotOverOrShortageVersusSamples,
+#     data[data$sys.samplerName == "uniform",],
+#     "p95", file.path(outdir, "samples-vs-error-uniformsampler-p95"))
 
 tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
     PlotOverageVersusSamples,
@@ -429,15 +448,15 @@ tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
     data[data$sys.samplerName == "threshold",],
     "p95", file.path(outdir, "samples-vs-overage-thresholdsampler-p95"))
 
-tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
-    PlotOverageVersusSamples,
-    data[data$sys.samplerName == "uniform",],
-    "mean", file.path(outdir, "samples-vs-overage-uniformsampler-mean"))
+# tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
+#     PlotOverageVersusSamples,
+#     data[data$sys.samplerName == "uniform",],
+#     "mean", file.path(outdir, "samples-vs-overage-uniformsampler-mean"))
 
-tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
-    PlotOverageVersusSamples,
-    data[data$sys.samplerName == "uniform",],
-    "p95", file.path(outdir, "samples-vs-overage-uniformsampler-p95"))
+# tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
+#     PlotOverageVersusSamples,
+#     data[data$sys.samplerName == "uniform",],
+#     "p95", file.path(outdir, "samples-vs-overage-uniformsampler-p95"))
 
 tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
     PlotShortageVersusSamples,
@@ -449,14 +468,14 @@ tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
     data[data$sys.samplerName == "threshold",],
     "p95", file.path(outdir, "samples-vs-shortage-thresholdsampler-p95"))
 
-tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
-    PlotShortageVersusSamples,
-    data[data$sys.samplerName == "uniform",],
-    "mean", file.path(outdir, "samples-vs-shortage-uniformsampler-mean"))
+# tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
+#     PlotShortageVersusSamples,
+#     data[data$sys.samplerName == "uniform",],
+#     "mean", file.path(outdir, "samples-vs-shortage-uniformsampler-mean"))
 
-tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
-    PlotShortageVersusSamples,
-    data[data$sys.samplerName == "uniform",],
-    "p95", file.path(outdir, "samples-vs-shortage-uniformsampler-p95"))
+# tasks <- AppendAllPlotOverOrShortageVersusSamples(tasks,
+#     PlotShortageVersusSamples,
+#     data[data$sys.samplerName == "uniform",],
+#     "p95", file.path(outdir, "samples-vs-shortage-uniformsampler-p95"))
 
 .junk <- parallel::mccollect()
