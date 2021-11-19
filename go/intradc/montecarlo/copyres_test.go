@@ -7,6 +7,59 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
+type testMergeMetrics struct {
+	ignored bool
+
+	M1 metricWithAbsVal
+	M2 metric           `dist:"collect"`
+	M3 metricWithAbsVal `dist:"collect"`
+
+	ToSum float64
+}
+
+func TestMergeMetricsInto(t *testing.T) {
+	src := testMergeMetrics{
+		ignored: true,
+		ToSum:   6,
+	}
+	src.M1.Record(1)
+	src.M2.Record(1.5)
+	src.M3.Record(2)
+
+	dst := testMergeMetrics{
+		ToSum: 1,
+	}
+	dst.M1.Record(10)
+	dst.M2.Record(20)
+	dst.M3.Record(30)
+
+	mergeMetricsInto(&src, &dst)
+	if dst.ignored != false {
+		t.Errorf("ignored set to true")
+	}
+	if got := dst.M1.Abs.sum; got != 11 {
+		t.Errorf("got wrong sum for M1: got %v want %v", got, 11)
+	}
+	if len(dst.M1.Abs.vals) != 2 {
+		t.Errorf("M1.Abs.vals = %v: want 2 elements", dst.M1.Abs.vals)
+	}
+	if got := dst.M2.sum; got != 21.5 {
+		t.Errorf("got wrong sum for M2: got %v want %v", got, 21.5)
+	}
+	if len(dst.M2.vals) != 2 {
+		t.Errorf("M2.vals = %v: want 2 elements", dst.M2.vals)
+	}
+	if got := dst.M3.Raw.sum; got != 32 {
+		t.Errorf("got wrong sum for M3: got %v want %v", got, 32)
+	}
+	if len(dst.M3.Raw.vals) != 2 {
+		t.Errorf("M3.Raw.vals = %v: want 2 elements", dst.M3.Raw.vals)
+	}
+	if dst.ToSum != 7 {
+		t.Errorf("ToSum: got %v, want %v", dst.ToSum, 7)
+	}
+}
+
 type testPop struct {
 	M1 metric
 	M2 metricWithAbsVal

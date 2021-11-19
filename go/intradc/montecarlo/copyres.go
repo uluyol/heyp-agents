@@ -1,9 +1,61 @@
 package montecarlo
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 )
+
+// mergeMetricsInto takes two structs (of the same type) and merges the data in src
+// to dst.
+//
+// Merging the data is done as follows:
+// - For fields that are of type metric or metricWithAbsVal, it calls dst.F.MergeFrom(&src.F)
+// - For fields that are of type float64, it does dst.F += src.F
+func mergeMetricsInto(src, dst interface{}) {
+	typ := reflect.TypeOf(src)
+	typ2 := reflect.TypeOf(dst)
+	if typ != typ2 {
+		panic(fmt.Errorf("src type %v != dst type %v", typ, typ2))
+	}
+
+	if typ.Kind() != reflect.Ptr {
+		panic(errors.New("data must be a pointer value"))
+	}
+
+	stType := typ.Elem()
+	if stType.Kind() != reflect.Struct {
+		panic(fmt.Errorf("data must be a pointer to struct, got pointer to %v", stType))
+	}
+
+	srcVal := reflect.ValueOf(src).Elem()
+	dstVal := reflect.ValueOf(dst).Elem()
+
+	numFields := stType.NumField()
+	for fieldID := 0; fieldID < numFields; fieldID++ {
+		fieldType := stType.Field(fieldID)
+		if !fieldType.IsExported() {
+			continue
+		}
+
+		srcIface := srcVal.Field(fieldID).Addr().Interface()
+		dstIface := dstVal.Field(fieldID).Addr().Interface()
+
+		switch srcP := srcIface.(type) {
+		case *metric:
+			dstP := dstIface.(*metric)
+			dstP.MergeFrom(srcP)
+		case *metricWithAbsVal:
+			dstP := dstIface.(*metricWithAbsVal)
+			dstP.MergeFrom(srcP)
+		case *float64:
+			dstP := dstIface.(*float64)
+			*dstP += *srcP
+		default:
+			panic(fmt.Errorf("unknown type %T", srcIface))
+		}
+	}
+}
 
 // populateSummary populates summaryOut (preserving the values of untouched fields)
 // with Stats of metrics in resultStruct. It returns summaryOut.
