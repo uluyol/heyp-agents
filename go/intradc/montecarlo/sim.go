@@ -193,7 +193,7 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 				sampleTracker.Clear()
 				usages = inst.HostUsages.GenDist(rng, usages)
 				usagesNoTemporalLocality = inst.HostUsages.GenDist(rng, usagesNoTemporalLocality)
-				rand.Shuffle(len(usagesNoTemporalLocality), func(i, j int) {
+				rng.Shuffle(len(usagesNoTemporalLocality), func(i, j int) {
 					usagesNoTemporalLocality[i], usagesNoTemporalLocality[j] = usagesNoTemporalLocality[j], usagesNoTemporalLocality[i]
 				})
 
@@ -204,7 +204,7 @@ func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []Insta
 
 				var exactUsageNoTemporalLocality float64
 				for _, v := range usagesNoTemporalLocality {
-					exactUsage += v
+					exactUsageNoTemporalLocality += v
 				}
 
 				exactDowngradeFrac := downgradeFrac(exactUsage, approval)
