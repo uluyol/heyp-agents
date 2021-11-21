@@ -1,0 +1,35 @@
+hostUsages:
+        - uniform:
+                  high: 12000
+        - exponential:
+                  mean: 6000
+                  max: 1000000
+        - elephantsMice:
+                  elephants:
+                          high: 1200000
+                          low: 800000
+                          num: 1000
+                  mice:
+                          high: 2000
+        - fb15: {}
+numHosts: [2_000_000]
+approvalOverExpectedUsage: [0.5, 0.9, 1, 1.1, 1.5]
+numSamplesAtApproval:
+        [
+                128,
+                256,
+                512,
+                1024,
+                2048,
+                4096,
+                8192,
+                16_384,
+                32_768,
+                65_536,
+                131_072,
+                262_144,
+                524_288,
+                1_048_576,
+                2_097_152,
+        ]
+numPastPeriods: [5]

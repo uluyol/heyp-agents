@@ -1,0 +1,61 @@
+hostUsages:
+        - elephantsMice:
+                  elephants:
+                          high: 1200000
+                          low: 800000
+                          num: 8
+                  mice:
+                          high: 0
+        - elephantsMice:
+                  elephants:
+                          high: 1200000
+                          low: 800000
+                          num: 16
+                  mice:
+                          high: 0
+        - elephantsMice:
+                  elephants:
+                          high: 1200000
+                          low: 800000
+                          num: 32
+                  mice:
+                          high: 0
+        - elephantsMice:
+                  elephants:
+                          high: 1200000
+                          low: 800000
+                          num: 64
+                  mice:
+                          high: 0
+        - elephantsMice:
+                  elephants:
+                          high: 1200000
+                          low: 800000
+                          num: 128
+                  mice:
+                          high: 0
+        - elephantsMice:
+                  elephants:
+                          high: 1200000
+                          low: 800000
+                          num: 256
+                  mice:
+                          high: 0
+        - elephantsMice:
+                  elephants:
+                          high: 1200000
+                          low: 800000
+                          num: 512
+                  mice:
+                          high: 0
+        - elephantsMice:
+                  elephants:
+                          high: 1200000
+                          low: 800000
+                          num: 1024
+                  mice:
+                          high: 0
+numHosts: [2_000_000]
+approvalOverExpectedUsage: [0.5, 0.9, 1, 1.1, 1.5]
+numSamplesAtApproval: [32_768] # TODO: replace with the right number
+numPastPeriods: [5]
