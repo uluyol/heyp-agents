@@ -8,9 +8,10 @@ if [[ $# -lt 1 ]]; then
 fi
 
 outdir=${1%/}
+config=${CONFIG:-config.yaml}
 
 mkdir -p "$outdir"
-cp config.yaml "$outdir/config.yaml"
+cp "$config" "$outdir/config.yaml"
 bin/dc-control-sim \
   -c "$outdir/config.yaml" \
   -o "$outdir/sim-data.json" \
