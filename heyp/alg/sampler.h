@@ -4,6 +4,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/random/distributions.h"
 #include "absl/random/random.h"
+#include "absl/strings/str_cat.h"
 
 namespace heyp {
 
@@ -11,6 +12,8 @@ struct ValCount {
   double val = 0;
   double expected_count = 0;
 };
+
+std::ostream& operator<<(std::ostream& os, const ValCount& vc);
 
 class ThresholdSampler {
  public:
@@ -57,6 +60,13 @@ class ThresholdSampler {
   const double approval_;
   const double thresh_;
 };
+
+// ValCount implementation
+
+inline std::ostream& operator<<(std::ostream& os, const ValCount& vc) {
+  return os << absl::StrCat("{ val = ", vc.val, ", expected_count = ", vc.expected_count,
+                            "}");
+}
 
 // ThresholdSampler implementation
 
