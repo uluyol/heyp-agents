@@ -60,15 +60,6 @@ load("@com_github_grpc_grpc//bazel:grpc_extra_deps.bzl", "grpc_extra_deps")
 grpc_extra_deps()
 
 http_archive(
-    name = "com_github_uluyol_routing_algos",
-    sha256 = "873dd78369f5a13f56df603bc35b2f7fdf2057ce54b8114c88af60282c16a3f3",
-    strip_prefix = "routing-algos-a43ab38b70d0301e38f0114df651edbffa730d4c",
-    urls = [
-        "https://github.com/uluyol/routing-algos/archive/a43ab38b70d0301e38f0114df651edbffa730d4c.tar.gz",
-    ],
-)
-
-http_archive(
     name = "glpk",
     build_file = "@com_google_ortools//bazel:glpk.BUILD",
     sha256 = "4281e29b628864dfe48d393a7bedd781e5b475387c20d8b0158f329994721a10",

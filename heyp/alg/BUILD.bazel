@@ -15,7 +15,7 @@ cc_library(
     srcs = ["export.cc"],
     visibility = ["//visibility:private"],
     deps = [
-        "@com_github_uluyol_routing_algos//routing-algos/alg:max-min-fairness",
+        "//heyp/alg/fairness:max-min-fairness",
         "@com_google_ortools//ortools/algorithms:knapsack_solver_lib",
     ],
 )

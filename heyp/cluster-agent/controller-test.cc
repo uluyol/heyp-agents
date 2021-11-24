@@ -7,13 +7,13 @@
 #include "gtest/gtest.h"
 #include "heyp/alg/debug.h"
 #include "heyp/alg/demand-predictor.h"
+#include "heyp/alg/fairness/max-min-fairness.h"
 #include "heyp/cluster-agent/allocator.h"
 #include "heyp/log/spdlog.h"
 #include "heyp/proto/config.pb.h"
 #include "heyp/proto/heyp.pb.h"
 #include "heyp/proto/parse-text.h"
 #include "heyp/proto/testing.h"
-#include "routing-algos/alg/max-min-fairness.h"
 
 using ::testing::AllOf;
 using ::testing::Ge;
@@ -362,12 +362,10 @@ class FixedDemandHostSimulator {
       }
     }
 
-    const int64_t hipri_waterlevel =
-        routing_algos::SingleLinkMaxMinFairnessProblem().ComputeWaterlevel(
-            hipri_bottleneck_available_bps, {per_host_hipri_send});
-    const int64_t lopri_waterlevel =
-        routing_algos::SingleLinkMaxMinFairnessProblem().ComputeWaterlevel(
-            lopri_bottleneck_available_bps, {per_host_lopri_send});
+    const int64_t hipri_waterlevel = SingleLinkMaxMinFairnessProblem().ComputeWaterlevel(
+        hipri_bottleneck_available_bps, per_host_hipri_send);
+    const int64_t lopri_waterlevel = SingleLinkMaxMinFairnessProblem().ComputeWaterlevel(
+        lopri_bottleneck_available_bps, per_host_lopri_send);
 
     SPDLOG_LOGGER_INFO(&logger_, "hipri_waterlevel: {} across {} children",
                        hipri_waterlevel, hipri_count);

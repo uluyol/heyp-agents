@@ -6,8 +6,8 @@
 #include <optional>
 #include <vector>
 
+#include "heyp/alg/fairness/max-min-fairness.h"
 #include "ortools/algorithms/knapsack_solver.h"
-#include "routing-algos/alg/max-min-fairness.h"
 
 extern "C" {
 int64_t HeypKnapsackUsageLOPRI(int64_t* demands, size_t num_demands,
@@ -42,7 +42,7 @@ int64_t HeypKnapsackUsageLOPRI(int64_t* demands, size_t num_demands,
 int64_t HeypMaxMinFairWaterlevel(int64_t admission, int64_t* demands,
                                  size_t num_demands) {
   std::vector<int64_t> demands_vec(demands, demands + num_demands);
-  routing_algos::SingleLinkMaxMinFairnessProblem problem;
-  return problem.ComputeWaterlevel(admission, {demands_vec});
+  heyp::SingleLinkMaxMinFairnessProblem problem;
+  return problem.ComputeWaterlevel(admission, demands_vec);
 }
 }

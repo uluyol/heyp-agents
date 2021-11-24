@@ -3,6 +3,7 @@
 #include "absl/container/flat_hash_map.h"
 #include "absl/strings/str_join.h"
 #include "heyp/alg/debug.h"
+#include "heyp/alg/fairness/max-min-fairness.h"
 #include "heyp/alg/qos-downgrade.h"
 #include "heyp/alg/rate-limits.h"
 #include "heyp/log/spdlog.h"
@@ -10,7 +11,6 @@
 #include "heyp/proto/config.pb.h"
 #include "heyp/proto/heyp.pb.h"
 #include "heyp/proto/monitoring.pb.h"
-#include "routing-algos/alg/max-min-fairness.h"
 
 namespace heyp {
 
@@ -131,8 +131,8 @@ class BweAggAllocator : public PerAggAllocator {
       demands.push_back(info.predicted_demand_bps());
     }
 
-    routing_algos::SingleLinkMaxMinFairnessProblem problem;
-    int64_t waterlevel = problem.ComputeWaterlevel(cluster_admission, {demands});
+    SingleLinkMaxMinFairnessProblem problem;
+    int64_t waterlevel = problem.ComputeWaterlevel(cluster_admission, demands);
 
     int64_t bonus = 0;
     if (config_.enable_bonus()) {
@@ -289,11 +289,9 @@ class HeypSigcomm20Allocator : public PerAggAllocator {
     debug_state->set_frac_lopri_post_partition(frac_lopri_post_partition);
     debug_state->set_frac_lopri_final(cur_state.frac_lopri);
 
-    routing_algos::SingleLinkMaxMinFairnessProblem problem;
-    int64_t hipri_waterlevel =
-        problem.ComputeWaterlevel(hipri_admission, {hipri_demands});
-    int64_t lopri_waterlevel =
-        problem.ComputeWaterlevel(lopri_admission, {lopri_demands});
+    SingleLinkMaxMinFairnessProblem problem;
+    int64_t hipri_waterlevel = problem.ComputeWaterlevel(hipri_admission, hipri_demands);
+    int64_t lopri_waterlevel = problem.ComputeWaterlevel(lopri_admission, lopri_demands);
 
     if (should_debug) {
       SPDLOG_LOGGER_INFO(&logger_, "hipri waterlevel = {} lopri waterlevel = {}",
@@ -439,11 +437,9 @@ class DowngradeAllocator : public PerAggAllocator {
     debug_state->set_frac_lopri_post_partition(frac_lopri_post_partition);
     debug_state->set_frac_lopri_final(std::min(frac_lopri, frac_lopri_post_partition));
 
-    routing_algos::SingleLinkMaxMinFairnessProblem problem;
-    int64_t hipri_waterlevel =
-        problem.ComputeWaterlevel(hipri_admission, {hipri_demands});
-    int64_t lopri_waterlevel =
-        problem.ComputeWaterlevel(lopri_admission, {lopri_demands});
+    SingleLinkMaxMinFairnessProblem problem;
+    int64_t hipri_waterlevel = problem.ComputeWaterlevel(hipri_admission, hipri_demands);
+    int64_t lopri_waterlevel = problem.ComputeWaterlevel(lopri_admission, lopri_demands);
 
     if (should_debug) {
       SPDLOG_LOGGER_INFO(&logger_, "hipri waterlevel = {} lopri waterlevel = {}",
