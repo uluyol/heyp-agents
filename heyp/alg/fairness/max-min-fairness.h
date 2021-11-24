@@ -40,12 +40,12 @@ class SingleLinkMaxMinFairnessProblem {
 
   // Computes the max-min fair waterlevel.
   int64_t ComputeWaterlevel(int64_t capacity,
-                            const std::vector<std::vector<int64_t>>& demands);
+                            const std::vector<int64_t>& demands);
 
   // Sets allocations[i][j] = min(demands[i][j], waterlevel).
   void SetAllocations(int64_t waterlevel,
-                      const std::vector<std::vector<int64_t>>& demands,
-                      std::vector<std::vector<int64_t>>* allocations);
+                      const std::vector<int64_t>& demands,
+                      std::vector<int64_t>* allocations);
 
  private:
   const SingleLinkMaxMinFairnessProblemOptions options_;

@@ -16,7 +16,7 @@ constexpr bool kDebugAllocator = false;
 
 // Simpler, slower allocation method. Used for testing / comparison.
 int64_t SolveFullSort(int64_t capacity, int64_t waterlevel,
-                      const std::vector<std::vector<int64_t>>& demands,
+                      const std::vector<int64_t>& demands,
                       absl::Span<int64_t> sorted_demands) {
   absl::c_sort(sorted_demands);
 
@@ -49,7 +49,7 @@ int64_t SolveFullSort(int64_t capacity, int64_t waterlevel,
 class PartialSortAllocator {
  public:
   PartialSortAllocator(int64_t original_capacity, int64_t capacity, int64_t waterlevel,
-                       const std::vector<std::vector<int64_t>>& demands,
+                       const std::vector<int64_t>& demands,
                        absl::Span<int64_t> sorted_demands)
       : capacity_(original_capacity),
         demands_(demands),
@@ -69,7 +69,7 @@ class PartialSortAllocator {
   bool PrintInvariantViolations();
 
   const int64_t capacity_;
-  const std::vector<std::vector<int64_t>>& demands_;
+  const std::vector<int64_t>& demands_;
   const absl::Span<int64_t> sorted_demands_;
 
   // Current area of interest is [lower_limit, upper_limit].
@@ -145,7 +145,8 @@ bool PartialSortAllocator::PrintInvariantViolations() {
 
 void PartialSortAllocator::PrintState() {
   std::cerr << "waterlevel: " << waterlevel_ << "\n";
-  std::cerr << "demands: [" << absl::StrJoin(demands_, " ", BpsVecFormatter()) << "]\n";
+  std::cerr << "demands: [" << absl::StrJoin(demands_, " ", absl::AlphaNumFormatter())
+            << "]\n";
   std::cerr << "lower_limit: " << lower_limit_ << " upper_limit: " << upper_limit_
             << "\n";
   std::cerr << "sorted_index: ["
@@ -246,7 +247,7 @@ int64_t PartialSortAllocator::ComputeWaterlevel() {
 
 // Faster allocation method.
 int64_t SolvePartialSort(int64_t original_capacity, int64_t capacity, int64_t waterlevel,
-                         const std::vector<std::vector<int64_t>>& demands,
+                         const std::vector<int64_t>& demands,
                          absl::Span<int64_t> sorted_demands) {
   PartialSortAllocator allocator(original_capacity, capacity, waterlevel, demands,
                                  sorted_demands);
@@ -260,13 +261,10 @@ SingleLinkMaxMinFairnessProblem::SingleLinkMaxMinFairnessProblem(
     : options_(std::move(options)) {}
 
 int64_t SingleLinkMaxMinFairnessProblem::ComputeWaterlevel(
-    int64_t capacity, const std::vector<std::vector<int64_t>>& demands) {
+    int64_t capacity, const std::vector<int64_t>& demands) {
   ABSL_ASSERT(capacity >= 0);
 
-  int64_t num_demands = 0;
-  for (const auto& d : demands) {
-    num_demands += d.size();
-  }
+  int64_t num_demands = demands.size();
 
   // Sort all demands in increasing order to make it easy to track how many
   // demands have been satisfied (or not).
@@ -283,14 +281,12 @@ int64_t SingleLinkMaxMinFairnessProblem::ComputeWaterlevel(
   size_t num_unfiltered = 0;
   int64_t waterlevel = 0;
   for (uint32_t i = 0; i < demands.size(); i++) {
-    for (uint32_t j = 0; j < demands[i].size(); j++) {
-      sorted_demands_buf_[num_unfiltered] = demands[i][j];
-      if (demands[i][j] <= tiny_demand_thresh) {
-        capacity -= demands[i][j];
-        waterlevel = std::max(waterlevel, demands[i][j]);
-      } else {
-        num_unfiltered++;
-      }
+    sorted_demands_buf_[num_unfiltered] = demands[i];
+    if (demands[i] <= tiny_demand_thresh) {
+      capacity -= demands[i];
+      waterlevel = std::max(waterlevel, demands[i]);
+    } else {
+      num_unfiltered++;
     }
   }
   const int64_t capacity_without_tiny = capacity;
@@ -312,15 +308,12 @@ int64_t SingleLinkMaxMinFairnessProblem::ComputeWaterlevel(
   return waterlevel;
 }
 
-void SingleLinkMaxMinFairnessProblem::SetAllocations(
-    int64_t waterlevel, const std::vector<std::vector<int64_t>>& demands,
-    std::vector<std::vector<int64_t>>* allocations) {
-  allocations->resize(demands.size(), {});
+void SingleLinkMaxMinFairnessProblem::SetAllocations(int64_t waterlevel,
+                                                     const std::vector<int64_t>& demands,
+                                                     std::vector<int64_t>* allocations) {
+  allocations->resize(demands.size(), 0);
   for (size_t i = 0; i < demands.size(); i++) {
-    (*allocations)[i].resize(demands[i].size(), 0);
-    for (size_t j = 0; j < demands[i].size(); j++) {
-      (*allocations)[i][j] = std::min(waterlevel, demands[i][j]);
-    }
+    (*allocations)[i] = std::min(waterlevel, demands[i]);
   }
 }
 

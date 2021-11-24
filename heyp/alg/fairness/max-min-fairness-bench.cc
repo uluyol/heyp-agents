@@ -13,18 +13,15 @@ namespace {
 static void BenchSingleLinkMaxMinFairnessProblem(
     benchmark::State& state, absl::FunctionRef<int64_t(int64_t)> total_to_capacity_fn,
     SingleLinkMaxMinFairnessProblem* problem) {
-  std::vector<std::vector<int64_t>> demands(4,
-                                            std::vector<int64_t>(state.range(0) / 4, 0));
+  std::vector<int64_t> demands(state.range(0), 0);
   std::mt19937_64 rng(0);
   int64_t total = 0;
   for (size_t i = 0; i < demands.size(); i++) {
-    for (size_t j = 0; j < demands[i].size(); j++) {
-      demands[i][j] = absl::Uniform<int64_t>(rng, 0, 1000);
-      total += demands[i][j];
-    }
+    demands[i] = absl::Uniform<int64_t>(rng, 0, 1000);
+    total += demands[i];
   }
   const int64_t capacity = total_to_capacity_fn(total);
-  std::vector<std::vector<int64_t>> allocs;
+  std::vector<int64_t> allocs;
   for (auto _ : state) {
     int64_t waterlevel = problem->ComputeWaterlevel(capacity, demands);
     problem->SetAllocations(waterlevel, demands, &allocs);
