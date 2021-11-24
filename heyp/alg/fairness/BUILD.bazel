@@ -1,0 +1,59 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library", "cc_test")
+
+package(default_visibility = ["//visibility:public"])
+
+cc_library(
+    name = "max-min-fairness",
+    srcs = ["max-min-fairness.cc"],
+    hdrs = ["max-min-fairness.h"],
+    deps = [
+        ":nth-element",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/base",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
+    ],
+)
+
+cc_test(
+    name = "max-min-fairness_test",
+    srcs = ["max-min-fairness-test.cc"],
+    deps = [
+        ":max-min-fairness",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/strings",
+        "@gtest//:gtest_main",
+    ],
+)
+
+cc_binary(
+    name = "max-min-fairness-bench",
+    srcs = ["max-min-fairness-bench.cc"],
+    deps = [
+        ":max-min-fairness",
+        "@com_google_absl//absl/functional:function_ref",
+        "@com_google_absl//absl/random",
+        "@com_google_benchmark//:benchmark_main",
+    ],
+)
+
+cc_library(
+    name = "nth-element",
+    hdrs = ["nth-element.h"],
+    visibility = ["//visibility:private"],
+    deps = [
+        "//third_party/fastalg:hybrid_qsort",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_test(
+    name = "nth-element-test",
+    srcs = ["nth-element-test.cc"],
+    deps = [
+        ":nth-element",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
+        "@gtest//:gtest_main",
+    ],
+)
