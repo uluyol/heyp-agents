@@ -73,6 +73,15 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "sampler",
+    hdrs = ["sampler.h"],
+    deps = [
+        "@com_google_absl//absl/container:flat_hash_map",
+        "@com_google_absl//absl/random",
+    ],
+)
+
 cc_test(
     name = "agg-info-views-test",
     srcs = ["agg-info-views-test.cc"],
@@ -101,5 +110,14 @@ cc_test(
         "//heyp/init:test-main",
         "//heyp/proto:parse-text",
         "@com_google_absl//absl/functional:bind_front",
+    ],
+)
+
+cc_test(
+    name = "sampler-test",
+    srcs = ["sampler-test.cc"],
+    deps = [
+        ":sampler",
+        "//heyp/init:test-main",
     ],
 )
