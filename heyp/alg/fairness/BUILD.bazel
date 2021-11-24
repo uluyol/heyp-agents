@@ -15,8 +15,23 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "max-min-fairness-dist",
+    srcs = ["max-min-fairness-dist.cc"],
+    hdrs = ["max-min-fairness-dist.h"],
+    deps = [
+        ":max-min-fairness",
+        ":nth-element",
+        "//heyp/alg:sampler",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/base",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/types:span",
+    ],
+)
+
 cc_test(
-    name = "max-min-fairness_test",
+    name = "max-min-fairness-test",
     srcs = ["max-min-fairness-test.cc"],
     deps = [
         ":max-min-fairness",
@@ -31,6 +46,28 @@ cc_binary(
     srcs = ["max-min-fairness-bench.cc"],
     deps = [
         ":max-min-fairness",
+        "@com_google_absl//absl/functional:function_ref",
+        "@com_google_absl//absl/random",
+        "@com_google_benchmark//:benchmark_main",
+    ],
+)
+
+cc_test(
+    name = "max-min-fairness-dist-test",
+    srcs = ["max-min-fairness-dist-test.cc"],
+    deps = [
+        ":max-min-fairness-dist",
+        "@com_google_absl//absl/algorithm:container",
+        "@com_google_absl//absl/strings",
+        "@gtest//:gtest_main",
+    ],
+)
+
+cc_binary(
+    name = "max-min-fairness-dist-bench",
+    srcs = ["max-min-fairness-dist-bench.cc"],
+    deps = [
+        ":max-min-fairness-dist",
         "@com_google_absl//absl/functional:function_ref",
         "@com_google_absl//absl/random",
         "@com_google_benchmark//:benchmark_main",
