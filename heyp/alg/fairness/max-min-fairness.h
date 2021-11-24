@@ -1,10 +1,9 @@
 #ifndef HEYP_ALG_FAIRNESS_MAX_MIN_FAIRNESS_H_
 #define HEYP_ALG_FAIRNESS_MAX_MIN_FAIRNESS_H_
 
-#include <stddef.h>
-#include <stdint.h>
-
 #include <cassert>
+#include <cstddef>
+#include <cstdint>
 #include <vector>
 
 #define RB_DEBUG_MAX_MIN_FAIRNESS 0
@@ -39,12 +38,10 @@ class SingleLinkMaxMinFairnessProblem {
           SingleLinkMaxMinFairnessProblemOptions());
 
   // Computes the max-min fair waterlevel.
-  int64_t ComputeWaterlevel(int64_t capacity,
-                            const std::vector<int64_t>& demands);
+  int64_t ComputeWaterlevel(int64_t capacity, const std::vector<int64_t>& demands);
 
   // Sets allocations[i][j] = min(demands[i][j], waterlevel).
-  void SetAllocations(int64_t waterlevel,
-                      const std::vector<int64_t>& demands,
+  void SetAllocations(int64_t waterlevel, const std::vector<int64_t>& demands,
                       std::vector<int64_t>* allocations);
 
  private:

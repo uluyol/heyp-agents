@@ -330,6 +330,6 @@ std::ostream& operator<<(std::ostream& os,
   }
   return os << absl::Substitute("{solve_method: $0, enable_tiny_flow_opt; $1}",
                                 solve_method, options.enable_tiny_flow_opt);
-}  // namespace rb
+}
 
 }  // namespace heyp
