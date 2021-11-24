@@ -117,7 +117,8 @@ void NthElementScratch(RandomIt first, RandomIt nth, RandomIt last, ScratchIt sc
 
 template <ptrdiff_t kScratchSize, typename RandomIt, typename Compare>
 void NthElement(RandomIt first, RandomIt nth, RandomIt last, Compare comp) {
-  int64_t scratch[kScratchSize];
+  using T = typename std::decay<decltype(*first)>::type;
+  T scratch[kScratchSize];
 
   while (first <= nth && nth <= last) {
     if (last - first > kScratchSize) {
