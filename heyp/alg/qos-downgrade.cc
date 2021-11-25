@@ -1,10 +1,12 @@
 #include "heyp/alg/qos-downgrade.h"
 
 #include <algorithm>
+#include <memory>
 
 #include "absl/strings/str_join.h"
 #include "heyp/alg/agg-info-views.h"
 #include "heyp/alg/debug.h"
+#include "heyp/alg/internal/downgrade-selector-hashing.h"
 #include "heyp/alg/internal/downgrade-selector-heyp-sigcomm-20.h"
 #include "heyp/alg/internal/downgrade-selector-knapsack-solver.h"
 #include "heyp/alg/internal/downgrade-selector-largest-first.h"
@@ -19,6 +21,9 @@ DowngradeSelector::DowngradeSelector(const proto::DowngradeSelector& selector)
       downgrade_jobs_(selector.downgrade_jobs()) {
   std::vector<bool> selection;
   switch (selector.type()) {
+    case proto::DS_HASHING:
+      impl_ = std::make_unique<internal::HashingDowngradeSelector>();
+      break;
     case proto::DS_HEYP_SIGCOMM20:
       impl_ = std::make_unique<internal::HeypSigcomm20DowngradeSelector>();
       break;

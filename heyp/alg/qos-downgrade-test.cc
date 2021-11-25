@@ -3,6 +3,7 @@
 #include "debug.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include "heyp/alg/internal/hash-ring.h"
 #include "heyp/proto/config.pb.h"
 #include "heyp/proto/parse-text.h"
 
@@ -11,8 +12,11 @@ namespace {
 
 proto::AggInfo ChildrenWithDemands(std::vector<int64_t> demands_bps) {
   proto::AggInfo info;
-  for (int64_t d : demands_bps) {
-    info.add_children()->set_predicted_demand_bps(d);
+  uint64_t num_demands = demands_bps.size();
+  for (uint64_t i = 0; i < demands_bps.size(); ++i) {
+    proto::FlowInfo* child = info.add_children();
+    child->set_predicted_demand_bps(demands_bps[i]);
+    child->mutable_flow()->set_host_id((internal::MaxId / num_demands) * i);
   }
   return info;
 }
@@ -25,11 +29,14 @@ struct ChildInfo {
 
 proto::AggInfo ChildrenWithDemandsAndPri(std::vector<ChildInfo> demands_islopri_bps) {
   proto::AggInfo info;
-  for (const ChildInfo& p : demands_islopri_bps) {
-    auto cp = info.add_children();
-    cp->mutable_flow()->set_job(p.job);
-    cp->set_predicted_demand_bps(p.demand_bps);
-    cp->set_currently_lopri(p.is_lopri);
+  uint64_t num_demands = demands_islopri_bps.size();
+  for (uint64_t i = 0; i < demands_islopri_bps.size(); ++i) {
+    const ChildInfo& p = demands_islopri_bps[i];
+    auto child = info.add_children();
+    child->mutable_flow()->set_job(p.job);
+    child->mutable_flow()->set_host_id((internal::MaxId / num_demands) * i);
+    child->set_predicted_demand_bps(p.demand_bps);
+    child->set_currently_lopri(p.is_lopri);
   }
   return info;
 }
@@ -195,6 +202,84 @@ TEST(KnapsackSolverPickLOPRIChildrenTest, JobLevel) {
   EXPECT_THAT(selector.PickLOPRIChildren(info, 0.572), testing::ElementsAre(f, f, t, t));
   EXPECT_THAT(selector.PickLOPRIChildren(info, 0.999), testing::ElementsAre(f, f, t, t));
   EXPECT_THAT(selector.PickLOPRIChildren(info, 1.000), testing::ElementsAre(t, t, t, t));
+}
+
+TEST(HashingLOPRIChildrenTest, Directionality) {
+  const proto::AggInfo info = ChildrenWithDemandsAndPri({
+      {200, true},
+      {100, false},
+      {300, false},
+      {100, true},
+  });
+
+  constexpr bool t = true;
+  constexpr bool f = false;
+
+  auto logger = MakeLogger("test");
+
+  proto::DowngradeSelector config;
+  config.set_type(proto::DS_HASHING);
+
+  EXPECT_THAT(DowngradeSelector(config).PickLOPRIChildren(info, 0.28),
+              testing::ElementsAre(t, t, f, f));
+  EXPECT_THAT(DowngradeSelector(config).PickLOPRIChildren(info, 0.58),
+              testing::ElementsAre(t, t, t, f));
+  EXPECT_THAT(DowngradeSelector(config).PickLOPRIChildren(info, 0.71),
+              testing::ElementsAre(t, t, t, f));
+  EXPECT_THAT(DowngradeSelector(config).PickLOPRIChildren(info, 0.14),
+              testing::ElementsAre(t, f, f, f));
+}
+
+TEST(HashingLOPRIChildrenTest, FlipCompletely) {
+  const proto::AggInfo info = ChildrenWithDemandsAndPri({
+      {200, true},
+      {100, false},
+      {300, false},
+      {100, true},
+  });
+
+  constexpr bool t = true;
+  constexpr bool f = false;
+
+  auto logger = MakeLogger("test");
+
+  proto::DowngradeSelector config;
+  config.set_type(proto::DS_HASHING);
+
+  EXPECT_THAT(DowngradeSelector(config).PickLOPRIChildren(info, 1),
+              testing::ElementsAre(t, t, t, t));
+  EXPECT_THAT(DowngradeSelector(config).PickLOPRIChildren(info, 0),
+              testing::ElementsAre(f, f, f, f));
+}
+
+TEST(HashingLOPRIChildrenTest, IsFIFO) {
+  const proto::AggInfo info = ChildrenWithDemandsAndPri({
+      {200, true},
+      {100, false},
+      {300, false},
+      {100, true},
+  });
+
+  constexpr bool t = true;
+  constexpr bool f = false;
+
+  auto logger = MakeLogger("test");
+
+  proto::DowngradeSelector config;
+  config.set_type(proto::DS_HASHING);
+  DowngradeSelector selector(config);
+
+  SetDebugQosAndRateLimitSelection(true);
+
+  EXPECT_THAT(selector.PickLOPRIChildren(info, 0.20), testing::ElementsAre(t, f, f, f));
+  EXPECT_THAT(selector.PickLOPRIChildren(info, 0.20), testing::ElementsAre(t, f, f, f));
+  EXPECT_THAT(selector.PickLOPRIChildren(info, 0.00), testing::ElementsAre(f, f, f, f));
+  EXPECT_THAT(selector.PickLOPRIChildren(info, 0.50), testing::ElementsAre(f, t, t, f));
+  EXPECT_THAT(selector.PickLOPRIChildren(info, 0.25), testing::ElementsAre(f, f, t, f));
+  EXPECT_THAT(selector.PickLOPRIChildren(info, 0.00), testing::ElementsAre(f, f, f, f));
+  EXPECT_THAT(selector.PickLOPRIChildren(info, 0.50), testing::ElementsAre(t, f, f, t));
+
+  SetDebugQosAndRateLimitSelection(false);
 }
 
 TEST(FracAdmittedAtLOPRITest, Basic) {

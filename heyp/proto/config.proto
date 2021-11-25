@@ -120,7 +120,7 @@ enum DowngradeSelectorType {
   DS_HEYP_SIGCOMM20 = 0;
   DS_HASHING = 1;
   DS_HYBRID_HASHING = 2;  // TODO: implement
-  DS_KNAPSACK_SOLVER = 3; // TODO: implement
+  DS_KNAPSACK_SOLVER = 3;
   DS_LARGEST_FIRST = 4;
 };
 
