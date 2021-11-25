@@ -116,8 +116,16 @@ TEST(JobLevelViewTest, Basic) {
 
   JobLevelView view(raw_info);
 
+  std::vector<const google::protobuf::FieldDescriptor*> fields_to_ignore{
+      proto::FlowInfo::GetDescriptor()
+          ->FindFieldByName("flow")
+          ->message_type()
+          ->FindFieldByName("host_id"),
+  };
+
   EXPECT_THAT(view.parent(), EqProto(raw_info.parent()));
-  EXPECT_THAT(view.children(), EqRepeatedProto(expected_job_children));
+  EXPECT_THAT(view.children(),
+              EqRepeatedProtoIgnoringFields(expected_job_children, fields_to_ignore));
   EXPECT_THAT(view.job_index_of_host(), testing::ElementsAre(0, 1, 0));
 }
 

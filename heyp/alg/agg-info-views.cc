@@ -2,6 +2,7 @@
 
 #include "absl/container/flat_hash_map.h"
 #include "heyp/proto/alg.h"
+#include "third_party/xxhash/xxhash.h"
 
 namespace heyp {
 
@@ -25,6 +26,7 @@ JobLevelView::JobLevelView(const proto::AggInfo& info)
     flow_to_job_index[flow] = job_children_.size();
     proto::FlowInfo* info = job_children_.Add();
     *info->mutable_flow() = flow;
+    info->mutable_flow()->set_host_id(XXH64(flow.job().data(), flow.job().size(), 0));
     return job_children_.size() - 1;
   };
 
