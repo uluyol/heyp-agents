@@ -174,6 +174,7 @@ class HeypSigcomm20Allocator : public PerAggAllocator {
   const double demand_multiplier_;
   spdlog::logger logger_;
   FlowMap<PerAggState> agg_states_;
+  DowngradeSelector downgrade_selector_;
 
  public:
   HeypSigcomm20Allocator(const proto::ClusterAllocatorConfig& config,
@@ -181,7 +182,8 @@ class HeypSigcomm20Allocator : public PerAggAllocator {
                          double demand_multiplier)
       : config_(config),
         demand_multiplier_(demand_multiplier),
-        logger_(MakeLogger("heyp-sigcomm20-alloc")) {
+        logger_(MakeLogger("heyp-sigcomm20-alloc")),
+        downgrade_selector_(config_.downgrade_selector()) {
     for (const auto& flow_alloc_pair : agg_admissions) {
       agg_states_[flow_alloc_pair.first] = {.alloc = flow_alloc_pair.second};
     }
@@ -255,9 +257,8 @@ class HeypSigcomm20Allocator : public PerAggAllocator {
       debug_state->set_burstiness(1);
     }
 
-    std::vector<bool> lopri_children =
-        PickLOPRIChildren(agg_info, cur_state.frac_lopri_with_probing,
-                          config_.downgrade_selector(), &logger_);
+    std::vector<bool> lopri_children = downgrade_selector_.PickLOPRIChildren(
+        agg_info, cur_state.frac_lopri_with_probing);
 
     std::vector<int64_t> hipri_demands;
     std::vector<int64_t> lopri_demands;
@@ -347,13 +348,15 @@ class DowngradeAllocator : public PerAggAllocator {
   const proto::ClusterAllocatorConfig config_;
   const FlowMap<proto::FlowAlloc> agg_admissions_;
   spdlog::logger logger_;
+  DowngradeSelector downgrade_selector_;
 
  public:
   DowngradeAllocator(const proto::ClusterAllocatorConfig& config,
                      FlowMap<proto::FlowAlloc> agg_admissions, double demand_multiplier)
       : config_(config),
         agg_admissions_(agg_admissions),
-        logger_(MakeLogger("downgrade-alloc")) {}
+        logger_(MakeLogger("downgrade-alloc")),
+        downgrade_selector_(config_.downgrade_selector()) {}
 
   std::vector<proto::FlowAlloc> AllocAgg(
       absl::Time time, const proto::AggInfo& agg_info,
@@ -409,8 +412,7 @@ class DowngradeAllocator : public PerAggAllocator {
 
     std::vector<bool> lopri_children;
     if (frac_lopri > 0) {
-      lopri_children =
-          PickLOPRIChildren(agg_info, frac_lopri, config_.downgrade_selector(), &logger_);
+      lopri_children = downgrade_selector_.PickLOPRIChildren(agg_info, frac_lopri);
     } else {
       lopri_children = std::vector<bool>(agg_info.children_size(), false);
     }

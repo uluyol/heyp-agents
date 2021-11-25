@@ -102,18 +102,14 @@ TEST(HeypSigcomm20PickLOPRIChildrenTest, Directionality) {
   constexpr bool t = true;
   constexpr bool f = false;
 
-  auto logger = MakeLogger("test");
-  proto::DowngradeSelector selector;
-  selector.set_type(proto::DS_HEYP_SIGCOMM20);
+  proto::DowngradeSelector config;
+  config.set_type(proto::DS_HEYP_SIGCOMM20);
+  DowngradeSelector selector(config);
 
-  EXPECT_THAT(PickLOPRIChildren(info, 0.28, selector, &logger),
-              testing::ElementsAre(t, f, f, f));
-  EXPECT_THAT(PickLOPRIChildren(info, 0.58, selector, &logger),
-              testing::ElementsAre(t, t, f, t));
-  EXPECT_THAT(PickLOPRIChildren(info, 0.71, selector, &logger),
-              testing::ElementsAre(t, t, f, t));
-  EXPECT_THAT(PickLOPRIChildren(info, 0.14, selector, &logger),
-              testing::ElementsAre(f, f, f, t));
+  EXPECT_THAT(selector.PickLOPRIChildren(info, 0.28), testing::ElementsAre(t, f, f, f));
+  EXPECT_THAT(selector.PickLOPRIChildren(info, 0.58), testing::ElementsAre(t, t, f, t));
+  EXPECT_THAT(selector.PickLOPRIChildren(info, 0.71), testing::ElementsAre(t, t, f, t));
+  EXPECT_THAT(selector.PickLOPRIChildren(info, 0.14), testing::ElementsAre(f, f, f, t));
 }
 
 TEST(HeypSigcomm20PickLOPRIChildrenTest, FlipCompletely) {
@@ -128,13 +124,12 @@ TEST(HeypSigcomm20PickLOPRIChildrenTest, FlipCompletely) {
   constexpr bool f = false;
 
   auto logger = MakeLogger("test");
-  proto::DowngradeSelector selector;
-  selector.set_type(proto::DS_HEYP_SIGCOMM20);
+  proto::DowngradeSelector config;
+  config.set_type(proto::DS_HEYP_SIGCOMM20);
+  DowngradeSelector selector(config);
 
-  EXPECT_THAT(PickLOPRIChildren(info, 1, selector, &logger),
-              testing::ElementsAre(t, t, t, t));
-  EXPECT_THAT(PickLOPRIChildren(info, 0, selector, &logger),
-              testing::ElementsAre(f, f, f, f));
+  EXPECT_THAT(selector.PickLOPRIChildren(info, 1), testing::ElementsAre(t, t, t, t));
+  EXPECT_THAT(selector.PickLOPRIChildren(info, 0), testing::ElementsAre(f, f, f, f));
 }
 
 TEST(LargestFirstPickLOPRIChildrenTest, Directionality) {
@@ -150,17 +145,14 @@ TEST(LargestFirstPickLOPRIChildrenTest, Directionality) {
 
   auto logger = MakeLogger("test");
 
-  proto::DowngradeSelector selector;
-  selector.set_type(proto::DS_LARGEST_FIRST);
+  proto::DowngradeSelector config;
+  config.set_type(proto::DS_LARGEST_FIRST);
+  DowngradeSelector selector(config);
 
-  EXPECT_THAT(PickLOPRIChildren(info, 0.28, selector, &logger),
-              testing::ElementsAre(f, f, t, f));
-  EXPECT_THAT(PickLOPRIChildren(info, 0.58, selector, &logger),
-              testing::ElementsAre(t, f, t, f));
-  EXPECT_THAT(PickLOPRIChildren(info, 0.71, selector, &logger),
-              testing::ElementsAre(t, f, t, f));
-  EXPECT_THAT(PickLOPRIChildren(info, 0.14, selector, &logger),
-              testing::ElementsAre(f, f, f, f));
+  EXPECT_THAT(selector.PickLOPRIChildren(info, 0.28), testing::ElementsAre(f, f, t, f));
+  EXPECT_THAT(selector.PickLOPRIChildren(info, 0.58), testing::ElementsAre(t, f, t, f));
+  EXPECT_THAT(selector.PickLOPRIChildren(info, 0.71), testing::ElementsAre(t, f, t, f));
+  EXPECT_THAT(selector.PickLOPRIChildren(info, 0.14), testing::ElementsAre(f, f, f, f));
 }
 
 TEST(LargestFirstPickLOPRIChildrenTest, FlipCompletely) {
@@ -176,13 +168,12 @@ TEST(LargestFirstPickLOPRIChildrenTest, FlipCompletely) {
 
   auto logger = MakeLogger("test");
 
-  proto::DowngradeSelector selector;
-  selector.set_type(proto::DS_LARGEST_FIRST);
+  proto::DowngradeSelector config;
+  config.set_type(proto::DS_LARGEST_FIRST);
+  DowngradeSelector selector(config);
 
-  EXPECT_THAT(PickLOPRIChildren(info, 1, selector, &logger),
-              testing::ElementsAre(t, t, t, t));
-  EXPECT_THAT(PickLOPRIChildren(info, 0, selector, &logger),
-              testing::ElementsAre(f, f, f, f));
+  EXPECT_THAT(selector.PickLOPRIChildren(info, 1), testing::ElementsAre(t, t, t, t));
+  EXPECT_THAT(selector.PickLOPRIChildren(info, 0), testing::ElementsAre(f, f, f, f));
 }
 
 TEST(KnapsackSolverPickLOPRIChildrenTest, Directionality) {
@@ -198,22 +189,22 @@ TEST(KnapsackSolverPickLOPRIChildrenTest, Directionality) {
 
   auto logger = MakeLogger("test");
 
-  proto::DowngradeSelector selector;
-  selector.set_type(proto::DS_KNAPSACK_SOLVER);
+  proto::DowngradeSelector config;
+  config.set_type(proto::DS_KNAPSACK_SOLVER);
+  DowngradeSelector selector(config);
 
   EXPECT_THAT(
-      PickLOPRIChildren(info, 0.28, selector, &logger),
+      selector.PickLOPRIChildren(info, 0.28),
       testing::AnyOf(testing::ElementsAre(f, t, f, f), testing::ElementsAre(f, f, f, t)));
   EXPECT_THAT(
-      PickLOPRIChildren(info, 0.58, selector, &logger),
+      selector.PickLOPRIChildren(info, 0.58),
       testing::AnyOf(testing::ElementsAre(t, t, f, t), testing::ElementsAre(f, t, t, f),
                      testing::ElementsAre(f, f, t, t)));
   EXPECT_THAT(
-      PickLOPRIChildren(info, 0.71, selector, &logger),
+      selector.PickLOPRIChildren(info, 0.71),
       testing::AnyOf(testing::ElementsAre(t, t, f, t), testing::ElementsAre(f, t, t, f),
                      testing::ElementsAre(f, f, t, t)));
-  EXPECT_THAT(PickLOPRIChildren(info, 0.14, selector, &logger),
-              testing::ElementsAre(f, f, f, f));
+  EXPECT_THAT(selector.PickLOPRIChildren(info, 0.14), testing::ElementsAre(f, f, f, f));
 }
 
 TEST(KnapsackSolverPickLOPRIChildrenTest, FlipCompletely) {
@@ -229,13 +220,12 @@ TEST(KnapsackSolverPickLOPRIChildrenTest, FlipCompletely) {
 
   auto logger = MakeLogger("test");
 
-  proto::DowngradeSelector selector;
-  selector.set_type(proto::DS_KNAPSACK_SOLVER);
+  proto::DowngradeSelector config;
+  config.set_type(proto::DS_KNAPSACK_SOLVER);
+  DowngradeSelector selector(config);
 
-  EXPECT_THAT(PickLOPRIChildren(info, 1, selector, &logger),
-              testing::ElementsAre(t, t, t, t));
-  EXPECT_THAT(PickLOPRIChildren(info, 0, selector, &logger),
-              testing::ElementsAre(f, f, f, f));
+  EXPECT_THAT(selector.PickLOPRIChildren(info, 1), testing::ElementsAre(t, t, t, t));
+  EXPECT_THAT(selector.PickLOPRIChildren(info, 0), testing::ElementsAre(f, f, f, f));
 }
 
 TEST(KnapsackSolverPickLOPRIChildrenTest, JobLevel) {
@@ -251,22 +241,17 @@ TEST(KnapsackSolverPickLOPRIChildrenTest, JobLevel) {
 
   auto logger = MakeLogger("test");
 
-  proto::DowngradeSelector selector;
-  selector.set_type(proto::DS_KNAPSACK_SOLVER);
-  selector.set_downgrade_jobs(true);
+  proto::DowngradeSelector config;
+  config.set_type(proto::DS_KNAPSACK_SOLVER);
+  config.set_downgrade_jobs(true);
+  DowngradeSelector selector(config);
 
-  EXPECT_THAT(PickLOPRIChildren(info, 0.428, selector, &logger),
-              testing::ElementsAre(f, f, f, f));
-  EXPECT_THAT(PickLOPRIChildren(info, 0.429, selector, &logger),
-              testing::ElementsAre(t, t, f, f));
-  EXPECT_THAT(PickLOPRIChildren(info, 0.571, selector, &logger),
-              testing::ElementsAre(t, t, f, f));
-  EXPECT_THAT(PickLOPRIChildren(info, 0.572, selector, &logger),
-              testing::ElementsAre(f, f, t, t));
-  EXPECT_THAT(PickLOPRIChildren(info, 0.999, selector, &logger),
-              testing::ElementsAre(f, f, t, t));
-  EXPECT_THAT(PickLOPRIChildren(info, t, selector, &logger),
-              testing::ElementsAre(t, t, t, t));
+  EXPECT_THAT(selector.PickLOPRIChildren(info, 0.428), testing::ElementsAre(f, f, f, f));
+  EXPECT_THAT(selector.PickLOPRIChildren(info, 0.429), testing::ElementsAre(t, t, f, f));
+  EXPECT_THAT(selector.PickLOPRIChildren(info, 0.571), testing::ElementsAre(t, t, f, f));
+  EXPECT_THAT(selector.PickLOPRIChildren(info, 0.572), testing::ElementsAre(f, f, t, t));
+  EXPECT_THAT(selector.PickLOPRIChildren(info, 0.999), testing::ElementsAre(f, f, t, t));
+  EXPECT_THAT(selector.PickLOPRIChildren(info, 1.000), testing::ElementsAre(t, t, t, t));
 }
 
 TEST(FracAdmittedAtLOPRITest, Basic) {

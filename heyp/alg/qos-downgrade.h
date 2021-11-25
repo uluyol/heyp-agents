@@ -13,13 +13,21 @@
 
 namespace heyp {
 
-// PickLOPRIChildren returns a bitmap of children that should use LOPRI.
-//
-// The total demand marked is aimed to be close to want_frac_lopri.
-std::vector<bool> PickLOPRIChildren(const proto::AggInfo& agg_info,
-                                    const double want_frac_lopri,
-                                    const proto::DowngradeSelector& selector,
-                                    spdlog::logger* logger);
+class DowngradeSelectorImpl;
+
+class DowngradeSelector {
+ public:
+  explicit DowngradeSelector(const proto::DowngradeSelector& selector);
+  ~DowngradeSelector();
+
+  std::vector<bool> PickLOPRIChildren(const proto::AggInfo& agg_info,
+                                      const double want_frac_lopri);
+
+ private:
+  spdlog::logger logger_;
+  std::unique_ptr<DowngradeSelectorImpl> impl_;
+  const bool downgrade_jobs_;
+};
 
 // FracAdmittedAtLOPRI returns the fraction of traffic that should ideally be sent at
 // LOPRI.
