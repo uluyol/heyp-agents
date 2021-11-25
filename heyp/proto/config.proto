@@ -118,8 +118,10 @@ enum ClusterAllocatorType {
 
 enum DowngradeSelectorType {
   DS_HEYP_SIGCOMM20 = 0;
-  DS_KNAPSACK_SOLVER = 1;
-  DS_LARGEST_FIRST = 2;
+  DS_HASHING = 1;
+  DS_HYBRID_HASHING = 2;  // TODO: implement
+  DS_KNAPSACK_SOLVER = 3; // TODO: implement
+  DS_LARGEST_FIRST = 4;
 };
 
 message DowngradeSelector {
@@ -129,6 +131,20 @@ message DowngradeSelector {
   // within those jobs as LOPRI.
   // Otherwise, it will select hosts without looking at which job a host belongs to.
   optional bool downgrade_jobs = 2 [default = false];
+
+  message HybridHashingConfig {
+    // num_demand_aware is the number of hosts that will have their QoS set
+    // explicitly based on demand data.
+    optional int32 num_demand_aware = 1 [default = 100];
+
+    // min_qos_pin_ms is the minimum amount of time a host will stay at
+    // a given QoS. Until then, a host that has been explicitly selected
+    // for HIPRI/LOPRI will retain that QoS. Afterward, the QoS may change.
+    optional int64 min_qos_pin_ms = 2 [default = 1000];
+  }
+
+  // Used when type == DS_HYBRID_HASHING
+  optional HybridHashingConfig hybrid_hashing = 3;
 }
 
 message FixedClusterHostAllocs {
