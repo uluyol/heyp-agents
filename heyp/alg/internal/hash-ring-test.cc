@@ -77,6 +77,18 @@ TEST(RingRangesTest, Basic) {
 
 constexpr uint64_t kHashRingMargin = MaxId / 1'000'000;
 
+TEST(FracToRingTest, EdgeCases) {
+  EXPECT_EQ(HashRing::FracToRing(0), 0);
+  EXPECT_EQ(HashRing::FracToRing(1.0), MaxId);
+}
+
+TEST(FracToRingTest, Approx) {
+  EXPECT_EQ(HashRing::FracToRing(0.25), MaxId / 4);
+  EXPECT_THAT(HashRing::FracToRing(0.10),
+              testing::AllOf(testing::Gt(MaxId / 10 - kHashRingMargin),
+                             testing::Lt(MaxId / 10 + kHashRingMargin)));
+}
+
 TEST(HashRingTest, Zero) {
   RingRanges r = HashRing().MatchingRanges();
   EXPECT_GT(r.a.lo, r.a.hi);
