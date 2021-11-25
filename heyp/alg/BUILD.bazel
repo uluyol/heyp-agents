@@ -54,12 +54,12 @@ cc_library(
     deps = [
         ":agg-info-views",
         ":debug",
+        "//heyp/alg/internal:downgrade-selectors",
         "//heyp/log:spdlog",
         "//heyp/proto:config_cc_proto",
         "//heyp/proto:heyp_cc_proto",
         "@com_google_absl//absl/strings:str_format",
         "@com_google_absl//absl/time",
-        "@com_google_ortools//ortools/algorithms:knapsack_solver_lib",
     ],
 )
 
@@ -110,7 +110,6 @@ cc_test(
         ":qos-downgrade",
         "//heyp/init:test-main",
         "//heyp/proto:parse-text",
-        "@com_google_absl//absl/functional:bind_front",
     ],
 )
 

@@ -5,282 +5,14 @@
 #include "absl/strings/str_join.h"
 #include "heyp/alg/agg-info-views.h"
 #include "heyp/alg/debug.h"
+#include "heyp/alg/internal/downgrade-selector-heyp-sigcomm-20.h"
+#include "heyp/alg/internal/downgrade-selector-knapsack-solver.h"
+#include "heyp/alg/internal/downgrade-selector-largest-first.h"
 #include "heyp/log/spdlog.h"
 #include "heyp/proto/config.pb.h"
 #include "heyp/proto/heyp.pb.h"
-#include "ortools/algorithms/knapsack_solver.h"
 
 namespace heyp {
-
-template <bool StateToIncrease>
-void GreedyAssignToMinimizeGap(GreedyAssignToMinimizeGapArgs args,
-                               std::vector<bool>& lopri_children,
-                               bool punish_only_largest) {
-  for (size_t i = 0; i < args.children_sorted_by_dec_demand.size(); ++i) {
-    const size_t child_i = args.children_sorted_by_dec_demand[i];
-    if (lopri_children[child_i] == StateToIncrease) {
-      continue;  // child already belongs to our bin, don't flip
-    }
-    // Try to flip child_i to our bin.
-    int64_t next_demand =
-        args.cur_demand + args.agg_info.children(child_i).predicted_demand_bps();
-
-    if (next_demand > args.want_demand) {
-      bool exceeds_twice_gap = next_demand > 2 * args.want_demand - args.cur_demand;
-
-      if (punish_only_largest) {
-        if (!exceeds_twice_gap) {
-          // safe to flip
-          lopri_children[child_i] = StateToIncrease;
-          args.cur_demand = next_demand;
-        }
-        return;
-      }
-
-      // Don't flip child_i if there are more children with smaller demands to flip.
-      bool have_children_with_less_demand =
-          i < args.children_sorted_by_dec_demand.size() - 1;
-
-      if (have_children_with_less_demand || exceeds_twice_gap) {
-        continue;  // flipping child_i overshoots the goal
-      }
-    }
-    // Safe to flip child_i;
-    lopri_children[child_i] = StateToIncrease;
-    args.cur_demand = next_demand;
-  }
-}
-
-// Instantiate both (true/false) variants
-template void GreedyAssignToMinimizeGap<false>(GreedyAssignToMinimizeGapArgs args,
-                                               std::vector<bool>& lopri_children,
-                                               bool punish_only_largest);
-template void GreedyAssignToMinimizeGap<true>(GreedyAssignToMinimizeGapArgs args,
-                                              std::vector<bool>& lopri_children,
-                                              bool punish_only_largest);
-
-struct BitmapFormatter {
-  void operator()(std::string* out, bool b) {
-    if (b) {
-      out->push_back('1');
-    } else {
-      out->push_back('0');
-    }
-  }
-};
-
-struct FlowInfoFormatter {
-  void operator()(std::string* out, const proto::FlowInfo& info) {
-    *out += info.DebugString();
-  }
-};
-
-class DowngradeSelectorImpl {
- public:
-  virtual ~DowngradeSelectorImpl() {}
-  virtual std::vector<bool> PickLOPRIChildren(const AggInfoView& agg_info,
-                                              const double want_frac_lopri,
-                                              spdlog::logger* logger) = 0;
-};
-
-class HeypSigcomm20DowngradeSelector : public DowngradeSelectorImpl {
-  std::vector<bool> PickLOPRIChildren(const AggInfoView& agg_info,
-                                      const double want_frac_lopri,
-                                      spdlog::logger* logger) override {
-    const bool should_debug = DebugQosAndRateLimitSelection();
-    if (should_debug) {
-      SPDLOG_LOGGER_INFO(logger, "parent: {}", agg_info.parent().DebugString());
-      SPDLOG_LOGGER_INFO(logger, "children: {}",
-                         absl::StrJoin(agg_info.children(), "\n", FlowInfoFormatter()));
-    }
-
-    std::vector<bool> lopri_children(agg_info.children_size(), false);
-    int64_t total_demand = 0;
-    int64_t lopri_demand = 0;
-    std::vector<size_t> children_sorted_by_dec_demand(agg_info.children_size(), 0);
-    for (size_t i = 0; i < agg_info.children_size(); ++i) {
-      children_sorted_by_dec_demand[i] = i;
-      const auto& c = agg_info.children(i);
-      total_demand += c.predicted_demand_bps();
-      if (c.currently_lopri()) {
-        lopri_children[i] = true;
-        lopri_demand += c.predicted_demand_bps();
-      }
-    }
-
-    if (total_demand == 0) {
-      if (should_debug) {
-        SPDLOG_LOGGER_INFO(logger, "no demand");
-      }
-      // Don't use LOPRI if all demand is zero.
-      return std::vector<bool>(agg_info.children_size(), false);
-    }
-
-    std::sort(children_sorted_by_dec_demand.begin(), children_sorted_by_dec_demand.end(),
-              [&agg_info](size_t lhs, size_t rhs) -> bool {
-                int64_t lhs_demand = agg_info.children(lhs).predicted_demand_bps();
-                int64_t rhs_demand = agg_info.children(rhs).predicted_demand_bps();
-                if (lhs_demand == rhs_demand) {
-                  return lhs > rhs;
-                }
-                return lhs_demand > rhs_demand;
-              });
-
-    if (static_cast<double>(lopri_demand) / static_cast<double>(total_demand) >
-        want_frac_lopri) {
-      if (should_debug) {
-        SPDLOG_LOGGER_INFO(logger, "move from LOPRI to HIPRI");
-      }
-      int64_t hipri_demand = total_demand - lopri_demand;
-      int64_t want_demand = (1 - want_frac_lopri) * total_demand;
-      GreedyAssignToMinimizeGap<false>(
-          {
-              .cur_demand = hipri_demand,
-              .want_demand = want_demand,
-              .children_sorted_by_dec_demand = children_sorted_by_dec_demand,
-              .agg_info = agg_info,
-          },
-          lopri_children, false);
-    } else {
-      if (should_debug) {
-        SPDLOG_LOGGER_INFO(logger, "move from HIPRI to LOPRI");
-      }
-      int64_t want_demand = want_frac_lopri * total_demand;
-      GreedyAssignToMinimizeGap<true>(
-          {
-              .cur_demand = lopri_demand,
-              .want_demand = want_demand,
-              .children_sorted_by_dec_demand = children_sorted_by_dec_demand,
-              .agg_info = agg_info,
-          },
-          lopri_children, false);
-    }
-
-    if (should_debug) {
-      SPDLOG_LOGGER_INFO(logger, "picked LOPRI assignment: {}",
-                         absl::StrJoin(lopri_children, "", BitmapFormatter()));
-    }
-
-    return lopri_children;
-  }
-};
-
-class LargestFirstDowngradeSelector : public DowngradeSelectorImpl {
- public:
-  std::vector<bool> PickLOPRIChildren(const AggInfoView& agg_info,
-                                      const double want_frac_lopri,
-                                      spdlog::logger* logger) override {
-    const bool should_debug = DebugQosAndRateLimitSelection();
-
-    if (should_debug) {
-      SPDLOG_LOGGER_INFO(logger, "parent: {}", agg_info.parent().DebugString());
-      SPDLOG_LOGGER_INFO(logger, "children: {}",
-                         absl::StrJoin(agg_info.children(), "\n", FlowInfoFormatter()));
-    }
-
-    int64_t total_demand = 0;
-    std::vector<size_t> children_sorted_by_dec_demand(agg_info.children_size(), 0);
-    for (size_t i = 0; i < agg_info.children_size(); ++i) {
-      children_sorted_by_dec_demand[i] = i;
-      const auto& c = agg_info.children(i);
-      total_demand += c.predicted_demand_bps();
-    }
-
-    if (total_demand == 0) {
-      if (should_debug) {
-        SPDLOG_LOGGER_INFO(logger, "no demand");
-      }
-      // Don't use LOPRI if all demand is zero.
-      return std::vector<bool>(agg_info.children_size(), false);
-    }
-
-    std::sort(children_sorted_by_dec_demand.begin(), children_sorted_by_dec_demand.end(),
-              [&agg_info](size_t lhs, size_t rhs) -> bool {
-                int64_t lhs_demand = agg_info.children(lhs).predicted_demand_bps();
-                int64_t rhs_demand = agg_info.children(rhs).predicted_demand_bps();
-                if (lhs_demand == rhs_demand) {
-                  return lhs > rhs;
-                }
-                return lhs_demand > rhs_demand;
-              });
-
-    std::vector<bool> lopri_children(agg_info.children_size(), false);
-    int64_t lopri_demand = 0;
-    if (should_debug) {
-      SPDLOG_LOGGER_INFO(logger, "move from HIPRI to LOPRI");
-    }
-    int64_t want_demand = want_frac_lopri * total_demand;
-    GreedyAssignToMinimizeGap<true>(
-        {
-            .cur_demand = lopri_demand,
-            .want_demand = want_demand,
-            .children_sorted_by_dec_demand = children_sorted_by_dec_demand,
-            .agg_info = agg_info,
-        },
-        lopri_children, true);
-
-    if (should_debug) {
-      SPDLOG_LOGGER_INFO(logger, "picked LOPRI assignment: {}",
-                         absl::StrJoin(lopri_children, "", BitmapFormatter()));
-    }
-
-    return lopri_children;
-  }
-};
-
-class KnapsackSolverDowngradeSelector : public DowngradeSelectorImpl {
-  std::vector<bool> PickLOPRIChildren(const AggInfoView& agg_info,
-                                      const double want_frac_lopri,
-                                      spdlog::logger* logger) override {
-    const bool should_debug = DebugQosAndRateLimitSelection();
-    if (should_debug) {
-      SPDLOG_LOGGER_INFO(logger, "parent: {}", agg_info.parent().DebugString());
-      SPDLOG_LOGGER_INFO(logger, "children: {}",
-                         absl::StrJoin(agg_info.children(), "\n", FlowInfoFormatter()));
-    }
-
-    absl::optional<operations_research::KnapsackSolver> solver;
-
-    if (agg_info.children_size() <= 64) {
-      solver.emplace(operations_research::KnapsackSolver::KNAPSACK_64ITEMS_SOLVER,
-                     "pick-lopri");
-    } else {
-      solver.emplace("pick-lopri");
-    }
-
-    int64_t total_demand = 0;
-    std::vector<int64_t> demands(agg_info.children_size(), 0);
-    for (size_t i = 0; i < agg_info.children_size(); ++i) {
-      const auto& c = agg_info.children(i);
-      total_demand += c.predicted_demand_bps();
-      demands[i] = c.predicted_demand_bps();
-    }
-
-    int64_t want_demand = want_frac_lopri * total_demand;
-
-    solver->Init(demands, {demands}, {want_demand});
-    int64_t got_total_demand = solver->Solve();
-
-    int64_t double_check_total_demand = 0;
-    std::vector<bool> lopri_children(agg_info.children_size(), false);
-    for (size_t i = 0; i < agg_info.children_size(); ++i) {
-      if (solver->BestSolutionContains(i)) {
-        lopri_children[i] = true;
-        double_check_total_demand += demands[i];
-      }
-    }
-
-    H_SPDLOG_CHECK_LE(logger, got_total_demand, want_demand);
-    H_SPDLOG_CHECK_EQ(logger, double_check_total_demand, got_total_demand);
-
-    if (should_debug) {
-      SPDLOG_LOGGER_INFO(logger, "picked LOPRI assignment: {}",
-                         absl::StrJoin(lopri_children, "", BitmapFormatter()));
-    }
-
-    return lopri_children;
-  }
-};
 
 DowngradeSelector::DowngradeSelector(const proto::DowngradeSelector& selector)
     : logger_(MakeLogger("downgrade-selector")),
@@ -288,13 +20,13 @@ DowngradeSelector::DowngradeSelector(const proto::DowngradeSelector& selector)
   std::vector<bool> selection;
   switch (selector.type()) {
     case proto::DS_HEYP_SIGCOMM20:
-      impl_ = std::make_unique<HeypSigcomm20DowngradeSelector>();
+      impl_ = std::make_unique<internal::HeypSigcomm20DowngradeSelector>();
       break;
     case proto::DS_KNAPSACK_SOLVER:
-      impl_ = std::make_unique<KnapsackSolverDowngradeSelector>();
+      impl_ = std::make_unique<internal::KnapsackSolverDowngradeSelector>();
       break;
     case proto::DS_LARGEST_FIRST:
-      impl_ = std::make_unique<LargestFirstDowngradeSelector>();
+      impl_ = std::make_unique<internal::LargestFirstDowngradeSelector>();
       break;
     default:
       SPDLOG_LOGGER_CRITICAL(&logger_, "unsupported DowngradeSelectorType: {}",
@@ -303,8 +35,6 @@ DowngradeSelector::DowngradeSelector(const proto::DowngradeSelector& selector)
   }
 }
 
-DowngradeSelector::~DowngradeSelector() {}
-
 std::vector<bool> DowngradeSelector::PickLOPRIChildren(const proto::AggInfo& agg_info,
                                                        const double want_frac_lopri) {
   TransparentView raw_view(agg_info);
@@ -312,7 +42,7 @@ std::vector<bool> DowngradeSelector::PickLOPRIChildren(const proto::AggInfo& agg
   AggInfoView* view = &raw_view;
 
   if (downgrade_jobs_) {
-    job_level_view = absl::make_unique<JobLevelView>(agg_info);
+    job_level_view = std::make_unique<JobLevelView>(agg_info);
     view = job_level_view.get();
   }
   std::vector<bool> selection =

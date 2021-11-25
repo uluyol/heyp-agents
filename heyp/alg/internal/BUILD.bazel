@@ -1,0 +1,57 @@
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+
+package(
+    default_visibility = ["//heyp/alg:__subpackages__"],
+)
+
+cc_library(
+    name = "downgrade-selectors",
+    srcs = [
+        "downgrade-selector-heyp-sigcomm-20.cc",
+        "downgrade-selector-knapsack-solver.cc",
+        "downgrade-selector-largest-first.cc",
+    ],
+    hdrs = [
+        "downgrade-selector-heyp-sigcomm-20.h",
+        "downgrade-selector-iface.h",
+        "downgrade-selector-knapsack-solver.h",
+        "downgrade-selector-largest-first.h",
+    ],
+    deps = [
+        ":formatters",
+        ":greedy-assign",
+        "//heyp/alg:agg-info-views",
+        "//heyp/alg:debug",
+        "//heyp/log:spdlog",
+        "//heyp/proto:heyp_cc_proto",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/strings:str_format",
+        "@com_google_ortools//ortools/algorithms:knapsack_solver_lib",
+    ],
+)
+
+cc_library(
+    name = "formatters",
+    hdrs = ["formatters.h"],
+    deps = [
+        "//heyp/proto:formatter",
+    ],
+)
+
+cc_library(
+    name = "greedy-assign",
+    hdrs = ["greedy-assign.h"],
+    deps = [
+        "//heyp/alg:agg-info-views",
+    ],
+)
+
+cc_test(
+    name = "greedy-assign-test",
+    srcs = ["greedy-assign-test.cc"],
+    deps = [
+        ":greedy-assign",
+        "//heyp/init:test-main",
+        "@com_google_absl//absl/functional:bind_front",
+    ],
+)

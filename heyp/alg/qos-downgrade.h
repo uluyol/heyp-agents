@@ -7,25 +7,23 @@
 #include "absl/strings/str_format.h"
 #include "absl/time/time.h"
 #include "heyp/alg/agg-info-views.h"
+#include "heyp/alg/internal/downgrade-selector-iface.h"
 #include "heyp/log/spdlog.h"
 #include "heyp/proto/config.pb.h"
 #include "heyp/proto/heyp.pb.h"
 
 namespace heyp {
 
-class DowngradeSelectorImpl;
-
 class DowngradeSelector {
  public:
   explicit DowngradeSelector(const proto::DowngradeSelector& selector);
-  ~DowngradeSelector();
 
   std::vector<bool> PickLOPRIChildren(const proto::AggInfo& agg_info,
                                       const double want_frac_lopri);
 
  private:
   spdlog::logger logger_;
-  std::unique_ptr<DowngradeSelectorImpl> impl_;
+  std::unique_ptr<internal::DowngradeSelectorImpl> impl_;
   const bool downgrade_jobs_;
 };
 
@@ -50,28 +48,6 @@ double FracAdmittedAtLOPRIToProbe(const proto::AggInfo& agg_info,
                                   const int64_t lopri_rate_limit_bps,
                                   const double demand_multiplier, const double lopri_frac,
                                   spdlog::logger* logger);
-
-// --- Following are mainly exposed for unit testing ---
-
-struct GreedyAssignToMinimizeGapArgs {
-  int64_t cur_demand;
-  const int64_t want_demand;
-  const std::vector<size_t>& children_sorted_by_dec_demand;
-  const AggInfoView& agg_info;
-};
-
-// GreedyAssignToMinimizeGap is a greedy algorithm to partition children into
-// bins that have aggregate demand X and Y.
-//
-// - StateToIncrease specifies whether we need to increase HIPRI demand (false)
-//   or LOPRI (true).
-// - args.cur_demand is the sum of demands for children that currently belong to
-//   the bin.
-// - args.want_demand is the desired sum of demands for the bin.
-template <bool StateToIncrease>
-void GreedyAssignToMinimizeGap(GreedyAssignToMinimizeGapArgs args,
-                               std::vector<bool>& lopri_children,
-                               bool punish_only_largest);
 
 // Expect the following fields for SingleAggState:
 //
