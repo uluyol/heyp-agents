@@ -39,10 +39,24 @@ cc_library(
 )
 
 cc_library(
+    name = "hash-ring",
+    hdrs = ["hash-ring.h"],
+)
+
+cc_library(
     name = "greedy-assign",
     hdrs = ["greedy-assign.h"],
     deps = [
         "//heyp/alg:agg-info-views",
+    ],
+)
+
+cc_test(
+    name = "hash-ring-test",
+    srcs = ["hash-ring-test.cc"],
+    deps = [
+        ":hash-ring",
+        "//heyp/init:test-main",
     ],
 )
 
