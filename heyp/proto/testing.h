@@ -58,6 +58,24 @@ MATCHER_P(EqRepeatedProto, other, "") {
   return true;
 }
 
+MATCHER_P2(EqRepeatedProtoIgnoringFields, other, fields_to_ignore, "") {
+  if (arg.size() != other.size()) {
+    return false;
+  }
+  for (int i = 0; i < arg.size(); ++i) {
+    google::protobuf::util::MessageDifferencer differencer;
+    differencer.set_message_field_comparison(
+        google::protobuf::util::MessageDifferencer::MessageFieldComparison::EQUIVALENT);
+    for (const google::protobuf::FieldDescriptor* field : fields_to_ignore) {
+      differencer.IgnoreField(field);
+    }
+    if (!differencer.Compare(arg[i], other[i])) {
+      return false;
+    }
+  }
+  return true;
+}
+
 }  // namespace heyp
 
 #endif  // HEYP_PROTO_TESTING_H_
