@@ -22,16 +22,20 @@ DowngradeSelector::DowngradeSelector(const proto::DowngradeSelector& selector)
   std::vector<bool> selection;
   switch (selector.type()) {
     case proto::DS_HASHING:
-      impl_ = std::make_unique<internal::HashingDowngradeSelector>();
+      impl_ = std::make_unique<
+          internal::HashingDowngradeSelector<FVSource::kPredictedDemand>>();
       break;
     case proto::DS_HEYP_SIGCOMM20:
-      impl_ = std::make_unique<internal::HeypSigcomm20DowngradeSelector>();
+      impl_ = std::make_unique<
+          internal::HeypSigcomm20DowngradeSelector<FVSource::kPredictedDemand>>();
       break;
     case proto::DS_KNAPSACK_SOLVER:
-      impl_ = std::make_unique<internal::KnapsackSolverDowngradeSelector>();
+      impl_ = std::make_unique<
+          internal::KnapsackSolverDowngradeSelector<FVSource::kPredictedDemand>>();
       break;
     case proto::DS_LARGEST_FIRST:
-      impl_ = std::make_unique<internal::LargestFirstDowngradeSelector>();
+      impl_ = std::make_unique<
+          internal::LargestFirstDowngradeSelector<FVSource::kPredictedDemand>>();
       break;
     default:
       SPDLOG_LOGGER_CRITICAL(&logger_, "unsupported DowngradeSelectorType: {}",

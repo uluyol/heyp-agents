@@ -22,7 +22,7 @@ std::vector<bool> GreedyAssignToMinimizeGapWrapper(proto::AggInfo demands,
                                                    int64_t cur_demand,
                                                    int64_t want_demand) {
   std::vector<bool> lopri_children = initial_lopri;
-  GreedyAssignToMinimizeGap<StateToIncrease>(
+  GreedyAssignToMinimizeGap<StateToIncrease, FVSource::kPredictedDemand>(
       {
           .cur_demand = cur_demand,
           .want_demand = want_demand,

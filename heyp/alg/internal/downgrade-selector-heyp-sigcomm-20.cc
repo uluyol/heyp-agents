@@ -10,7 +10,8 @@
 namespace heyp {
 namespace internal {
 
-std::vector<bool> HeypSigcomm20DowngradeSelector::PickLOPRIChildren(
+template <FVSource vol_source>
+std::vector<bool> HeypSigcomm20DowngradeSelector<vol_source>::PickLOPRIChildren(
     const AggInfoView& agg_info, const double want_frac_lopri, spdlog::logger* logger) {
   const bool should_debug = DebugQosAndRateLimitSelection();
   if (should_debug) {
@@ -26,10 +27,10 @@ std::vector<bool> HeypSigcomm20DowngradeSelector::PickLOPRIChildren(
   for (size_t i = 0; i < agg_info.children_size(); ++i) {
     children_sorted_by_dec_demand[i] = i;
     const auto& c = agg_info.children(i);
-    total_demand += c.predicted_demand_bps();
+    total_demand += GetFlowVolume(c, vol_source);
     if (c.currently_lopri()) {
       lopri_children[i] = true;
-      lopri_demand += c.predicted_demand_bps();
+      lopri_demand += GetFlowVolume(c, vol_source);
     }
   }
 
@@ -43,8 +44,8 @@ std::vector<bool> HeypSigcomm20DowngradeSelector::PickLOPRIChildren(
 
   std::sort(children_sorted_by_dec_demand.begin(), children_sorted_by_dec_demand.end(),
             [&agg_info](size_t lhs, size_t rhs) -> bool {
-              int64_t lhs_demand = agg_info.children(lhs).predicted_demand_bps();
-              int64_t rhs_demand = agg_info.children(rhs).predicted_demand_bps();
+              int64_t lhs_demand = GetFlowVolume(agg_info.children(lhs), vol_source);
+              int64_t rhs_demand = GetFlowVolume(agg_info.children(rhs), vol_source);
               if (lhs_demand == rhs_demand) {
                 return lhs > rhs;
               }
@@ -58,7 +59,7 @@ std::vector<bool> HeypSigcomm20DowngradeSelector::PickLOPRIChildren(
     }
     int64_t hipri_demand = total_demand - lopri_demand;
     int64_t want_demand = (1 - want_frac_lopri) * total_demand;
-    GreedyAssignToMinimizeGap<false>(
+    GreedyAssignToMinimizeGap<false, vol_source>(
         {
             .cur_demand = hipri_demand,
             .want_demand = want_demand,
@@ -71,7 +72,7 @@ std::vector<bool> HeypSigcomm20DowngradeSelector::PickLOPRIChildren(
       SPDLOG_LOGGER_INFO(logger, "move from HIPRI to LOPRI");
     }
     int64_t want_demand = want_frac_lopri * total_demand;
-    GreedyAssignToMinimizeGap<true>(
+    GreedyAssignToMinimizeGap<true, vol_source>(
         {
             .cur_demand = lopri_demand,
             .want_demand = want_demand,
@@ -88,6 +89,14 @@ std::vector<bool> HeypSigcomm20DowngradeSelector::PickLOPRIChildren(
 
   return lopri_children;
 }
+
+template std::vector<bool>
+HeypSigcomm20DowngradeSelector<FVSource::kPredictedDemand>::PickLOPRIChildren(
+    const AggInfoView& agg_info, const double want_frac_lopri, spdlog::logger* logger);
+
+template std::vector<bool>
+HeypSigcomm20DowngradeSelector<FVSource::kUsage>::PickLOPRIChildren(
+    const AggInfoView& agg_info, const double want_frac_lopri, spdlog::logger* logger);
 
 }  // namespace internal
 }  // namespace heyp

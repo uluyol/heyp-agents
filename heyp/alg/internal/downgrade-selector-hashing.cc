@@ -7,7 +7,8 @@
 namespace heyp {
 namespace internal {
 
-std::vector<bool> HashingDowngradeSelector::PickLOPRIChildren(
+template <FVSource vol_source>
+std::vector<bool> HashingDowngradeSelector<vol_source>::PickLOPRIChildren(
     const AggInfoView& agg_info, const double want_frac_lopri, spdlog::logger* logger) {
   const bool should_debug = DebugQosAndRateLimitSelection();
 
@@ -34,6 +35,13 @@ std::vector<bool> HashingDowngradeSelector::PickLOPRIChildren(
 
   return lopri_children;
 }
+
+template std::vector<bool>
+HashingDowngradeSelector<FVSource::kPredictedDemand>::PickLOPRIChildren(
+    const AggInfoView& agg_info, const double want_frac_lopri, spdlog::logger* logger);
+
+template std::vector<bool> HashingDowngradeSelector<FVSource::kUsage>::PickLOPRIChildren(
+    const AggInfoView& agg_info, const double want_frac_lopri, spdlog::logger* logger);
 
 }  // namespace internal
 }  // namespace heyp

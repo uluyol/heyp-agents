@@ -1,12 +1,14 @@
 #ifndef HEYP_ALG_INTERNAL_DOWNGRADE_SELECTOR_HASHING_H_
 #define HEYP_ALG_INTERNAL_DOWNGRADE_SELECTOR_HASHING_H_
 
+#include "heyp/alg/flow-volume.h"
 #include "heyp/alg/internal/downgrade-selector-iface.h"
 #include "heyp/alg/internal/hash-ring.h"
 
 namespace heyp {
 namespace internal {
 
+template <FVSource vol_source>
 class HashingDowngradeSelector : public DowngradeSelectorImpl {
  public:
   std::vector<bool> PickLOPRIChildren(const AggInfoView& agg_info,

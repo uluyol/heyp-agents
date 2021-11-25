@@ -49,6 +49,12 @@ cc_library(
 )
 
 cc_library(
+    name = "flow-volume",
+    hdrs = ["flow-volume.h"],
+    deps = ["//heyp/proto:heyp_cc_proto"],
+)
+
+cc_library(
     name = "qos-downgrade",
     srcs = ["qos-downgrade.cc"],
     hdrs = ["qos-downgrade.h"],
