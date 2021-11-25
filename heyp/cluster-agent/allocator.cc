@@ -222,12 +222,13 @@ class HeypSigcomm20Allocator : public PerAggAllocator {
 
     *debug_state->mutable_parent_alloc() = cur_state.alloc;
 
-    cur_state.frac_lopri =
-        FracAdmittedAtLOPRI(agg_info.parent(), hipri_admission, lopri_admission);
+    cur_state.frac_lopri = FracAdmittedAtLOPRI<FVSource::kPredictedDemand>(
+        agg_info.parent(), hipri_admission, lopri_admission);
     if (config_.heyp_probe_lopri_when_ambiguous()) {
       cur_state.frac_lopri_with_probing =
-          FracAdmittedAtLOPRIToProbe(agg_info, hipri_admission, lopri_admission,
-                                     demand_multiplier_, cur_state.frac_lopri, &logger_);
+          FracAdmittedAtLOPRIToProbe<FVSource::kPredictedDemand>(
+              agg_info, hipri_admission, lopri_admission, demand_multiplier_,
+              cur_state.frac_lopri, &logger_);
     } else {
       cur_state.frac_lopri_with_probing = cur_state.frac_lopri;
     }

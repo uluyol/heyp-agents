@@ -7,6 +7,7 @@
 #include "absl/strings/str_format.h"
 #include "absl/time/time.h"
 #include "heyp/alg/agg-info-views.h"
+#include "heyp/alg/flow-volume.h"
 #include "heyp/alg/internal/downgrade-selector-iface.h"
 #include "heyp/log/spdlog.h"
 #include "heyp/proto/config.pb.h"
@@ -29,6 +30,7 @@ class DowngradeSelector {
 
 // FracAdmittedAtLOPRI returns the fraction of traffic that should ideally be sent at
 // LOPRI.
+template <FVSource vol_source>
 double FracAdmittedAtLOPRI(const proto::FlowInfo& parent,
                            const int64_t hipri_rate_limit_bps,
                            const int64_t lopri_rate_limit_bps);
@@ -43,6 +45,7 @@ double FracAdmittedAtLOPRI(const proto::FlowInfo& parent,
 // (if larger than the current value of lopri_frac and fits within lopri_rate_limit_bps).
 //
 // Else the return value will equal lopri_frac.
+template <FVSource vol_source>
 double FracAdmittedAtLOPRIToProbe(const proto::AggInfo& agg_info,
                                   const int64_t hipri_rate_limit_bps,
                                   const int64_t lopri_rate_limit_bps,

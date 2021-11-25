@@ -70,21 +70,31 @@ std::vector<bool> DowngradeSelector::PickLOPRIChildren(const proto::AggInfo& agg
   return selection;
 }
 
+template <FVSource vol_source>
 double FracAdmittedAtLOPRI(const proto::FlowInfo& parent,
                            const int64_t hipri_rate_limit_bps,
                            const int64_t lopri_rate_limit_bps) {
   bool maybe_admit = lopri_rate_limit_bps > 0;
-  maybe_admit = maybe_admit && parent.predicted_demand_bps() > 0;
-  maybe_admit = maybe_admit && parent.predicted_demand_bps() > hipri_rate_limit_bps;
+  maybe_admit = maybe_admit && GetFlowVolume(parent, vol_source) > 0;
+  maybe_admit = maybe_admit && GetFlowVolume(parent, vol_source) > hipri_rate_limit_bps;
   if (maybe_admit) {
     const double total_rate_limit_bps = hipri_rate_limit_bps + lopri_rate_limit_bps;
     const double total_admitted_demand_bps =
-        std::min<double>(parent.predicted_demand_bps(), total_rate_limit_bps);
+        std::min<double>(GetFlowVolume(parent, vol_source), total_rate_limit_bps);
     return 1 - (hipri_rate_limit_bps / total_admitted_demand_bps);
   }
   return 0;
 }
 
+template double FracAdmittedAtLOPRI<FVSource::kPredictedDemand>(
+    const proto::FlowInfo& parent, const int64_t hipri_rate_limit_bps,
+    const int64_t lopri_rate_limit_bps);
+
+template double FracAdmittedAtLOPRI<FVSource::kUsage>(const proto::FlowInfo& parent,
+                                                      const int64_t hipri_rate_limit_bps,
+                                                      const int64_t lopri_rate_limit_bps);
+
+template <FVSource vol_source>
 double FracAdmittedAtLOPRIToProbe(const proto::AggInfo& agg_info,
                                   const int64_t hipri_rate_limit_bps,
                                   const int64_t lopri_rate_limit_bps,
@@ -100,20 +110,21 @@ double FracAdmittedAtLOPRIToProbe(const proto::AggInfo& agg_info,
     SPDLOG_LOGGER_INFO(logger, "initial lopri_frac: {}", lopri_frac);
   }
 
-  if (agg_info.parent().predicted_demand_bps() < hipri_rate_limit_bps) {
+  if (GetFlowVolume(agg_info.parent(), vol_source) < hipri_rate_limit_bps) {
     if (should_debug) {
-      SPDLOG_LOGGER_INFO(logger, "predicted demand < hipri rate limit ({} < {})",
-                         agg_info.parent().predicted_demand_bps(), hipri_rate_limit_bps);
+      SPDLOG_LOGGER_INFO(logger, "flow volume < hipri rate limit ({} < {})",
+                         GetFlowVolume(agg_info.parent(), vol_source),
+                         hipri_rate_limit_bps);
     }
     return lopri_frac;
   }
-  if (agg_info.parent().predicted_demand_bps() >
+  if (GetFlowVolume(agg_info.parent(), vol_source) >
       demand_multiplier * hipri_rate_limit_bps) {
     if (should_debug) {
-      SPDLOG_LOGGER_INFO(
-          logger, "predicted demand > demand multipler * hipri rate limit ({} > {})",
-          agg_info.parent().predicted_demand_bps(),
-          demand_multiplier * hipri_rate_limit_bps);
+      SPDLOG_LOGGER_INFO(logger,
+                         "flow volume > volume multipler * hipri rate limit ({} > {})",
+                         GetFlowVolume(agg_info.parent(), vol_source),
+                         demand_multiplier * hipri_rate_limit_bps);
     }
     return lopri_frac;
   }
@@ -123,15 +134,15 @@ double FracAdmittedAtLOPRIToProbe(const proto::AggInfo& agg_info,
     }
     return lopri_frac;
   }
-  int64_t smallest_child_demand_bps = agg_info.children(0).predicted_demand_bps();
+  int64_t smallest_child_demand_bps = GetFlowVolume(agg_info.children(0), vol_source);
   for (const proto::FlowInfo& child : agg_info.children()) {
     smallest_child_demand_bps =
-        std::min(smallest_child_demand_bps, child.predicted_demand_bps());
+        std::min(smallest_child_demand_bps, GetFlowVolume(child, vol_source));
   }
 
   if (smallest_child_demand_bps > lopri_rate_limit_bps) {
     if (should_debug) {
-      SPDLOG_LOGGER_INFO(logger, "smallest child demand > lopri rate limit ({} > {})",
+      SPDLOG_LOGGER_INFO(logger, "smallest child volume > lopri rate limit ({} > {})",
                          smallest_child_demand_bps, lopri_rate_limit_bps);
     }
     return lopri_frac;
@@ -139,7 +150,7 @@ double FracAdmittedAtLOPRIToProbe(const proto::AggInfo& agg_info,
 
   double revised_frac = 1.00001 /* account for rounding error */ *
                         static_cast<double>(smallest_child_demand_bps) /
-                        static_cast<double>(agg_info.parent().predicted_demand_bps());
+                        static_cast<double>(GetFlowVolume(agg_info.parent(), vol_source));
   if (revised_frac > lopri_frac) {
     if (should_debug) {
       SPDLOG_LOGGER_INFO(logger, "revised lopri frac from {} to {}", lopri_frac,
@@ -152,6 +163,24 @@ double FracAdmittedAtLOPRIToProbe(const proto::AggInfo& agg_info,
                        lopri_frac, revised_frac);
   }
   return lopri_frac;
+}
+
+template double FracAdmittedAtLOPRIToProbe<FVSource::kPredictedDemand>(
+    const proto::AggInfo& agg_info, const int64_t hipri_rate_limit_bps,
+    const int64_t lopri_rate_limit_bps, const double demand_multiplier,
+    const double lopri_frac, spdlog::logger* logger);
+
+template <>
+double FracAdmittedAtLOPRIToProbe<FVSource::kUsage>(const proto::AggInfo& agg_info,
+                                                    const int64_t hipri_rate_limit_bps,
+                                                    const int64_t lopri_rate_limit_bps,
+                                                    const double demand_multiplier,
+                                                    const double lopri_frac,
+                                                    spdlog::logger* logger) {
+  SPDLOG_LOGGER_CRITICAL(logger, "{}: not implemented for usage-based flow volumes",
+                         __func__);
+  DumpStackTraceAndExit(33);
+  return 666;
 }
 
 }  // namespace heyp

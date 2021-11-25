@@ -283,39 +283,39 @@ TEST(HashingLOPRIChildrenTest, IsFIFO) {
 }
 
 TEST(FracAdmittedAtLOPRITest, Basic) {
-  EXPECT_EQ(FracAdmittedAtLOPRI(
+  EXPECT_EQ(FracAdmittedAtLOPRI<FVSource::kPredictedDemand>(
                 ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 1000"), 600, 200),
             0.25);
 
-  EXPECT_EQ(FracAdmittedAtLOPRI(
+  EXPECT_EQ(FracAdmittedAtLOPRI<FVSource::kPredictedDemand>(
                 ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 640"), 600, 200),
             0.0625);
 
-  EXPECT_EQ(FracAdmittedAtLOPRI(
+  EXPECT_EQ(FracAdmittedAtLOPRI<FVSource::kPredictedDemand>(
                 ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 500"), 600, 200),
             0);
 }
 
 TEST(FracAdmittedAtLOPRITest, AllLOPRI) {
-  EXPECT_EQ(FracAdmittedAtLOPRI(
-                ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 1000"), 0, 900),
+  EXPECT_EQ(FracAdmittedAtLOPRI<FVSource::kUsage>(
+                ParseTextProto<proto::FlowInfo>("ewma_usage_bps: 1000"), 0, 900),
             1);
 }
 
 TEST(FracAdmittedAtLOPRITest, AllHIPRI) {
-  EXPECT_EQ(FracAdmittedAtLOPRI(
-                ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 1000"), 600, 0),
+  EXPECT_EQ(FracAdmittedAtLOPRI<FVSource::kUsage>(
+                ParseTextProto<proto::FlowInfo>("ewma_usage_bps: 1000"), 600, 0),
             0);
 }
 
 TEST(FracAdmittedAtLOPRITest, ZeroLimit) {
-  EXPECT_EQ(FracAdmittedAtLOPRI(
+  EXPECT_EQ(FracAdmittedAtLOPRI<FVSource::kPredictedDemand>(
                 ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 1000"), 0, 0),
             0);
 }
 
 TEST(FracAdmittedAtLOPRITest, ZeroDemand) {
-  EXPECT_EQ(FracAdmittedAtLOPRI(
+  EXPECT_EQ(FracAdmittedAtLOPRI<FVSource::kPredictedDemand>(
                 ParseTextProto<proto::FlowInfo>("predicted_demand_bps: 0"), 600, 0),
             0);
 }
@@ -325,21 +325,28 @@ TEST(ShouldProbeLOPRITest, Basic) {
   info.mutable_parent()->set_predicted_demand_bps(2499);
   auto logger = MakeLogger("test");
 
-  ASSERT_EQ(FracAdmittedAtLOPRIToProbe(info, 2500, 600, 1.9, -1, &logger), -1);
+  ASSERT_EQ(FracAdmittedAtLOPRIToProbe<FVSource::kPredictedDemand>(info, 2500, 600, 1.9,
+                                                                   -1, &logger),
+            -1);
 
   info.mutable_parent()->set_predicted_demand_bps(2500);
-  ASSERT_NEAR(FracAdmittedAtLOPRIToProbe(info, 2500, 600, 1.9, -1, &logger), 0.04,
-              0.00001);
+  ASSERT_NEAR(FracAdmittedAtLOPRIToProbe<FVSource::kPredictedDemand>(info, 2500, 600, 1.9,
+                                                                     -1, &logger),
+              0.04, 0.00001);
 
   info.mutable_parent()->set_predicted_demand_bps(3000);
-  ASSERT_NEAR(FracAdmittedAtLOPRIToProbe(info, 2500, 600, 1.9, 0.2, &logger), 0.2,
-              0.00001);
+  ASSERT_NEAR(FracAdmittedAtLOPRIToProbe<FVSource::kPredictedDemand>(info, 2500, 600, 1.9,
+                                                                     0.2, &logger),
+              0.2, 0.00001);
 
   info.mutable_parent()->set_predicted_demand_bps(3000);
-  ASSERT_NEAR(FracAdmittedAtLOPRIToProbe(info, 2500, 600, 1.2, 0.2, &logger), 0.2,
-              0.00001);
+  ASSERT_NEAR(FracAdmittedAtLOPRIToProbe<FVSource::kPredictedDemand>(info, 2500, 600, 1.2,
+                                                                     0.2, &logger),
+              0.2, 0.00001);
 
-  ASSERT_EQ(FracAdmittedAtLOPRIToProbe(info, 2500, 0, 1.9, 0, &logger), 0);
+  ASSERT_EQ(FracAdmittedAtLOPRIToProbe<FVSource::kPredictedDemand>(info, 2500, 0, 1.9, 0,
+                                                                   &logger),
+            0);
 }
 
 class HeypSigcomm20MaybeReviseLOPRIAdmissionTest : public testing::Test {
