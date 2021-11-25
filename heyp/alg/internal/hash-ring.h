@@ -43,6 +43,7 @@ class HashRing {
  public:
   void Add(double frac_diff);
   void Sub(double frac_diff);
+  void UpdateFrac(double frac);
 
   RingRanges MatchingRanges() const;
 
@@ -74,6 +75,13 @@ inline void HashRing::Sub(double frac_diff) {
     frac_ = 0;
   }
   start_ += FracOfRingSize(frac_diff);
+}
+
+inline void HashRing::UpdateFrac(double frac) {
+  frac_ = frac;
+  if (frac_ > 1) {
+    frac_ = 1;
+  }
 }
 
 inline uint64_t HashRing::FracOfRingSize(double frac) {
