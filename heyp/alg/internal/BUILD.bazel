@@ -40,7 +40,11 @@ cc_library(
 
 cc_library(
     name = "hash-ring",
+    srcs = ["hash-ring.cc"],
     hdrs = ["hash-ring.h"],
+    deps = [
+        "@com_google_absl//absl/strings",
+    ],
 )
 
 cc_library(

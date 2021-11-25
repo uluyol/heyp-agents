@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <limits>
 #include <ostream>
+#include <string>
 
 namespace heyp {
 namespace internal {
@@ -46,6 +47,7 @@ class HashRing {
   void UpdateFrac(double frac);
 
   RingRanges MatchingRanges() const;
+  std::string ToString() const;
 
  private:
   static uint64_t FracOfRingSize(double frac);
