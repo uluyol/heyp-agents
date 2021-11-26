@@ -15,34 +15,46 @@
 #include "heyp/proto/heyp.pb.h"
 
 namespace heyp {
+namespace {
 
-DowngradeSelector::DowngradeSelector(const proto::DowngradeSelector& selector)
-    : logger_(MakeLogger("downgrade-selector")),
-      downgrade_jobs_(selector.downgrade_jobs()) {
-  std::vector<bool> selection;
+template <FVSource vol_source>
+std::unique_ptr<internal::DowngradeSelectorImpl> GetSelectorWithSource(
+    const proto::DowngradeSelector& selector, spdlog::logger* logger) {
   switch (selector.type()) {
     case proto::DS_HASHING:
-      impl_ = std::make_unique<
-          internal::HashingDowngradeSelector<FVSource::kPredictedDemand>>();
+      return std::make_unique<internal::HashingDowngradeSelector<vol_source>>();
       break;
     case proto::DS_HEYP_SIGCOMM20:
-      impl_ = std::make_unique<
-          internal::HeypSigcomm20DowngradeSelector<FVSource::kPredictedDemand>>();
+      return std::make_unique<internal::HeypSigcomm20DowngradeSelector<vol_source>>();
       break;
     case proto::DS_KNAPSACK_SOLVER:
-      impl_ = std::make_unique<
-          internal::KnapsackSolverDowngradeSelector<FVSource::kPredictedDemand>>();
+      return std::make_unique<internal::KnapsackSolverDowngradeSelector<vol_source>>();
       break;
     case proto::DS_LARGEST_FIRST:
-      impl_ = std::make_unique<
-          internal::LargestFirstDowngradeSelector<FVSource::kPredictedDemand>>();
+      return std::make_unique<internal::LargestFirstDowngradeSelector<vol_source>>();
       break;
     default:
-      SPDLOG_LOGGER_CRITICAL(&logger_, "unsupported DowngradeSelectorType: {}",
+      SPDLOG_LOGGER_CRITICAL(logger, "unsupported DowngradeSelectorType: {}",
                              selector.type());
       DumpStackTraceAndExit(5);
   }
+  return nullptr;
 }
+
+std::unique_ptr<internal::DowngradeSelectorImpl> GetSelector(
+    const proto::DowngradeSelector& selector, spdlog::logger* logger) {
+  if (selector.downgrade_usage()) {
+    return GetSelectorWithSource<FVSource::kUsage>(selector, logger);
+  }
+  return GetSelectorWithSource<FVSource::kPredictedDemand>(selector, logger);
+}
+
+}  // namespace
+
+DowngradeSelector::DowngradeSelector(const proto::DowngradeSelector& selector)
+    : logger_(MakeLogger("downgrade-selector")),
+      impl_(GetSelector(selector, &logger_)),
+      downgrade_jobs_(selector.downgrade_jobs()) {}
 
 std::vector<bool> DowngradeSelector::PickLOPRIChildren(const proto::AggInfo& agg_info,
                                                        const double want_frac_lopri) {

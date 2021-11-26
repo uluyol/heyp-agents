@@ -471,6 +471,7 @@ TEST(HeypSigcomm20ClusterAllocatorTest, Basic) {
                                  enable_burstiness: false
                                  enable_bonus: true
                                  oversub_factor: 1.0
+                                 downgrade_selector { downgrade_usage: false }
                                  heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
                                  heyp_probe_lopri_when_ambiguous: false
                                )"),
@@ -542,6 +543,7 @@ TEST(HeypSigcomm20ClusterAllocatorTest, WithOversub) {
                                  enable_burstiness: false
                                  enable_bonus: true
                                  oversub_factor: 1.5
+                                 downgrade_selector { downgrade_usage: false }
                                  heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
                                  heyp_probe_lopri_when_ambiguous: false
                                )"),
@@ -596,6 +598,7 @@ TEST(HeypSigcomm20ClusterAllocatorTest, WithBonus) {
                                  enable_burstiness: false
                                  enable_bonus: true
                                  oversub_factor: 1.0
+                                 downgrade_selector { downgrade_usage: false }
                                  heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
                                  heyp_probe_lopri_when_ambiguous: false
                                )"),
@@ -650,6 +653,7 @@ TEST(HeypSigcomm20ClusterAllocatorTest, WithBurstiness) {
                                  enable_burstiness: true
                                  enable_bonus: true
                                  oversub_factor: 1.0
+                                 downgrade_selector { downgrade_usage: false }
                                  heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
                                  heyp_probe_lopri_when_ambiguous: false
                                )"),
@@ -704,6 +708,7 @@ TEST(HeypSigcomm20ClusterAllocatorTest, WithBurstinessAndCongestion) {
                                  enable_burstiness: true
                                  enable_bonus: true
                                  oversub_factor: 1.0
+                                 downgrade_selector { downgrade_usage: false }
                                  heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
                                  heyp_probe_lopri_when_ambiguous: false
                                )"),
@@ -758,6 +763,7 @@ TEST(HeypSigcomm20ClusterAllocatorTest, ZeroDemand) {
                                  enable_burstiness: true
                                  enable_bonus: true
                                  oversub_factor: 1.1
+                                 downgrade_selector { downgrade_usage: false }
                                  heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
                                  heyp_probe_lopri_when_ambiguous: false
                                )"),
@@ -804,6 +810,7 @@ TEST(HeypSigcomm20ClusterAllocatorTest, ZeroLimit) {
                                  enable_burstiness: true
                                  enable_bonus: true
                                  oversub_factor: 1.1
+                                 downgrade_selector { downgrade_usage: false }
                                  heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
                                  heyp_probe_lopri_when_ambiguous: false
                                )"),
@@ -850,6 +857,7 @@ TEST(HeypSigcomm20ClusterAllocatorTest, AllLOPRI) {
                                  enable_burstiness: true
                                  enable_bonus: true
                                  oversub_factor: 1.1
+                                 downgrade_selector { downgrade_usage: false }
                                  heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
                                  heyp_probe_lopri_when_ambiguous: false
                                )"),
@@ -973,6 +981,7 @@ TEST(HeypSigcomm20ClusterAllocatorTest, BoundedLOPRICongestion) {
                                  enable_burstiness: true
                                  enable_bonus: true
                                  oversub_factor: 1.1
+                                 downgrade_selector { downgrade_usage: false }
                                  heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
                                  heyp_probe_lopri_when_ambiguous: false
                                )"),
@@ -1044,6 +1053,7 @@ TEST(HeypSigcomm20ClusterAllocatorTest, UnboundedLOPRICongestion) {
                                  enable_burstiness: true
                                  enable_bonus: true
                                  oversub_factor: 1.1
+                                 downgrade_selector { downgrade_usage: false }
                                  heyp_acceptable_measured_ratio_over_intended_ratio: 0.9
                                )"),
                                ParseTextProto<proto::AllocBundle>(R"(
@@ -1121,22 +1131,24 @@ TEST(HeypSigcomm20ClusterAllocatorTest, UnboundedLOPRICongestion) {
 }
 
 TEST(SimpleDowngradeClusterAllocatorTest, MissingAllocInConfig) {
-  auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
-                                          type: CA_SIMPLE_DOWNGRADE
-                                          enable_burstiness: false
-                                          enable_bonus: true
-                                          oversub_factor: 1.0
-                                          downgrade_selector { type: DS_KNAPSACK_SOLVER }
-                                        )"),
-                                        ParseTextProto<proto::AllocBundle>(R"(
-                                          flow_allocs {
-                                            flow { src_dc: "east-us" dst_dc: "west-us" }
-                                            hipri_rate_limit_bps: 666666
-                                            lopri_rate_limit_bps: 333333
-                                          }
-                                        )"),
-                                        1)
-                   .value();
+  auto alloc =
+      ClusterAllocator::Create(
+          ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+            type: CA_SIMPLE_DOWNGRADE
+            enable_burstiness: false
+            enable_bonus: true
+            oversub_factor: 1.0
+            downgrade_selector { type: DS_KNAPSACK_SOLVER downgrade_usage: false }
+          )"),
+          ParseTextProto<proto::AllocBundle>(R"(
+            flow_allocs {
+              flow { src_dc: "east-us" dst_dc: "west-us" }
+              hipri_rate_limit_bps: 666666
+              lopri_rate_limit_bps: 333333
+            }
+          )"),
+          1)
+          .value();
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
@@ -1158,22 +1170,24 @@ TEST(SimpleDowngradeClusterAllocatorTest, MissingAllocInConfig) {
 }
 
 TEST(SimpleDowngradeClusterAllocatorTest, Basic) {
-  auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
-                                          type: CA_SIMPLE_DOWNGRADE
-                                          enable_burstiness: false
-                                          enable_bonus: true
-                                          oversub_factor: 1.0
-                                          downgrade_selector { type: DS_KNAPSACK_SOLVER }
-                                        )"),
-                                        ParseTextProto<proto::AllocBundle>(R"(
-                                          flow_allocs {
-                                            flow { src_dc: "east-us" dst_dc: "west-us" }
-                                            hipri_rate_limit_bps: 600000
-                                            lopri_rate_limit_bps: 333333
-                                          }
-                                        )"),
-                                        1)
-                   .value();
+  auto alloc =
+      ClusterAllocator::Create(
+          ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+            type: CA_SIMPLE_DOWNGRADE
+            enable_burstiness: false
+            enable_bonus: true
+            oversub_factor: 1.0
+            downgrade_selector { type: DS_KNAPSACK_SOLVER downgrade_usage: false }
+          )"),
+          ParseTextProto<proto::AllocBundle>(R"(
+            flow_allocs {
+              flow { src_dc: "east-us" dst_dc: "west-us" }
+              hipri_rate_limit_bps: 600000
+              lopri_rate_limit_bps: 333333
+            }
+          )"),
+          1)
+          .value();
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
@@ -1227,21 +1241,23 @@ TEST(SimpleDowngradeClusterAllocatorTest, Basic) {
 }
 
 TEST(SimpleDowngradeClusterAllocatorTest, WithOversub) {
-  auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
-                                          type: CA_SIMPLE_DOWNGRADE
-                                          enable_burstiness: false
-                                          enable_bonus: true
-                                          oversub_factor: 1.5
-                                          downgrade_selector { type: DS_KNAPSACK_SOLVER }
-                                        )"),
-                                        ParseTextProto<proto::AllocBundle>(R"(
-                                          flow_allocs {
-                                            flow { src_dc: "east-us" dst_dc: "west-us" }
-                                            hipri_rate_limit_bps: 600
-                                          }
-                                        )"),
-                                        1)
-                   .value();
+  auto alloc =
+      ClusterAllocator::Create(
+          ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+            type: CA_SIMPLE_DOWNGRADE
+            enable_burstiness: false
+            enable_bonus: true
+            oversub_factor: 1.5
+            downgrade_selector { type: DS_KNAPSACK_SOLVER downgrade_usage: false }
+          )"),
+          ParseTextProto<proto::AllocBundle>(R"(
+            flow_allocs {
+              flow { src_dc: "east-us" dst_dc: "west-us" }
+              hipri_rate_limit_bps: 600
+            }
+          )"),
+          1)
+          .value();
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
@@ -1279,21 +1295,23 @@ TEST(SimpleDowngradeClusterAllocatorTest, WithOversub) {
 }
 
 TEST(SimpleDowngradeClusterAllocatorTest, WithBonus) {
-  auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
-                                          type: CA_SIMPLE_DOWNGRADE
-                                          enable_burstiness: false
-                                          enable_bonus: true
-                                          oversub_factor: 1.0
-                                          downgrade_selector { type: DS_KNAPSACK_SOLVER }
-                                        )"),
-                                        ParseTextProto<proto::AllocBundle>(R"(
-                                          flow_allocs {
-                                            flow { src_dc: "east-us" dst_dc: "west-us" }
-                                            hipri_rate_limit_bps: 600
-                                          }
-                                        )"),
-                                        1)
-                   .value();
+  auto alloc =
+      ClusterAllocator::Create(
+          ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+            type: CA_SIMPLE_DOWNGRADE
+            enable_burstiness: false
+            enable_bonus: true
+            oversub_factor: 1.0
+            downgrade_selector { type: DS_KNAPSACK_SOLVER downgrade_usage: false }
+          )"),
+          ParseTextProto<proto::AllocBundle>(R"(
+            flow_allocs {
+              flow { src_dc: "east-us" dst_dc: "west-us" }
+              hipri_rate_limit_bps: 600
+            }
+          )"),
+          1)
+          .value();
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
@@ -1331,21 +1349,23 @@ TEST(SimpleDowngradeClusterAllocatorTest, WithBonus) {
 }
 
 TEST(SimpleDowngradeClusterAllocatorTest, WithBurstiness) {
-  auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
-                                          type: CA_SIMPLE_DOWNGRADE
-                                          enable_burstiness: true
-                                          enable_bonus: true
-                                          oversub_factor: 1.0
-                                          downgrade_selector { type: DS_KNAPSACK_SOLVER }
-                                        )"),
-                                        ParseTextProto<proto::AllocBundle>(R"(
-                                          flow_allocs {
-                                            flow { src_dc: "east-us" dst_dc: "west-us" }
-                                            hipri_rate_limit_bps: 600
-                                          }
-                                        )"),
-                                        1)
-                   .value();
+  auto alloc =
+      ClusterAllocator::Create(
+          ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+            type: CA_SIMPLE_DOWNGRADE
+            enable_burstiness: true
+            enable_bonus: true
+            oversub_factor: 1.0
+            downgrade_selector { type: DS_KNAPSACK_SOLVER downgrade_usage: false }
+          )"),
+          ParseTextProto<proto::AllocBundle>(R"(
+            flow_allocs {
+              flow { src_dc: "east-us" dst_dc: "west-us" }
+              hipri_rate_limit_bps: 600
+            }
+          )"),
+          1)
+          .value();
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
@@ -1383,21 +1403,23 @@ TEST(SimpleDowngradeClusterAllocatorTest, WithBurstiness) {
 }
 
 TEST(SimpleDowngradeClusterAllocatorTest, WithBurstinessAndCongestion) {
-  auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
-                                          type: CA_SIMPLE_DOWNGRADE
-                                          enable_burstiness: true
-                                          enable_bonus: true
-                                          oversub_factor: 1.0
-                                          downgrade_selector { type: DS_KNAPSACK_SOLVER }
-                                        )"),
-                                        ParseTextProto<proto::AllocBundle>(R"(
-                                          flow_allocs {
-                                            flow { src_dc: "east-us" dst_dc: "west-us" }
-                                            hipri_rate_limit_bps: 600
-                                          }
-                                        )"),
-                                        1)
-                   .value();
+  auto alloc =
+      ClusterAllocator::Create(
+          ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+            type: CA_SIMPLE_DOWNGRADE
+            enable_burstiness: true
+            enable_bonus: true
+            oversub_factor: 1.0
+            downgrade_selector { type: DS_KNAPSACK_SOLVER downgrade_usage: false }
+          )"),
+          ParseTextProto<proto::AllocBundle>(R"(
+            flow_allocs {
+              flow { src_dc: "east-us" dst_dc: "west-us" }
+              hipri_rate_limit_bps: 600
+            }
+          )"),
+          1)
+          .value();
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
@@ -1435,21 +1457,23 @@ TEST(SimpleDowngradeClusterAllocatorTest, WithBurstinessAndCongestion) {
 }
 
 TEST(SimpleDowngradeClusterAllocatorTest, ZeroDemand) {
-  auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
-                                          type: CA_SIMPLE_DOWNGRADE
-                                          enable_burstiness: true
-                                          enable_bonus: true
-                                          oversub_factor: 1.1
-                                          downgrade_selector { type: DS_KNAPSACK_SOLVER }
-                                        )"),
-                                        ParseTextProto<proto::AllocBundle>(R"(
-                                          flow_allocs {
-                                            flow { src_dc: "east-us" dst_dc: "west-us" }
-                                            hipri_rate_limit_bps: 600
-                                          }
-                                        )"),
-                                        1)
-                   .value();
+  auto alloc =
+      ClusterAllocator::Create(
+          ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+            type: CA_SIMPLE_DOWNGRADE
+            enable_burstiness: true
+            enable_bonus: true
+            oversub_factor: 1.1
+            downgrade_selector { type: DS_KNAPSACK_SOLVER downgrade_usage: false }
+          )"),
+          ParseTextProto<proto::AllocBundle>(R"(
+            flow_allocs {
+              flow { src_dc: "east-us" dst_dc: "west-us" }
+              hipri_rate_limit_bps: 600
+            }
+          )"),
+          1)
+          .value();
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
@@ -1479,21 +1503,23 @@ TEST(SimpleDowngradeClusterAllocatorTest, ZeroDemand) {
 }
 
 TEST(SimpleDowngradeClusterAllocatorTest, ZeroLimit) {
-  auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
-                                          type: CA_SIMPLE_DOWNGRADE
-                                          enable_burstiness: true
-                                          enable_bonus: true
-                                          oversub_factor: 1.1
-                                          downgrade_selector { type: DS_KNAPSACK_SOLVER }
-                                        )"),
-                                        ParseTextProto<proto::AllocBundle>(R"(
-                                          flow_allocs {
-                                            flow { src_dc: "east-us" dst_dc: "west-us" }
-                                            hipri_rate_limit_bps: 0
-                                          }
-                                        )"),
-                                        1)
-                   .value();
+  auto alloc =
+      ClusterAllocator::Create(
+          ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+            type: CA_SIMPLE_DOWNGRADE
+            enable_burstiness: true
+            enable_bonus: true
+            oversub_factor: 1.1
+            downgrade_selector { type: DS_KNAPSACK_SOLVER downgrade_usage: false }
+          )"),
+          ParseTextProto<proto::AllocBundle>(R"(
+            flow_allocs {
+              flow { src_dc: "east-us" dst_dc: "west-us" }
+              hipri_rate_limit_bps: 0
+            }
+          )"),
+          1)
+          .value();
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(
@@ -1523,21 +1549,23 @@ TEST(SimpleDowngradeClusterAllocatorTest, ZeroLimit) {
 }
 
 TEST(SimpleDowngradeClusterAllocatorTest, AllLOPRI) {
-  auto alloc = ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
-                                          type: CA_SIMPLE_DOWNGRADE
-                                          enable_burstiness: true
-                                          enable_bonus: true
-                                          oversub_factor: 1.1
-                                          downgrade_selector { type: DS_KNAPSACK_SOLVER }
-                                        )"),
-                                        ParseTextProto<proto::AllocBundle>(R"(
-                                          flow_allocs {
-                                            flow { src_dc: "east-us" dst_dc: "west-us" }
-                                            lopri_rate_limit_bps: 50
-                                          }
-                                        )"),
-                                        1)
-                   .value();
+  auto alloc =
+      ClusterAllocator::Create(
+          ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+            type: CA_SIMPLE_DOWNGRADE
+            enable_burstiness: true
+            enable_bonus: true
+            oversub_factor: 1.1
+            downgrade_selector { type: DS_KNAPSACK_SOLVER downgrade_usage: false }
+          )"),
+          ParseTextProto<proto::AllocBundle>(R"(
+            flow_allocs {
+              flow { src_dc: "east-us" dst_dc: "west-us" }
+              lopri_rate_limit_bps: 50
+            }
+          )"),
+          1)
+          .value();
   alloc->Reset();
   alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
                            R"(

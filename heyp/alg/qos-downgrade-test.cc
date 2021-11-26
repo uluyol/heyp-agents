@@ -54,6 +54,7 @@ TEST(HeypSigcomm20PickLOPRIChildrenTest, Directionality) {
 
   proto::DowngradeSelector config;
   config.set_type(proto::DS_HEYP_SIGCOMM20);
+  config.set_downgrade_usage(false);
   DowngradeSelector selector(config);
 
   EXPECT_THAT(selector.PickLOPRIChildren(info, 0.28), testing::ElementsAre(t, f, f, f));
@@ -76,6 +77,7 @@ TEST(HeypSigcomm20PickLOPRIChildrenTest, FlipCompletely) {
   auto logger = MakeLogger("test");
   proto::DowngradeSelector config;
   config.set_type(proto::DS_HEYP_SIGCOMM20);
+  config.set_downgrade_usage(false);
   DowngradeSelector selector(config);
 
   EXPECT_THAT(selector.PickLOPRIChildren(info, 1), testing::ElementsAre(t, t, t, t));
@@ -97,6 +99,7 @@ TEST(LargestFirstPickLOPRIChildrenTest, Directionality) {
 
   proto::DowngradeSelector config;
   config.set_type(proto::DS_LARGEST_FIRST);
+  config.set_downgrade_usage(false);
   DowngradeSelector selector(config);
 
   EXPECT_THAT(selector.PickLOPRIChildren(info, 0.28), testing::ElementsAre(f, f, t, f));
@@ -120,6 +123,7 @@ TEST(LargestFirstPickLOPRIChildrenTest, FlipCompletely) {
 
   proto::DowngradeSelector config;
   config.set_type(proto::DS_LARGEST_FIRST);
+  config.set_downgrade_usage(false);
   DowngradeSelector selector(config);
 
   EXPECT_THAT(selector.PickLOPRIChildren(info, 1), testing::ElementsAre(t, t, t, t));
@@ -141,6 +145,7 @@ TEST(KnapsackSolverPickLOPRIChildrenTest, Directionality) {
 
   proto::DowngradeSelector config;
   config.set_type(proto::DS_KNAPSACK_SOLVER);
+  config.set_downgrade_usage(false);
   DowngradeSelector selector(config);
 
   EXPECT_THAT(
@@ -172,6 +177,7 @@ TEST(KnapsackSolverPickLOPRIChildrenTest, FlipCompletely) {
 
   proto::DowngradeSelector config;
   config.set_type(proto::DS_KNAPSACK_SOLVER);
+  config.set_downgrade_usage(false);
   DowngradeSelector selector(config);
 
   EXPECT_THAT(selector.PickLOPRIChildren(info, 1), testing::ElementsAre(t, t, t, t));
@@ -194,6 +200,7 @@ TEST(KnapsackSolverPickLOPRIChildrenTest, JobLevel) {
   proto::DowngradeSelector config;
   config.set_type(proto::DS_KNAPSACK_SOLVER);
   config.set_downgrade_jobs(true);
+  config.set_downgrade_usage(false);
   DowngradeSelector selector(config);
 
   EXPECT_THAT(selector.PickLOPRIChildren(info, 0.428), testing::ElementsAre(f, f, f, f));
@@ -269,8 +276,6 @@ TEST(HashingLOPRIChildrenTest, IsFIFO) {
   config.set_type(proto::DS_HASHING);
   DowngradeSelector selector(config);
 
-  SetDebugQosAndRateLimitSelection(true);
-
   EXPECT_THAT(selector.PickLOPRIChildren(info, 0.20), testing::ElementsAre(t, f, f, f));
   EXPECT_THAT(selector.PickLOPRIChildren(info, 0.20), testing::ElementsAre(t, f, f, f));
   EXPECT_THAT(selector.PickLOPRIChildren(info, 0.00), testing::ElementsAre(f, f, f, f));
@@ -278,8 +283,6 @@ TEST(HashingLOPRIChildrenTest, IsFIFO) {
   EXPECT_THAT(selector.PickLOPRIChildren(info, 0.25), testing::ElementsAre(f, f, t, f));
   EXPECT_THAT(selector.PickLOPRIChildren(info, 0.00), testing::ElementsAre(f, f, f, f));
   EXPECT_THAT(selector.PickLOPRIChildren(info, 0.50), testing::ElementsAre(t, f, f, t));
-
-  SetDebugQosAndRateLimitSelection(false);
 }
 
 TEST(FracAdmittedAtLOPRITest, Basic) {

@@ -350,6 +350,7 @@ class DowngradeAllocator : public PerAggAllocator {
   const FlowMap<proto::FlowAlloc> agg_admissions_;
   spdlog::logger logger_;
   DowngradeSelector downgrade_selector_;
+  const FVSource downgrade_fv_source_;
 
  public:
   DowngradeAllocator(const proto::ClusterAllocatorConfig& config,
@@ -357,7 +358,10 @@ class DowngradeAllocator : public PerAggAllocator {
       : config_(config),
         agg_admissions_(agg_admissions),
         logger_(MakeLogger("downgrade-alloc")),
-        downgrade_selector_(config_.downgrade_selector()) {}
+        downgrade_selector_(config_.downgrade_selector()),
+        downgrade_fv_source_(config_.downgrade_selector().downgrade_usage()
+                                 ? FVSource::kUsage
+                                 : FVSource::kPredictedDemand) {}
 
   std::vector<proto::FlowAlloc> AllocAgg(
       absl::Time time, const proto::AggInfo& agg_info,
@@ -382,11 +386,12 @@ class DowngradeAllocator : public PerAggAllocator {
                          hipri_admission, lopri_admission);
     }
 
-    const int64_t lopri_bps =
-        std::max<int64_t>(0, agg_info.parent().predicted_demand_bps() - hipri_admission);
+    const int64_t lopri_bps = std::max<int64_t>(
+        0, GetFlowVolume(agg_info.parent(), downgrade_fv_source_) - hipri_admission);
 
-    double frac_lopri = static_cast<double>(lopri_bps) /
-                        static_cast<double>(agg_info.parent().predicted_demand_bps());
+    double frac_lopri =
+        static_cast<double>(lopri_bps) /
+        static_cast<double>(GetFlowVolume(agg_info.parent(), downgrade_fv_source_));
 
     *debug_state->mutable_parent_alloc() = admissions;
     debug_state->set_frac_lopri_initial(frac_lopri);

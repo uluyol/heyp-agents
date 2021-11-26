@@ -127,10 +127,13 @@ enum DowngradeSelectorType {
 message DowngradeSelector {
   optional DowngradeSelectorType type = 1 [default = DS_HEYP_SIGCOMM20];
 
+  // If set, will downgrade using usage as input not predicted demand.
+  optional bool downgrade_usage = 2 [default = true];
+
   // If set, the DowngradeSelector will identify jobs to downgrade and mark all hosts
   // within those jobs as LOPRI.
   // Otherwise, it will select hosts without looking at which job a host belongs to.
-  optional bool downgrade_jobs = 2 [default = false];
+  optional bool downgrade_jobs = 3 [default = false];
 
   message HybridHashingConfig {
     // num_demand_aware is the number of hosts that will have their QoS set
@@ -144,7 +147,7 @@ message DowngradeSelector {
   }
 
   // Used when type == DS_HYBRID_HASHING
-  optional HybridHashingConfig hybrid_hashing = 3;
+  optional HybridHashingConfig hybrid_hashing = 4;
 }
 
 message FixedClusterHostAllocs {
