@@ -4,6 +4,7 @@
 #include <memory>
 
 #include "absl/strings/str_join.h"
+#include "flow-volume.h"
 #include "heyp/alg/agg-info-views.h"
 #include "heyp/alg/debug.h"
 #include "heyp/alg/internal/downgrade-selector-hashing.h"
@@ -17,21 +18,20 @@
 namespace heyp {
 namespace {
 
-template <FVSource vol_source>
-std::unique_ptr<internal::DowngradeSelectorImpl> GetSelectorWithSource(
+std::unique_ptr<internal::DowngradeSelectorImpl> GetSelector(
     const proto::DowngradeSelector& selector, spdlog::logger* logger) {
   switch (selector.type()) {
     case proto::DS_HASHING:
-      return std::make_unique<internal::HashingDowngradeSelector<vol_source>>();
+      return std::make_unique<internal::HashingDowngradeSelector>();
       break;
     case proto::DS_HEYP_SIGCOMM20:
-      return std::make_unique<internal::HeypSigcomm20DowngradeSelector<vol_source>>();
+      return std::make_unique<internal::HeypSigcomm20DowngradeSelector>();
       break;
     case proto::DS_KNAPSACK_SOLVER:
-      return std::make_unique<internal::KnapsackSolverDowngradeSelector<vol_source>>();
+      return std::make_unique<internal::KnapsackSolverDowngradeSelector>();
       break;
     case proto::DS_LARGEST_FIRST:
-      return std::make_unique<internal::LargestFirstDowngradeSelector<vol_source>>();
+      return std::make_unique<internal::LargestFirstDowngradeSelector>();
       break;
     default:
       SPDLOG_LOGGER_CRITICAL(logger, "unsupported DowngradeSelectorType: {}",
@@ -41,45 +41,44 @@ std::unique_ptr<internal::DowngradeSelectorImpl> GetSelectorWithSource(
   return nullptr;
 }
 
-std::unique_ptr<internal::DowngradeSelectorImpl> GetSelector(
-    const proto::DowngradeSelector& selector, spdlog::logger* logger) {
-  if (selector.downgrade_usage()) {
-    return GetSelectorWithSource<FVSource::kUsage>(selector, logger);
-  }
-  return GetSelectorWithSource<FVSource::kPredictedDemand>(selector, logger);
-}
-
 }  // namespace
 
 DowngradeSelector::DowngradeSelector(const proto::DowngradeSelector& selector)
     : logger_(MakeLogger("downgrade-selector")),
       impl_(GetSelector(selector, &logger_)),
-      downgrade_jobs_(selector.downgrade_jobs()) {}
+      downgrade_jobs_(selector.downgrade_jobs()),
+      downgrade_usage_(selector.downgrade_usage()) {}
 
 std::vector<bool> DowngradeSelector::PickLOPRIChildren(const proto::AggInfo& agg_info,
                                                        const double want_frac_lopri) {
-  TransparentView raw_view(agg_info);
-  std::unique_ptr<JobLevelView> job_level_view;
-  AggInfoView* view = &raw_view;
+  if (downgrade_jobs_) {
+    std::optional<JobLevelView> job_level_view;
+    if (downgrade_usage_) {
+      job_level_view.emplace(JobLevelView::Create<FVSource::kUsage>(agg_info));
+    } else {
+      job_level_view.emplace(JobLevelView::Create<FVSource::kPredictedDemand>(agg_info));
+    }
+    std::vector<bool> job_selection =
+        impl_->PickLOPRIChildren(*job_level_view, want_frac_lopri, &logger_);
 
-  if (downgrade_jobs_) {
-    job_level_view = std::make_unique<JobLevelView>(agg_info);
-    view = job_level_view.get();
-  }
-  std::vector<bool> selection =
-      impl_->PickLOPRIChildren(*view, want_frac_lopri, &logger_);
-  if (downgrade_jobs_) {
     std::vector<bool> host_selection(agg_info.children_size(), false);
     const std::vector<int>& job_of_host = job_level_view->job_index_of_host();
     H_SPDLOG_CHECK_EQ(&logger_, host_selection.size(), job_of_host.size());
     for (int i = 0; i < host_selection.size(); ++i) {
       H_SPDLOG_CHECK_GE(&logger_, job_of_host[i], 0);
-      H_SPDLOG_CHECK_LT(&logger_, job_of_host[i], selection.size());
-      host_selection[i] = selection[job_of_host[i]];
+      H_SPDLOG_CHECK_LT(&logger_, job_of_host[i], job_selection.size());
+      host_selection[i] = job_selection[job_of_host[i]];
     }
     return host_selection;
   }
-  return selection;
+
+  std::optional<HostLevelView> view;
+  if (downgrade_usage_) {
+    view.emplace(HostLevelView::Create<FVSource::kUsage>(agg_info));
+  } else {
+    view.emplace(HostLevelView::Create<FVSource::kPredictedDemand>(agg_info));
+  }
+  return impl_->PickLOPRIChildren(*view, want_frac_lopri, &logger_);
 }
 
 template <FVSource vol_source>

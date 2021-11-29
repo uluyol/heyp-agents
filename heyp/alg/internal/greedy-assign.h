@@ -6,7 +6,6 @@
 #include <vector>
 
 #include "heyp/alg/agg-info-views.h"
-#include "heyp/alg/flow-volume.h"
 
 namespace heyp {
 namespace internal {
@@ -26,7 +25,7 @@ struct GreedyAssignToMinimizeGapArgs {
 // - args.cur_demand is the sum of demands for children that currently belong to
 //   the bin.
 // - args.want_demand is the desired sum of demands for the bin.
-template <bool StateToIncrease, FVSource vol_source>
+template <bool StateToIncrease>
 void GreedyAssignToMinimizeGap(GreedyAssignToMinimizeGapArgs args,
                                std::vector<bool>& lopri_children,
                                bool punish_only_largest) {
@@ -36,8 +35,7 @@ void GreedyAssignToMinimizeGap(GreedyAssignToMinimizeGapArgs args,
       continue;  // child already belongs to our bin, don't flip
     }
     // Try to flip child_i to our bin.
-    int64_t next_demand =
-        args.cur_demand + GetFlowVolume(args.agg_info.children()[child_i], vol_source);
+    int64_t next_demand = args.cur_demand + args.agg_info.children()[child_i].volume_bps;
 
     if (next_demand > args.want_demand) {
       bool exceeds_twice_gap = next_demand > 2 * args.want_demand - args.cur_demand;

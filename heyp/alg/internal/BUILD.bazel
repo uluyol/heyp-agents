@@ -26,7 +26,6 @@ cc_library(
         ":formatters",
         ":hash-ring",
         "//heyp/alg:debug",
-        "//heyp/alg:flow-volume",
         "@com_google_absl//absl/strings",
     ],
 )
@@ -44,7 +43,6 @@ cc_library(
         ":formatters",
         ":greedy-assign",
         "//heyp/alg:debug",
-        "//heyp/alg:flow-volume",
         "@com_google_absl//absl/strings",
     ],
 )
@@ -61,7 +59,6 @@ cc_library(
         ":downgrade-selector-iface",
         ":formatters",
         "//heyp/alg:debug",
-        "//heyp/alg:flow-volume",
         "@com_google_absl//absl/strings",
         "@com_google_ortools//ortools/algorithms:knapsack_solver_lib",
     ],
@@ -80,7 +77,6 @@ cc_library(
         ":formatters",
         ":greedy-assign",
         "//heyp/alg:debug",
-        "//heyp/alg:flow-volume",
         "@com_google_absl//absl/strings",
     ],
 )
@@ -107,7 +103,6 @@ cc_library(
     hdrs = ["greedy-assign.h"],
     deps = [
         "//heyp/alg:agg-info-views",
-        "//heyp/alg:flow-volume",
     ],
 )
 

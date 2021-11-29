@@ -1,13 +1,11 @@
 #ifndef HEYP_ALG_INTERNAL_DOWNGRADE_SELECTOR_LARGEST_FIRST_H
 #define HEYP_ALG_INTERNAL_DOWNGRADE_SELECTOR_LARGEST_FIRST_H
 
-#include "heyp/alg/flow-volume.h"
 #include "heyp/alg/internal/downgrade-selector-iface.h"
 
 namespace heyp {
 namespace internal {
 
-template <FVSource vol_source>
 class LargestFirstDowngradeSelector : public DowngradeSelectorImpl {
  public:
   std::vector<bool> PickLOPRIChildren(const AggInfoView& agg_info,

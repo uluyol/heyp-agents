@@ -1,5 +1,6 @@
 #include "heyp/alg/agg-info-views.h"
 
+#include "flow-volume.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "heyp/proto/parse-text.h"
@@ -8,7 +9,7 @@
 namespace heyp {
 namespace {
 
-TEST(TransparentViewTest, Basic) {
+TEST(HostLevelViewTest, Basic) {
   auto raw_info = ParseTextProto<proto::AggInfo>(R"(
     parent {
       flow { src_dc: "NY" dst_dc: "LA" }
@@ -48,10 +49,25 @@ TEST(TransparentViewTest, Basic) {
     }
   )");
 
-  TransparentView view(raw_info);
+  auto demand_view = HostLevelView::Create<FVSource::kPredictedDemand>(raw_info);
 
-  EXPECT_THAT(view.parent(), EqProto(raw_info.parent()));
-  EXPECT_THAT(view.children(), EqRepeatedProto(raw_info.children()));
+  EXPECT_THAT(demand_view.parent(), EqProto(raw_info.parent()));
+  EXPECT_THAT(
+      demand_view.children(),
+      testing::ElementsAre(
+          ChildFlowInfo{.child_id = 1, .volume_bps = 500, .currently_lopri = true},
+          ChildFlowInfo{.child_id = 2, .volume_bps = 300, .currently_lopri = false},
+          ChildFlowInfo{.child_id = 3, .volume_bps = 400, .currently_lopri = true}));
+
+  auto usage_view = HostLevelView::Create<FVSource::kUsage>(raw_info);
+
+  EXPECT_THAT(usage_view.parent(), EqProto(raw_info.parent()));
+  EXPECT_THAT(
+      usage_view.children(),
+      testing::ElementsAre(
+          ChildFlowInfo{.child_id = 1, .volume_bps = 500, .currently_lopri = true},
+          ChildFlowInfo{.child_id = 2, .volume_bps = 300, .currently_lopri = false},
+          ChildFlowInfo{.child_id = 3, .volume_bps = 311, .currently_lopri = true}));
 }
 
 TEST(JobLevelViewTest, Basic) {
@@ -94,39 +110,33 @@ TEST(JobLevelViewTest, Basic) {
     }
   )");
 
-  google::protobuf::RepeatedPtrField<proto::FlowInfo> expected_job_children;
-  expected_job_children.Add(ParseTextProto<proto::FlowInfo>(R"(
-    flow { src_dc: "NY" dst_dc: "LA" job: "YT" }
-    predicted_demand_bps: 900
-    ewma_usage_bps: 811
-    cum_usage_bytes: 9000
-    cum_hipri_usage_bytes: 8901
-    cum_lopri_usage_bytes: 99
-    currently_lopri: true
-  )"));
-  expected_job_children.Add(ParseTextProto<proto::FlowInfo>(R"(
-    flow { src_dc: "NY" dst_dc: "LA" job: "FB" }
-    predicted_demand_bps: 300
-    ewma_usage_bps: 300
-    cum_usage_bytes: 99
-    cum_hipri_usage_bytes: 99
-    cum_lopri_usage_bytes: 0
-    currently_lopri: false
-  )"));
+  auto demand_view = JobLevelView::Create<FVSource::kPredictedDemand>(raw_info);
 
-  JobLevelView view(raw_info);
+  EXPECT_THAT(demand_view.parent(), EqProto(raw_info.parent()));
+  EXPECT_THAT(demand_view.job_index_of_host(), testing::ElementsAre(0, 1, 0));
 
-  std::vector<const google::protobuf::FieldDescriptor*> fields_to_ignore{
-      proto::FlowInfo::GetDescriptor()
-          ->FindFieldByName("flow")
-          ->message_type()
-          ->FindFieldByName("host_id"),
-  };
+  EXPECT_THAT(demand_view.children().size(), testing::Eq(2));
+  EXPECT_THAT(demand_view.children()[0].volume_bps, testing::Eq(900));
+  EXPECT_THAT(demand_view.children()[0].currently_lopri, testing::Eq(true));
+  EXPECT_THAT(demand_view.children()[1].volume_bps, testing::Eq(300));
+  EXPECT_THAT(demand_view.children()[1].currently_lopri, testing::Eq(false));
+  EXPECT_THAT(demand_view.children()[0].child_id,
+              testing::Ne(demand_view.children()[1].child_id));
 
-  EXPECT_THAT(view.parent(), EqProto(raw_info.parent()));
-  EXPECT_THAT(view.children(),
-              EqRepeatedProtoIgnoringFields(expected_job_children, fields_to_ignore));
-  EXPECT_THAT(view.job_index_of_host(), testing::ElementsAre(0, 1, 0));
+  auto usage_view = JobLevelView::Create<FVSource::kUsage>(raw_info);
+
+  EXPECT_THAT(usage_view.parent(), EqProto(raw_info.parent()));
+  EXPECT_THAT(usage_view.job_index_of_host(), testing::ElementsAre(0, 1, 0));
+
+  EXPECT_THAT(usage_view.children()[0].volume_bps, testing::Eq(811));
+  EXPECT_THAT(usage_view.children()[0].currently_lopri, testing::Eq(true));
+  EXPECT_THAT(usage_view.children()[1].volume_bps, testing::Eq(300));
+  EXPECT_THAT(usage_view.children()[1].currently_lopri, testing::Eq(false));
+  EXPECT_THAT(usage_view.children()[0].child_id,
+              testing::Ne(usage_view.children()[1].child_id));
+
+  EXPECT_EQ(usage_view.children()[0].child_id, demand_view.children()[0].child_id);
+  EXPECT_EQ(usage_view.children()[1].child_id, demand_view.children()[1].child_id);
 }
 
 }  // namespace

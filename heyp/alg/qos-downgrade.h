@@ -26,6 +26,7 @@ class DowngradeSelector {
   spdlog::logger logger_;
   std::unique_ptr<internal::DowngradeSelectorImpl> impl_;
   const bool downgrade_jobs_;
+  const bool downgrade_usage_;
 };
 
 // FracAdmittedAtLOPRI returns the fraction of traffic that should ideally be sent at

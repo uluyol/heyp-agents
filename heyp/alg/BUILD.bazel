@@ -25,6 +25,7 @@ cc_library(
     srcs = ["agg-info-views.cc"],
     hdrs = ["agg-info-views.h"],
     deps = [
+        ":flow-volume",
         "//heyp/proto:alg",
         "//heyp/proto:heyp_cc_proto",
         "//third_party/xxhash",

@@ -7,15 +7,14 @@
 namespace heyp {
 namespace internal {
 
-template <FVSource vol_source>
-std::vector<bool> HashingDowngradeSelector<vol_source>::PickLOPRIChildren(
+std::vector<bool> HashingDowngradeSelector::PickLOPRIChildren(
     const AggInfoView& agg_info, const double want_frac_lopri, spdlog::logger* logger) {
   const bool should_debug = DebugQosAndRateLimitSelection();
 
   if (should_debug) {
     SPDLOG_LOGGER_INFO(logger, "parent: {}", agg_info.parent().DebugString());
     SPDLOG_LOGGER_INFO(logger, "children: {}",
-                       absl::StrJoin(agg_info.children(), "\n", FlowInfoFormatter()));
+                       absl::StrJoin(agg_info.children(), "\n", absl::StreamFormatter()));
     SPDLOG_LOGGER_INFO(logger, "initial lopri ring: {}", lopri_.ToString());
   }
 
@@ -25,7 +24,7 @@ std::vector<bool> HashingDowngradeSelector<vol_source>::PickLOPRIChildren(
   const auto& agg_children = agg_info.children();
   std::vector<bool> lopri_children(agg_children.size(), false);
   for (size_t i = 0; i < agg_children.size(); ++i) {
-    lopri_children[i] = lopri_ranges.Contains(agg_children[i].flow().host_id());
+    lopri_children[i] = lopri_ranges.Contains(agg_children[i].child_id);
   }
 
   if (should_debug) {
@@ -36,13 +35,6 @@ std::vector<bool> HashingDowngradeSelector<vol_source>::PickLOPRIChildren(
 
   return lopri_children;
 }
-
-template std::vector<bool>
-HashingDowngradeSelector<FVSource::kPredictedDemand>::PickLOPRIChildren(
-    const AggInfoView& agg_info, const double want_frac_lopri, spdlog::logger* logger);
-
-template std::vector<bool> HashingDowngradeSelector<FVSource::kUsage>::PickLOPRIChildren(
-    const AggInfoView& agg_info, const double want_frac_lopri, spdlog::logger* logger);
 
 }  // namespace internal
 }  // namespace heyp

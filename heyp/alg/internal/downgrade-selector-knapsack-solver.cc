@@ -10,15 +10,14 @@
 namespace heyp {
 namespace internal {
 
-template <FVSource vol_source>
-std::vector<bool> KnapsackSolverDowngradeSelector<vol_source>::PickLOPRIChildren(
+std::vector<bool> KnapsackSolverDowngradeSelector::PickLOPRIChildren(
     const AggInfoView& agg_info, const double want_frac_lopri, spdlog::logger* logger) {
   const bool should_debug = DebugQosAndRateLimitSelection();
   const auto& agg_children = agg_info.children();
   if (should_debug) {
     SPDLOG_LOGGER_INFO(logger, "parent: {}", agg_info.parent().DebugString());
     SPDLOG_LOGGER_INFO(logger, "children: {}",
-                       absl::StrJoin(agg_children, "\n", FlowInfoFormatter()));
+                       absl::StrJoin(agg_children, "\n", absl::StreamFormatter()));
   }
 
   absl::optional<operations_research::KnapsackSolver> solver;
@@ -34,8 +33,8 @@ std::vector<bool> KnapsackSolverDowngradeSelector<vol_source>::PickLOPRIChildren
   std::vector<int64_t> demands(agg_children.size(), 0);
   for (size_t i = 0; i < agg_children.size(); ++i) {
     const auto& c = agg_children[i];
-    total_demand += GetFlowVolume(c, vol_source);
-    demands[i] = GetFlowVolume(c, vol_source);
+    total_demand += c.volume_bps;
+    demands[i] = c.volume_bps;
   }
 
   int64_t want_demand = want_frac_lopri * total_demand;
@@ -62,14 +61,6 @@ std::vector<bool> KnapsackSolverDowngradeSelector<vol_source>::PickLOPRIChildren
 
   return lopri_children;
 }
-
-template std::vector<bool>
-KnapsackSolverDowngradeSelector<FVSource::kPredictedDemand>::PickLOPRIChildren(
-    const AggInfoView& agg_info, const double want_frac_lopri, spdlog::logger* logger);
-
-template std::vector<bool>
-KnapsackSolverDowngradeSelector<FVSource::kUsage>::PickLOPRIChildren(
-    const AggInfoView& agg_info, const double want_frac_lopri, spdlog::logger* logger);
 
 }  // namespace internal
 }  // namespace heyp
