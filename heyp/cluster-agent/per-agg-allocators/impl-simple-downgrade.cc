@@ -6,6 +6,10 @@
 #include "heyp/alg/rate-limits.h"
 
 namespace heyp {
+namespace {
+constexpr int64_t kMaxChildBandwidthBps =
+    100 * (static_cast<int64_t>(1) << 30);  // 100 Gbps
+}
 
 SimpleDowngradeAllocator::SimpleDowngradeAllocator(
     const proto::ClusterAllocatorConfig& config, FlowMap<proto::FlowAlloc> agg_admissions,
@@ -125,12 +129,38 @@ std::vector<proto::FlowAlloc> SimpleDowngradeAllocator::AllocAgg(
   debug_state->set_hipri_bonus(hipri_bonus);
   debug_state->set_lopri_bonus(lopri_bonus);
 
-  const int64_t hipri_limit = config_.oversub_factor() * (hipri_waterlevel + hipri_bonus);
+  bool throttle_hipri = false;
+  switch (config_.simple_downgrade_throttle_hipri()) {
+    case proto::HTC_NEVER:
+      // don't throttle
+      break;
+    case proto::HTC_WHEN_ABOVE_HIPRI_LIMIT:
+      if (lopri_bps > 0) {
+        throttle_hipri = true;
+      }
+      break;
+    case proto::HTC_WHEN_ASSIGNED_LOPRI:
+      if (lopri_demands.size() > 0) {
+        throttle_hipri = true;
+      }
+      break;
+    case proto::HTC_ALWAYS:
+      throttle_hipri = true;
+      break;
+    default:
+      SPDLOG_LOGGER_ERROR(&logger_, "unknown HipriThrottleCondition = {}",
+                          config_.simple_downgrade_throttle_hipri());
+  }
+
+  int64_t hipri_limit = config_.oversub_factor() * (hipri_waterlevel + hipri_bonus);
+  if (!throttle_hipri) {
+    hipri_limit = kMaxChildBandwidthBps;
+  }
   const int64_t lopri_limit = config_.oversub_factor() * (lopri_waterlevel + lopri_bonus);
 
   if (should_debug) {
-    SPDLOG_LOGGER_INFO(&logger_, "hipri limit = {} lopri limit = {}", hipri_limit,
-                       lopri_limit);
+    SPDLOG_LOGGER_INFO(&logger_, "throttle hipri = {} hipri limit = {} lopri limit = {}",
+                       throttle_hipri, hipri_limit, lopri_limit);
   }
 
   std::vector<proto::FlowAlloc> allocs;

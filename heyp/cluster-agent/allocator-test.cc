@@ -1227,6 +1227,443 @@ TEST(SimpleDowngradeClusterAllocatorTest, Basic) {
                 })")));
 }
 
+TEST(SimpleDowngradeClusterAllocatorTest, BasicThrottleHIPRINever) {
+  auto alloc =
+      ClusterAllocator::Create(
+          ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+            type: CA_SIMPLE_DOWNGRADE
+            enable_burstiness: false
+            enable_bonus: true
+            oversub_factor: 1.0
+            downgrade_selector { type: DS_KNAPSACK_SOLVER downgrade_usage: false }
+            simple_downgrade_throttle_hipri: HTC_NEVER
+          )"),
+          ParseTextProto<proto::AllocBundle>(R"(
+            flow_allocs {
+              flow { src_dc: "east-us" dst_dc: "west-us" }
+              hipri_rate_limit_bps: 600000
+              lopri_rate_limit_bps: 333333
+            }
+          )"),
+          1)
+          .value();
+  alloc->Reset();
+  alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
+                           R"(
+                             parent {
+                               flow { src_dc: "east-us" dst_dc: "west-us" }
+                               predicted_demand_bps: 933300
+                             }
+                             children {
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
+                               predicted_demand_bps: 600000
+                             }
+                             children {
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
+                               predicted_demand_bps: 300000
+                             }
+                             children {
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 3 }
+                               predicted_demand_bps: 30000
+                             }
+                             children {
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 4 }
+                               predicted_demand_bps: 3000
+                             }
+                             children {
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 5 }
+                               predicted_demand_bps: 300
+                             }
+                           )"));
+  EXPECT_THAT(Bundle(alloc->GetAllocs()),
+              AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
+                flow_allocs {
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
+                  hipri_rate_limit_bps: 107374182400
+                }
+                flow_allocs {
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
+                  lopri_rate_limit_bps: 300008
+                }
+                flow_allocs {
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 3 }
+                  lopri_rate_limit_bps: 300008
+                }
+                flow_allocs {
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 4 }
+                  lopri_rate_limit_bps: 300008
+                }
+                flow_allocs {
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 5 }
+                  lopri_rate_limit_bps: 300008
+                })")));
+}
+
+TEST(SimpleDowngradeClusterAllocatorTest,
+     BasicThrottleHIPRIWhenAboveHIPRILimit_BelowHIPRI) {
+  auto alloc =
+      ClusterAllocator::Create(
+          ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+            type: CA_SIMPLE_DOWNGRADE
+            enable_burstiness: false
+            enable_bonus: true
+            oversub_factor: 1.0
+            downgrade_selector { type: DS_KNAPSACK_SOLVER downgrade_usage: false }
+            simple_downgrade_throttle_hipri: HTC_WHEN_ABOVE_HIPRI_LIMIT
+          )"),
+          ParseTextProto<proto::AllocBundle>(R"(
+            flow_allocs {
+              flow { src_dc: "east-us" dst_dc: "west-us" }
+              hipri_rate_limit_bps: 600000
+              lopri_rate_limit_bps: 333333
+            }
+          )"),
+          1)
+          .value();
+  alloc->Reset();
+  alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
+                           R"(
+                             parent {
+                               flow { src_dc: "east-us" dst_dc: "west-us" }
+                               predicted_demand_bps: 5
+                             }
+                             children {
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
+                               predicted_demand_bps: 1
+                             }
+                             children {
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
+                               predicted_demand_bps: 1
+                             }
+                             children {
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 3 }
+                               predicted_demand_bps: 1
+                             }
+                             children {
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 4 }
+                               predicted_demand_bps: 1
+                             }
+                             children {
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 5 }
+                               predicted_demand_bps: 1
+                             }
+                           )"));
+  EXPECT_THAT(Bundle(alloc->GetAllocs()),
+              AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
+                flow_allocs {
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
+                  hipri_rate_limit_bps: 107374182400
+                }
+                flow_allocs {
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
+                  hipri_rate_limit_bps: 107374182400
+                }
+                flow_allocs {
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 3 }
+                  hipri_rate_limit_bps: 107374182400
+                }
+                flow_allocs {
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 4 }
+                  hipri_rate_limit_bps: 107374182400
+                }
+                flow_allocs {
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 5 }
+                  hipri_rate_limit_bps: 107374182400
+                })")));
+}
+
+TEST(SimpleDowngradeClusterAllocatorTest,
+     BasicThrottleHIPRIWhenAboveHIPRILimit_AboveHIPRI) {
+  auto alloc =
+      ClusterAllocator::Create(
+          ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+            type: CA_SIMPLE_DOWNGRADE
+            enable_burstiness: false
+            enable_bonus: true
+            oversub_factor: 1.0
+            downgrade_selector { type: DS_KNAPSACK_SOLVER downgrade_usage: false }
+            simple_downgrade_throttle_hipri: HTC_WHEN_ABOVE_HIPRI_LIMIT
+          )"),
+          ParseTextProto<proto::AllocBundle>(R"(
+            flow_allocs {
+              flow { src_dc: "east-us" dst_dc: "west-us" }
+              hipri_rate_limit_bps: 600000
+              lopri_rate_limit_bps: 333333
+            }
+          )"),
+          1)
+          .value();
+  alloc->Reset();
+  alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
+                           R"(
+                             parent {
+                               flow { src_dc: "east-us" dst_dc: "west-us" }
+                               predicted_demand_bps: 650000
+                             }
+                             children {
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
+                               predicted_demand_bps: 130000
+                             }
+                             children {
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
+                               predicted_demand_bps: 130000
+                             }
+                             children {
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 3 }
+                               predicted_demand_bps: 130000
+                             }
+                             children {
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 4 }
+                               predicted_demand_bps: 130000
+                             }
+                             children {
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 5 }
+                               predicted_demand_bps: 130000
+                             }
+                           )"));
+  EXPECT_THAT(Bundle(alloc->GetAllocs()),
+              AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
+                flow_allocs {
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
+                  hipri_rate_limit_bps: 120000
+                }
+                flow_allocs {
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
+                  hipri_rate_limit_bps: 120000
+                }
+                flow_allocs {
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 3 }
+                  hipri_rate_limit_bps: 120000
+                }
+                flow_allocs {
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 4 }
+                  hipri_rate_limit_bps: 120000
+                }
+                flow_allocs {
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 5 }
+                  hipri_rate_limit_bps: 120000
+                })")));
+}
+
+TEST(SimpleDowngradeClusterAllocatorTest,
+     BasicThrottleHIPRIWhenAssignedLOPRI_BelowHIPRI) {
+  auto alloc =
+      ClusterAllocator::Create(
+          ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+            type: CA_SIMPLE_DOWNGRADE
+            enable_burstiness: false
+            enable_bonus: true
+            oversub_factor: 1.0
+            downgrade_selector { type: DS_KNAPSACK_SOLVER downgrade_usage: false }
+            simple_downgrade_throttle_hipri: HTC_WHEN_ASSIGNED_LOPRI
+          )"),
+          ParseTextProto<proto::AllocBundle>(R"(
+            flow_allocs {
+              flow { src_dc: "east-us" dst_dc: "west-us" }
+              hipri_rate_limit_bps: 600000
+              lopri_rate_limit_bps: 333333
+            }
+          )"),
+          1)
+          .value();
+  alloc->Reset();
+  alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
+                           R"(
+                             parent {
+                               flow { src_dc: "east-us" dst_dc: "west-us" }
+                               predicted_demand_bps: 5
+                             }
+                             children {
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
+                               predicted_demand_bps: 1
+                             }
+                             children {
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
+                               predicted_demand_bps: 1
+                             }
+                             children {
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 3 }
+                               predicted_demand_bps: 1
+                             }
+                             children {
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 4 }
+                               predicted_demand_bps: 1
+                             }
+                             children {
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 5 }
+                               predicted_demand_bps: 1
+                             }
+                           )"));
+  EXPECT_THAT(Bundle(alloc->GetAllocs()),
+              AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
+                flow_allocs {
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
+                  hipri_rate_limit_bps: 107374182400
+                }
+                flow_allocs {
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
+                  hipri_rate_limit_bps: 107374182400
+                }
+                flow_allocs {
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 3 }
+                  hipri_rate_limit_bps: 107374182400
+                }
+                flow_allocs {
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 4 }
+                  hipri_rate_limit_bps: 107374182400
+                }
+                flow_allocs {
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 5 }
+                  hipri_rate_limit_bps: 107374182400
+                })")));
+}
+
+TEST(SimpleDowngradeClusterAllocatorTest,
+     BasicThrottleHIPRIWhenAssignedLOPRI_AboveHIPRI_NotAssignedLOPRI) {
+  auto alloc =
+      ClusterAllocator::Create(
+          ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+            type: CA_SIMPLE_DOWNGRADE
+            enable_burstiness: false
+            enable_bonus: true
+            oversub_factor: 1.0
+            downgrade_selector { type: DS_KNAPSACK_SOLVER downgrade_usage: false }
+            simple_downgrade_throttle_hipri: HTC_WHEN_ASSIGNED_LOPRI
+          )"),
+          ParseTextProto<proto::AllocBundle>(R"(
+            flow_allocs {
+              flow { src_dc: "east-us" dst_dc: "west-us" }
+              hipri_rate_limit_bps: 600000
+              lopri_rate_limit_bps: 333333
+            }
+          )"),
+          1)
+          .value();
+  alloc->Reset();
+  alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
+                           R"(
+                             parent {
+                               flow { src_dc: "east-us" dst_dc: "west-us" }
+                               predicted_demand_bps: 650000
+                             }
+                             children {
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
+                               predicted_demand_bps: 130000
+                             }
+                             children {
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
+                               predicted_demand_bps: 130000
+                             }
+                             children {
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 3 }
+                               predicted_demand_bps: 130000
+                             }
+                             children {
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 4 }
+                               predicted_demand_bps: 130000
+                             }
+                             children {
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 5 }
+                               predicted_demand_bps: 130000
+                             }
+                           )"));
+  EXPECT_THAT(Bundle(alloc->GetAllocs()),
+              AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
+                flow_allocs {
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
+                  hipri_rate_limit_bps: 107374182400
+                }
+                flow_allocs {
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
+                  hipri_rate_limit_bps: 107374182400
+                }
+                flow_allocs {
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 3 }
+                  hipri_rate_limit_bps: 107374182400
+                }
+                flow_allocs {
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 4 }
+                  hipri_rate_limit_bps: 107374182400
+                }
+                flow_allocs {
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 5 }
+                  hipri_rate_limit_bps: 107374182400
+                })")));
+}
+
+TEST(SimpleDowngradeClusterAllocatorTest,
+     BasicThrottleHIPRIWhenAssignedLOPRI_AboveHIPRI_AssignedLOPRI) {
+  auto alloc =
+      ClusterAllocator::Create(
+          ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+            type: CA_SIMPLE_DOWNGRADE
+            enable_burstiness: false
+            enable_bonus: true
+            oversub_factor: 1.0
+            downgrade_selector { type: DS_KNAPSACK_SOLVER downgrade_usage: false }
+            simple_downgrade_throttle_hipri: HTC_WHEN_ASSIGNED_LOPRI
+          )"),
+          ParseTextProto<proto::AllocBundle>(R"(
+            flow_allocs {
+              flow { src_dc: "east-us" dst_dc: "west-us" }
+              hipri_rate_limit_bps: 600000
+              lopri_rate_limit_bps: 333333
+            }
+          )"),
+          1)
+          .value();
+  alloc->Reset();
+  alloc->AddInfo(T(1), ParseTextProto<proto::AggInfo>(
+                           R"(
+                             parent {
+                               flow { src_dc: "east-us" dst_dc: "west-us" }
+                               predicted_demand_bps: 740000
+                             }
+                             children {
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
+                               predicted_demand_bps: 140000
+                             }
+                             children {
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
+                               predicted_demand_bps: 150000
+                             }
+                             children {
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 3 }
+                               predicted_demand_bps: 150000
+                             }
+                             children {
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 4 }
+                               predicted_demand_bps: 150000
+                             }
+                             children {
+                               flow { src_dc: "east-us" dst_dc: "west-us" host_id: 5 }
+                               predicted_demand_bps: 150000
+                             }
+                           )"));
+  EXPECT_THAT(Bundle(alloc->GetAllocs()),
+              AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
+                flow_allocs {
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 1 }
+                  lopri_rate_limit_bps: 333333
+                }
+                flow_allocs {
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 2 }
+                  hipri_rate_limit_bps: 150000
+                }
+                flow_allocs {
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 3 }
+                  hipri_rate_limit_bps: 150000
+                }
+                flow_allocs {
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 4 }
+                  hipri_rate_limit_bps: 150000
+                }
+                flow_allocs {
+                  flow { src_dc: "east-us" dst_dc: "west-us" host_id: 5 }
+                  hipri_rate_limit_bps: 150000
+                })")));
+}
+
 TEST(SimpleDowngradeClusterAllocatorTest, WithOversub) {
   auto alloc =
       ClusterAllocator::Create(

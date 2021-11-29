@@ -174,6 +174,13 @@ message FixedClusterHostAllocs {
   repeated Snapshot snapshots = 2;
 }
 
+enum HipriThrottleConditions {
+  HTC_NEVER = 0;
+  HTC_WHEN_ABOVE_HIPRI_LIMIT = 1;
+  HTC_WHEN_ASSIGNED_LOPRI = 2;
+  HTC_ALWAYS = 3;
+}
+
 message ClusterAllocatorConfig {
   optional ClusterAllocatorType type = 1 [default = CA_BWE];
   optional bool enable_burstiness = 2 [default = true];
@@ -185,7 +192,9 @@ message ClusterAllocatorConfig {
   optional double heyp_acceptable_measured_ratio_over_intended_ratio = 6 [default = 0.9];
   optional bool heyp_probe_lopri_when_ambiguous = 7 [default = true];
 
-  repeated FixedClusterHostAllocs fixed_host_alloc_patterns = 8;
+  optional HipriThrottleConditions simple_downgrade_throttle_hipri = 8 [default = HTC_ALWAYS];
+
+  repeated FixedClusterHostAllocs fixed_host_alloc_patterns = 9;
 }
 
 message ClusterServerConfig {
