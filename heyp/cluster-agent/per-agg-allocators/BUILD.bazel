@@ -5,14 +5,56 @@ package(
 )
 
 cc_library(
-    name = "per-agg-allocators",
-    srcs = glob(["impl-*.cc"]),
+    name = "interface",
     hdrs = [
         "interface.h",
-    ] + glob([
-        "impl-*.h",
-    ]),
+    ],
     deps = [
+        "//heyp/proto:heyp_cc_proto",
+        "//heyp/proto:monitoring_cc_proto",
+        "@com_google_absl//absl/time",
+    ],
+)
+
+cc_library(
+    name = "impl-bwe",
+    srcs = ["impl-bwe.cc"],
+    hdrs = ["impl-bwe.h"],
+    deps = [
+        ":interface",
+        ":util",
+        "//heyp/alg:rate-limits",
+        "//heyp/alg/fairness:max-min-fairness",
+        "//heyp/log:spdlog",
+        "//heyp/proto:config_cc_proto",
+        "//heyp/proto:heyp_cc_proto",
+        "//heyp/proto:monitoring_cc_proto",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_library(
+    name = "impl-fixed-host-pattern",
+    srcs = ["impl-fixed-host-pattern.cc"],
+    hdrs = ["impl-fixed-host-pattern.h"],
+    deps = [
+        ":interface",
+        ":util",
+        "//heyp/alg:debug",
+        "//heyp/log:spdlog",
+        "//heyp/proto:config_cc_proto",
+        "//heyp/proto:heyp_cc_proto",
+        "//heyp/proto:monitoring_cc_proto",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_library(
+    name = "impl-heyp-sigcomm-20",
+    srcs = ["impl-heyp-sigcomm-20.cc"],
+    hdrs = ["impl-heyp-sigcomm-20.h"],
+    deps = [
+        ":interface",
         ":util",
         "//heyp/alg:debug",
         "//heyp/alg:qos-downgrade",
@@ -23,7 +65,35 @@ cc_library(
         "//heyp/proto:heyp_cc_proto",
         "//heyp/proto:monitoring_cc_proto",
         "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/time",
+    ],
+)
+
+cc_library(
+    name = "impl-nop",
+    hdrs = ["impl-nop.h"],
+    deps = [
+        ":interface",
+        "//heyp/alg:debug",
+        "//heyp/log:spdlog",
+    ],
+)
+
+cc_library(
+    name = "impl-simple-downgrade",
+    srcs = ["impl-simple-downgrade.cc"],
+    hdrs = ["impl-simple-downgrade.h"],
+    deps = [
+        ":interface",
+        ":util",
+        "//heyp/alg:debug",
+        "//heyp/alg:qos-downgrade",
+        "//heyp/alg:rate-limits",
+        "//heyp/alg/fairness:max-min-fairness",
+        "//heyp/log:spdlog",
+        "//heyp/proto:config_cc_proto",
+        "//heyp/proto:heyp_cc_proto",
+        "//heyp/proto:monitoring_cc_proto",
+        "@com_google_absl//absl/strings",
     ],
 )
 

@@ -24,7 +24,12 @@ cc_library(
     hdrs = ["allocator.h"],
     deps = [
         ":allocs",
-        "//heyp/cluster-agent/per-agg-allocators",
+        "//heyp/cluster-agent/per-agg-allocators:impl-bwe",
+        "//heyp/cluster-agent/per-agg-allocators:impl-fixed-host-pattern",
+        "//heyp/cluster-agent/per-agg-allocators:impl-heyp-sigcomm-20",
+        "//heyp/cluster-agent/per-agg-allocators:impl-nop",
+        "//heyp/cluster-agent/per-agg-allocators:impl-simple-downgrade",
+        "//heyp/cluster-agent/per-agg-allocators:interface",
         "//heyp/log:spdlog",
         "//heyp/proto:ndjson-logger",
         "//heyp/threads:executor",
