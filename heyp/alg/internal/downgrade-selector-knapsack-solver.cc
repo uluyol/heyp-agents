@@ -14,15 +14,16 @@ template <FVSource vol_source>
 std::vector<bool> KnapsackSolverDowngradeSelector<vol_source>::PickLOPRIChildren(
     const AggInfoView& agg_info, const double want_frac_lopri, spdlog::logger* logger) {
   const bool should_debug = DebugQosAndRateLimitSelection();
+  const auto& agg_children = agg_info.children();
   if (should_debug) {
     SPDLOG_LOGGER_INFO(logger, "parent: {}", agg_info.parent().DebugString());
     SPDLOG_LOGGER_INFO(logger, "children: {}",
-                       absl::StrJoin(agg_info.children(), "\n", FlowInfoFormatter()));
+                       absl::StrJoin(agg_children, "\n", FlowInfoFormatter()));
   }
 
   absl::optional<operations_research::KnapsackSolver> solver;
 
-  if (agg_info.children_size() <= 64) {
+  if (agg_children.size() <= 64) {
     solver.emplace(operations_research::KnapsackSolver::KNAPSACK_64ITEMS_SOLVER,
                    "pick-lopri");
   } else {
@@ -30,9 +31,9 @@ std::vector<bool> KnapsackSolverDowngradeSelector<vol_source>::PickLOPRIChildren
   }
 
   int64_t total_demand = 0;
-  std::vector<int64_t> demands(agg_info.children_size(), 0);
-  for (size_t i = 0; i < agg_info.children_size(); ++i) {
-    const auto& c = agg_info.children(i);
+  std::vector<int64_t> demands(agg_children.size(), 0);
+  for (size_t i = 0; i < agg_children.size(); ++i) {
+    const auto& c = agg_children[i];
     total_demand += GetFlowVolume(c, vol_source);
     demands[i] = GetFlowVolume(c, vol_source);
   }
@@ -43,8 +44,8 @@ std::vector<bool> KnapsackSolverDowngradeSelector<vol_source>::PickLOPRIChildren
   int64_t got_total_demand = solver->Solve();
 
   int64_t double_check_total_demand = 0;
-  std::vector<bool> lopri_children(agg_info.children_size(), false);
-  for (size_t i = 0; i < agg_info.children_size(); ++i) {
+  std::vector<bool> lopri_children(agg_children.size(), false);
+  for (size_t i = 0; i < agg_children.size(); ++i) {
     if (solver->BestSolutionContains(i)) {
       lopri_children[i] = true;
       double_check_total_demand += demands[i];

@@ -14,18 +14,19 @@ template <FVSource vol_source>
 std::vector<bool> LargestFirstDowngradeSelector<vol_source>::PickLOPRIChildren(
     const AggInfoView& agg_info, const double want_frac_lopri, spdlog::logger* logger) {
   const bool should_debug = DebugQosAndRateLimitSelection();
+  const auto& agg_children = agg_info.children();
 
   if (should_debug) {
     SPDLOG_LOGGER_INFO(logger, "parent: {}", agg_info.parent().DebugString());
     SPDLOG_LOGGER_INFO(logger, "children: {}",
-                       absl::StrJoin(agg_info.children(), "\n", FlowInfoFormatter()));
+                       absl::StrJoin(agg_children, "\n", FlowInfoFormatter()));
   }
 
   int64_t total_demand = 0;
-  std::vector<size_t> children_sorted_by_dec_demand(agg_info.children_size(), 0);
-  for (size_t i = 0; i < agg_info.children_size(); ++i) {
+  std::vector<size_t> children_sorted_by_dec_demand(agg_children.size(), 0);
+  for (size_t i = 0; i < agg_children.size(); ++i) {
     children_sorted_by_dec_demand[i] = i;
-    const auto& c = agg_info.children(i);
+    const auto& c = agg_children[i];
     total_demand += GetFlowVolume(c, vol_source);
   }
 
@@ -34,20 +35,20 @@ std::vector<bool> LargestFirstDowngradeSelector<vol_source>::PickLOPRIChildren(
       SPDLOG_LOGGER_INFO(logger, "no demand");
     }
     // Don't use LOPRI if all demand is zero.
-    return std::vector<bool>(agg_info.children_size(), false);
+    return std::vector<bool>(agg_children.size(), false);
   }
 
   std::sort(children_sorted_by_dec_demand.begin(), children_sorted_by_dec_demand.end(),
-            [&agg_info](size_t lhs, size_t rhs) -> bool {
-              int64_t lhs_demand = GetFlowVolume(agg_info.children(lhs), vol_source);
-              int64_t rhs_demand = GetFlowVolume(agg_info.children(rhs), vol_source);
+            [&agg_children](size_t lhs, size_t rhs) -> bool {
+              int64_t lhs_demand = GetFlowVolume(agg_children[lhs], vol_source);
+              int64_t rhs_demand = GetFlowVolume(agg_children[rhs], vol_source);
               if (lhs_demand == rhs_demand) {
                 return lhs > rhs;
               }
               return lhs_demand > rhs_demand;
             });
 
-  std::vector<bool> lopri_children(agg_info.children_size(), false);
+  std::vector<bool> lopri_children(agg_children.size(), false);
   int64_t lopri_demand = 0;
   if (should_debug) {
     SPDLOG_LOGGER_INFO(logger, "move from HIPRI to LOPRI");

@@ -22,9 +22,10 @@ std::vector<bool> HashingDowngradeSelector<vol_source>::PickLOPRIChildren(
   lopri_.UpdateFrac(want_frac_lopri);
   RingRanges lopri_ranges = lopri_.MatchingRanges();
 
-  std::vector<bool> lopri_children(agg_info.children_size(), false);
-  for (size_t i = 0; i < agg_info.children_size(); ++i) {
-    lopri_children[i] = lopri_ranges.Contains(agg_info.children(i).flow().host_id());
+  const auto& agg_children = agg_info.children();
+  std::vector<bool> lopri_children(agg_children.size(), false);
+  for (size_t i = 0; i < agg_children.size(); ++i) {
+    lopri_children[i] = lopri_ranges.Contains(agg_children[i].flow().host_id());
   }
 
   if (should_debug) {

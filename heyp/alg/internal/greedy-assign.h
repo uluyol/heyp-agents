@@ -37,7 +37,7 @@ void GreedyAssignToMinimizeGap(GreedyAssignToMinimizeGapArgs args,
     }
     // Try to flip child_i to our bin.
     int64_t next_demand =
-        args.cur_demand + GetFlowVolume(args.agg_info.children(child_i), vol_source);
+        args.cur_demand + GetFlowVolume(args.agg_info.children()[child_i], vol_source);
 
     if (next_demand > args.want_demand) {
       bool exceeds_twice_gap = next_demand > 2 * args.want_demand - args.cur_demand;

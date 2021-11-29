@@ -61,7 +61,11 @@ cc_library(
     deps = [
         ":agg-info-views",
         ":debug",
-        "//heyp/alg/internal:downgrade-selectors",
+        "//heyp/alg/internal:downgrade-selector-hashing",
+        "//heyp/alg/internal:downgrade-selector-heyp-sigcomm-20",
+        "//heyp/alg/internal:downgrade-selector-iface",
+        "//heyp/alg/internal:downgrade-selector-knapsack-solver",
+        "//heyp/alg/internal:downgrade-selector-largest-first",
         "//heyp/log:spdlog",
         "//heyp/proto:config_cc_proto",
         "//heyp/proto:heyp_cc_proto",

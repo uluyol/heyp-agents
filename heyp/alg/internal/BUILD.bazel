@@ -5,32 +5,83 @@ package(
 )
 
 cc_library(
-    name = "downgrade-selectors",
+    name = "downgrade-selector-iface",
+    hdrs = ["downgrade-selector-iface.h"],
+    deps = [
+        "//heyp/alg:agg-info-views",
+        "//heyp/log:spdlog",
+    ],
+)
+
+cc_library(
+    name = "downgrade-selector-hashing",
     srcs = [
         "downgrade-selector-hashing.cc",
-        "downgrade-selector-heyp-sigcomm-20.cc",
-        "downgrade-selector-knapsack-solver.cc",
-        "downgrade-selector-largest-first.cc",
     ],
     hdrs = [
         "downgrade-selector-hashing.h",
+    ],
+    deps = [
+        ":downgrade-selector-iface",
+        ":formatters",
+        ":hash-ring",
+        "//heyp/alg:debug",
+        "//heyp/alg:flow-volume",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_library(
+    name = "downgrade-selector-heyp-sigcomm-20",
+    srcs = [
+        "downgrade-selector-heyp-sigcomm-20.cc",
+    ],
+    hdrs = [
         "downgrade-selector-heyp-sigcomm-20.h",
-        "downgrade-selector-iface.h",
+    ],
+    deps = [
+        ":downgrade-selector-iface",
+        ":formatters",
+        ":greedy-assign",
+        "//heyp/alg:debug",
+        "//heyp/alg:flow-volume",
+        "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_library(
+    name = "downgrade-selector-knapsack-solver",
+    srcs = [
+        "downgrade-selector-knapsack-solver.cc",
+    ],
+    hdrs = [
         "downgrade-selector-knapsack-solver.h",
+    ],
+    deps = [
+        ":downgrade-selector-iface",
+        ":formatters",
+        "//heyp/alg:debug",
+        "//heyp/alg:flow-volume",
+        "@com_google_absl//absl/strings",
+        "@com_google_ortools//ortools/algorithms:knapsack_solver_lib",
+    ],
+)
+
+cc_library(
+    name = "downgrade-selector-largest-first",
+    srcs = [
+        "downgrade-selector-largest-first.cc",
+    ],
+    hdrs = [
         "downgrade-selector-largest-first.h",
     ],
     deps = [
+        ":downgrade-selector-iface",
         ":formatters",
         ":greedy-assign",
-        ":hash-ring",
-        "//heyp/alg:agg-info-views",
         "//heyp/alg:debug",
         "//heyp/alg:flow-volume",
-        "//heyp/log:spdlog",
-        "//heyp/proto:heyp_cc_proto",
         "@com_google_absl//absl/strings",
-        "@com_google_absl//absl/strings:str_format",
-        "@com_google_ortools//ortools/algorithms:knapsack_solver_lib",
     ],
 )
 

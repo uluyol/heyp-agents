@@ -13,9 +13,6 @@ class AggInfoView {
 
   virtual const proto::FlowInfo& parent() const = 0;
   virtual const google::protobuf::RepeatedPtrField<proto::FlowInfo>& children() const = 0;
-
-  int children_size() const { return children().size(); }
-  const proto::FlowInfo& children(int i) const { return children()[i]; }
 };
 
 class TransparentView : public AggInfoView {
