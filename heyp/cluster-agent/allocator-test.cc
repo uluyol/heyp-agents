@@ -12,19 +12,6 @@
 namespace heyp {
 namespace {
 
-TEST(ClampFracLOPRITest, EdgeConditionsAndRanges) {
-  auto logger = MakeLogger("test");
-  EXPECT_EQ(ClampFracLOPRI(&logger, NAN), 0);
-  EXPECT_EQ(ClampFracLOPRI(&logger, -0.00001), 0);
-  EXPECT_EQ(ClampFracLOPRI(&logger, 0), 0);
-  EXPECT_EQ(ClampFracLOPRI(&logger, 0.00001), 0.00001);
-  EXPECT_EQ(ClampFracLOPRI(&logger, 0.99999), 0.99999);
-  EXPECT_EQ(ClampFracLOPRI(&logger, 1), 1);
-  EXPECT_EQ(ClampFracLOPRI(&logger, 1.00001), 1);
-  EXPECT_EQ(ClampFracLOPRI(&logger, std::numeric_limits<double>::infinity()), 1);
-  EXPECT_EQ(ClampFracLOPRI(&logger, -std::numeric_limits<double>::infinity()), 0);
-}
-
 absl::Time T(int64_t sec) { return absl::UnixEpoch() + absl::Seconds(sec); }
 
 proto::AllocBundle Bundle(const AllocSet& alloc_set) {

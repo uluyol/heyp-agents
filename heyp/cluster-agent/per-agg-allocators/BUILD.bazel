@@ -1,0 +1,49 @@
+load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+
+package(
+    default_visibility = ["//heyp/cluster-agent:__subpackages__"],
+)
+
+cc_library(
+    name = "per-agg-allocators",
+    srcs = glob(["impl-*.cc"]),
+    hdrs = [
+        "interface.h",
+    ] + glob([
+        "impl-*.h",
+    ]),
+    deps = [
+        ":util",
+        "//heyp/alg:debug",
+        "//heyp/alg:qos-downgrade",
+        "//heyp/alg:rate-limits",
+        "//heyp/alg/fairness:max-min-fairness",
+        "//heyp/log:spdlog",
+        "//heyp/proto:config_cc_proto",
+        "//heyp/proto:heyp_cc_proto",
+        "//heyp/proto:monitoring_cc_proto",
+        "@com_google_absl//absl/strings",
+        "@com_google_absl//absl/time",
+    ],
+)
+
+cc_library(
+    name = "util",
+    srcs = ["util.cc"],
+    hdrs = ["util.h"],
+    deps = [
+        "//heyp/log:spdlog",
+        "//heyp/proto:alg",
+        "//heyp/proto:heyp_cc_proto",
+        "@com_google_absl//absl/container:flat_hash_map",
+    ],
+)
+
+cc_test(
+    name = "util-test",
+    srcs = ["util-test.cc"],
+    deps = [
+        ":util",
+        "//heyp/init:test-main",
+    ],
+)

@@ -7,6 +7,7 @@
 #include "absl/status/statusor.h"
 #include "absl/time/time.h"
 #include "heyp/cluster-agent/allocs.h"
+#include "heyp/cluster-agent/per-agg-allocators/interface.h"
 #include "heyp/log/spdlog.h"
 #include "heyp/proto/config.pb.h"
 #include "heyp/proto/heyp.pb.h"
@@ -15,16 +16,12 @@
 
 namespace heyp {
 
-class PerAggAllocator;
-
 class ClusterAllocator {
  public:
   static absl::StatusOr<std::unique_ptr<ClusterAllocator>> Create(
       const proto::ClusterAllocatorConfig& config,
       const proto::AllocBundle& cluster_wide_allocs, double demand_multiplier,
       NdjsonLogger* alloc_recorder = nullptr /* optional */);
-
-  ~ClusterAllocator();
 
   void Reset();
   void AddInfo(absl::Time time, const proto::AggInfo& info);
