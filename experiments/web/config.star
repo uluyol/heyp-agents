@@ -858,7 +858,7 @@ def RateLimitConfig(**kwargs):
 def QoSDowngradeConfig(**kwargs):
     allocator = config_pb.ClusterAllocatorConfig(
         type = "CA_SIMPLE_DOWNGRADE",
-        downgrade_selector = {"type": "DS_KNAPSACK_SOLVER"},
+        downgrade_selector = {"type": "DS_KNAPSACK_SOLVER", "downgrade_usage": True},
         enable_burstiness = True,
         enable_bonus = True,
         oversub_factor = OVERSUB_FACTOR,
@@ -875,7 +875,7 @@ def QoSDowngradeConfig(**kwargs):
 def QoSDowngradeAndLimitLOPRIConfig(**kwargs):
     allocator = config_pb.ClusterAllocatorConfig(
         type = "CA_SIMPLE_DOWNGRADE",
-        downgrade_selector = {"type": "DS_KNAPSACK_SOLVER"},
+        downgrade_selector = {"type": "DS_KNAPSACK_SOLVER", "downgrade_usage": True},
         enable_burstiness = True,
         enable_bonus = True,
         oversub_factor = OVERSUB_FACTOR,
@@ -892,7 +892,7 @@ def QoSDowngradeAndLimitLOPRIConfig(**kwargs):
 def QoSDowngradeAndLimitLOPRIConfigJobLevel(**kwargs):
     allocator = config_pb.ClusterAllocatorConfig(
         type = "CA_SIMPLE_DOWNGRADE",
-        downgrade_selector = {"type": "DS_KNAPSACK_SOLVER", "downgrade_jobs": True},
+        downgrade_selector = {"type": "DS_KNAPSACK_SOLVER", "downgrade_usage": True, "downgrade_jobs": True},
         enable_burstiness = True,
         enable_bonus = True,
         oversub_factor = OVERSUB_FACTOR,
@@ -910,7 +910,7 @@ def HSC20Config(**kwargs):
     # Basically does nothing
     allocator = config_pb.ClusterAllocatorConfig(
         type = "CA_HEYP_SIGCOMM20",
-        downgrade_selector = {"type": "DS_HEYP_SIGCOMM20"},
+        downgrade_selector = {"type": "DS_HEYP_SIGCOMM20", "downgrade_usage": True},
         enable_burstiness = True,
         enable_bonus = True,
         oversub_factor = OVERSUB_FACTOR,
