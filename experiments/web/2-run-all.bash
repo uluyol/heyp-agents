@@ -7,6 +7,7 @@ if [[ $# -lt 1 ]]; then
   exit 1
 fi
 
+RETRY=${RETRY:-0}
 outdir=${1%/}
 
 wait_all() {
@@ -53,7 +54,7 @@ run_one() {
   dpids=""
   bin/deploy-heyp collect-host-stats -c $c -stop &
   dpids="$dpids $!"
-  bin/deploy-heyp stop-heyp-agents -c $c & # graceful shutdown
+  bin/deploy-heyp stop-heyp-agents -c $c &# graceful shutdown
   dpids="$dpids $!"
 
   wait_all $dpids || true # ignore shutdown errors
@@ -62,7 +63,7 @@ run_one() {
 
   local did_fetch=0
   local try=1
-  while (( did_fetch == 0 )); do
+  while ((did_fetch == 0)); do
     echo "[$HEYP_RUN_NAME] fetch data (try = $try)"
     if bin/deploy-heyp fetch-data -c $c -o $o; then
       did_fetch=1
@@ -78,44 +79,54 @@ run_one() {
   return 0
 }
 
+run_shard() {
+  local shard="$1"
+  local shardi=$(basename "$shard")
+  if [[ $shardi -ne 0 ]]; then
+    sleep 5
+  fi
+  local all_good=1
+  local first=1
+  local name
+  for name in $(sort $shard); do
+    local c="$outdir/configs/$name.textproto"
+    local o="$outdir/data/$name"
+    if ((first == 1)); then
+      echo "[shard $shardi] check nodes"
+      bin/deploy-heyp check-nodes -c $c || return 1
+      echo "[shard $shardi] config sys"
+      bin/deploy-heyp config-sys -c $c -cc bbr -debugmon || return 1
+      echo "[shard $shardi] roughly measure per-QoS BW w/ congestion (info only)"
+      bin/deploy-heyp report-pri-bw -c $c || true
+      echo "[shard $shardi] install bundle"
+      bin/deploy-heyp install-bundle -c $c || return 1
+      first=0
+    fi
+
+    echo "[$name] start run ====="
+    if ! HEYP_RUN_NAME=$name run_one "$c" "$o"; then
+      echo "[$name] run failed !!!!!"
+      all_good=0
+    else
+      echo "[$name] finished run ====="
+    fi
+  done
+  if ((all_good != 1)); then
+    return 1
+  fi
+  return 0
+}
 
 pids=""
 mkdir -p "$outdir/data"
 for shard in "$outdir"/shards/*; do
   (
-    shardi=$(basename "$shard")
-    if [[ $shardi -ne 0 ]]; then
-      sleep 5
-    fi
-    all_good=1
-    first=1
-    for name in $(sort $shard); do
-      c="$outdir/configs/$name.textproto"
-      o="$outdir/data/$name"
-      if (( first == 1 )); then
-        echo "[shard $shardi] check nodes"
-        bin/deploy-heyp check-nodes -c $c
-        echo "[shard $shardi] config sys"
-        bin/deploy-heyp config-sys -c $c -cc bbr -debugmon
-        echo "[shard $shardi] roughly measure per-QoS BW w/ congestion (info only)"
-        bin/deploy-heyp report-pri-bw -c $c
-        echo "[shard $shardi] install bundle"
-        bin/deploy-heyp install-bundle -c $c
-        first=0
+    while ! run_shard "$shard"; do
+      if [[ $RETRY -eq 0 ]]; then
+        exit 1
       fi
-
-      echo "[$name] start run ====="
-      export HEYP_RUN_NAME=$name
-      if ! run_one "$c" "$o"; then
-        echo "[$name] run failed !!!!!"
-        all_good=0
-      else
-        echo "[$name] finished run ====="
-      fi
+      sleep 15
     done
-    if (( all_good != 1 )); then
-      exit 1
-    fi
   ) &
   pids="$pids $!"
 done
