@@ -18,12 +18,18 @@ SYS_LONG[["qdlrlj"]] <- "QDJob+LimitLO"
 SYS_LONG[["rl"]] <- "RateLimit"
 SYS_LONG[["flipflop"]] <- "MixedFlipFlop"
 SYS_LONG[["stableqos"]] <- "MixedStable"
+SYS_LONG[["flipflop_nl"]] <- "MixedFlipFlop-NL"
+SYS_LONG[["stableqos_nl"]] <- "MixedStable-NL"
+SYS_LONG[["flipflop_rl"]] <- "MixedFlipFlop-RLTight"
+SYS_LONG[["stableqos_rl"]] <- "MixedStable-RLTight"
+SYS_LONG[["flipflop_oversub"]] <- "MixedFlipFlop-RL"
+SYS_LONG[["stableqos_oversub"]] <- "MixedStable-RL"
 SYS_LONG[["hipri"]] <- "AllHIPRI"
 SYS_LONG[["lopri"]] <- "AllLOPRI"
 
 PlotLatencyCumCountsTo <- function(ymax, subset, output) {
     if (nrow(subset) > 0) {
-        subset$Sys <- factor(subset$Sys, levels=c("NoLimit", "AllHIPRI", "MixedStable", "MixedFlipFlop", "AllLOPRI"))
+        # subset$Sys <- factor(subset$Sys, levels=c("NoLimit", "AllHIPRI", "MixedStable", "MixedFlipFlop", "AllLOPRI"))
         subset$Y <- subset$CumNumSamples
 
         pdf(output, height=2.5, width=5)
@@ -60,7 +66,7 @@ PlotLatencyCumCountsTo <- function(ymax, subset, output) {
 
 PlotLatencyCDFTo <- function(subset, output) {
     if (nrow(subset) > 0) {
-        subset$Sys <- factor(subset$Sys, levels=c("NoLimit", "AllHIPRI", "MixedStable", "MixedFlipFlop", "AllLOPRI"))
+        # subset$Sys <- factor(subset$Sys, levels=c("NoLimit", "AllHIPRI", "MixedStable", "MixedFlipFlop", "AllLOPRI"))
         subset$Y <- subset$Percentile / 100
 
         pdf(output, height=2.5, width=5)
@@ -98,7 +104,7 @@ PlotLatencyCDFTo <- function(subset, output) {
 
 PlotLatencyCCDFTo <- function(subset, output) {
     if (nrow(subset) > 0) {
-        subset$Sys <- factor(subset$Sys, levels=c("NoLimit", "AllHIPRI", "MixedStable", "MixedFlipFlop", "AllLOPRI"))
+        # subset$Sys <- factor(subset$Sys, levels=c("NoLimit", "AllHIPRI", "MixedStable", "MixedFlipFlop", "AllLOPRI"))
         subset$Y <- 1 - (subset$Percentile / 100)
         subset <- subset[subset$Y > 0,]
 
