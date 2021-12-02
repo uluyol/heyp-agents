@@ -926,7 +926,11 @@ def HSC20Config(**kwargs):
         **kwargs
     )
 
-def FixedHostPatternStableQoSConfig(**kwargs):
+def FixedHostPatternStableQoSConfig(AA_admission_bps = None, **kwargs):
+    AA_num_hipri_hosts = 4
+    AA_rate_limit_hipri = Gbps(100)
+    if AA_admission_bps != None:
+        AA_rate_limit_hipri = AA_admission_bps // AA_num_hipri_hosts
     allocator = config_pb.ClusterAllocatorConfig(
         type = "CA_FIXED_HOST_PATTERN",
         fixed_host_alloc_patterns = [
@@ -940,7 +944,7 @@ def FixedHostPatternStableQoSConfig(**kwargs):
                         "host_allocs": [
                             {
                                 "alloc": {
-                                    "hipri_rate_limit_bps": Gbps(100),
+                                    "hipri_rate_limit_bps": AA_rate_limit_hipri,
                                 },
                                 "num_hosts": 4,
                             },
@@ -978,12 +982,16 @@ def FixedHostPatternStableQoSConfig(**kwargs):
     return GenConfig(
         ca_allocator = allocator,
         ca_limits_to_apply = "HL",
-        limit_hipri = False,
+        limit_hipri = AA_admission_bps != None,
         limit_lopri = False,
         **kwargs
     )
 
-def FixedHostPatternAlternatingQoSConfig(**kwargs):
+def FixedHostPatternAlternatingQoSConfig(AA_admission_bps = None, **kwargs):
+    AA_num_hipri_hosts = 4
+    AA_rate_limit_hipri = Gbps(100)
+    if AA_admission_bps != None:
+        AA_rate_limit_hipri = AA_admission_bps // AA_num_hipri_hosts
     allocator = config_pb.ClusterAllocatorConfig(
         type = "CA_FIXED_HOST_PATTERN",
         fixed_host_alloc_patterns = [
@@ -997,7 +1005,7 @@ def FixedHostPatternAlternatingQoSConfig(**kwargs):
                         "host_allocs": [
                             {
                                 "alloc": {
-                                    "hipri_rate_limit_bps": Gbps(100),
+                                    "hipri_rate_limit_bps": AA_rate_limit_hipri,
                                 },
                                 "num_hosts": 4,
                             },
@@ -1019,7 +1027,7 @@ def FixedHostPatternAlternatingQoSConfig(**kwargs):
                             },
                             {
                                 "alloc": {
-                                    "hipri_rate_limit_bps": Gbps(100),
+                                    "hipri_rate_limit_bps": AA_rate_limit_hipri,
                                 },
                                 "num_hosts": 4,
                             },
@@ -1051,12 +1059,16 @@ def FixedHostPatternAlternatingQoSConfig(**kwargs):
     return GenConfig(
         ca_allocator = allocator,
         ca_limits_to_apply = "HL",
-        limit_hipri = False,
+        limit_hipri = AA_admission_bps != None,
         limit_lopri = False,
         **kwargs
     )
 
-def FixedHostPatternHIPRIConfig(**kwargs):
+def FixedHostPatternHIPRIConfig(AA_admission_bps = None, **kwargs):
+    AA_num_hipri_hosts = 8
+    AA_rate_limit_hipri = Gbps(100)
+    if AA_admission_bps != None:
+        AA_rate_limit_hipri = AA_admission_bps // AA_num_hipri_hosts
     allocator = config_pb.ClusterAllocatorConfig(
         type = "CA_FIXED_HOST_PATTERN",
         fixed_host_alloc_patterns = [
@@ -1070,7 +1082,7 @@ def FixedHostPatternHIPRIConfig(**kwargs):
                         "host_allocs": [
                             {
                                 "alloc": {
-                                    "hipri_rate_limit_bps": Gbps(100),
+                                    "hipri_rate_limit_bps": AA_rate_limit_hipri,
                                 },
                                 "num_hosts": 8,
                             },
@@ -1102,7 +1114,7 @@ def FixedHostPatternHIPRIConfig(**kwargs):
     return GenConfig(
         ca_allocator = allocator,
         ca_limits_to_apply = "HL",
-        limit_hipri = False,
+        limit_hipri = AA_admission_bps != None,
         limit_lopri = False,
         **kwargs
     )
@@ -1361,17 +1373,17 @@ def AddConfigsFlipQoS(configs):
 
     # (AA HIPRI, WA, AA LOPRI) triplets, in ms
     latencies = [
-        # (30, 50, 90),
-        (100, 120, 210),
+        (30, 50, 90),
+        # (100, 120, 210),
         # (100, 120, 310),
-        (200, 220, 310),
+        # (200, 220, 310),
         # (200, 220, 410),
         # (300, 220, 410),
     ]
 
-    for cp in ["500ms", "1s", "2s", "4s"]:
+    for cp in ["100ms", "300ms", "500ms"]:
         for AA_lat, WA_lat, AA_lopri_lat in latencies:
-            for WA_demand_gbps in [6, 8]:
+            for WA_demand_gbps in [6, float("6.5")]:
                 WA_demand = int(Gbps(WA_demand_gbps))
                 kwargs_rr = dict({
                     "AA_lopri_is_longer": True,
@@ -1381,7 +1393,7 @@ def AddConfigsFlipQoS(configs):
                     "AA_prop_delay_ms": AA_lat,
                     "WA_prop_delay_ms": WA_lat,
                     "AA_prop_delay_ms_extra_lopri": AA_lopri_lat - AA_lat,
-                    "shard_key": "qflip_lat_{0}_{1}_{2}".format(AA_lat, WA_lat, AA_lopri_lat),
+                    "shard_key": "qflip_cp_{0}_lat_{1}_{2}_{3}".format(cp, AA_lat, WA_lat, AA_lopri_lat),
                     "node_counts": {
                         "EDGE": 2,
                         "AA": 8,
@@ -1392,8 +1404,8 @@ def AddConfigsFlipQoS(configs):
                 }, **GenWorkloadStagesStatic(
                     AA_bps = 2 * AA_approval,
                     WA_bps = WA_demand,
-                    AA_lb_policy = "ROUND_ROBIN",
-                    WA_lb_policy = "ROUND_ROBIN",
+                    AA_lb_policy = "LEAST_REQUEST",
+                    WA_lb_policy = "LEAST_REQUEST",
                     AA_avg_prop_delay_ms = AA_lopri_lat,
                     AA_max_prop_delay_ms = (AA_lat + AA_lopri_lat) // 2,
                     WA_prop_delay_ms = WA_lat,
@@ -1404,10 +1416,17 @@ def AddConfigsFlipQoS(configs):
 
                 prefix = "qflip_cp_{0}_lat_{1}_{2}_{3}_bg{4}".format(cp, AA_lat, WA_lat, AA_lopri_lat, WA_demand_gbps)
 
-                configs[prefix + "-hipri"] = FixedHostPatternHIPRIConfig(**kwargs_rr)
+                # configs[prefix + "-hipri"] = FixedHostPatternHIPRIConfig(**kwargs_rr)
                 configs[prefix + "-lopri"] = FixedHostPatternLOPRIConfig(**kwargs_rr)
-                configs[prefix + "-flipflop"] = FixedHostPatternAlternatingQoSConfig(**kwargs_rr)
-                configs[prefix + "-stableqos"] = FixedHostPatternStableQoSConfig(**kwargs_rr)
+
+                # configs[prefix + "-flipflop_nl"] = FixedHostPatternAlternatingQoSConfig(**kwargs_rr)
+                # configs[prefix + "-stableqos_nl"] = FixedHostPatternStableQoSConfig(**kwargs_rr)
+
+                # configs[prefix + "-flipflop_rl"] = FixedHostPatternAlternatingQoSConfig(AA_admission_bps = AA_approval, **kwargs_rr)
+                # configs[prefix + "-stableqos_rl"] = FixedHostPatternStableQoSConfig(AA_admission_bps = AA_approval, **kwargs_rr)
+
+                configs[prefix + "-flipflop_oversub"] = FixedHostPatternAlternatingQoSConfig(AA_admission_bps = int(OVERSUB_FACTOR * AA_approval), **kwargs_rr)
+                configs[prefix + "-stableqos_oversub"] = FixedHostPatternStableQoSConfig(AA_admission_bps = int(OVERSUB_FACTOR * AA_approval), **kwargs_rr)
 
 def AddConfigsTestAdmissionControl(configs):
     # for aa_bps in [int(Gbps(1)), int(Gbps(4)), int(Gbps(5)), int(Gbps(6)), int(Gbps(7)), int(Gbps(8)), int(Gbps(9))]:
