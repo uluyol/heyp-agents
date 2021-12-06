@@ -855,10 +855,10 @@ def RateLimitConfig(**kwargs):
         **kwargs
     )
 
-def QoSDowngradeConfig(**kwargs):
+def QoSDowngradeConfig(ds_selector_type = "DS_KNAPSACK_SOLVER", **kwargs):
     allocator = config_pb.ClusterAllocatorConfig(
         type = "CA_SIMPLE_DOWNGRADE",
-        downgrade_selector = {"type": "DS_KNAPSACK_SOLVER", "downgrade_usage": True},
+        downgrade_selector = {"type": ds_selector_type, "downgrade_usage": True},
         enable_burstiness = True,
         enable_bonus = True,
         oversub_factor = OVERSUB_FACTOR,
@@ -868,6 +868,24 @@ def QoSDowngradeConfig(**kwargs):
         ca_allocator = allocator,
         ca_limits_to_apply = "HL",
         limit_hipri = False,
+        limit_lopri = False,
+        **kwargs
+    )
+
+def QoSDowngradeAndLimitMixedHIPRIConfig(ds_selector_type = "DS_KNAPSACK_SOLVER", **kwargs):
+    allocator = config_pb.ClusterAllocatorConfig(
+        type = "CA_SIMPLE_DOWNGRADE",
+        downgrade_selector = {"type": ds_selector_type, "downgrade_usage": True},
+        enable_burstiness = True,
+        enable_bonus = True,
+        oversub_factor = OVERSUB_FACTOR,
+        simple_downgrade_throttle_hipri = "HTC_WHEN_ASSIGNED_LOPRI",
+    )
+
+    return GenConfig(
+        ca_allocator = allocator,
+        ca_limits_to_apply = "HL",
+        limit_hipri = True,
         limit_lopri = False,
         **kwargs
     )
@@ -1278,6 +1296,38 @@ def AddConfigsIncreasing(configs):
     configs[prefix + "-qdlrl"] = QoSDowngradeAndLimitLOPRIConfig(**kwargs)
     configs[prefix + "-rl"] = RateLimitConfig(**kwargs)
 
+def AddConfigsRateLimitHIPRI(configs):
+    # "AA_lopri_is_longer": True,
+    # "admission_controlled_envoy_groups": ["AA"],
+    kwargs = dict({
+        "AA_approved_bps": int(Gbps(2)),
+        "AA_surplus_bps": int(Gbps(10)),
+        "WA_approved_bps": int(Gbps(12)),
+        "shard_key": "rlhipri",
+        "cluster_control_period": "500ms",
+    }, **GenWorkloadStagesIncreasing(
+        AA_bps = int(Gbps(16)),
+        num_AA_backends = 1,
+        WA_bps_min = int(Gbps(4)),
+        WA_bps_max = int(Gbps(12)),
+        enable_timeout = False,
+    ))
+    # kwargs = dict({
+    #     "AA_approved_bps": int(Gbps(8)),
+    #     "AA_surplus_bps": int(Gbps(10)),
+    #     "WA_approved_bps": int(Gbps(6)),
+    #     "shard_key": "inc",
+    # }, **GenWorkloadStagesIncreasing(
+    #     AA_bps = int(Gbps(18)),
+    #     num_AA_backends = 5,
+    #     WA_bps_min = int(Gbps(2)),
+    #     WA_bps_max = int(Gbps(6)),
+    # ))
+
+    prefix = "rlhipri"
+    configs[prefix + "-qd"] = QoSDowngradeConfig(ds_selector_type = "DS_HEYP_SIGCOMM20", **kwargs)
+    configs[prefix + "-qdhrl"] = QoSDowngradeAndLimitMixedHIPRIConfig(ds_selector_type = "DS_HEYP_SIGCOMM20", **kwargs)
+
 def AddConfigsLossTrainingDataIncreasing(configs, lopri_latency = "same"):
     kwargs = dict({
         "AA_approved_bps": int(Gbps(2)),
@@ -1464,6 +1514,7 @@ def GenConfigs():
         "qflip": AddConfigsFlipQoS,
         "sweep": AddConfigsSweep,
         "tac": AddConfigsTestAdmissionControl,
+        "rlhipri": AddConfigsRateLimitHIPRI,
     }
 
     configs = dict()
