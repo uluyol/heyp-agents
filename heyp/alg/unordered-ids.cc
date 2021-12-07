@@ -18,10 +18,11 @@ std::string ToString(IdRange range) {
   return out;
 }
 
-std::string ToString(const UnorderedIds& set) {
-  return absl::StrCat("{\n  ranges = (",
-                      absl::StrJoin(set.ranges, ", ", IdRangeFormatter()),
-                      "),\n  points = (", absl::StrJoin(set.points, ", "), "),\n}");
+std::string ToString(const UnorderedIds& set, std::string_view indent) {
+  return absl::StrCat("{\n", indent, "  ranges = (",
+                      absl::StrJoin(set.ranges, ", ", IdRangeFormatter()), "),\n", indent,
+                      "  points = (", absl::StrJoin(set.points, ", "), "),\n", indent,
+                      "}");
 }
 
 std::ostream& operator<<(std::ostream& os, IdRange range) {
@@ -30,6 +31,10 @@ std::ostream& operator<<(std::ostream& os, IdRange range) {
 
 std::ostream& operator<<(std::ostream& os, const UnorderedIds& set) {
   return os << ToString(set);
+}
+
+bool operator==(const UnorderedIds& lhs, const UnorderedIds& rhs) {
+  return (lhs.ranges == rhs.ranges) && (lhs.points == rhs.points);
 }
 
 }  // namespace heyp

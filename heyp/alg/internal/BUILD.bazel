@@ -6,9 +6,11 @@ package(
 
 cc_library(
     name = "downgrade-selector-iface",
+    srcs = ["downgrade-selector-iface.cc"],
     hdrs = ["downgrade-selector-iface.h"],
     deps = [
         "//heyp/alg:agg-info-views",
+        "//heyp/alg:unordered-ids",
         "//heyp/log:spdlog",
     ],
 )
@@ -104,6 +106,16 @@ cc_library(
     hdrs = ["greedy-assign.h"],
     deps = [
         "//heyp/alg:agg-info-views",
+    ],
+)
+
+cc_test(
+    name = "downgrade-selector-iface-test",
+    srcs = ["downgrade-selector-iface-test.cc"],
+    deps = [
+        ":downgrade-selector-iface",
+        "//heyp/init:test-main",
+        "//heyp/proto:parse-text",
     ],
 )
 

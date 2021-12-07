@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <ostream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace heyp {
@@ -27,13 +28,15 @@ inline bool operator==(const IdRange& lhs, const IdRange& rhs) {
   return lhs.lo == rhs.lo && lhs.hi == rhs.hi;
 }
 
-inline bool IdRange::Contains(uint64_t id) const { return lo <= id && id <= hi; }
+bool operator==(const UnorderedIds& lhs, const UnorderedIds& rhs);
 
 std::string ToString(IdRange interval);
-std::string ToString(const UnorderedIds& set);
+std::string ToString(const UnorderedIds& set, std::string_view indent = "");
 
 std::ostream& operator<<(std::ostream& os, IdRange interval);
 std::ostream& operator<<(std::ostream& os, const UnorderedIds& set);
+
+inline bool IdRange::Contains(uint64_t id) const { return lo <= id && id <= hi; }
 
 }  // namespace heyp
 
