@@ -1,11 +1,10 @@
-#include "heyp/alg/internal/downgrade-selector-hashing.h"
+#include "heyp/alg/downgrade/impl-hashing.h"
 
 #include "absl/strings/str_join.h"
 #include "heyp/alg/debug.h"
-#include "heyp/alg/internal/formatters.h"
+#include "heyp/alg/downgrade/formatters.h"
 
 namespace heyp {
-namespace internal {
 
 std::vector<bool> HashingDowngradeSelector::PickLOPRIChildren(
     const AggInfoView& agg_info, const double want_frac_lopri, spdlog::logger* logger) {
@@ -36,5 +35,4 @@ std::vector<bool> HashingDowngradeSelector::PickLOPRIChildren(
   return lopri_children;
 }
 
-}  // namespace internal
 }  // namespace heyp

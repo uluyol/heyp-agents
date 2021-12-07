@@ -7,8 +7,8 @@
 #include "absl/strings/str_format.h"
 #include "absl/time/time.h"
 #include "heyp/alg/agg-info-views.h"
+#include "heyp/alg/downgrade/iface.h"
 #include "heyp/alg/flow-volume.h"
-#include "heyp/alg/internal/downgrade-selector-iface.h"
 #include "heyp/log/spdlog.h"
 #include "heyp/proto/config.pb.h"
 #include "heyp/proto/heyp.pb.h"
@@ -24,7 +24,7 @@ class DowngradeSelector {
 
  private:
   spdlog::logger logger_;
-  std::unique_ptr<internal::DowngradeSelectorImpl> impl_;
+  std::unique_ptr<DowngradeSelectorImpl> impl_;
   const bool downgrade_jobs_;
   const bool downgrade_usage_;
 };

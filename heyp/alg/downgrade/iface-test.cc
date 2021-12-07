@@ -1,4 +1,4 @@
-#include "heyp/alg/internal/downgrade-selector-iface.h"
+#include "heyp/alg/downgrade/iface.h"
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"

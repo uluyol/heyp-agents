@@ -1,11 +1,11 @@
-#include "heyp/alg/internal/greedy-assign.h"
+#include "heyp/alg/downgrade/greedy-assign.h"
 
 #include "absl/functional/bind_front.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
 namespace heyp {
-namespace internal {
+namespace {
 
 proto::AggInfo ChildrenWithDemands(std::vector<int64_t> demands_bps) {
   proto::AggInfo info;
@@ -71,5 +71,5 @@ TEST(GreedyAssignToMinimizeGapTest, FlipCompletely) {
   EXPECT_THAT(assign_hipri(700), testing::ElementsAre(f, f, f, f));
 }
 
-}  // namespace internal
+}  // namespace
 }  // namespace heyp

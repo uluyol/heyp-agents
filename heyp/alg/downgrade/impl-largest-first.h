@@ -1,10 +1,9 @@
-#ifndef HEYP_ALG_INTERNAL_DOWNGRADE_SELECTOR_LARGEST_FIRST_H
-#define HEYP_ALG_INTERNAL_DOWNGRADE_SELECTOR_LARGEST_FIRST_H
+#ifndef HEYP_ALG_DOWNGRADE_IMPL_LARGEST_FIRST_H
+#define HEYP_ALG_DOWNGRADE_IMPL_LARGEST_FIRST_H
 
-#include "heyp/alg/internal/downgrade-selector-iface.h"
+#include "heyp/alg/downgrade/iface.h"
 
 namespace heyp {
-namespace internal {
 
 class LargestFirstDowngradeSelector : public DowngradeSelectorImpl {
  public:
@@ -13,7 +12,6 @@ class LargestFirstDowngradeSelector : public DowngradeSelectorImpl {
                                       spdlog::logger* logger) override;
 };
 
-}  // namespace internal
 }  // namespace heyp
 
-#endif  // HEYP_ALG_INTERNAL_DOWNGRADE_SELECTOR_LARGEST_FIRST_H
+#endif  // HEYP_ALG_DOWNGRADE_IMPL_LARGEST_FIRST_H

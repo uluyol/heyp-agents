@@ -1,5 +1,5 @@
-#ifndef HEYP_ALG_INTERNAL_DOWNGRADE_SELECTOR_IFACE_H_
-#define HEYP_ALG_INTERNAL_DOWNGRADE_SELECTOR_IFACE_H_
+#ifndef HEYP_ALG_DOWNGRADE_IFACE_H_
+#define HEYP_ALG_DOWNGRADE_IFACE_H_
 
 #include <cstdbool>
 #include <string>
@@ -11,7 +11,6 @@
 #include "heyp/log/spdlog.h"
 
 namespace heyp {
-namespace internal {
 
 class DowngradeSelectorImpl {
  public:
@@ -44,7 +43,6 @@ std::string ToString(const DowngradeDiff& diff, std::string_view indent = "");
 bool operator==(const DowngradeDiff& lhs, const DowngradeDiff& rhs);
 std::ostream& operator<<(std::ostream& os, const DowngradeDiff& diff);
 
-}  // namespace internal
 }  // namespace heyp
 
-#endif  // HEYP_ALG_INTERNAL_DOWNGRADE_SELECTOR_IFACE_H_
+#endif  // HEYP_ALG_DOWNGRADE_IFACE_H_

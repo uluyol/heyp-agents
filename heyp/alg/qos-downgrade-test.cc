@@ -3,7 +3,7 @@
 #include "debug.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-#include "heyp/alg/internal/hash-ring.h"
+#include "heyp/alg/downgrade/hash-ring.h"
 #include "heyp/proto/config.pb.h"
 #include "heyp/proto/parse-text.h"
 
@@ -16,7 +16,7 @@ proto::AggInfo ChildrenWithDemands(std::vector<int64_t> demands_bps) {
   for (uint64_t i = 0; i < demands_bps.size(); ++i) {
     proto::FlowInfo* child = info.add_children();
     child->set_predicted_demand_bps(demands_bps[i]);
-    child->mutable_flow()->set_host_id((internal::MaxId / num_demands) * i);
+    child->mutable_flow()->set_host_id((MaxId / num_demands) * i);
   }
   return info;
 }
@@ -34,7 +34,7 @@ proto::AggInfo ChildrenWithDemandsAndPri(std::vector<ChildInfo> demands_islopri_
     const ChildInfo& p = demands_islopri_bps[i];
     auto child = info.add_children();
     child->mutable_flow()->set_job(p.job);
-    child->mutable_flow()->set_host_id((internal::MaxId / num_demands) * i);
+    child->mutable_flow()->set_host_id((MaxId / num_demands) * i);
     child->set_predicted_demand_bps(p.demand_bps);
     child->set_currently_lopri(p.is_lopri);
   }

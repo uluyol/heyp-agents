@@ -1,5 +1,5 @@
-#ifndef HEYP_ALG_INTERNAL_GREEDY_ASSIGN_H_
-#define HEYP_ALG_INTERNAL_GREEDY_ASSIGN_H_
+#ifndef HEYP_ALG_DOWNGRADE_GREEDY_ASSIGN_H_
+#define HEYP_ALG_DOWNGRADE_GREEDY_ASSIGN_H_
 
 #include <cstdbool>
 #include <cstdint>
@@ -8,7 +8,6 @@
 #include "heyp/alg/agg-info-views.h"
 
 namespace heyp {
-namespace internal {
 
 struct GreedyAssignToMinimizeGapArgs {
   int64_t cur_demand;
@@ -63,7 +62,6 @@ void GreedyAssignToMinimizeGap(GreedyAssignToMinimizeGapArgs args,
   }
 }
 
-}  // namespace internal
 }  // namespace heyp
 
-#endif  // HEYP_ALG_INTERNAL_GREEDY_ASSIGN_H_
+#endif  // HEYP_ALG_DOWNGRADE_GREEDY_ASSIGN_H_

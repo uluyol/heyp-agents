@@ -1,10 +1,9 @@
-#include "heyp/alg/internal/downgrade-selector-iface.h"
+#include "heyp/alg/downgrade/iface.h"
 
 #include "absl/functional/function_ref.h"
 #include "absl/strings/str_cat.h"
 
 namespace heyp {
-namespace internal {
 namespace {
 
 // Based on Go's sort.Search implementation
@@ -95,5 +94,4 @@ std::ostream& operator<<(std::ostream& os, const DowngradeDiff& diff) {
   return os << ToString(diff);
 }
 
-}  // namespace internal
 }  // namespace heyp

@@ -1,10 +1,10 @@
-#include "heyp/alg/internal/hash-ring.h"
+#include "heyp/alg/downgrade/hash-ring.h"
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
 namespace heyp {
-namespace internal {
+namespace {
 
 uint64_t Dist(uint64_t a, uint64_t b) {
   uint64_t x = a - b;
@@ -119,5 +119,5 @@ TEST(HashRingTest, IsFIFO) {
   EXPECT_THAT(r.b, ApproxIdRange(MaxId / 2, MaxId, kHashRingMargin));
 }
 
-}  // namespace internal
+}  // namespace
 }  // namespace heyp

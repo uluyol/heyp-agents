@@ -1,14 +1,13 @@
-#include "heyp/alg/internal/downgrade-selector-heyp-sigcomm-20.h"
+#include "heyp/alg/downgrade/impl-heyp-sigcomm-20.h"
 
 #include <algorithm>
 
 #include "absl/strings/str_join.h"
 #include "heyp/alg/debug.h"
-#include "heyp/alg/internal/formatters.h"
-#include "heyp/alg/internal/greedy-assign.h"
+#include "heyp/alg/downgrade/formatters.h"
+#include "heyp/alg/downgrade/greedy-assign.h"
 
 namespace heyp {
-namespace internal {
 
 std::vector<bool> HeypSigcomm20DowngradeSelector::PickLOPRIChildren(
     const AggInfoView& agg_info, const double want_frac_lopri, spdlog::logger* logger) {
@@ -91,5 +90,4 @@ std::vector<bool> HeypSigcomm20DowngradeSelector::PickLOPRIChildren(
   return lopri_children;
 }
 
-}  // namespace internal
 }  // namespace heyp

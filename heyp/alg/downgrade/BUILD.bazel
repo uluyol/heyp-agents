@@ -5,9 +5,9 @@ package(
 )
 
 cc_library(
-    name = "downgrade-selector-iface",
-    srcs = ["downgrade-selector-iface.cc"],
-    hdrs = ["downgrade-selector-iface.h"],
+    name = "iface",
+    srcs = ["iface.cc"],
+    hdrs = ["iface.h"],
     deps = [
         "//heyp/alg:agg-info-views",
         "//heyp/alg:unordered-ids",
@@ -16,50 +16,50 @@ cc_library(
 )
 
 cc_library(
-    name = "downgrade-selector-hashing",
+    name = "impl-hashing",
     srcs = [
-        "downgrade-selector-hashing.cc",
+        "impl-hashing.cc",
     ],
     hdrs = [
-        "downgrade-selector-hashing.h",
+        "impl-hashing.h",
     ],
     deps = [
-        ":downgrade-selector-iface",
         ":formatters",
         ":hash-ring",
+        ":iface",
         "//heyp/alg:debug",
         "@com_google_absl//absl/strings",
     ],
 )
 
 cc_library(
-    name = "downgrade-selector-heyp-sigcomm-20",
+    name = "impl-heyp-sigcomm-20",
     srcs = [
-        "downgrade-selector-heyp-sigcomm-20.cc",
+        "impl-heyp-sigcomm-20.cc",
     ],
     hdrs = [
-        "downgrade-selector-heyp-sigcomm-20.h",
+        "impl-heyp-sigcomm-20.h",
     ],
     deps = [
-        ":downgrade-selector-iface",
         ":formatters",
         ":greedy-assign",
+        ":iface",
         "//heyp/alg:debug",
         "@com_google_absl//absl/strings",
     ],
 )
 
 cc_library(
-    name = "downgrade-selector-knapsack-solver",
+    name = "impl-knapsack-solver",
     srcs = [
-        "downgrade-selector-knapsack-solver.cc",
+        "impl-knapsack-solver.cc",
     ],
     hdrs = [
-        "downgrade-selector-knapsack-solver.h",
+        "impl-knapsack-solver.h",
     ],
     deps = [
-        ":downgrade-selector-iface",
         ":formatters",
+        ":iface",
         "//heyp/alg:debug",
         "@com_google_absl//absl/strings",
         "@com_google_ortools//ortools/algorithms:knapsack_solver_lib",
@@ -67,17 +67,17 @@ cc_library(
 )
 
 cc_library(
-    name = "downgrade-selector-largest-first",
+    name = "impl-largest-first",
     srcs = [
-        "downgrade-selector-largest-first.cc",
+        "impl-largest-first.cc",
     ],
     hdrs = [
-        "downgrade-selector-largest-first.h",
+        "impl-largest-first.h",
     ],
     deps = [
-        ":downgrade-selector-iface",
         ":formatters",
         ":greedy-assign",
+        ":iface",
         "//heyp/alg:debug",
         "@com_google_absl//absl/strings",
     ],
@@ -110,10 +110,10 @@ cc_library(
 )
 
 cc_test(
-    name = "downgrade-selector-iface-test",
-    srcs = ["downgrade-selector-iface-test.cc"],
+    name = "iface-test",
+    srcs = ["iface-test.cc"],
     deps = [
-        ":downgrade-selector-iface",
+        ":iface",
         "//heyp/init:test-main",
         "//heyp/proto:parse-text",
     ],

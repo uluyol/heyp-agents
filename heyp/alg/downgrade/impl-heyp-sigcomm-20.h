@@ -1,10 +1,9 @@
-#ifndef HEYP_ALG_INTERNAL_DOWNGRADE_SELECTOR_HEYP_SIGCOMM_20_H_
-#define HEYP_ALG_INTERNAL_DOWNGRADE_SELECTOR_HEYP_SIGCOMM_20_H_
+#ifndef HEYP_ALG_DOWNGRADE_IMPL_HEYP_SIGCOMM_20_H_
+#define HEYP_ALG_DOWNGRADE_IMPL_HEYP_SIGCOMM_20_H_
 
-#include "heyp/alg/internal/downgrade-selector-iface.h"
+#include "heyp/alg/downgrade/iface.h"
 
 namespace heyp {
-namespace internal {
 
 class HeypSigcomm20DowngradeSelector : public DowngradeSelectorImpl {
   std::vector<bool> PickLOPRIChildren(const AggInfoView& agg_info,
@@ -12,7 +11,6 @@ class HeypSigcomm20DowngradeSelector : public DowngradeSelectorImpl {
                                       spdlog::logger* logger) override;
 };
 
-}  // namespace internal
 }  // namespace heyp
 
-#endif  // HEYP_ALG_INTERNAL_DOWNGRADE_SELECTOR_HEYP_SIGCOMM_20_H_
+#endif  // HEYP_ALG_DOWNGRADE_IMPL_HEYP_SIGCOMM_20_H_

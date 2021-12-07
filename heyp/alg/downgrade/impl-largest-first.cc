@@ -1,14 +1,13 @@
-#include "heyp/alg/internal/downgrade-selector-largest-first.h"
+#include "heyp/alg/downgrade/impl-largest-first.h"
 
 #include <algorithm>
 
 #include "absl/strings/str_join.h"
 #include "heyp/alg/debug.h"
-#include "heyp/alg/internal/formatters.h"
-#include "heyp/alg/internal/greedy-assign.h"
+#include "heyp/alg/downgrade/formatters.h"
+#include "heyp/alg/downgrade/greedy-assign.h"
 
 namespace heyp {
-namespace internal {
 
 std::vector<bool> LargestFirstDowngradeSelector::PickLOPRIChildren(
     const AggInfoView& agg_info, const double want_frac_lopri, spdlog::logger* logger) {
@@ -70,5 +69,4 @@ std::vector<bool> LargestFirstDowngradeSelector::PickLOPRIChildren(
   return lopri_children;
 }
 
-}  // namespace internal
 }  // namespace heyp

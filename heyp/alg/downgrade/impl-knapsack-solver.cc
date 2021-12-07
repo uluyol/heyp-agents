@@ -1,14 +1,13 @@
-#include "heyp/alg/internal/downgrade-selector-knapsack-solver.h"
+#include "heyp/alg/downgrade/impl-knapsack-solver.h"
 
 #include <algorithm>
 
 #include "absl/strings/str_join.h"
 #include "heyp/alg/debug.h"
-#include "heyp/alg/internal/formatters.h"
+#include "heyp/alg/downgrade/formatters.h"
 #include "ortools/algorithms/knapsack_solver.h"
 
 namespace heyp {
-namespace internal {
 
 std::vector<bool> KnapsackSolverDowngradeSelector::PickLOPRIChildren(
     const AggInfoView& agg_info, const double want_frac_lopri, spdlog::logger* logger) {
@@ -62,5 +61,4 @@ std::vector<bool> KnapsackSolverDowngradeSelector::PickLOPRIChildren(
   return lopri_children;
 }
 
-}  // namespace internal
 }  // namespace heyp

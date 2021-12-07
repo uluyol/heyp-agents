@@ -1,5 +1,5 @@
-#ifndef HEYP_ALG_INTERNAL_HASH_RING_H_
-#define HEYP_ALG_INTERNAL_HASH_RING_H_
+#ifndef HEYP_ALG_DOWNGRADE_HASH_RING_H_
+#define HEYP_ALG_DOWNGRADE_HASH_RING_H_
 
 #include <cmath>
 #include <cstdint>
@@ -10,7 +10,6 @@
 #include "heyp/alg/unordered-ids.h"
 
 namespace heyp {
-namespace internal {
 
 inline constexpr uint64_t MaxId = std::numeric_limits<uint64_t>::max();
 
@@ -102,7 +101,6 @@ inline RingRanges HashRing::MatchingRanges() const {
   };
 }
 
-}  // namespace internal
 }  // namespace heyp
 
-#endif  // HEYP_ALG_INTERNAL_HASH_RING_H_
+#endif  // HEYP_ALG_DOWNGRADE_HASH_RING_H_

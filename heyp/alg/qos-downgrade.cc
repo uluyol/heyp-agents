@@ -7,10 +7,10 @@
 #include "flow-volume.h"
 #include "heyp/alg/agg-info-views.h"
 #include "heyp/alg/debug.h"
-#include "heyp/alg/internal/downgrade-selector-hashing.h"
-#include "heyp/alg/internal/downgrade-selector-heyp-sigcomm-20.h"
-#include "heyp/alg/internal/downgrade-selector-knapsack-solver.h"
-#include "heyp/alg/internal/downgrade-selector-largest-first.h"
+#include "heyp/alg/downgrade/impl-hashing.h"
+#include "heyp/alg/downgrade/impl-heyp-sigcomm-20.h"
+#include "heyp/alg/downgrade/impl-knapsack-solver.h"
+#include "heyp/alg/downgrade/impl-largest-first.h"
 #include "heyp/log/spdlog.h"
 #include "heyp/proto/config.pb.h"
 #include "heyp/proto/heyp.pb.h"
@@ -18,20 +18,20 @@
 namespace heyp {
 namespace {
 
-std::unique_ptr<internal::DowngradeSelectorImpl> GetSelector(
+std::unique_ptr<DowngradeSelectorImpl> GetSelector(
     const proto::DowngradeSelector& selector, spdlog::logger* logger) {
   switch (selector.type()) {
     case proto::DS_HASHING:
-      return std::make_unique<internal::HashingDowngradeSelector>();
+      return std::make_unique<HashingDowngradeSelector>();
       break;
     case proto::DS_HEYP_SIGCOMM20:
-      return std::make_unique<internal::HeypSigcomm20DowngradeSelector>();
+      return std::make_unique<HeypSigcomm20DowngradeSelector>();
       break;
     case proto::DS_KNAPSACK_SOLVER:
-      return std::make_unique<internal::KnapsackSolverDowngradeSelector>();
+      return std::make_unique<KnapsackSolverDowngradeSelector>();
       break;
     case proto::DS_LARGEST_FIRST:
-      return std::make_unique<internal::LargestFirstDowngradeSelector>();
+      return std::make_unique<LargestFirstDowngradeSelector>();
       break;
     default:
       SPDLOG_LOGGER_CRITICAL(logger, "unsupported DowngradeSelectorType: {}",

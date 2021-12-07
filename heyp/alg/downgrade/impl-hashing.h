@@ -1,11 +1,10 @@
-#ifndef HEYP_ALG_INTERNAL_DOWNGRADE_SELECTOR_HASHING_H_
-#define HEYP_ALG_INTERNAL_DOWNGRADE_SELECTOR_HASHING_H_
+#ifndef HEYP_ALG_DOWNGRADE_IMPL_HASHING_H_
+#define HEYP_ALG_DOWNGRADE_IMPL_HASHING_H_
 
-#include "heyp/alg/internal/downgrade-selector-iface.h"
-#include "heyp/alg/internal/hash-ring.h"
+#include "heyp/alg/downgrade/hash-ring.h"
+#include "heyp/alg/downgrade/iface.h"
 
 namespace heyp {
-namespace internal {
 
 class HashingDowngradeSelector : public DowngradeSelectorImpl {
  public:
@@ -17,7 +16,6 @@ class HashingDowngradeSelector : public DowngradeSelectorImpl {
   HashRing lopri_;
 };
 
-}  // namespace internal
 }  // namespace heyp
 
-#endif  // HEYP_ALG_INTERNAL_DOWNGRADE_SELECTOR_HASHING_H_
+#endif  // HEYP_ALG_DOWNGRADE_IMPL_HASHING_H_
