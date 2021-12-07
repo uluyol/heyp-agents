@@ -95,6 +95,13 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "unordered-ids",
+    srcs = ["unordered-ids.cc"],
+    hdrs = ["unordered-ids.h"],
+    deps = ["@com_google_absl//absl/strings"],
+)
+
 cc_test(
     name = "agg-info-views-test",
     srcs = ["agg-info-views-test.cc"],

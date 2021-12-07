@@ -94,6 +94,7 @@ cc_library(
     srcs = ["hash-ring.cc"],
     hdrs = ["hash-ring.h"],
     deps = [
+        "//heyp/alg:unordered-ids",
         "@com_google_absl//absl/strings",
     ],
 )

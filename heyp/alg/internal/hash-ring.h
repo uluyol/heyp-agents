@@ -7,28 +7,12 @@
 #include <ostream>
 #include <string>
 
+#include "heyp/alg/unordered-ids.h"
+
 namespace heyp {
 namespace internal {
 
 inline constexpr uint64_t MaxId = std::numeric_limits<uint64_t>::max();
-
-struct IdRange {
-  IdRange() : lo(1), hi(0) {}
-  IdRange(uint64_t from, uint64_t to) : lo(from), hi(to) {}
-
-  uint64_t lo;  // inclusive
-  uint64_t hi;  // inclusive
-
-  bool Contains(uint64_t id) const;
-};
-
-inline bool operator==(const IdRange& lhs, const IdRange& rhs) {
-  return lhs.lo == rhs.lo && lhs.hi == rhs.hi;
-}
-
-inline std::ostream& operator<<(std::ostream& os, const IdRange& r) {
-  return os << "{ lo = " << r.lo << ", hi = " << r.hi << "}";
-}
 
 struct RingRanges {
   IdRange a;
@@ -59,8 +43,6 @@ class HashRing {
 };
 
 // Implementation
-
-inline bool IdRange::Contains(uint64_t id) const { return lo <= id && id <= hi; }
 
 inline bool RingRanges::Contains(uint64_t id) const {
   return a.Contains(id) || b.Contains(id);
