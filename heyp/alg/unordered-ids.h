@@ -12,11 +12,13 @@ namespace heyp {
 struct IdRange {
   IdRange() : lo(1), hi(0) {}
   IdRange(uint64_t from, uint64_t to) : lo(from), hi(to) {}
+  IdRange(const IdRange& other) : lo(other.lo), hi(other.hi) {}
 
   uint64_t lo;  // inclusive
   uint64_t hi;  // inclusive
 
   bool Contains(uint64_t id) const;
+  bool Empty() const;
 };
 
 struct UnorderedIds {
@@ -37,6 +39,8 @@ std::ostream& operator<<(std::ostream& os, IdRange interval);
 std::ostream& operator<<(std::ostream& os, const UnorderedIds& set);
 
 inline bool IdRange::Contains(uint64_t id) const { return lo <= id && id <= hi; }
+
+inline bool IdRange::Empty() const { return hi < lo; }
 
 }  // namespace heyp
 

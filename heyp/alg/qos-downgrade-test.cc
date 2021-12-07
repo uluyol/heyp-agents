@@ -10,13 +10,17 @@
 namespace heyp {
 namespace {
 
+uint64_t IdSpaceSizeDivInto(uint64_t val) {
+  return absl::Uint128Low64((absl::uint128(MaxId) + 1) / val);
+}
+
 proto::AggInfo ChildrenWithDemands(std::vector<int64_t> demands_bps) {
   proto::AggInfo info;
   uint64_t num_demands = demands_bps.size();
   for (uint64_t i = 0; i < demands_bps.size(); ++i) {
     proto::FlowInfo* child = info.add_children();
     child->set_predicted_demand_bps(demands_bps[i]);
-    child->mutable_flow()->set_host_id((MaxId / num_demands) * i);
+    child->mutable_flow()->set_host_id(IdSpaceSizeDivInto(num_demands) * i);
   }
   return info;
 }
@@ -34,7 +38,7 @@ proto::AggInfo ChildrenWithDemandsAndPri(std::vector<ChildInfo> demands_islopri_
     const ChildInfo& p = demands_islopri_bps[i];
     auto child = info.add_children();
     child->mutable_flow()->set_job(p.job);
-    child->mutable_flow()->set_host_id((MaxId / num_demands) * i);
+    child->mutable_flow()->set_host_id(IdSpaceSizeDivInto(num_demands) * i);
     child->set_predicted_demand_bps(p.demand_bps);
     child->set_currently_lopri(p.is_lopri);
   }
@@ -213,10 +217,10 @@ TEST(KnapsackSolverPickLOPRIChildrenTest, JobLevel) {
 
 TEST(HashingLOPRIChildrenTest, Directionality) {
   const proto::AggInfo info = ChildrenWithDemandsAndPri({
-      {200, true},
+      {200, false},
       {100, false},
       {300, false},
-      {100, true},
+      {100, false},
   });
 
   constexpr bool t = true;
@@ -239,10 +243,10 @@ TEST(HashingLOPRIChildrenTest, Directionality) {
 
 TEST(HashingLOPRIChildrenTest, FlipCompletely) {
   const proto::AggInfo info = ChildrenWithDemandsAndPri({
-      {200, true},
+      {200, false},
       {100, false},
       {300, false},
-      {100, true},
+      {100, false},
   });
 
   constexpr bool t = true;
@@ -260,11 +264,11 @@ TEST(HashingLOPRIChildrenTest, FlipCompletely) {
 }
 
 TEST(HashingLOPRIChildrenTest, IsFIFO) {
-  const proto::AggInfo info = ChildrenWithDemandsAndPri({
-      {200, true},
+  proto::AggInfo info = ChildrenWithDemandsAndPri({
+      {200, false},
       {100, false},
       {300, false},
-      {100, true},
+      {100, false},
   });
 
   constexpr bool t = true;
@@ -276,13 +280,27 @@ TEST(HashingLOPRIChildrenTest, IsFIFO) {
   config.set_type(proto::DS_HASHING);
   DowngradeSelector selector(config);
 
-  EXPECT_THAT(selector.PickLOPRIChildren(info, 0.20), testing::ElementsAre(t, f, f, f));
-  EXPECT_THAT(selector.PickLOPRIChildren(info, 0.20), testing::ElementsAre(t, f, f, f));
-  EXPECT_THAT(selector.PickLOPRIChildren(info, 0.00), testing::ElementsAre(f, f, f, f));
-  EXPECT_THAT(selector.PickLOPRIChildren(info, 0.50), testing::ElementsAre(f, t, t, f));
-  EXPECT_THAT(selector.PickLOPRIChildren(info, 0.25), testing::ElementsAre(f, f, t, f));
-  EXPECT_THAT(selector.PickLOPRIChildren(info, 0.00), testing::ElementsAre(f, f, f, f));
-  EXPECT_THAT(selector.PickLOPRIChildren(info, 0.50), testing::ElementsAre(t, f, f, t));
+  auto apply_and_ret = [&info](std::vector<bool> mask) -> std::vector<bool> {
+    for (int i = 0; i < mask.size(); ++i) {
+      info.mutable_children(i)->set_currently_lopri(mask[i]);
+    }
+    return mask;
+  };
+
+  EXPECT_THAT(apply_and_ret(selector.PickLOPRIChildren(info, 0.20)),
+              testing::ElementsAre(t, f, f, f));
+  EXPECT_THAT(apply_and_ret(selector.PickLOPRIChildren(info, 0.20)),
+              testing::ElementsAre(t, f, f, f));
+  EXPECT_THAT(apply_and_ret(selector.PickLOPRIChildren(info, 0.00)),
+              testing::ElementsAre(f, f, f, f));
+  EXPECT_THAT(apply_and_ret(selector.PickLOPRIChildren(info, 0.50)),
+              testing::ElementsAre(f, t, t, f));
+  EXPECT_THAT(apply_and_ret(selector.PickLOPRIChildren(info, 0.25)),
+              testing::ElementsAre(f, f, t, f));
+  EXPECT_THAT(apply_and_ret(selector.PickLOPRIChildren(info, 0.00)),
+              testing::ElementsAre(f, f, f, f));
+  EXPECT_THAT(apply_and_ret(selector.PickLOPRIChildren(info, 0.50)),
+              testing::ElementsAre(t, f, f, t));
 }
 
 TEST(FracAdmittedAtLOPRITest, Basic) {

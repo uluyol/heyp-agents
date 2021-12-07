@@ -6,8 +6,9 @@
 
 namespace heyp {
 
-std::vector<bool> HashingDowngradeSelector::PickLOPRIChildren(
-    const AggInfoView& agg_info, const double want_frac_lopri, spdlog::logger* logger) {
+DowngradeDiff HashingDowngradeSelector::PickChildren(const AggInfoView& agg_info,
+                                                     const double want_frac_lopri,
+                                                     spdlog::logger* logger) {
   const bool should_debug = DebugQosAndRateLimitSelection();
 
   if (should_debug) {
@@ -17,22 +18,37 @@ std::vector<bool> HashingDowngradeSelector::PickLOPRIChildren(
     SPDLOG_LOGGER_INFO(logger, "initial lopri ring: {}", lopri_.ToString());
   }
 
-  lopri_.UpdateFrac(want_frac_lopri);
-  RingRanges lopri_ranges = lopri_.MatchingRanges();
+  DowngradeDiff ret;
+  RangeDiff d = lopri_.UpdateFrac(want_frac_lopri);
+  std::vector<IdRange>* dst = nullptr;
+  switch (d.type) {
+    case RangeDiffType::kAdd:
+      dst = &ret.to_downgrade.ranges;
+      break;
+    case RangeDiffType::kDel:
+      dst = &ret.to_upgrade.ranges;
+      break;
+    default: {
+      H_SPDLOG_CHECK_MESG(logger, false,
+                          "impossible branch: were new RangeDiffTypes added?")
+      break;
+    }
+  }
 
-  const auto& agg_children = agg_info.children();
-  std::vector<bool> lopri_children(agg_children.size(), false);
-  for (size_t i = 0; i < agg_children.size(); ++i) {
-    lopri_children[i] = lopri_ranges.Contains(agg_children[i].child_id);
+  if (!d.diff.a.Empty()) {
+    dst->push_back(d.diff.a);
+  }
+  if (!d.diff.b.Empty()) {
+    dst->push_back(d.diff.b);
   }
 
   if (should_debug) {
     SPDLOG_LOGGER_INFO(logger, "revised lopri ring: {}", lopri_.ToString());
-    SPDLOG_LOGGER_INFO(logger, "picked LOPRI assignment: {}",
-                       absl::StrJoin(lopri_children, "", BitmapFormatter()));
+    SPDLOG_LOGGER_INFO(logger, "range diff: {}", ToString(d));
+    SPDLOG_LOGGER_INFO(logger, "downgrade diff: {}", ToString(ret));
   }
 
-  return lopri_children;
+  return ret;
 }
 
 }  // namespace heyp

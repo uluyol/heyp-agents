@@ -6,11 +6,10 @@
 
 namespace heyp {
 
-class HashingDowngradeSelector : public DowngradeSelectorImpl {
+class HashingDowngradeSelector : public DiffDowngradeSelectorImpl {
  public:
-  std::vector<bool> PickLOPRIChildren(const AggInfoView& agg_info,
-                                      const double want_frac_lopri,
-                                      spdlog::logger* logger) override;
+  DowngradeDiff PickChildren(const AggInfoView& agg_info, const double want_frac_lopri,
+                             spdlog::logger* logger) override;
 
  private:
   HashRing lopri_;
