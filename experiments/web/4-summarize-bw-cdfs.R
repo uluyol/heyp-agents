@@ -1,6 +1,7 @@
 #!/usr/bin/env Rscript
 
 library(ggplot2)
+library(data.table)
 
 args <- commandArgs(trailingOnly=TRUE)
 
@@ -13,6 +14,7 @@ SYS_LONG[["hsc"]] <- "HSC20"
 SYS_LONG[["nl"]] <- "NoLimit"
 SYS_LONG[["qd"]] <- "QD"
 SYS_LONG[["qdlrl"]] <- "QD+LimitLO"
+SYS_LONG[["qdhrl"]] <- "QD+LimitHI"
 SYS_LONG[["rl"]] <- "RateLimit"
 
 # Derived from https://github.com/tidyverse/ggplot2/issues/1467#issuecomment-169763396
@@ -176,7 +178,7 @@ PlotGoodputTo <- function(subset, output) {
 PlotQoSChurnTo <- function(subset, output) {
     subset <- subset[subset$Sys != "NoLimit",]
     subset <- subset[subset$Sys != "RateLimit",]
-    subset$Sys <- factor(subset$Sys, levels=c("HSC20", "QD+LimitLO", "QD"))
+    subset$Sys <- factor(subset$Sys, levels=c("HSC20", "QD+LimitHI", "QD+LimitLO", "QD"))
 
     pdf(output, height=2.5, width=5)
     p <- ggplot(data=subset, aes(x=FracChanged, color=Sys, linetype=Sys)) +
@@ -186,6 +188,78 @@ PlotQoSChurnTo <- function(subset, output) {
         coord_cartesian(xlim=c(0, 1), ylim=c(0, 1), expand=FALSE) +
         scale_x_continuous(breaks=seq(0, 1, by=0.2)) +
         scale_y_continuous(breaks=seq(0, 1, by=0.2)) +
+        theme_bw() +
+        guides(color=guide_legend(ncol=3), linetype=guide_legend(ncol=3)) +
+        theme(
+            legend.title=element_blank(),
+            legend.position="top",
+            legend.margin=margin(0, 0, 0, 0),
+            legend.box.margin=margin(-4, -4, -8, 0),
+            legend.background=element_rect(color="black", fill="white", linetype="blank", size=0),
+            legend.direction="horizontal",
+            legend.key=element_blank(),
+            legend.key.height=unit(11, "points"),
+            legend.key.width=unit(25, "points"),
+            legend.spacing.x=unit(1, "points"),
+            legend.spacing.y=unit(0, "points"),
+            legend.text=element_text(size=11, margin=margin(r=10)),
+            strip.background=element_rect(color="white", fill="white"),
+            strip.text=element_text(size=12),
+            plot.margin=unit(c(5.5, 8.5, 5.5, 5.5), "points"),
+            axis.text=element_text(color="black", size=11),
+            axis.title.y=element_text(size=12, margin=margin(0, 3, 0, 0)),
+            axis.title.x=element_text(size=12, margin=margin(3, 0, 0, 0)))
+    print(p)
+    .junk <- dev.off()
+}
+
+PlotQoSNumChangeTo <- function(subset, output) {
+    subset <- subset[subset$Sys != "NoLimit",]
+    subset <- subset[subset$Sys != "RateLimit",]
+    subset$Sys <- factor(subset$Sys, levels=c("HSC20", "QD+LimitHI", "QD+LimitLO", "QD"))
+
+    pdf(output, height=2.5, width=5)
+    p <- ggplot(data=subset, aes(x=Sys, y=NumQoSChanges)) +
+        geom_bar(stat="identity", size=0.5, fill="white", color="black") +
+        xlab("") +
+        ylab("Number of QoS changes across all hosts") +
+        scale_y_continuous(limits=c(0, NA)) +
+        theme_bw() +
+        theme(
+            legend.title=element_blank(),
+            legend.position="top",
+            legend.margin=margin(0, 0, 0, 0),
+            legend.box.margin=margin(-4, -4, -8, 0),
+            legend.background=element_rect(color="black", fill="white", linetype="blank", size=0),
+            legend.direction="horizontal",
+            legend.key=element_blank(),
+            legend.key.height=unit(11, "points"),
+            legend.key.width=unit(25, "points"),
+            legend.spacing.x=unit(1, "points"),
+            legend.spacing.y=unit(0, "points"),
+            legend.text=element_text(size=11, margin=margin(r=10)),
+            strip.background=element_rect(color="white", fill="white"),
+            strip.text=element_text(size=12),
+            plot.margin=unit(c(5.5, 8.5, 5.5, 5.5), "points"),
+            axis.text=element_text(color="black", size=11),
+            axis.title.y=element_text(size=12, margin=margin(0, 3, 0, 0)),
+            axis.title.x=element_text(size=12, margin=margin(3, 0, 0, 0)))
+    print(p)
+    .junk <- dev.off()
+}
+
+PlotQoSTimeNoChangeTo <- function(subset, output) {
+    subset <- subset[subset$Sys != "NoLimit",]
+    subset <- subset[subset$Sys != "RateLimit",]
+    subset$Sys <- factor(subset$Sys, levels=c("QD", "HSC20", "QD+LimitHI", "QD+LimitLO"))
+
+    pdf(output, height=2.5, width=5)
+    p <- ggplot(data=subset, aes(x=SecondsSinceLastAllChange, color=Sys, linetype=Sys)) +
+        stat_myecdf(size=1) +
+        xlab("Time (sec) between QoS changes") +
+        ylab("CDF across (host, time) pairs") +
+        scale_x_continuous(limits=c(0, NA), expand=c(0, 0)) +
+        scale_y_continuous(breaks=seq(0, 1, by=0.2), limits=c(0, 1), expand=c(0, 0)) +
         theme_bw() +
         guides(color=guide_legend(ncol=3), linetype=guide_legend(ncol=3)) +
         theme(
@@ -381,6 +455,8 @@ for (cfgGroup in cfgGroups) {
     goodput <- data.frame()
     retransmits.agg <- data.frame()
     qos.churn <- data.frame()
+    qos.num.change <- data.frame()
+    qos.time.no.change <- data.frame()
 
     for (procdir in procdirs) {
         sys_name <- SYS_LONG[[gsub(".*-", "", procdir)]]
@@ -391,6 +467,7 @@ for (cfgGroup in cfgGroups) {
         truedemand.ts <- read.csv(file.path(procdir, "true-app-demand.csv"), header=TRUE, stringsAsFactors=FALSE)
         host.ts <- read.csv(file.path(procdir, "global-host-ts.csv"), header=TRUE, stringsAsFactors=FALSE)
         qos.retained.ts <- read.csv(file.path(procdir, "cluster-alloc-qos-retained.csv"), header=TRUE, stringsAsFactors=FALSE)
+        hostchanges.ts <- read.csv(file.path(procdir, "host-enforcer-changes.csv"), header=TRUE, stringsAsFactors=FALSE)
         startend <- read.csv(file.path(procdir, "wl-start-end.csv"), header=TRUE, stringsAsFactors=FALSE)
         #approvals$FG <- paste0(approvals$SrcDC, "_TO_", approvals$DstDC)
 
@@ -402,6 +479,7 @@ for (cfgGroup in cfgGroups) {
         truedemand.ts <- Trim(truedemand.ts, "UnixTime", startUnix, endUnix)
         host.ts <- Trim(host.ts, "UnixTime", startUnix, endUnix)
         qos.retained.ts <- Trim(qos.retained.ts, "UnixTime", startUnix, endUnix)
+        hostchanges.ts <- Trim(hostchanges.ts, "UnixTime", startUnix, endUnix)
 
         goodput.summed <- SumClientGoodput(client.ts)
         goodput <- rbind(
@@ -517,6 +595,22 @@ for (cfgGroup in cfgGroups) {
                     FracChanged=1-qos.retained.ts$FracLOPRIRetained,
                     Kind=rep.int("LO to HIPRI", nrow(qos.retained.ts)),
                     Sys=rep.int(sys_name, nrow(qos.retained.ts)))))
+
+        hostchanges.ts$NumQoSChanges <- hostchanges.ts$Update == "AllChange"
+        qos.num.change.this <- aggregate(NumQoSChanges ~ FG, data=hostchanges.ts, FUN=sum)
+        qos.num.change.this$Sys <- rep.int(sys_name, nrow(qos.num.change.this))
+        qos.num.change <- rbind(qos.num.change, qos.num.change.this)
+
+        hostchanges.ts.tab <- as.data.table(hostchanges.ts)
+        hostchanges.ts.tab$FG_Host <- paste(hostchanges.ts.tab$FG, hostchanges.ts.tab$Host)
+        last <- hostchanges.ts.tab[hostchanges.ts.tab[, .I[UnixTime == max(UnixTime)], by=FG_Host]$V1]
+        last <- last[last$Update != "AllChange",] # don't double count 
+        qos.time.no.change.this <- rbind(
+            hostchanges.ts[hostchanges.ts$Update == "AllChange", c("FG", "Host", "SecondsSinceLastAllChange")],
+            as.data.frame(last)[,c("FG", "Host", "SecondsSinceLastAllChange")])
+        qos.time.no.change.this$Sys <- rep.int(sys_name, nrow(qos.time.no.change.this))
+
+        qos.time.no.change <- rbind(qos.time.no.change, qos.time.no.change.this)
     }
 
     write.csv(goodput, file.path(summarydir, paste0(cfgGroup, "-goodput.csv")), quote=FALSE, row.names=FALSE)
@@ -524,19 +618,21 @@ for (cfgGroup in cfgGroups) {
     write.csv(shortage, file.path(summarydir, paste0(cfgGroup, "-shortage.csv")), quote=FALSE, row.names=FALSE)
     write.csv(retransmits.agg, file.path(summarydir, paste0(cfgGroup, "-retransmits_agg.csv")), quote=FALSE, row.names=FALSE)
     write.csv(qos.churn, file.path(summarydir, paste0(cfgGroup, "-qos_churn.csv")), quote=FALSE, row.names=FALSE)
+    write.csv(qos.num.change, file.path(summarydir, paste0(cfgGroup, "-qos_num_change.csv")), quote=FALSE, row.names=FALSE)
+    write.csv(qos.time.no.change, file.path(summarydir, paste0(cfgGroup, "-qos_time_no_change.csv")), quote=FALSE, row.names=FALSE)
 
     for (kind in unique(goodput$Kind)) {
-        PlotGoodputTo(goodput[goodput$Kind == kind,], file.path(summarydir, paste0(cfgGroup, "-goodput-", gsub("/", "_", kind), ".pdf")))
+        parallel::mcparallel(PlotGoodputTo(goodput[goodput$Kind == kind,], file.path(summarydir, paste0(cfgGroup, "-goodput-", gsub("/", "_", kind), ".pdf"))))
     }
 
-    PlotRetransmitsAggTo(retransmits.agg, file.path(summarydir, paste0(cfgGroup, "-retransmits_agg.pdf")))
-    PlotEgressMinuxIngressAggTo(retransmits.agg, file.path(summarydir, paste0(cfgGroup, "-egress_minus_ingress_agg.pdf")))
+    parallel::mcparallel(PlotRetransmitsAggTo(retransmits.agg, file.path(summarydir, paste0(cfgGroup, "-retransmits_agg.pdf"))))
+    parallel::mcparallel(PlotEgressMinuxIngressAggTo(retransmits.agg, file.path(summarydir, paste0(cfgGroup, "-egress_minus_ingress_agg.pdf"))))
 
     for (fg in unique(overage$FG)) {
         fgsubset <- overage[overage$FG == fg,]
         for (qos in unique(fgsubset$QoS)) {
             if (qos != "LOPRI" && sum(fgsubset$OverageGbps[fgsubset$QoS == qos]) > 0) {
-                PlotOverageTo(fgsubset[fgsubset$QoS == qos,], file.path(summarydir, paste0(cfgGroup, "-bw-overage-", fg, "-", qos, ".pdf")))
+                parallel::mcparallel(PlotOverageTo(fgsubset[fgsubset$QoS == qos,], file.path(summarydir, paste0(cfgGroup, "-bw-overage-", fg, "-", qos, ".pdf"))))
             }
         }
     }
@@ -545,7 +641,7 @@ for (cfgGroup in cfgGroups) {
         fgsubset <- shortage[shortage$FG == fg,]
         for (qos in unique(fgsubset$QoS)) {
             if (qos != "LOPRI" && sum(fgsubset$ShortageGbps[fgsubset$QoS == qos]) > 0) {
-                PlotShortageTo(fgsubset[fgsubset$QoS == qos,], file.path(summarydir, paste0(cfgGroup, "-bw-shortage-", fg, "-", qos, ".pdf")))
+                parallel::mcparallel(PlotShortageTo(fgsubset[fgsubset$QoS == qos,], file.path(summarydir, paste0(cfgGroup, "-bw-shortage-", fg, "-", qos, ".pdf"))))
             }
         }
     }
@@ -554,7 +650,7 @@ for (cfgGroup in cfgGroups) {
         fgsubset <- overage[overage$FG == fg,]
         for (qos in unique(fgsubset$QoS)) {
             if (qos != "LOPRI" && sum(fgsubset$OverageGbps[fgsubset$QoS == qos]) > 0) {
-                PlotFracOverageTo(fgsubset[fgsubset$QoS == qos,], file.path(summarydir, paste0(cfgGroup, "-fracoverage-", fg, "-", qos, ".pdf")))
+                parallel::mcparallel(PlotFracOverageTo(fgsubset[fgsubset$QoS == qos,], file.path(summarydir, paste0(cfgGroup, "-fracoverage-", fg, "-", qos, ".pdf"))))
             }
         }
     }
@@ -563,12 +659,24 @@ for (cfgGroup in cfgGroups) {
         fgsubset <- shortage[shortage$FG == fg,]
         for (qos in unique(fgsubset$QoS)) {
             if (qos != "LOPRI" && sum(fgsubset$ShortageGbps[fgsubset$QoS == qos]) > 0) {
-                PlotFracShortageTo(fgsubset[fgsubset$QoS == qos,], file.path(summarydir, paste0(cfgGroup, "-fracshortage-", fg, "-", qos, ".pdf")))
+                parallel::mcparallel(PlotFracShortageTo(fgsubset[fgsubset$QoS == qos,], file.path(summarydir, paste0(cfgGroup, "-fracshortage-", fg, "-", qos, ".pdf"))))
             }
         }
     }
 
     for (kind in unique(qos.churn$Kind)) {
-        PlotQoSChurnTo(qos.churn[qos.churn$Kind == kind,], file.path(summarydir, paste0(cfgGroup, "-qos_churn-", gsub(" ", "_", kind), ".pdf")))
+        parallel::mcparallel(PlotQoSChurnTo(qos.churn[qos.churn$Kind == kind,], file.path(summarydir, paste0(cfgGroup, "-qos_churn-", gsub(" ", "_", kind), ".pdf"))))
+    }
+
+    for (fg in unique(qos.num.change$FG)) {
+        if (max(qos.num.change$NumQoSChanges[qos.num.change$FG == fg]) > 0) {
+            parallel::mcparallel(PlotQoSNumChangeTo(qos.num.change[qos.num.change$FG == fg,],
+                file.path(summarydir, paste0(cfgGroup, "-qos_num_change-", fg, ".pdf"))))
+
+            parallel::mcparallel(PlotQoSTimeNoChangeTo(qos.time.no.change[qos.time.no.change$FG == fg,],
+                file.path(summarydir, paste0(cfgGroup, "-qos_time_no_change-", fg, ".pdf"))))
+        }
     }
 }
+
+.junk <- parallel::mccollect()
