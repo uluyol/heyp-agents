@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"sort"
+	"time"
 
 	"github.com/uluyol/heyp-agents/go/proc/logs"
 	"golang.org/x/sync/errgroup"
@@ -119,17 +120,30 @@ func PrintHostEnforcerChanges(fsys fs.FS, inputs []NamedLog, hostDC, nodeIP map[
 
 			buf := new(bytes.Buffer)
 			var prev map[flowgroup][2]int64
+			prevAllChangeTime := make(map[flowgroup]time.Time)
+			var runStart time.Time
 			for {
 				e := new(logs.HostEnforcerLogEntry)
 				if !r.ReadOne(e) {
 					break
+				}
+				if prev == nil {
+					runStart = e.Time
 				}
 
 				cur := extractConfig(e)
 				if prev != nil {
 					diffs := diffEnforcerConfigByFG(prev, cur)
 					for _, diff := range diffs {
-						fmt.Fprintf(buf, "%f,%s_TO_%s,%s\n", unixSec(e.Time), diff.fg.srcDC, diff.fg.dstDC, diff.diff.String())
+						t, ok := prevAllChangeTime[diff.fg]
+						if !ok {
+							t = runStart
+						}
+						durSincAllChange := e.Time.Sub(t)
+						if diff.diff == dAllChange {
+							prevAllChangeTime[diff.fg] = e.Time
+						}
+						fmt.Fprintf(buf, "%f,%s_TO_%s,%s,%s,%f\n", unixSec(e.Time), diff.fg.srcDC, diff.fg.dstDC, log.Name, diff.diff.String(), durSincAllChange.Seconds())
 					}
 				}
 
@@ -152,7 +166,7 @@ func PrintHostEnforcerChanges(fsys fs.FS, inputs []NamedLog, hostDC, nodeIP map[
 	}
 	if f != nil {
 		defer f.Close()
-		_, err = io.WriteString(f, "UnixTime,FG,Update\n")
+		_, err = io.WriteString(f, "UnixTime,FG,Host,Update,SecondsSinceLastAllChange\n")
 	}
 	if err == nil {
 		err = SortedPrintTable(f, outs, ",")
