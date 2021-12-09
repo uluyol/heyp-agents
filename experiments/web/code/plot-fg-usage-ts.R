@@ -2,6 +2,7 @@
 
 library(ggplot2)
 library(reshape2)
+library(parallel)
 library(wesanderson)
 
 args <- commandArgs(trailingOnly=TRUE)
@@ -165,14 +166,16 @@ PlotAgg <- function(output) {
   .junk <- dev.off()
 }
 
+tasks <- list(
+  parallel::mcparallel(PlotAgg(paste0(outpre, "usage-ts-agg.pdf"))))
+
 for (fg in fgs) {
-  PlotFG(fg, "Usage", "Usage", paste0(outpre, "usage-ts-fg-", fg, ".pdf"))
-  PlotFG(fg, "Demand", "Predicted Demand", paste0(outpre, "demand-ts-fg-", fg, ".pdf"))
+  tasks <- append(tasks, parallel::mcparallel(PlotFG(fg, "Usage", "Usage", paste0(outpre, "usage-ts-fg-", fg, ".pdf"))))
+  tasks <- append(tasks, parallel::mcparallel(PlotFG(fg, "Demand", "Predicted Demand", paste0(outpre, "demand-ts-fg-", fg, ".pdf"))))
 }
 
 for (fg in fgs) {
-  PlotFGNode(fg, paste0(outpre, "usage-ts-fg-node-", fg, ".pdf"))
+  tasks <- append(tasks, parallel::mcparallel(PlotFGNode(fg, paste0(outpre, "usage-ts-fg-node-", fg, ".pdf"))))
 }
 
-PlotAgg(
-  paste0(outpre, "usage-ts-agg.pdf"))
+.junk <- parallel::mccollect()
