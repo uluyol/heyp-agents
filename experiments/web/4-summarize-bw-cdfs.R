@@ -17,6 +17,11 @@ SYS_LONG[["qdlrl"]] <- "QD+LimitLO"
 SYS_LONG[["qdhrl"]] <- "QD+LimitHI"
 SYS_LONG[["rl"]] <- "RateLimit"
 
+SYS_LONG[["qd_knap"]] <- "Knapsack"
+SYS_LONG[["qd_hash"]] <- "Hash"
+SYS_LONG[["qdhrl_knap"]] <- "Knapsack+LimitHI"
+SYS_LONG[["qdhrl_hash"]] <- "Hash+LimitHI"
+
 # Derived from https://github.com/tidyverse/ggplot2/issues/1467#issuecomment-169763396
 stat_myecdf <- function(mapping = NULL, data = NULL, geom = "step",
                       position = "identity", n = NULL, na.rm = FALSE,
@@ -68,8 +73,6 @@ SumClientGoodput <- function(subset) {
 }
 
 PlotRetransmitsAggTo <- function(subset, output) {
-    subset$Sys <- factor(subset$Sys, levels=c("RateLimit", "HSC20", "QD+LimitLO", "QD", "NoLimit"))
-
     pdf(output, height=2.5, width=5)
     p <- ggplot(data=subset, aes(x=RetransSegs, color=Sys, linetype=Sys)) +
         stat_myecdf(size=1) +
@@ -103,8 +106,6 @@ PlotRetransmitsAggTo <- function(subset, output) {
 }
 
 PlotEgressMinuxIngressAggTo <- function(subset, output) {
-    subset$Sys <- factor(subset$Sys, levels=c("RateLimit", "HSC20", "QD+LimitLO", "QD", "NoLimit"))
-
     subset$X <- (subset$EgressBps - subset$IngressBps) / (2 ^ 30)
 
     pdf(output, height=2.5, width=5)
@@ -140,8 +141,6 @@ PlotEgressMinuxIngressAggTo <- function(subset, output) {
 }
 
 PlotGoodputTo <- function(subset, output) {
-    subset$Sys <- factor(subset$Sys, levels=c("RateLimit", "HSC20", "QD+LimitLO", "QD", "NoLimit"))
-
     pdf(output, height=2.5, width=5)
     p <- ggplot(data=subset, aes(x=GoodputGbps, color=Sys, linetype=Sys)) +
         stat_myecdf(size=1) +
@@ -178,7 +177,6 @@ PlotGoodputTo <- function(subset, output) {
 PlotQoSChurnTo <- function(subset, output) {
     subset <- subset[subset$Sys != "NoLimit",]
     subset <- subset[subset$Sys != "RateLimit",]
-    subset$Sys <- factor(subset$Sys, levels=c("HSC20", "QD+LimitHI", "QD+LimitLO", "QD"))
 
     pdf(output, height=2.5, width=5)
     p <- ggplot(data=subset, aes(x=FracChanged, color=Sys, linetype=Sys)) +
@@ -216,7 +214,6 @@ PlotQoSChurnTo <- function(subset, output) {
 PlotQoSNumChangeTo <- function(subset, output) {
     subset <- subset[subset$Sys != "NoLimit",]
     subset <- subset[subset$Sys != "RateLimit",]
-    subset$Sys <- factor(subset$Sys, levels=c("HSC20", "QD+LimitHI", "QD+LimitLO", "QD"))
 
     pdf(output, height=2.5, width=5)
     p <- ggplot(data=subset, aes(x=Sys, y=NumQoSChanges)) +
@@ -251,7 +248,6 @@ PlotQoSNumChangeTo <- function(subset, output) {
 PlotQoSTimeNoChangeTo <- function(subset, output) {
     subset <- subset[subset$Sys != "NoLimit",]
     subset <- subset[subset$Sys != "RateLimit",]
-    subset$Sys <- factor(subset$Sys, levels=c("QD", "HSC20", "QD+LimitHI", "QD+LimitLO"))
 
     pdf(output, height=2.5, width=5)
     p <- ggplot(data=subset, aes(x=SecondsSinceLastAllChange, color=Sys, linetype=Sys)) +
@@ -287,7 +283,6 @@ PlotQoSTimeNoChangeTo <- function(subset, output) {
 
 PlotOverageTo <- function(subset, output) {
     subset <- subset[subset$Sys != "NoLimit",]
-    subset$Sys <- factor(subset$Sys, levels=c("RateLimit", "HSC20", "QD+LimitLO", "QD"))
 
     pdf(output, height=2.5, width=5)
     p <- ggplot(data=subset, aes(x=OverageGbps, color=Sys, linetype=Sys)) +
@@ -323,7 +318,6 @@ PlotOverageTo <- function(subset, output) {
 
 PlotShortageTo <- function(subset, output) {
     subset <- subset[subset$Sys != "NoLimit",]
-    subset$Sys <- factor(subset$Sys, levels=c("RateLimit", "HSC20", "QD+LimitLO", "QD"))
 
     pdf(output, height=2.5, width=5)
     p <- ggplot(data=subset, aes(x=ShortageGbps, color=Sys, linetype=Sys)) +
@@ -359,7 +353,6 @@ PlotShortageTo <- function(subset, output) {
 
 PlotFracOverageTo <- function(subset, output) {
     subset <- subset[subset$Sys != "NoLimit",]
-    subset$Sys <- factor(subset$Sys, levels=c("RateLimit", "HSC20", "QD+LimitLO", "QD"))
 
     pdf(output, height=2.5, width=5)
     p <- ggplot(data=subset, aes(x=OverageFrac, color=Sys, linetype=Sys)) +
@@ -396,7 +389,6 @@ PlotFracOverageTo <- function(subset, output) {
 
 PlotFracShortageTo <- function(subset, output) {
     subset <- subset[subset$Sys != "NoLimit",]
-    subset$Sys <- factor(subset$Sys, levels=c("RateLimit", "HSC20", "QD+LimitLO", "QD"))
 
     pdf(output, height=2.5, width=5)
     p <- ggplot(data=subset, aes(x=ShortageFrac, color=Sys, linetype=Sys)) +
