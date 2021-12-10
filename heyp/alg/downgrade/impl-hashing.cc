@@ -6,6 +6,19 @@
 
 namespace heyp {
 
+static std::string MatchString(const RingRanges& r) {
+  if (r.a.Empty() && r.b.Empty()) {
+    return "{}";
+  }
+  if (r.a.Empty()) {
+    return ToString(r.b);
+  }
+  if (r.b.Empty()) {
+    return ToString(r.a);
+  }
+  return absl::StrCat(ToString(r.a), "∪", ToString(r.b));
+}
+
 DowngradeDiff HashingDowngradeSelector::PickChildren(const AggInfoView& agg_info,
                                                      const double want_frac_lopri,
                                                      spdlog::logger* logger) {
@@ -42,10 +55,12 @@ DowngradeDiff HashingDowngradeSelector::PickChildren(const AggInfoView& agg_info
     dst->push_back(d.diff.b);
   }
 
+  RingRanges matching = lopri_.MatchingRanges();
+  SPDLOG_LOGGER_INFO(logger, "revised lopri ring: {} matches: {} downgrade diff: {}",
+                     lopri_.ToString(), MatchString(matching), ToString(ret));
+
   if (should_debug) {
-    SPDLOG_LOGGER_INFO(logger, "revised lopri ring: {}", lopri_.ToString());
     SPDLOG_LOGGER_INFO(logger, "range diff: {}", ToString(d));
-    SPDLOG_LOGGER_INFO(logger, "downgrade diff: {}", ToString(ret));
   }
 
   return ret;

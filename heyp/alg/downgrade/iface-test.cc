@@ -5,7 +5,6 @@
 #include "heyp/proto/parse-text.h"
 
 namespace heyp {
-namespace internal {
 namespace {
 
 class MockSelectorImpl : public DiffDowngradeSelectorImpl {
@@ -108,6 +107,83 @@ TEST(DiffDowngradeSelectorImplTest, Basic) {
                                              ));
 }
 
+TEST(DiffDowngradeSelectorImplTest, DiffIsSticky) {
+  auto logger = MakeLogger("test");
+  MockSelectorImpl selector;
+  DowngradeDiff diff{
+      .to_downgrade =
+          UnorderedIds{
+              .ranges = {IdRange(2, 3)},
+              .points = {60},
+          },
+      .to_upgrade =
+          UnorderedIds{
+              .ranges = {IdRange(5, 8)},
+              .points = {61},
+          },
+  };
+  {
+    testing::InSequence s;
+    EXPECT_CALL(selector, PickChildren)
+        .WillOnce(testing::Return(diff))
+        .WillOnce(testing::Return(DowngradeDiff{}));
+  }
+  auto agg_info = ParseTextProto<proto::AggInfo>(R"(
+    children {
+      flow { host_id: 3 }
+      ewma_usage_bps: 100
+    }
+    children {
+      flow { host_id: 9 }
+      ewma_usage_bps: 100
+    }
+    children {
+      flow { host_id: 60 }
+      ewma_usage_bps: 100
+    }
+    children {
+      flow { host_id: 61 }
+      ewma_usage_bps: 100
+      currently_lopri: true
+    }
+    children {
+      flow { host_id: 0 }
+      ewma_usage_bps: 100
+      currently_lopri: true
+    }
+    children {
+      flow { host_id: 2 }
+      ewma_usage_bps: 100
+    }
+    children {
+      flow { host_id: 6 }
+      ewma_usage_bps: 100
+      currently_lopri: true
+    }
+  )");
+  std::vector<bool> is_lopri = selector.PickLOPRIChildren(
+      HostLevelView::Create<FVSource::kUsage>(agg_info), 0.5, &logger);
+  std::vector<bool> is_lopri2 = selector.PickLOPRIChildren(
+      HostLevelView::Create<FVSource::kUsage>(agg_info), 0.5, &logger);
+
+  EXPECT_THAT(is_lopri, testing::ElementsAre(true,   // 3
+                                             false,  // 9
+                                             true,   // 60
+                                             false,  // 61
+                                             true,   // 0
+                                             true,   // 2
+                                             false   // 6
+                                             ));
+
+  EXPECT_THAT(is_lopri2, testing::ElementsAre(true,   // 3
+                                              false,  // 9
+                                              true,   // 60
+                                              false,  // 61
+                                              true,   // 0
+                                              true,   // 2
+                                              false   // 6
+                                              ));
+}
+
 }  // namespace
-}  // namespace internal
 }  // namespace heyp

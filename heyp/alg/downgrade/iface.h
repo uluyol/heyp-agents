@@ -6,6 +6,7 @@
 #include <string_view>
 #include <vector>
 
+#include "absl/container/flat_hash_map.h"
 #include "heyp/alg/agg-info-views.h"
 #include "heyp/alg/unordered-ids.h"
 #include "heyp/log/spdlog.h"
@@ -36,6 +37,12 @@ class DiffDowngradeSelectorImpl : public DowngradeSelectorImpl {
   std::vector<bool> PickLOPRIChildren(const AggInfoView& agg_info,
                                       const double want_frac_lopri,
                                       spdlog::logger* logger) override;
+
+ private:
+  // last_is_lopri_ is a map of previous child id -> lopri/hipri assignments.
+  // We need the map so that QoS decsions stick even when they are not applied
+  // immediately.
+  absl::flat_hash_map<uint64_t, bool> last_is_lopri_;
 };
 
 std::string ToString(const DowngradeDiff& diff, std::string_view indent = "");

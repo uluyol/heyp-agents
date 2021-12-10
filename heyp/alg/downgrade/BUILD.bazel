@@ -9,9 +9,12 @@ cc_library(
     srcs = ["iface.cc"],
     hdrs = ["iface.h"],
     deps = [
+        ":formatters",
         "//heyp/alg:agg-info-views",
+        "//heyp/alg:debug",
         "//heyp/alg:unordered-ids",
         "//heyp/log:spdlog",
+        "@com_google_absl//absl/container:flat_hash_map",
     ],
 )
 
