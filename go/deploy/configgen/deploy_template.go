@@ -14,6 +14,7 @@ import (
 	starlarkmath "go.starlark.net/lib/math"
 	starlarkproto "go.starlark.net/lib/proto"
 	starlarktime "go.starlark.net/lib/time"
+	"go.starlark.net/resolve"
 	"go.starlark.net/starlark"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/reflect/protoregistry"
@@ -55,6 +56,12 @@ func ReadExternalAddrsMap(rspecPath, sshUser string) (map[string]string, error) 
 	}
 
 	return externalAddrForIP, nil
+}
+
+func init() {
+	resolve.AllowNestedDef = true
+	resolve.AllowRecursion = true
+	resolve.AllowSet = true
 }
 
 func GenDeploymentConfigs(filename string, configSetsToGen []string, externalAddrForIP []map[string]string) (configs map[string]*pb.DeploymentConfig, shardConfigs [][]string, err error) {

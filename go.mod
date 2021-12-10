@@ -12,7 +12,7 @@ require (
 	github.com/google/subcommands v1.2.0
 	github.com/google/uuid v1.2.0
 	github.com/planetscale/vtprotobuf v0.2.1-0.20211020080541-088be8c8c872
-	go.starlark.net v0.0.0-20210602144842-1cdb82c9e17a
+	go.starlark.net v0.0.0-20211203141949-70c0e40ae128
 	golang.org/x/exp v0.0.0-20191030013958-a1ab85dbe136
 	golang.org/x/net v0.0.0-20211020060615-d418f374d309
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
