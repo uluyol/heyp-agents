@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include "absl/strings/str_join.h"
+#include "heyp/flows/agg-marker.h"
 #include "heyp/log/spdlog.h"
 #include "heyp/proto/alg.h"
 #include "heyp/proto/constructors.h"
@@ -40,16 +41,7 @@ std::unique_ptr<FlowAggregator> NewConnToHostAggregator(
       std::move(host_demand_predictor),
       FlowAggregator::Config{
           .usage_history_window = usage_history_window,
-          .get_agg_flow_fn = [](const proto::FlowMarker& c) -> proto::FlowMarker {
-            proto::FlowMarker h = c;
-            h.clear_src_addr();
-            h.clear_dst_addr();
-            h.clear_protocol();
-            h.clear_src_port();
-            h.clear_dst_port();
-            h.clear_seqnum();
-            return h;
-          },
+          .get_agg_flow_fn = &ToHostFlow,
           .is_valid_parent = [](const proto::FlowMarker& h) -> bool {
             return ExpectedFieldsAreSet(h, HostFlowOptions()) &&
                    UnexpectedFieldsAreUnset(h, HostFlowOptions());
@@ -67,18 +59,7 @@ std::unique_ptr<FlowAggregator> NewHostToClusterAggregator(
       std::move(cluster_demand_predictor),
       FlowAggregator::Config{
           .usage_history_window = usage_history_window,
-          .get_agg_flow_fn = [](const proto::FlowMarker& c) -> proto::FlowMarker {
-            proto::FlowMarker h = c;
-            h.clear_job();
-            h.clear_host_id();
-            h.clear_src_addr();
-            h.clear_dst_addr();
-            h.clear_protocol();
-            h.clear_src_port();
-            h.clear_dst_port();
-            h.clear_seqnum();
-            return h;
-          },
+          .get_agg_flow_fn = &ToClusterFlow,
           .is_valid_parent = [](const proto::FlowMarker& c) -> bool {
             return ExpectedFieldsAreSet(c, ClusterFlowOptions()) &&
                    UnexpectedFieldsAreUnset(c, ClusterFlowOptions());

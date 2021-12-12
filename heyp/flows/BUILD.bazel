@@ -7,6 +7,7 @@ cc_library(
     srcs = ["aggregator.cc"],
     hdrs = ["aggregator.h"],
     deps = [
+        ":agg-marker",
         ":state",
         "//heyp/alg:demand-predictor",
         "//heyp/log:spdlog",
@@ -21,6 +22,12 @@ cc_library(
 )
 
 cc_library(
+    name = "agg-marker",
+    hdrs = ["agg-marker.h"],
+    deps = ["//heyp/proto:heyp_cc_proto"],
+)
+
+cc_library(
     name = "dc-mapper",
     srcs = ["dc-mapper.cc"],
     hdrs = ["dc-mapper.h"],
@@ -29,6 +36,15 @@ cc_library(
         "//heyp/proto:config_cc_proto",
         "@com_google_absl//absl/container:flat_hash_map",
         "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_library(
+    name = "map",
+    hdrs = ["map.h"],
+    deps = [
+        "//heyp/proto:alg",
+        "@com_google_absl//absl/container:flat_hash_map",
     ],
 )
 

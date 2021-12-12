@@ -63,6 +63,20 @@ cc_library(
 )
 
 cc_library(
+    name = "fast-aggregator",
+    srcs = ["fast-aggregator.cc"],
+    hdrs = ["fast-aggregator.h"],
+    deps = [
+        "//heyp/alg:agg-info-views",
+        "//heyp/alg:sampler",
+        "//heyp/flows:agg-marker",
+        "//heyp/flows:map",
+        "//heyp/threads:executor",
+        "//heyp/threads:par-indexed-map",
+    ],
+)
+
+cc_library(
     name = "server",
     srcs = ["server.cc"],
     hdrs = ["server.h"],
@@ -106,6 +120,19 @@ cc_test(
         "//heyp/init:test-main",
         "//heyp/proto:parse-text",
         "//heyp/proto:testing",
+    ],
+)
+
+cc_test(
+    name = "fast-aggregator-test",
+    srcs = ["fast-aggregator-test.cc"],
+    deps = [
+        ":fast-aggregator",
+        "//heyp/init:test-main",
+        "//heyp/proto:heyp_cc_proto",
+        "//heyp/proto:parse-text",
+        "//heyp/proto:testing",
+        "@com_google_absl//absl/strings",
     ],
 )
 
