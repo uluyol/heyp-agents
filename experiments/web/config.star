@@ -462,20 +462,29 @@ _DEFAULT_NODE_COUNTS = {
     "CLIENT": 2,
 }
 
+# Work around cloudlab issues
+_BAD_NODE_IDS = set([])
+
 def _GetNodeTypeUB(node_counts):
     ubs = dict()
 
+    def _get_ub(next_id, count):
+        added = 0
+        for _ in range(2000):  # starlark lacks while loop
+            if added >= count:
+                break
+            if next_id not in _BAD_NODE_IDS:
+                added += 1
+            next_id += 1
+        return next_id, next_id - 1
+
     # IDs start from 1
-    # Node with ID 1 is cluster agent
-    c = 1
-    c += node_counts["EDGE"]
-    ubs["EDGE"] = c
-    c += node_counts["AA"]
-    ubs["AA"] = c
-    c += node_counts["WA"]
-    ubs["WA"] = c
-    c += node_counts["CLIENT"]
-    ubs["CLIENT"] = c
+    next_id = 1
+    next_id, _ = _get_ub(next_id, 1)  # cluster-agent
+    next_id, ubs["EDGE"] = _get_ub(next_id, node_counts["EDGE"])
+    next_id, ubs["AA"] = _get_ub(next_id, node_counts["AA"])
+    next_id, ubs["WA"] = _get_ub(next_id, node_counts["WA"])
+    next_id, ubs["CLIENT"] = _get_ub(next_id, node_counts["CLIENT"])
 
     return ubs
 
@@ -571,6 +580,10 @@ def GenConfig(
         i = idx + 1
         name = "n" + str(i)
         roles = []
+
+        if i in _BAD_NODE_IDS:
+            continue
+
         if i == 1:
             roles.append("cluster-agent")
             clusters["EDGE"]["node_names"].append(name)
@@ -925,7 +938,6 @@ def QoSDowngradeAndLimitLOPRIConfigJobLevel(**kwargs):
     )
 
 def HSC20Config(**kwargs):
-    # Basically does nothing
     allocator = config_pb.ClusterAllocatorConfig(
         type = "CA_HEYP_SIGCOMM20",
         downgrade_selector = {"type": "DS_HEYP_SIGCOMM20", "downgrade_usage": True},
@@ -1325,8 +1337,10 @@ def AddConfigsRateLimitHIPRI(configs):
     # ))
 
     prefix = "rlhipri"
-    configs[prefix + "-qd"] = QoSDowngradeConfig(ds_selector_type = "DS_HEYP_SIGCOMM20", **kwargs)
-    configs[prefix + "-qdhrl"] = QoSDowngradeAndLimitMixedHIPRIConfig(ds_selector_type = "DS_HEYP_SIGCOMM20", **kwargs)
+    configs[prefix + "-qd_knap"] = QoSDowngradeConfig(ds_selector_type = "DS_KNAPSACK_SOLVER", **kwargs)
+    configs[prefix + "-qdhrl_knap"] = QoSDowngradeAndLimitMixedHIPRIConfig(ds_selector_type = "DS_KNAPSACK_SOLVER", **kwargs)
+    configs[prefix + "-qd_hash"] = QoSDowngradeConfig(ds_selector_type = "DS_HASHING", **kwargs)
+    configs[prefix + "-qdhrl_hash"] = QoSDowngradeAndLimitMixedHIPRIConfig(ds_selector_type = "DS_HASHING", **kwargs)
 
 def AddConfigsLossTrainingDataIncreasing(configs, lopri_latency = "same"):
     kwargs = dict({
