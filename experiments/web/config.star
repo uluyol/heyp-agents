@@ -480,7 +480,7 @@ def _GetNodeTypeUB(node_counts):
 
     # IDs start from 1
     next_id = 1
-    next_id, _ = _get_ub(next_id, 1)  # cluster-agent
+    next_id, ubs["cluster-agent"] = _get_ub(next_id, 1)  # cluster-agent
     next_id, ubs["EDGE"] = _get_ub(next_id, node_counts["EDGE"])
     next_id, ubs["AA"] = _get_ub(next_id, node_counts["AA"])
     next_id, ubs["WA"] = _get_ub(next_id, node_counts["WA"])
@@ -576,7 +576,8 @@ def GenConfig(
     idx_ubs = _GetNodeTypeUB(node_counts)
 
     shard_index = 0
-    for idx in range(16):
+    cluster_agent_nodes = []
+    for idx in range(17):
         i = idx + 1
         name = "n" + str(i)
         roles = []
@@ -584,12 +585,13 @@ def GenConfig(
         if i in _BAD_NODE_IDS:
             continue
 
-        if i == 1:
+        if i <= idx_ubs["cluster-agent"]:
             roles.append("cluster-agent")
             clusters["EDGE"]["node_names"].append(name)
             clusters["AA"]["node_names"].append(name)
             clusters["WA"]["node_names"].append(name)
             clusters["CLIENT"]["node_names"].append(name)
+            cluster_agent_nodes.append(name)
         else:
             roles.append("host-agent")
             if i <= idx_ubs["EDGE"]:
@@ -611,7 +613,7 @@ def GenConfig(
                 if "UNUSED" not in clusters:
                     clusters["UNUSED"] = {
                         "name": "UNUSED",
-                        "node_names": ["n1"],
+                        "node_names": cluster_agent_nodes[:],
                         "cluster_agent_port": 4600,
                     }
                 clusters["UNUSED"]["node_names"].append(name)
@@ -1445,9 +1447,10 @@ def AddConfigsFlipQoS(configs):
         # (300, 220, 410),
     ]
 
-    for cp in ["100ms", "300ms", "500ms"]:
+    # for cp in ["100ms", "200ms", "300ms", "400ms", "500ms", "600ms", "700ms", "800ms", "900ms", "1s", "2s", "3s", "4s", "5s"]:
+    for cp in ["1s", "2s", "3s", "4s", "5s"]:
         for AA_lat, WA_lat, AA_lopri_lat in latencies:
-            for WA_demand_gbps in [6, float("6.5")]:
+            for WA_demand_gbps in [float("6.5")]:
                 WA_demand = int(Gbps(WA_demand_gbps))
                 kwargs_rr = dict({
                     "AA_lopri_is_longer": True,
@@ -1465,6 +1468,7 @@ def AddConfigsFlipQoS(configs):
                         "CLIENT": 2,
                     },
                     "cluster_control_period": cp,
+                    "host_agent_log_fine_grained_stats": True,  # for analysis
                 }, **GenWorkloadStagesStatic(
                     AA_bps = 2 * AA_approval,
                     WA_bps = WA_demand,
