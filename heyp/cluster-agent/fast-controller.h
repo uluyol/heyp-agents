@@ -84,7 +84,9 @@ class FastClusterController : public ClusterController {
     std::vector<bool> agg_is_lopri;
     absl::flat_hash_map<uint64_t, std::function<void(const proto::AllocBundle&)>>
         lis_new_bundle_funcs;
+    int64_t gen_seen = 0;
     bool broadcasted_latest_state = false;
+    bool saw_data_this_run = false;
   };
   ParIndexedMap<uint64_t, ChildState, absl::flat_hash_map<uint64_t, ParID>> child_states_;
 

@@ -92,6 +92,10 @@ void FastClusterController::BroadcastStateUnconditional(
       alloc->set_lopri_rate_limit_bps(0);
     }
   }
+  base_bundle->set_gen(0);
+  if (state.saw_data_this_run) {
+    base_bundle->set_gen(state.gen_seen);
+  }
   for (auto& [lis_id, on_new_bundle_func] : state.lis_new_bundle_funcs) {
     on_new_bundle_func(*base_bundle);
   }
@@ -205,7 +209,18 @@ void FastClusterController::ComputeAndBroadcast() {
       DowngradeDiff downgrade_diff =
           agg_selectors_[agg_id].PickChildren(info, frac_lopri, &logger_);
 
-      // Step 2.3: Update child states and record which children we need to contact.
+      // Step 2.3: Record which children we just heard from (for monitoring response time)
+      for (const auto& hg : info.info_gen()) {
+        auto iter = host2par_.find(hg.host_id);
+        if (iter != host2par_.end()) {
+          child_states_.OnID(iter->second, [hg](ChildState& state) {
+            state.gen_seen = std::max(hg.gen, state.gen_seen);
+            state.saw_data_this_run = true;
+          });
+        }
+      }
+
+      // Step 2.4: Update child states and record which children we need to contact.
       ForEachSelected(host2par_, downgrade_diff.to_downgrade,
                       [agg_id, &par_ids_to_bcast, this](uint64_t host_id, ParID par_id) {
                         par_ids_to_bcast[agg_id].push_back(par_id);

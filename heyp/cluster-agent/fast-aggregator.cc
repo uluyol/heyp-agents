@@ -62,18 +62,22 @@ void FastAggregator::UpdateInfo(const proto::InfoBundle& info) {
     }
   }
   // Now active_info_shard_ids_[shard] < 0: no one else can modify
-  std::vector<Info>& cur = info_shards_[shard][cur_id];
+  InfoShard& cur = info_shards_[shard][cur_id];
 
   for (Info i : got) {
-    cur.push_back(i);
+    cur.infos.push_back(i);
   }
+  cur.gens.push_back({
+      .host_id = info.bundler().host_id(),
+      .gen = info.gen(),
+  });
 
   // Done with info_shards_[shard]
   active_info_shard_ids_[shard].store(cur_id, std::memory_order_seq_cst);
 }
 
 std::pair<std::vector<FastAggInfo>, std::vector<ThresholdSampler::AggUsageEstimator>>
-FastAggregator::Aggregate(const std::vector<FastAggregator::Info>& shard) {
+FastAggregator::Aggregate(const FastAggregator::InfoShard& shard) {
   std::vector<ThresholdSampler::AggUsageEstimator> volume_bps;
   std::vector<FastAggInfo> agg;
   agg.reserve(template_agg_info_.size());
@@ -84,13 +88,18 @@ FastAggregator::Aggregate(const std::vector<FastAggregator::Info>& shard) {
     volume_bps.push_back(samplers_[i].NewAggUsageEstimator());
   }
 
-  for (const Info& info : shard) {
+  for (const Info& info : shard.infos) {
     agg[info.agg_id].children_.push_back(ChildFlowInfo{
         .child_id = info.child_id,
         .volume_bps = info.volume_bps,
         .currently_lopri = info.currently_lopri,
     });
     volume_bps[info.agg_id].RecordSample(info.volume_bps);
+  }
+  for (const auto gen : shard.gens) {
+    for (FastAggInfo& ai : agg) {
+      ai.info_gen_.push_back(gen);
+    }
   }
 
   return {agg, volume_bps};
@@ -101,11 +110,10 @@ std::vector<FastAggInfo> FastAggregator::CollectSnapshot(Executor* exec) {
   // Aggregate into one final std::vector<FastAggInfo>.
   std::unique_ptr<TaskGroup> tasks = exec->NewTaskGroup();
   std::array<std::vector<FastAggInfo>, kNumInfoShards> parts;
-  std::array<size_t, kNumInfoShards> sizes;
   std::array<std::vector<ThresholdSampler::AggUsageEstimator>, kNumInfoShards>
       parent_volume_bps;
   for (int i = 0; i < kNumInfoShards; ++i) {
-    tasks->AddTaskNoStatus([i, this, &parts, &sizes, &parent_volume_bps] {
+    tasks->AddTaskNoStatus([i, this, &parts, &parent_volume_bps] {
       // First swap the existing shard data with the other buffer
       int cur_id = -2;
       while (true) {
@@ -117,11 +125,10 @@ std::vector<FastAggInfo> FastAggregator::CollectSnapshot(Executor* exec) {
           break;
         }
       }
-      std::vector<Info>& cur = info_shards_[i][cur_id];
+      InfoShard& cur = info_shards_[i][cur_id];
 
       // cur contains the shard data
       std::tie(parts[i], parent_volume_bps[i]) = this->Aggregate(cur);
-      sizes[i] = cur.size();
     });
   }
 

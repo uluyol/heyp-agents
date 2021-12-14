@@ -165,6 +165,7 @@ TEST(FullClusterControllerTest, PlumbsDataCompletely) {
                     flow { src_dc: "chicago" dst_dc: "detroit" job: "UNSET" host_id: 1 }
                     lopri_rate_limit_bps: 1000
                   }
+                  gen: 1
                 )")));
     ++call_count;
   });
@@ -181,6 +182,7 @@ TEST(FullClusterControllerTest, PlumbsDataCompletely) {
   UpdateInfo(&controller, ParseTextProto<proto::InfoBundle>(R"(
     bundler { host_id: 1 }
     timestamp { seconds: 1 }
+    gen: 1
     flow_infos {
       flow { src_dc: "chicago" dst_dc: "detroit" job: "UNSET" host_id: 1 }
       predicted_demand_bps: 1000

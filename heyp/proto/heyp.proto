@@ -106,6 +106,7 @@ message AggInfo {
 message InfoBundle {
   FlowMarker bundler = 1;
   google.protobuf.Timestamp timestamp = 3;
+  int64 gen = 4;
   repeated FlowInfo flow_infos = 2;
 }
 
@@ -117,6 +118,7 @@ message FlowAlloc {
 
 message AllocBundle {
   repeated FlowAlloc flow_allocs = 1;
+  int64 gen = 2;
 }
 
 service ClusterAgent {

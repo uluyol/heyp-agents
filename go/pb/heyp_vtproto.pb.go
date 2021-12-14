@@ -665,6 +665,11 @@ func (m *InfoBundle) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if m.Gen != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.Gen))
+		i--
+		dAtA[i] = 0x20
+	}
 	if m.Timestamp != nil {
 		if marshalto, ok := interface{}(m.Timestamp).(interface {
 			MarshalToSizedBufferVT([]byte) (int, error)
@@ -794,6 +799,11 @@ func (m *AllocBundle) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 	if m.unknownFields != nil {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
+	}
+	if m.Gen != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.Gen))
+		i--
+		dAtA[i] = 0x10
 	}
 	if len(m.FlowAllocs) > 0 {
 		for iNdEx := len(m.FlowAllocs) - 1; iNdEx >= 0; iNdEx-- {
@@ -1119,6 +1129,9 @@ func (m *InfoBundle) SizeVT() (n int) {
 		}
 		n += 1 + l + sov(uint64(l))
 	}
+	if m.Gen != 0 {
+		n += 1 + sov(uint64(m.Gen))
+	}
 	if m.unknownFields != nil {
 		n += len(m.unknownFields)
 	}
@@ -1158,6 +1171,9 @@ func (m *AllocBundle) SizeVT() (n int) {
 			l = e.SizeVT()
 			n += 1 + l + sov(uint64(l))
 		}
+	}
+	if m.Gen != 0 {
+		n += 1 + sov(uint64(m.Gen))
 	}
 	if m.unknownFields != nil {
 		n += len(m.unknownFields)
@@ -2919,6 +2935,25 @@ func (m *InfoBundle) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			iNdEx = postIndex
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Gen", wireType)
+			}
+			m.Gen = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Gen |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])
@@ -3129,6 +3164,25 @@ func (m *AllocBundle) UnmarshalVT(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Gen", wireType)
+			}
+			m.Gen = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Gen |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		default:
 			iNdEx = preIndex
 			skippy, err := skip(dAtA[iNdEx:])

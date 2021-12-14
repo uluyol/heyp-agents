@@ -16,11 +16,18 @@ class FastAggInfo : public AggInfoView {
   const proto::FlowInfo& parent() const override { return parent_; }
   const std::vector<ChildFlowInfo>& children() const override { return children_; }
 
+  struct HostInfoGen {
+    uint64_t host_id = 0;
+    int64_t gen = 0;
+  };
+
   int64_t agg_id() const { return agg_id_; }
+  const std::vector<HostInfoGen>& info_gen() const { return info_gen_; }
 
  private:
   proto::FlowInfo parent_;
   std::vector<ChildFlowInfo> children_;
+  std::vector<HostInfoGen> info_gen_;
   int64_t agg_id_ = -1;
 
   friend class FastAggregator;
@@ -46,11 +53,16 @@ class FastAggregator {
     bool currently_lopri;
   };
 
+  struct InfoShard {
+    std::vector<FastAggInfo::HostInfoGen> gens;
+    std::vector<Info> infos;
+  };
+
   static std::vector<FastAggInfo> ComputeTemplateAggInfo(
       const ClusterFlowMap<int64_t>* agg_flow_to_id);
   // Aggregate aggregates the info but doesn't populate parent_.
   std::pair<std::vector<FastAggInfo>, std::vector<ThresholdSampler::AggUsageEstimator>>
-  Aggregate(const std::vector<Info>& shard);
+  Aggregate(const InfoShard& shard);
 
   const ClusterFlowMap<int64_t>* agg_flow_to_id_;
   const std::vector<ThresholdSampler> samplers_;
@@ -61,7 +73,7 @@ class FastAggregator {
   // The current data for shard i can be found in info_shard_[active_info_shard_id_[i]]
   // *if* active_info_shard_id_[i] > 0. If it is < 0, a write is in progress.
   std::array<std::atomic<int>, kNumInfoShards> active_info_shard_ids_;
-  std::array<std::array<std::vector<Info>, 2>, kNumInfoShards> info_shards_;
+  std::array<std::array<InfoShard, 2>, kNumInfoShards> info_shards_;
 };
 
 }  // namespace heyp
