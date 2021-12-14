@@ -8,7 +8,6 @@
 #include "heyp/alg/sampler.h"
 #include "heyp/flows/map.h"
 #include "heyp/threads/executor.h"
-#include "heyp/threads/par-indexed-map.h"
 
 namespace heyp {
 
@@ -32,10 +31,8 @@ class FastAggregator {
   FastAggregator(const FlowMap<int64_t>* agg_flow_to_id,
                  const std::vector<ThresholdSampler>* samplers);
 
-  // TODO: implement destructor that properly frees info_shards_. Low priority.
-
   // UpdateInfo updates the info. This method is thread safe.
-  void UpdateInfo(ParID bundler_id, const proto::InfoBundle& info);
+  void UpdateInfo(const proto::InfoBundle& info);
 
   // CollectSnapshot produces a snapshot of usage. It should only be called from
   // one thread at a time but it may be called in parallel to UpdateInfo.
@@ -59,17 +56,12 @@ class FastAggregator {
   const std::vector<ThresholdSampler>* samplers_;
   const std::vector<FastAggInfo> template_agg_info_;
 
-  // Sentinal value, see info_shards_;
-  std::vector<Info> info_being_updated_;
   constexpr static int kNumInfoShards = 8;
-
-  // info_shards_ contains multiple queues of Infos.
-  // Each entry can be in one of two states:
-  // - Write in progrerss: in this case, info_shards_[i] == &info_being_updated_
-  // - Ready for writing: in this case, CAS info_shards_[i] with &info_being_updated_
-  //   to complete the write.
-  std::array<std::atomic<std::vector<Info>*>, kNumInfoShards> info_shards_;
-  size_t last_shard_size_;
+  // Maintain a sharded queues of Infos.
+  // The current data for shard i can be found in info_shard_[active_info_shard_id_[i]]
+  // *if* active_info_shard_id_[i] > 0. If it is < 0, a write is in progress.
+  std::array<std::atomic<int>, kNumInfoShards> active_info_shard_ids_;
+  std::array<std::array<std::vector<Info>, 2>, kNumInfoShards> info_shards_;
 };
 
 }  // namespace heyp

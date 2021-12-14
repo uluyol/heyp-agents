@@ -1,6 +1,7 @@
 #include "heyp/cluster-agent/fast-aggregator.h"
 
 #include "heyp/flows/agg-marker.h"
+#include "heyp/log/spdlog.h"
 
 namespace heyp {
 
@@ -27,14 +28,13 @@ FastAggregator::FastAggregator(const FlowMap<int64_t>* agg_flow_to_id,
                                const std::vector<ThresholdSampler>* samplers)
     : agg_flow_to_id_(agg_flow_to_id),
       samplers_(samplers),
-      template_agg_info_(ComputeTemplateAggInfo(agg_flow_to_id_)),
-      last_shard_size_(64) {
+      template_agg_info_(ComputeTemplateAggInfo(agg_flow_to_id_)) {
   for (int i = 0; i < kNumInfoShards; ++i) {
-    info_shards_[i] = new std::vector<Info>;
+    active_info_shard_ids_[i].store(0);
   }
 }
 
-void FastAggregator::UpdateInfo(ParID bundler_id, const proto::InfoBundle& info) {
+void FastAggregator::UpdateInfo(const proto::InfoBundle& info) {
   std::vector<Info> got;
   got.reserve(agg_flow_to_id_->size());
   for (const proto::FlowInfo& fi : info.flow_infos()) {
@@ -50,27 +50,27 @@ void FastAggregator::UpdateInfo(ParID bundler_id, const proto::InfoBundle& info)
     });
   }
 
-  int shard = static_cast<uint>(bundler_id) % kNumInfoShards;
+  int shard = static_cast<uint>(info.bundler().host_id()) % kNumInfoShards;
 
-  std::vector<Info>* cur = nullptr;
+  int cur_id = 0;
   while (true) {
-    cur = info_shards_[shard].load();
-    if (cur == &info_being_updated_) {
+    cur_id = active_info_shard_ids_[shard].load();
+    if (cur_id < 0) {
       continue;  // try again
     }
-    if (std::atomic_compare_exchange_strong(&info_shards_[shard], &cur,
-                                            &info_being_updated_)) {
+    if (active_info_shard_ids_[shard].compare_exchange_strong(cur_id, -1)) {
       break;
     }
   }
-  // Now info_shards_[shard] == &info_being_updated_: no one else can modify
+  // Now active_info_shard_ids_[shard] < 0: no one else can modify
+  std::vector<Info>& cur = info_shards_[shard][cur_id];
 
   for (Info i : got) {
-    cur->push_back(i);
+    cur.push_back(i);
   }
 
   // Done with info_shards_[shard]
-  info_shards_[shard].store(cur, std::memory_order_seq_cst);
+  active_info_shard_ids_[shard].store(cur_id, std::memory_order_seq_cst);
 }
 
 std::pair<std::vector<FastAggInfo>, std::vector<ThresholdSampler::AggUsageEstimator>>
@@ -107,35 +107,26 @@ std::vector<FastAggInfo> FastAggregator::CollectSnapshot(Executor* exec) {
       parent_volume_bps;
   for (int i = 0; i < kNumInfoShards; ++i) {
     tasks->AddTaskNoStatus([i, this, &parts, &sizes, &parent_volume_bps] {
-      // First swap the existing shard data with a new buffer
-      std::vector<Info>* new_shard_data = new std::vector<Info>;
-      new_shard_data->resize(this->last_shard_size_);
-      std::vector<Info>* cur = nullptr;
+      // First swap the existing shard data with the other buffer
+      int cur_id = -2;
       while (true) {
-        cur = info_shards_[i].load();
-        if (cur == &info_being_updated_) {
+        cur_id = active_info_shard_ids_[i].load();
+        if (cur_id < 0) {
           continue;  // try again
         }
-        if (std::atomic_compare_exchange_strong(&info_shards_[i], &cur, new_shard_data)) {
+        if (active_info_shard_ids_[i].compare_exchange_strong(cur_id, (cur_id + 1) % 2)) {
           break;
         }
       }
+      std::vector<Info>& cur = info_shards_[i][cur_id];
 
       // cur contains the shard data
-      H_ASSERT_NE(cur, nullptr);
-      std::tie(parts[i], parent_volume_bps[i]) = this->Aggregate(*cur);
-      sizes[i] = cur->size();
-      delete cur;
+      std::tie(parts[i], parent_volume_bps[i]) = this->Aggregate(cur);
+      sizes[i] = cur.size();
     });
   }
 
   tasks->WaitAllNoStatus();
-
-  for (size_t s : sizes) {
-    if (s > last_shard_size_) {
-      last_shard_size_ = s;
-    }
-  }
 
   std::vector<FastAggInfo> combined = parts[0];
   for (int i = 0; i < combined.size(); ++i) {

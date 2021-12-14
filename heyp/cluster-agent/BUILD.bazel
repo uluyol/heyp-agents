@@ -72,7 +72,6 @@ cc_library(
         "//heyp/flows:agg-marker",
         "//heyp/flows:map",
         "//heyp/threads:executor",
-        "//heyp/threads:par-indexed-map",
     ],
 )
 

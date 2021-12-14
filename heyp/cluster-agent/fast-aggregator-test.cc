@@ -39,28 +39,28 @@ TEST(FastAggregatorTest, NoSamplingOneFG) {
   const std::vector<ThresholdSampler> samplers = TestSamplers(100, 0, 0, 0);
 
   FastAggregator aggregator(&agg_flow_to_id, &samplers);
-  aggregator.UpdateInfo(0, ParseTextProto<proto::InfoBundle>(R"(
-                          bundler { host_id: 101 }
-                          flow_infos {
-                            flow { src_dc: "A" dst_dc: "B-1" job: "web" host_id: 101 }
-                            ewma_usage_bps: 100
-                          }
-                        )"));
-  aggregator.UpdateInfo(1, ParseTextProto<proto::InfoBundle>(R"(
-                          bundler { host_id: 999 }
-                          flow_infos {
-                            flow { src_dc: "A" dst_dc: "B-1" job: "web" host_id: 999 }
-                            ewma_usage_bps: 202
-                          }
-                        )"));
-  aggregator.UpdateInfo(1, ParseTextProto<proto::InfoBundle>(R"(
-                          bundler { host_id: 44 }
-                          flow_infos {
-                            flow { src_dc: "A" dst_dc: "B-1" job: "web" host_id: 44 }
-                            ewma_usage_bps: 50
-                            currently_lopri: true
-                          }
-                        )"));
+  aggregator.UpdateInfo(ParseTextProto<proto::InfoBundle>(R"(
+    bundler { host_id: 101 }
+    flow_infos {
+      flow { src_dc: "A" dst_dc: "B-1" job: "web" host_id: 101 }
+      ewma_usage_bps: 100
+    }
+  )"));
+  aggregator.UpdateInfo(ParseTextProto<proto::InfoBundle>(R"(
+    bundler { host_id: 999 }
+    flow_infos {
+      flow { src_dc: "A" dst_dc: "B-1" job: "web" host_id: 999 }
+      ewma_usage_bps: 202
+    }
+  )"));
+  aggregator.UpdateInfo(ParseTextProto<proto::InfoBundle>(R"(
+    bundler { host_id: 44 }
+    flow_infos {
+      flow { src_dc: "A" dst_dc: "B-1" job: "web" host_id: 44 }
+      ewma_usage_bps: 50
+      currently_lopri: true
+    }
+  )"));
 
   Executor exec(4);
   std::vector<FastAggInfo> agg_info = aggregator.CollectSnapshot(&exec);
@@ -93,28 +93,28 @@ TEST(FastAggregatorTest, NoSamplingMultiFG) {
   const std::vector<ThresholdSampler> samplers = TestSamplers(100, 0, 0, 0);
 
   FastAggregator aggregator(&agg_flow_to_id, &samplers);
-  aggregator.UpdateInfo(0, ParseTextProto<proto::InfoBundle>(R"(
-                          bundler { host_id: 101 }
-                          flow_infos {
-                            flow { src_dc: "A" dst_dc: "B-1" job: "web" host_id: 101 }
-                            ewma_usage_bps: 100
-                          }
-                        )"));
-  aggregator.UpdateInfo(1, ParseTextProto<proto::InfoBundle>(R"(
-                          bundler { host_id: 999 }
-                          flow_infos {
-                            flow { src_dc: "A" dst_dc: "B-2" job: "web" host_id: 999 }
-                            ewma_usage_bps: 202
-                          }
-                        )"));
-  aggregator.UpdateInfo(1, ParseTextProto<proto::InfoBundle>(R"(
-                          bundler { host_id: 44 }
-                          flow_infos {
-                            flow { src_dc: "A" dst_dc: "B-0" job: "web" host_id: 44 }
-                            ewma_usage_bps: 50
-                            currently_lopri: true
-                          }
-                        )"));
+  aggregator.UpdateInfo(ParseTextProto<proto::InfoBundle>(R"(
+    bundler { host_id: 101 }
+    flow_infos {
+      flow { src_dc: "A" dst_dc: "B-1" job: "web" host_id: 101 }
+      ewma_usage_bps: 100
+    }
+  )"));
+  aggregator.UpdateInfo(ParseTextProto<proto::InfoBundle>(R"(
+    bundler { host_id: 999 }
+    flow_infos {
+      flow { src_dc: "A" dst_dc: "B-2" job: "web" host_id: 999 }
+      ewma_usage_bps: 202
+    }
+  )"));
+  aggregator.UpdateInfo(ParseTextProto<proto::InfoBundle>(R"(
+    bundler { host_id: 44 }
+    flow_infos {
+      flow { src_dc: "A" dst_dc: "B-0" job: "web" host_id: 44 }
+      ewma_usage_bps: 50
+      currently_lopri: true
+    }
+  )"));
 
   Executor exec(4);
   std::vector<FastAggInfo> agg_info = aggregator.CollectSnapshot(&exec);
@@ -148,36 +148,36 @@ TEST(FastAggregatorTest, WithSamplingOneFG) {
   const std::vector<ThresholdSampler> samplers = TestSamplers(10, 100, 0, 0);
 
   FastAggregator aggregator(&agg_flow_to_id, &samplers);
-  aggregator.UpdateInfo(0, ParseTextProto<proto::InfoBundle>(R"(
-                          bundler { host_id: 101 }
-                          flow_infos {
-                            flow { src_dc: "A" dst_dc: "B-0" job: "web" host_id: 101 }
-                            ewma_usage_bps: 100
-                          }
-                        )"));
-  aggregator.UpdateInfo(1, ParseTextProto<proto::InfoBundle>(R"(
-                          bundler { host_id: 999 }
-                          flow_infos {
-                            flow { src_dc: "A" dst_dc: "B-0" job: "web" host_id: 999 }
-                            ewma_usage_bps: 202
-                          }
-                        )"));
-  aggregator.UpdateInfo(1, ParseTextProto<proto::InfoBundle>(R"(
-                          bundler { host_id: 44 }
-                          flow_infos {
-                            flow { src_dc: "A" dst_dc: "B-0" job: "web" host_id: 44 }
-                            ewma_usage_bps: 50
-                            currently_lopri: true
-                          }
-                        )"));
-  aggregator.UpdateInfo(1, ParseTextProto<proto::InfoBundle>(R"(
-                          bundler { host_id: 4 }
-                          flow_infos {
-                            flow { src_dc: "A" dst_dc: "B-0" job: "web" host_id: 4 }
-                            ewma_usage_bps: 4
-                            currently_lopri: true
-                          }
-                        )"));
+  aggregator.UpdateInfo(ParseTextProto<proto::InfoBundle>(R"(
+    bundler { host_id: 101 }
+    flow_infos {
+      flow { src_dc: "A" dst_dc: "B-0" job: "web" host_id: 101 }
+      ewma_usage_bps: 100
+    }
+  )"));
+  aggregator.UpdateInfo(ParseTextProto<proto::InfoBundle>(R"(
+    bundler { host_id: 999 }
+    flow_infos {
+      flow { src_dc: "A" dst_dc: "B-0" job: "web" host_id: 999 }
+      ewma_usage_bps: 202
+    }
+  )"));
+  aggregator.UpdateInfo(ParseTextProto<proto::InfoBundle>(R"(
+    bundler { host_id: 44 }
+    flow_infos {
+      flow { src_dc: "A" dst_dc: "B-0" job: "web" host_id: 44 }
+      ewma_usage_bps: 50
+      currently_lopri: true
+    }
+  )"));
+  aggregator.UpdateInfo(ParseTextProto<proto::InfoBundle>(R"(
+    bundler { host_id: 4 }
+    flow_infos {
+      flow { src_dc: "A" dst_dc: "B-0" job: "web" host_id: 4 }
+      ewma_usage_bps: 4
+      currently_lopri: true
+    }
+  )"));
 
   Executor exec(4);
   std::vector<FastAggInfo> agg_info = aggregator.CollectSnapshot(&exec);
