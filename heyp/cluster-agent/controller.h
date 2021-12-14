@@ -41,7 +41,6 @@ class ClusterController {
 
     uint64_t host_id_;
     uint64_t lis_id_;
-    std::function<void(const proto::AllocBundle&)> on_new_bundle_func_;
     ClusterController* controller_ = nullptr;
 
     friend class ClusterController;
