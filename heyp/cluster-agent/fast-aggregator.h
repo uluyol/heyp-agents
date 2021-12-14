@@ -29,7 +29,7 @@ class FastAggInfo : public AggInfoView {
 class FastAggregator {
  public:
   FastAggregator(const FlowMap<int64_t>* agg_flow_to_id,
-                 const std::vector<ThresholdSampler>* samplers);
+                 std::vector<ThresholdSampler> samplers);
 
   // UpdateInfo updates the info. This method is thread safe.
   void UpdateInfo(const proto::InfoBundle& info);
@@ -53,7 +53,7 @@ class FastAggregator {
   Aggregate(const std::vector<Info>& shard);
 
   const FlowMap<int64_t>* agg_flow_to_id_;
-  const std::vector<ThresholdSampler>* samplers_;
+  const std::vector<ThresholdSampler> samplers_;
   const std::vector<FastAggInfo> template_agg_info_;
 
   constexpr static int kNumInfoShards = 8;

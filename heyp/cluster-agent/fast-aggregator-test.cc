@@ -36,9 +36,8 @@ std::vector<ThresholdSampler> TestSamplers(int num_samples, int64_t approval0_bp
 
 TEST(FastAggregatorTest, NoSamplingOneFG) {
   const FlowMap<int64_t> agg_flow_to_id = TestAggFlowToIdMap();
-  const std::vector<ThresholdSampler> samplers = TestSamplers(100, 0, 0, 0);
 
-  FastAggregator aggregator(&agg_flow_to_id, &samplers);
+  FastAggregator aggregator(&agg_flow_to_id, TestSamplers(100, 0, 0, 0));
   aggregator.UpdateInfo(ParseTextProto<proto::InfoBundle>(R"(
     bundler { host_id: 101 }
     flow_infos {
@@ -90,9 +89,8 @@ TEST(FastAggregatorTest, NoSamplingOneFG) {
 
 TEST(FastAggregatorTest, NoSamplingMultiFG) {
   const FlowMap<int64_t> agg_flow_to_id = TestAggFlowToIdMap();
-  const std::vector<ThresholdSampler> samplers = TestSamplers(100, 0, 0, 0);
 
-  FastAggregator aggregator(&agg_flow_to_id, &samplers);
+  FastAggregator aggregator(&agg_flow_to_id, TestSamplers(100, 0, 0, 0));
   aggregator.UpdateInfo(ParseTextProto<proto::InfoBundle>(R"(
     bundler { host_id: 101 }
     flow_infos {
@@ -145,9 +143,8 @@ TEST(FastAggregatorTest, NoSamplingMultiFG) {
 
 TEST(FastAggregatorTest, WithSamplingOneFG) {
   const FlowMap<int64_t> agg_flow_to_id = TestAggFlowToIdMap();
-  const std::vector<ThresholdSampler> samplers = TestSamplers(10, 100, 0, 0);
 
-  FastAggregator aggregator(&agg_flow_to_id, &samplers);
+  FastAggregator aggregator(&agg_flow_to_id, TestSamplers(10, 100, 0, 0));
   aggregator.UpdateInfo(ParseTextProto<proto::InfoBundle>(R"(
     bundler { host_id: 101 }
     flow_infos {

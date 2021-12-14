@@ -25,9 +25,9 @@ std::vector<FastAggInfo> FastAggregator::ComputeTemplateAggInfo(
 }
 
 FastAggregator::FastAggregator(const FlowMap<int64_t>* agg_flow_to_id,
-                               const std::vector<ThresholdSampler>* samplers)
+                               std::vector<ThresholdSampler> samplers)
     : agg_flow_to_id_(agg_flow_to_id),
-      samplers_(samplers),
+      samplers_(std::move(samplers)),
       template_agg_info_(ComputeTemplateAggInfo(agg_flow_to_id_)) {
   for (int i = 0; i < kNumInfoShards; ++i) {
     active_info_shard_ids_[i].store(0);
@@ -82,7 +82,7 @@ FastAggregator::Aggregate(const std::vector<FastAggregator::Info>& shard) {
   for (int i = 0; i < template_agg_info_.size(); ++i) {
     agg.push_back(FastAggInfo());
     agg.back().agg_id_ = i;
-    volume_bps.push_back((*samplers_)[i].NewAggUsageEstimator());
+    volume_bps.push_back(samplers_[i].NewAggUsageEstimator());
   }
 
   for (const Info& info : shard) {
