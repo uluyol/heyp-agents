@@ -54,17 +54,17 @@ class HostReactor
       // If lis_ is null, then we know that only one read was issued (the first) and no
       // writes, so it's impossible for concurrent operations to take place.
       mu_.Unlock();
-      lis_ = service_->controller_.RegisterListener(
+      lis_ = service_->controller_->RegisterListener(
           info_.bundler().host_id(), [this](const proto::AllocBundle& alloc) {
             SPDLOG_LOGGER_INFO(&service_->logger_, "sending allocs for {} FGs to {}",
                                alloc.flow_allocs_size(), peer_);
             UpdateAlloc(alloc);
           });
-      bundler_id_ = service_->controller_.GetBundlerID(info_.bundler());
+      bundler_id_ = service_->controller_->GetBundlerID(info_.bundler());
       mu_.Lock(kLongLockDur, &service_->logger_, "HostReactor.mu_");
     }
 
-    service_->controller_.UpdateInfo(bundler_id_, info_);
+    service_->controller_->UpdateInfo(bundler_id_, info_);
     DoReadLoop();
   }
 
@@ -127,11 +127,10 @@ class HostReactor
   ParID bundler_id_ = -1;
 };
 
-ClusterAgentService::ClusterAgentService(std::unique_ptr<FlowAggregator> aggregator,
-                                         std::unique_ptr<ClusterAllocator> allocator,
+ClusterAgentService::ClusterAgentService(std::unique_ptr<ClusterController> controller,
                                          absl::Duration control_period)
     : control_period_(control_period),
-      controller_(std::move(aggregator), std::move(allocator)),
+      controller_(std::move(controller)),
       logger_(MakeLogger("cluster-agent-svc")) {}
 
 grpc::ServerBidiReactor<proto::InfoBundle, proto::AllocBundle>*
@@ -142,7 +141,7 @@ ClusterAgentService::RegisterHost(grpc::CallbackServerContext* context) {
 void ClusterAgentService::RunLoop(std::atomic<bool>* should_exit) {
   while (!should_exit->load()) {
     SPDLOG_LOGGER_INFO(&logger_, "{}: compute new allocations", __func__);
-    controller_.ComputeAndBroadcast();
+    controller_->ComputeAndBroadcast();
     absl::SleepFor(control_period_);
   }
 }

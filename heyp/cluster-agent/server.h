@@ -3,7 +3,7 @@
 
 #include <atomic>
 
-#include "heyp/cluster-agent/full-controller.h"
+#include "heyp/cluster-agent/controller-iface.h"
 #include "heyp/proto/heyp.grpc.pb.h"
 #include "spdlog/spdlog.h"
 
@@ -11,8 +11,7 @@ namespace heyp {
 
 class ClusterAgentService final : public proto::ClusterAgent::CallbackService {
  public:
-  ClusterAgentService(std::unique_ptr<FlowAggregator> aggregator,
-                      std::unique_ptr<ClusterAllocator> allocator,
+  ClusterAgentService(std::unique_ptr<ClusterController> controller,
                       absl::Duration control_period = absl::Seconds(5));
 
   grpc::ServerBidiReactor<proto::InfoBundle, proto::AllocBundle>* RegisterHost(
@@ -22,7 +21,7 @@ class ClusterAgentService final : public proto::ClusterAgent::CallbackService {
 
  private:
   const absl::Duration control_period_;
-  FullClusterController controller_;
+  std::unique_ptr<ClusterController> controller_;
   spdlog::logger logger_;
 
   friend class HostReactor;

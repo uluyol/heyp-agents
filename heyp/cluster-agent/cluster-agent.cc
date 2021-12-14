@@ -9,6 +9,8 @@
 #include "grpcpp/grpcpp.h"
 #include "heyp/cli/parse.h"
 #include "heyp/cluster-agent/allocator.h"
+#include "heyp/cluster-agent/fast-controller.h"
+#include "heyp/cluster-agent/full-controller.h"
 #include "heyp/cluster-agent/server.h"
 #include "heyp/flows/aggregator.h"
 #include "heyp/init/init.h"
@@ -45,26 +47,33 @@ absl::Status Run(const proto::ClusterAgentConfig& c, const proto::AllocBundle& a
   }
 
   std::unique_ptr<NdjsonLogger> alloc_recorder;
-  if (!alloc_records_file.empty()) {
-    auto alloc_recorder_or = CreateNdjsonLogger(alloc_records_file);
-    if (!alloc_recorder_or.ok()) {
-      return alloc_recorder_or.status();
+  std::unique_ptr<ClusterController> controller;
+  if (c.controller_type() == proto::CC_FULL) {
+    if (!alloc_records_file.empty()) {
+      auto alloc_recorder_or = CreateNdjsonLogger(alloc_records_file);
+      if (!alloc_recorder_or.ok()) {
+        return alloc_recorder_or.status();
+      }
+      alloc_recorder = std::move(*alloc_recorder_or);
     }
-    alloc_recorder = std::move(*alloc_recorder_or);
+
+    auto cluster_alloc_or = ClusterAllocator::Create(
+        c.allocator(), allocs, c.flow_aggregator().demand_predictor().usage_multiplier(),
+        alloc_recorder.get());
+
+    if (!cluster_alloc_or.ok()) {
+      return cluster_alloc_or.status();
+    }
+    controller = std::make_unique<FullClusterController>(
+        NewHostToClusterAggregator(std::move(agg_demand_predictor), demand_time_window),
+        std::move(*cluster_alloc_or));
+  } else if (c.controller_type() == proto::CC_FAST) {
+    controller = FastClusterController::Create(c.fast_controller_config(), allocs);
+  } else {
+    return absl::InvalidArgumentError("unknown controller type");
   }
 
-  auto cluster_alloc_or = ClusterAllocator::Create(
-      c.allocator(), allocs, c.flow_aggregator().demand_predictor().usage_multiplier(),
-      alloc_recorder.get());
-
-  if (!cluster_alloc_or.ok()) {
-    return cluster_alloc_or.status();
-  }
-
-  ClusterAgentService service(
-      NewHostToClusterAggregator(std::move(agg_demand_predictor), demand_time_window),
-      std::move(*cluster_alloc_or), *control_period_or);
-
+  ClusterAgentService service(std::move(controller), *control_period_or);
   std::unique_ptr<grpc::Server> server(
       grpc::ServerBuilder()
           .AddListeningPort(c.server().address(), grpc::InsecureServerCredentials())

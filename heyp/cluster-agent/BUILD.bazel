@@ -6,6 +6,8 @@ heyp_cc_binary(
     srcs = ["cluster-agent.cc"],
     deps = [
         ":allocator",
+        ":fast-controller",
+        ":full-controller",
         ":server",
         "//heyp/cli:parse",
         "//heyp/flows:aggregator",
@@ -112,10 +114,10 @@ cc_library(
     srcs = ["server.cc"],
     hdrs = ["server.h"],
     deps = [
-        ":allocator",
-        ":full-controller",
+        ":controller-iface",
         "//heyp/log:spdlog",
         "//heyp/proto:heyp_cc_grpc",
+        "//heyp/threads:mutex-helpers",
         "@com_github_grpc_grpc//:grpc++",
     ],
 )
@@ -182,6 +184,7 @@ cc_test(
     name = "server-test",
     srcs = ["server-test.cc"],
     deps = [
+        ":full-controller",
         ":server",
         "//heyp/host-agent:cluster-agent-channel",
         "//heyp/init:test-main",

@@ -3,6 +3,7 @@
 #include "gmock/gmock.h"
 #include "grpcpp/grpcpp.h"
 #include "gtest/gtest.h"
+#include "heyp/cluster-agent/full-controller.h"
 #include "heyp/host-agent/cluster-agent-channel.h"
 #include "heyp/proto/config.pb.h"
 #include "heyp/proto/constructors.h"
@@ -88,28 +89,30 @@ TEST(ClusterAgentTest, NoCrash) {
   auto logger = MakeLogger("cluster-agent-test");
 
   ClusterAgentService service(
-      NewHostToClusterAggregator(
-          std::make_unique<BweDemandPredictor>(absl::Milliseconds(500), 1.2, 30),
-          absl::Seconds(500)),
-      ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
-                                 type: CA_HEYP_SIGCOMM20
-                                 enable_burstiness: true
-                                 enable_bonus: true
-                                 oversub_factor: 1.0
-                                 heyp_acceptable_measured_ratio_over_intended_ratio: 1.0
-                               )"),
-                               ParseTextProto<proto::AllocBundle>(R"(
-                                 flow_allocs {
-                                   flow { src_dc: "A" dst_dc: "B" }
-                                   hipri_rate_limit_bps: 50
-                                 }
-                                 flow_allocs {
-                                   flow { src_dc: "A" dst_dc: "C" }
-                                   hipri_rate_limit_bps: 70
-                                 }
-                               )"),
-                               1.1)
-          .value(),
+      std::make_unique<FullClusterController>(
+          NewHostToClusterAggregator(
+              std::make_unique<BweDemandPredictor>(absl::Milliseconds(500), 1.2, 30),
+              absl::Seconds(500)),
+          ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+                                     type: CA_HEYP_SIGCOMM20
+                                     enable_burstiness: true
+                                     enable_bonus: true
+                                     oversub_factor: 1.0
+                                     heyp_acceptable_measured_ratio_over_intended_ratio:
+                                         1.0
+                                   )"),
+                                   ParseTextProto<proto::AllocBundle>(R"(
+                                     flow_allocs {
+                                       flow { src_dc: "A" dst_dc: "B" }
+                                       hipri_rate_limit_bps: 50
+                                     }
+                                     flow_allocs {
+                                       flow { src_dc: "A" dst_dc: "C" }
+                                       hipri_rate_limit_bps: 70
+                                     }
+                                   )"),
+                                   1.1)
+              .value()),
       absl::Milliseconds(80));
   SPDLOG_LOGGER_INFO(&logger, "starting server");
   std::unique_ptr<grpc::Server> server =
