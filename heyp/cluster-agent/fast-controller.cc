@@ -106,7 +106,7 @@ void FastClusterController::BroadcastStateIfUpdated(
   state.broadcasted_latest_state = true;
 }
 
-std::unique_ptr<FastClusterController::Listener> FastClusterController::RegisterListener(
+std::unique_ptr<ClusterController::Listener> FastClusterController::RegisterListener(
     uint64_t host_id,
     const std::function<void(const proto::AllocBundle&)>& on_new_bundle_func) {
   GetResult res = child_states_.GetID(host_id);

@@ -8,6 +8,7 @@
 #include "heyp/alg/downgrade/impl-hashing.h"
 #include "heyp/alg/sampler.h"
 #include "heyp/alg/unordered-ids.h"
+#include "heyp/cluster-agent/controller-iface.h"
 #include "heyp/cluster-agent/fast-aggregator.h"
 #include "heyp/cluster-agent/per-agg-allocators/util.h"
 #include "heyp/flows/map.h"
@@ -22,30 +23,30 @@ namespace heyp {
 // using sampling and (mostly or fully) demand-oblivious downgrade selection.
 //
 // It is not as full featured as ClusterController.s
-class FastClusterController {
+class FastClusterController : public ClusterController {
  public:
   static std::unique_ptr<FastClusterController> Create(
       const proto::FastClusterControllerConfig& config,
       const proto::AllocBundle& cluster_wide_allocs);
 
-  void UpdateInfo(ParID bundler_id, const proto::InfoBundle& info) {
+  void UpdateInfo(ParID bundler_id, const proto::InfoBundle& info) override {
     aggregator_.UpdateInfo(info);
   }
 
-  void ComputeAndBroadcast();
+  void ComputeAndBroadcast() override;
 
   class Listener;
 
   // on_new_bundle_func should not block.
-  std::unique_ptr<Listener> RegisterListener(
+  std::unique_ptr<ClusterController::Listener> RegisterListener(
       uint64_t host_id,
-      const std::function<void(const proto::AllocBundle&)>& on_new_bundle_func);
+      const std::function<void(const proto::AllocBundle&)>& on_new_bundle_func) override;
 
-  ParID GetBundlerID(const proto::FlowMarker& bundler) {
+  ParID GetBundlerID(const proto::FlowMarker& bundler) override {
     return 0; /* currently unused by FastClusterController */
   }
 
-  class Listener {
+  class Listener : public ClusterController::Listener {
    public:
     ~Listener();
 

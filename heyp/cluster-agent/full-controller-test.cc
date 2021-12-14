@@ -68,13 +68,13 @@ TEST(FullClusterControllerTest, RemoveListener) {
   int num_broadcast_2 = 0;
   int num_broadcast_3 = 0;
 
-  std::unique_ptr<FullClusterController::Listener> lis1 = controller.RegisterListener(
+  std::unique_ptr<ClusterController::Listener> lis1 = controller.RegisterListener(
       1, [&](const proto::AllocBundle&) { ++num_broadcast_1; });
-  std::unique_ptr<FullClusterController::Listener> lis1_1 = controller.RegisterListener(
+  std::unique_ptr<ClusterController::Listener> lis1_1 = controller.RegisterListener(
       1, [&](const proto::AllocBundle&) { ++num_broadcast_1_1; });
-  std::unique_ptr<FullClusterController::Listener> lis2 = controller.RegisterListener(
+  std::unique_ptr<ClusterController::Listener> lis2 = controller.RegisterListener(
       2, [&](const proto::AllocBundle&) { ++num_broadcast_2; });
-  std::unique_ptr<FullClusterController::Listener> lis3 = controller.RegisterListener(
+  std::unique_ptr<ClusterController::Listener> lis3 = controller.RegisterListener(
       3, [&](const proto::AllocBundle&) { ++num_broadcast_3; });
 
   // Update some infos
@@ -282,7 +282,7 @@ class SingleFGAllocBundleCollector {
 
   std::vector<proto::AllocBundle> alloc_bundles_;
   std::vector<int> has_alloc_bundle_;
-  std::vector<std::unique_ptr<FullClusterController::Listener>> lis_;
+  std::vector<std::unique_ptr<ClusterController::Listener>> lis_;
 };
 
 struct Limits {

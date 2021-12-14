@@ -123,7 +123,7 @@ class HostReactor
 
   bool finished_;  // only read/written in event loop
 
-  std::unique_ptr<FullClusterController::Listener> lis_;
+  std::unique_ptr<ClusterController::Listener> lis_;
   ParID bundler_id_ = -1;
 };
 

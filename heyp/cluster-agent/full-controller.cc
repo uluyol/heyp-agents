@@ -8,6 +8,7 @@
 #include "heyp/proto/heyp.pb.h"
 
 namespace heyp {
+namespace {}
 
 static constexpr absl::Duration kLongBcastLockDur = absl::Milliseconds(50);
 static constexpr absl::Duration kLongStateLockDur = absl::Milliseconds(100);
@@ -35,7 +36,7 @@ FullClusterController::Listener::~Listener() {
   controller_ = nullptr;
 }
 
-std::unique_ptr<FullClusterController::Listener> FullClusterController::RegisterListener(
+std::unique_ptr<ClusterController::Listener> FullClusterController::RegisterListener(
     uint64_t host_id,
     const std::function<void(const proto::AllocBundle&)>& on_new_bundle_func) {
   auto lis = absl::WrapUnique(new Listener());

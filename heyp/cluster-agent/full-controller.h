@@ -5,31 +5,31 @@
 
 #include "absl/container/flat_hash_map.h"
 #include "heyp/cluster-agent/allocator.h"
+#include "heyp/cluster-agent/controller-iface.h"
 #include "heyp/flows/aggregator.h"
-#include "heyp/proto/heyp.pb.h"
 #include "heyp/threads/mutex-helpers.h"
 #include "spdlog/spdlog.h"
 
 namespace heyp {
 
-class FullClusterController {
+class FullClusterController : public ClusterController {
  public:
   FullClusterController(std::unique_ptr<FlowAggregator> aggregator,
                         std::unique_ptr<ClusterAllocator> allocator);
 
-  void UpdateInfo(ParID bundler_id, const proto::InfoBundle& info);
-  void ComputeAndBroadcast();
+  void UpdateInfo(ParID bundler_id, const proto::InfoBundle& info) override;
+  void ComputeAndBroadcast() override;
 
   class Listener;
 
   // on_new_bundle_func should not block.
-  std::unique_ptr<Listener> RegisterListener(
+  std::unique_ptr<ClusterController::Listener> RegisterListener(
       uint64_t host_id,
-      const std::function<void(const proto::AllocBundle&)>& on_new_bundle_func);
+      const std::function<void(const proto::AllocBundle&)>& on_new_bundle_func) override;
 
-  ParID GetBundlerID(const proto::FlowMarker& bundler);
+  ParID GetBundlerID(const proto::FlowMarker& bundler) override;
 
-  class Listener {
+  class Listener : public ClusterController::Listener {
    public:
     ~Listener();
 
