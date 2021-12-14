@@ -35,7 +35,7 @@ ClusterController::Listener::~Listener() {
 }
 
 std::unique_ptr<ClusterController::Listener> ClusterController::RegisterListener(
-    int64_t host_id,
+    uint64_t host_id,
     const std::function<void(const proto::AllocBundle&)>& on_new_bundle_func) {
   auto lis = absl::WrapUnique(new Listener());
   lis->host_id_ = host_id;
@@ -76,7 +76,7 @@ void ClusterController::ComputeAndBroadcast() {
     SPDLOG_LOGGER_INFO(&logger_, "got allocs: {}", allocs);
   }
 
-  absl::flat_hash_map<int64_t, proto::AllocBundle> alloc_bundles =
+  absl::flat_hash_map<uint64_t, proto::AllocBundle> alloc_bundles =
       BundleByHost(std::move(allocs));
 
   broadcasting_mu_.Lock(kLongBcastLockDur, &logger_,

@@ -24,7 +24,7 @@ class ClusterController {
 
   // on_new_bundle_func should not block.
   std::unique_ptr<Listener> RegisterListener(
-      int64_t host_id,
+      uint64_t host_id,
       const std::function<void(const proto::AllocBundle&)>& on_new_bundle_func);
 
   ParID GetBundlerID(const proto::FlowMarker& bundler);
@@ -39,7 +39,7 @@ class ClusterController {
    private:
     Listener();
 
-    int64_t host_id_;
+    uint64_t host_id_;
     uint64_t lis_id_;
     std::function<void(const proto::AllocBundle&)> on_new_bundle_func_;
     ClusterController* controller_ = nullptr;
@@ -56,7 +56,7 @@ class ClusterController {
   TimedMutex broadcasting_mu_;
   uint64_t next_lis_id_ ABSL_GUARDED_BY(broadcasting_mu_);
   absl::flat_hash_map<
-      int64_t,
+      uint64_t,
       absl::flat_hash_map<uint64_t, std::function<void(const proto::AllocBundle&)>>>
       new_bundle_funcs_ ABSL_GUARDED_BY(broadcasting_mu_);
 };

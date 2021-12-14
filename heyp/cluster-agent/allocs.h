@@ -16,7 +16,7 @@ struct AllocSet {
 
 std::ostream& operator<<(std::ostream& os, const AllocSet& allocs);
 
-absl::flat_hash_map<int64_t, proto::AllocBundle> BundleByHost(AllocSet allocs);
+absl::flat_hash_map<uint64_t, proto::AllocBundle> BundleByHost(AllocSet allocs);
 
 }  // namespace heyp
 
