@@ -1,5 +1,5 @@
-#ifndef HEYP_CLUSTER_AGENT_CONTROLLER_H_
-#define HEYP_CLUSTER_AGENT_CONTROLLER_H_
+#ifndef HEYP_CLUSTER_AGENT_FULL_CONTROLLER_H_
+#define HEYP_CLUSTER_AGENT_FULL_CONTROLLER_H_
 
 #include <cstdint>
 
@@ -12,10 +12,10 @@
 
 namespace heyp {
 
-class ClusterController {
+class FullClusterController {
  public:
-  ClusterController(std::unique_ptr<FlowAggregator> aggregator,
-                    std::unique_ptr<ClusterAllocator> allocator);
+  FullClusterController(std::unique_ptr<FlowAggregator> aggregator,
+                        std::unique_ptr<ClusterAllocator> allocator);
 
   void UpdateInfo(ParID bundler_id, const proto::InfoBundle& info);
   void ComputeAndBroadcast();
@@ -41,9 +41,9 @@ class ClusterController {
 
     uint64_t host_id_;
     uint64_t lis_id_;
-    ClusterController* controller_ = nullptr;
+    FullClusterController* controller_ = nullptr;
 
-    friend class ClusterController;
+    friend class FullClusterController;
   };
 
  private:
@@ -62,4 +62,4 @@ class ClusterController {
 
 }  // namespace heyp
 
-#endif  // HEYP_CLUSTER_AGENT_CONTROLLER_H_
+#endif  // HEYP_CLUSTER_AGENT_FULL_CONTROLLER_H_

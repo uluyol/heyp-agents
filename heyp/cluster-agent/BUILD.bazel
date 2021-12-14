@@ -49,20 +49,6 @@ cc_library(
 )
 
 cc_library(
-    name = "controller",
-    srcs = ["controller.cc"],
-    hdrs = ["controller.h"],
-    deps = [
-        ":allocator",
-        ":allocs",
-        "//heyp/alg:debug",
-        "//heyp/flows:aggregator",
-        "//heyp/proto:heyp_cc_proto",
-        "@com_google_absl//absl/container:flat_hash_map",
-    ],
-)
-
-cc_library(
     name = "fast-aggregator",
     srcs = ["fast-aggregator.cc"],
     hdrs = ["fast-aggregator.h"],
@@ -97,12 +83,26 @@ cc_library(
 )
 
 cc_library(
+    name = "full-controller",
+    srcs = ["full-controller.cc"],
+    hdrs = ["full-controller.h"],
+    deps = [
+        ":allocator",
+        ":allocs",
+        "//heyp/alg:debug",
+        "//heyp/flows:aggregator",
+        "//heyp/proto:heyp_cc_proto",
+        "@com_google_absl//absl/container:flat_hash_map",
+    ],
+)
+
+cc_library(
     name = "server",
     srcs = ["server.cc"],
     hdrs = ["server.h"],
     deps = [
         ":allocator",
-        ":controller",
+        ":full-controller",
         "//heyp/log:spdlog",
         "//heyp/proto:heyp_cc_grpc",
         "@com_github_grpc_grpc//:grpc++",
@@ -133,17 +133,6 @@ cc_test(
 )
 
 cc_test(
-    name = "controller-test",
-    srcs = ["controller-test.cc"],
-    deps = [
-        ":controller",
-        "//heyp/init:test-main",
-        "//heyp/proto:parse-text",
-        "//heyp/proto:testing",
-    ],
-)
-
-cc_test(
     name = "fast-aggregator-test",
     srcs = ["fast-aggregator-test.cc"],
     deps = [
@@ -161,6 +150,17 @@ cc_test(
     srcs = ["fast-controller-test.cc"],
     deps = [
         ":fast-controller",
+        "//heyp/init:test-main",
+        "//heyp/proto:parse-text",
+        "//heyp/proto:testing",
+    ],
+)
+
+cc_test(
+    name = "full-controller-test",
+    srcs = ["full-controller-test.cc"],
+    deps = [
+        ":full-controller",
         "//heyp/init:test-main",
         "//heyp/proto:parse-text",
         "//heyp/proto:testing",

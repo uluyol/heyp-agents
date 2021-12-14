@@ -4,7 +4,6 @@
 
 #include "absl/strings/str_format.h"
 #include "grpcpp/grpcpp.h"
-#include "heyp/cluster-agent/controller.h"
 #include "heyp/log/spdlog.h"
 #include "heyp/proto/heyp.pb.h"
 #include "heyp/threads/mutex-helpers.h"
@@ -124,7 +123,7 @@ class HostReactor
 
   bool finished_;  // only read/written in event loop
 
-  std::unique_ptr<ClusterController::Listener> lis_;
+  std::unique_ptr<FullClusterController::Listener> lis_;
   ParID bundler_id_ = -1;
 };
 

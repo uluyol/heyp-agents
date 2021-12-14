@@ -1,4 +1,4 @@
-#include "heyp/cluster-agent/controller.h"
+#include "heyp/cluster-agent/full-controller.h"
 
 #include <limits>
 
@@ -28,8 +28,8 @@ extern bool DebugShouldProbeLOPRI;
 
 namespace {
 
-ClusterController MakeClusterController() {
-  return ClusterController(
+FullClusterController MakeFullClusterController() {
+  return FullClusterController(
       NewHostToClusterAggregator(
           absl::make_unique<BweDemandPredictor>(absl::Seconds(5), 1.0, 500),
           absl::Seconds(5)),
@@ -55,26 +55,26 @@ ClusterController MakeClusterController() {
           .value());
 }
 
-void UpdateInfo(ClusterController* c, const proto::InfoBundle& b) {
+void UpdateInfo(FullClusterController* c, const proto::InfoBundle& b) {
   ParID id = c->GetBundlerID(b.bundler());
   c->UpdateInfo(id, b);
 }
 
-TEST(ClusterControllerTest, RemoveListener) {
-  auto controller = MakeClusterController();
+TEST(FullClusterControllerTest, RemoveListener) {
+  auto controller = MakeFullClusterController();
 
   int num_broadcast_1 = 0;
   int num_broadcast_1_1 = 0;
   int num_broadcast_2 = 0;
   int num_broadcast_3 = 0;
 
-  std::unique_ptr<ClusterController::Listener> lis1 = controller.RegisterListener(
+  std::unique_ptr<FullClusterController::Listener> lis1 = controller.RegisterListener(
       1, [&](const proto::AllocBundle&) { ++num_broadcast_1; });
-  std::unique_ptr<ClusterController::Listener> lis1_1 = controller.RegisterListener(
+  std::unique_ptr<FullClusterController::Listener> lis1_1 = controller.RegisterListener(
       1, [&](const proto::AllocBundle&) { ++num_broadcast_1_1; });
-  std::unique_ptr<ClusterController::Listener> lis2 = controller.RegisterListener(
+  std::unique_ptr<FullClusterController::Listener> lis2 = controller.RegisterListener(
       2, [&](const proto::AllocBundle&) { ++num_broadcast_2; });
-  std::unique_ptr<ClusterController::Listener> lis3 = controller.RegisterListener(
+  std::unique_ptr<FullClusterController::Listener> lis3 = controller.RegisterListener(
       3, [&](const proto::AllocBundle&) { ++num_broadcast_3; });
 
   // Update some infos
@@ -151,8 +151,8 @@ TEST(ClusterControllerTest, RemoveListener) {
   EXPECT_EQ(num_broadcast_3, 0);
 }
 
-TEST(ClusterControllerTest, PlumbsDataCompletely) {
-  auto controller = MakeClusterController();
+TEST(FullClusterControllerTest, PlumbsDataCompletely) {
+  auto controller = MakeFullClusterController();
 
   std::atomic<int> call_count = 0;
   auto lis1 = controller.RegisterListener(1, [&call_count](const proto::AllocBundle& b1) {
@@ -209,7 +209,7 @@ TEST(ClusterControllerTest, PlumbsDataCompletely) {
 
 class SingleFGAllocBundleCollector {
  public:
-  SingleFGAllocBundleCollector(int num_hosts, ClusterController* c)
+  SingleFGAllocBundleCollector(int num_hosts, FullClusterController* c)
       : num_hosts_(num_hosts),
         fg_(ParseTextProto<proto::FlowMarker>(R"(
           src_dc: "east-us"
@@ -278,11 +278,11 @@ class SingleFGAllocBundleCollector {
  private:
   const int num_hosts_;
   const proto::FlowMarker fg_;
-  ClusterController* controller_;
+  FullClusterController* controller_;
 
   std::vector<proto::AllocBundle> alloc_bundles_;
   std::vector<int> has_alloc_bundle_;
-  std::vector<std::unique_ptr<ClusterController::Listener>> lis_;
+  std::vector<std::unique_ptr<FullClusterController::Listener>> lis_;
 };
 
 struct Limits {
@@ -310,7 +310,7 @@ std::ostream& operator<<(std::ostream& os, const Limits& l) {
 class FixedDemandHostSimulator {
  public:
   FixedDemandHostSimulator(std::vector<int64_t> host_demands_bps,
-                           ClusterController* controller)
+                           FullClusterController* controller)
       : logger_(MakeLogger("fix-demand-host-simulator")),
         true_demands_bps_(std::move(host_demands_bps)),
         collector_(true_demands_bps_.size(), controller),
@@ -430,7 +430,7 @@ class FixedDemandHostSimulator {
   spdlog::logger logger_;
   const std::vector<int64_t> true_demands_bps_;
   SingleFGAllocBundleCollector collector_;
-  ClusterController* controller_;
+  FullClusterController* controller_;
 
   std::vector<std::unique_ptr<BweDemandPredictor>> demand_predictors_;
   std::vector<Limits> limits_bps_;
@@ -485,9 +485,9 @@ int64_t Gbps(Floating v) {
   return static_cast<int64_t>(v) * (1 << 30);
 }
 
-TEST(ClusterControllerTest, HeypSigcomm20ConvergesNoCongestion) {
+TEST(FullClusterControllerTest, HeypSigcomm20ConvergesNoCongestion) {
   constexpr static double kUsageMultiplier = 1.1;
-  ClusterController controller(
+  FullClusterController controller(
       NewHostToClusterAggregator(absl::make_unique<BweDemandPredictor>(
                                      absl::Seconds(30), kUsageMultiplier, 5'000'000),
                                  absl::Seconds(30)),

@@ -1,4 +1,4 @@
-#include "heyp/cluster-agent/controller.h"
+#include "heyp/cluster-agent/full-controller.h"
 
 #include "absl/base/macros.h"
 #include "heyp/alg/debug.h"
@@ -12,16 +12,17 @@ namespace heyp {
 static constexpr absl::Duration kLongBcastLockDur = absl::Milliseconds(50);
 static constexpr absl::Duration kLongStateLockDur = absl::Milliseconds(100);
 
-ClusterController::ClusterController(std::unique_ptr<FlowAggregator> aggregator,
-                                     std::unique_ptr<ClusterAllocator> allocator)
+FullClusterController::FullClusterController(std::unique_ptr<FlowAggregator> aggregator,
+                                             std::unique_ptr<ClusterAllocator> allocator)
     : aggregator_(std::move(aggregator)),
       allocator_(std::move(allocator)),
       logger_(MakeLogger("cluster-ctlr")),
       next_lis_id_(1) {}
 
-ClusterController::Listener::Listener() : host_id_(0), lis_id_(0), controller_(nullptr) {}
+FullClusterController::Listener::Listener()
+    : host_id_(0), lis_id_(0), controller_(nullptr) {}
 
-ClusterController::Listener::~Listener() {
+FullClusterController::Listener::~Listener() {
   if (controller_ != nullptr && host_id_ != 0) {
     MutexLockWarnLong l(&controller_->broadcasting_mu_, kLongBcastLockDur,
                         &controller_->logger_, "broadcasting_mu_ in ~Listenener");
@@ -34,7 +35,7 @@ ClusterController::Listener::~Listener() {
   controller_ = nullptr;
 }
 
-std::unique_ptr<ClusterController::Listener> ClusterController::RegisterListener(
+std::unique_ptr<FullClusterController::Listener> FullClusterController::RegisterListener(
     uint64_t host_id,
     const std::function<void(const proto::AllocBundle&)>& on_new_bundle_func) {
   auto lis = absl::WrapUnique(new Listener());
@@ -48,15 +49,15 @@ std::unique_ptr<ClusterController::Listener> ClusterController::RegisterListener
   return lis;
 }
 
-void ClusterController::UpdateInfo(ParID bundler_id, const proto::InfoBundle& info) {
+void FullClusterController::UpdateInfo(ParID bundler_id, const proto::InfoBundle& info) {
   aggregator_->Update(bundler_id, info);
 }
 
-ParID ClusterController::GetBundlerID(const proto::FlowMarker& bundler) {
+ParID FullClusterController::GetBundlerID(const proto::FlowMarker& bundler) {
   return aggregator_->GetBundlerID(bundler);
 }
 
-void ClusterController::ComputeAndBroadcast() {
+void FullClusterController::ComputeAndBroadcast() {
   const bool should_debug = DebugQosAndRateLimitSelection();
   state_mu_.Lock(kLongStateLockDur, &logger_, "state_mu_ in ComputeAndBroadcast");
   allocator_->Reset();

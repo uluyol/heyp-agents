@@ -3,7 +3,7 @@
 
 #include <atomic>
 
-#include "heyp/cluster-agent/controller.h"
+#include "heyp/cluster-agent/full-controller.h"
 #include "heyp/proto/heyp.grpc.pb.h"
 #include "spdlog/spdlog.h"
 
@@ -22,7 +22,7 @@ class ClusterAgentService final : public proto::ClusterAgent::CallbackService {
 
  private:
   const absl::Duration control_period_;
-  ClusterController controller_;
+  FullClusterController controller_;
   spdlog::logger logger_;
 
   friend class HostReactor;
