@@ -17,8 +17,8 @@ proto::FlowMarker TestAggFlow(int i) {
   return flow;
 }
 
-FlowMap<int64_t> TestAggFlowToIdMap() {
-  return FlowMap<int64_t>{
+ClusterFlowMap<int64_t> TestAggFlowToIdMap() {
+  return ClusterFlowMap<int64_t>{
       {TestAggFlow(0), 0},
       {TestAggFlow(1), 1},
       {TestAggFlow(2), 2},
@@ -35,7 +35,7 @@ std::vector<ThresholdSampler> TestSamplers(int num_samples, int64_t approval0_bp
 }
 
 TEST(FastAggregatorTest, NoSamplingOneFG) {
-  const FlowMap<int64_t> agg_flow_to_id = TestAggFlowToIdMap();
+  const ClusterFlowMap<int64_t> agg_flow_to_id = TestAggFlowToIdMap();
 
   FastAggregator aggregator(&agg_flow_to_id, TestSamplers(100, 0, 0, 0));
   aggregator.UpdateInfo(ParseTextProto<proto::InfoBundle>(R"(
@@ -88,7 +88,7 @@ TEST(FastAggregatorTest, NoSamplingOneFG) {
 }
 
 TEST(FastAggregatorTest, NoSamplingMultiFG) {
-  const FlowMap<int64_t> agg_flow_to_id = TestAggFlowToIdMap();
+  const ClusterFlowMap<int64_t> agg_flow_to_id = TestAggFlowToIdMap();
 
   FastAggregator aggregator(&agg_flow_to_id, TestSamplers(100, 0, 0, 0));
   aggregator.UpdateInfo(ParseTextProto<proto::InfoBundle>(R"(
@@ -142,7 +142,7 @@ TEST(FastAggregatorTest, NoSamplingMultiFG) {
 }
 
 TEST(FastAggregatorTest, WithSamplingOneFG) {
-  const FlowMap<int64_t> agg_flow_to_id = TestAggFlowToIdMap();
+  const ClusterFlowMap<int64_t> agg_flow_to_id = TestAggFlowToIdMap();
 
   FastAggregator aggregator(&agg_flow_to_id, TestSamplers(10, 100, 0, 0));
   aggregator.UpdateInfo(ParseTextProto<proto::InfoBundle>(R"(

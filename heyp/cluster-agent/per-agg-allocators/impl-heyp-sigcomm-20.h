@@ -11,7 +11,7 @@ namespace heyp {
 class HeypSigcomm20Allocator : public PerAggAllocator {
  public:
   HeypSigcomm20Allocator(const proto::ClusterAllocatorConfig& config,
-                         FlowMap<proto::FlowAlloc> agg_admissions,
+                         ClusterFlowMap<proto::FlowAlloc> agg_admissions,
                          double demand_multiplier);
 
   std::vector<proto::FlowAlloc> AllocAgg(
@@ -31,7 +31,7 @@ class HeypSigcomm20Allocator : public PerAggAllocator {
   const proto::ClusterAllocatorConfig config_;
   const double demand_multiplier_;
   spdlog::logger logger_;
-  FlowMap<PerAggState> agg_states_;
+  ClusterFlowMap<PerAggState> agg_states_;
   DowngradeSelector downgrade_selector_;
 };
 

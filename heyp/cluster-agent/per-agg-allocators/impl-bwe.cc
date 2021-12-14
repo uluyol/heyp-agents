@@ -6,7 +6,7 @@
 namespace heyp {
 
 BweAggAllocator::BweAggAllocator(const proto::ClusterAllocatorConfig& config,
-                                 FlowMap<proto::FlowAlloc> agg_admissions)
+                                 ClusterFlowMap<proto::FlowAlloc> agg_admissions)
     : config_(config),
       agg_admissions_(std::move(agg_admissions)),
       logger_(MakeLogger("bwe-alloc")) {}

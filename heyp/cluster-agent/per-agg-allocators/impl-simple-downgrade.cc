@@ -12,8 +12,8 @@ constexpr int64_t kMaxChildBandwidthBps =
 }
 
 SimpleDowngradeAllocator::SimpleDowngradeAllocator(
-    const proto::ClusterAllocatorConfig& config, FlowMap<proto::FlowAlloc> agg_admissions,
-    double demand_multiplier)
+    const proto::ClusterAllocatorConfig& config,
+    ClusterFlowMap<proto::FlowAlloc> agg_admissions, double demand_multiplier)
     : config_(config),
       agg_admissions_(agg_admissions),
       logger_(MakeLogger("downgrade-alloc")),

@@ -18,7 +18,7 @@ class FixedHostPatternAllocator : public PerAggAllocator {
 
  private:
   spdlog::logger logger_;
-  FlowMap<proto::FixedClusterHostAllocs> alloc_patterns_;
+  ClusterFlowMap<proto::FixedClusterHostAllocs> alloc_patterns_;
   size_t next_;
 };
 

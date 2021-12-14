@@ -6,7 +6,7 @@
 
 #include "heyp/alg/agg-info-views.h"
 #include "heyp/alg/sampler.h"
-#include "heyp/flows/map.h"
+#include "heyp/cluster-agent/per-agg-allocators/util.h"
 #include "heyp/threads/executor.h"
 
 namespace heyp {
@@ -28,7 +28,7 @@ class FastAggInfo : public AggInfoView {
 
 class FastAggregator {
  public:
-  FastAggregator(const FlowMap<int64_t>* agg_flow_to_id,
+  FastAggregator(const ClusterFlowMap<int64_t>* agg_flow_to_id,
                  std::vector<ThresholdSampler> samplers);
 
   // UpdateInfo updates the info. This method is thread safe.
@@ -47,12 +47,12 @@ class FastAggregator {
   };
 
   static std::vector<FastAggInfo> ComputeTemplateAggInfo(
-      const FlowMap<int64_t>* agg_flow_to_id);
+      const ClusterFlowMap<int64_t>* agg_flow_to_id);
   // Aggregate aggregates the info but doesn't populate parent_.
   std::pair<std::vector<FastAggInfo>, std::vector<ThresholdSampler::AggUsageEstimator>>
   Aggregate(const std::vector<Info>& shard);
 
-  const FlowMap<int64_t>* agg_flow_to_id_;
+  const ClusterFlowMap<int64_t>* agg_flow_to_id_;
   const std::vector<ThresholdSampler> samplers_;
   const std::vector<FastAggInfo> template_agg_info_;
 

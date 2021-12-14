@@ -1,12 +1,11 @@
 #include "heyp/cluster-agent/fast-aggregator.h"
 
-#include "heyp/flows/agg-marker.h"
 #include "heyp/log/spdlog.h"
 
 namespace heyp {
 
 std::vector<FastAggInfo> FastAggregator::ComputeTemplateAggInfo(
-    const FlowMap<int64_t>* agg_flow_to_id) {
+    const ClusterFlowMap<int64_t>* agg_flow_to_id) {
   std::vector<FastAggInfo> infos(agg_flow_to_id->size(), FastAggInfo{});
   for (int i = 0; i < infos.size(); ++i) {
     infos[i].agg_id_ = -1;
@@ -24,7 +23,7 @@ std::vector<FastAggInfo> FastAggregator::ComputeTemplateAggInfo(
   return infos;
 }
 
-FastAggregator::FastAggregator(const FlowMap<int64_t>* agg_flow_to_id,
+FastAggregator::FastAggregator(const ClusterFlowMap<int64_t>* agg_flow_to_id,
                                std::vector<ThresholdSampler> samplers)
     : agg_flow_to_id_(agg_flow_to_id),
       samplers_(std::move(samplers)),
@@ -38,7 +37,7 @@ void FastAggregator::UpdateInfo(const proto::InfoBundle& info) {
   std::vector<Info> got;
   got.reserve(agg_flow_to_id_->size());
   for (const proto::FlowInfo& fi : info.flow_infos()) {
-    auto id_iter = agg_flow_to_id_->find(ToClusterFlow(fi.flow()));
+    auto id_iter = agg_flow_to_id_->find(fi.flow());
     if (id_iter == agg_flow_to_id_->end()) {
       continue;
     }

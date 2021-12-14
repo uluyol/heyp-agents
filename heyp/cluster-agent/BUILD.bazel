@@ -69,7 +69,7 @@ cc_library(
     deps = [
         "//heyp/alg:agg-info-views",
         "//heyp/alg:sampler",
-        "//heyp/flows:agg-marker",
+        "//heyp/cluster-agent/per-agg-allocators:util",
         "//heyp/flows:map",
         "//heyp/threads:executor",
     ],

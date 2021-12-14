@@ -2,8 +2,9 @@
 
 namespace heyp {
 
-FlowMap<proto::FlowAlloc> ToAdmissionsMap(const proto::AllocBundle& cluster_wide_allocs) {
-  FlowMap<proto::FlowAlloc> map;
+ClusterFlowMap<proto::FlowAlloc> ToAdmissionsMap(
+    const proto::AllocBundle& cluster_wide_allocs) {
+  ClusterFlowMap<proto::FlowAlloc> map;
   for (const proto::FlowAlloc& a : cluster_wide_allocs.flow_allocs()) {
     map[a.flow()] = a;
   }

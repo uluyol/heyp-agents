@@ -11,7 +11,7 @@ namespace heyp {
 class BweAggAllocator : public PerAggAllocator {
  public:
   BweAggAllocator(const proto::ClusterAllocatorConfig& config,
-                  FlowMap<proto::FlowAlloc> agg_admissions);
+                  ClusterFlowMap<proto::FlowAlloc> agg_admissions);
 
   std::vector<proto::FlowAlloc> AllocAgg(
       absl::Time time, const proto::AggInfo& agg_info,
@@ -19,7 +19,7 @@ class BweAggAllocator : public PerAggAllocator {
 
  private:
   const proto::ClusterAllocatorConfig config_;
-  const FlowMap<proto::FlowAlloc> agg_admissions_;
+  const ClusterFlowMap<proto::FlowAlloc> agg_admissions_;
   spdlog::logger logger_;
 };
 

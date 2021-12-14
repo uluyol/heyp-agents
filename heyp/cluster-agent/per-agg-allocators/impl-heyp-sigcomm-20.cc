@@ -8,8 +8,8 @@
 namespace heyp {
 
 HeypSigcomm20Allocator::HeypSigcomm20Allocator(
-    const proto::ClusterAllocatorConfig& config, FlowMap<proto::FlowAlloc> agg_admissions,
-    double demand_multiplier)
+    const proto::ClusterAllocatorConfig& config,
+    ClusterFlowMap<proto::FlowAlloc> agg_admissions, double demand_multiplier)
     : config_(config),
       demand_multiplier_(demand_multiplier),
       logger_(MakeLogger("heyp-sigcomm20-alloc")),

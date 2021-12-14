@@ -11,10 +11,11 @@ namespace heyp {
 double ClampFracLOPRI(spdlog::logger* logger, double frac_lopri);
 
 template <typename ValueType>
-using FlowMap =
+using ClusterFlowMap =
     absl::flat_hash_map<proto::FlowMarker, ValueType, HashClusterFlow, EqClusterFlow>;
 
-FlowMap<proto::FlowAlloc> ToAdmissionsMap(const proto::AllocBundle& cluster_wide_allocs);
+ClusterFlowMap<proto::FlowAlloc> ToAdmissionsMap(
+    const proto::AllocBundle& cluster_wide_allocs);
 
 // Implementation //
 

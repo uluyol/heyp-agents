@@ -54,7 +54,8 @@ absl::StatusOr<std::unique_ptr<ClusterAllocator>> ClusterAllocator::Create(
     const proto::ClusterAllocatorConfig& config,
     const proto::AllocBundle& cluster_wide_allocs, double demand_multiplier,
     NdjsonLogger* alloc_recorder) {
-  FlowMap<proto::FlowAlloc> cluster_admissions = ToAdmissionsMap(cluster_wide_allocs);
+  ClusterFlowMap<proto::FlowAlloc> cluster_admissions =
+      ToAdmissionsMap(cluster_wide_allocs);
   switch (config.type()) {
     case proto::CA_NOP:
       return absl::WrapUnique(

@@ -11,7 +11,7 @@ namespace heyp {
 class SimpleDowngradeAllocator : public PerAggAllocator {
  public:
   SimpleDowngradeAllocator(const proto::ClusterAllocatorConfig& config,
-                           FlowMap<proto::FlowAlloc> agg_admissions,
+                           ClusterFlowMap<proto::FlowAlloc> agg_admissions,
                            double demand_multiplier);
 
   std::vector<proto::FlowAlloc> AllocAgg(
@@ -20,7 +20,7 @@ class SimpleDowngradeAllocator : public PerAggAllocator {
 
  private:
   const proto::ClusterAllocatorConfig config_;
-  const FlowMap<proto::FlowAlloc> agg_admissions_;
+  const ClusterFlowMap<proto::FlowAlloc> agg_admissions_;
   spdlog::logger logger_;
   DowngradeSelector downgrade_selector_;
   const FVSource downgrade_fv_source_;
