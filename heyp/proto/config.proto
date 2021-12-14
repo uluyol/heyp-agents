@@ -202,8 +202,30 @@ message ClusterServerConfig {
   optional string control_period = 2 [default = "5s"];
 }
 
+enum ClusterControllerType {
+  // CC_FULL maintains full visibility into host data and can perform
+  // any combination of downgrade and rate limiting.
+  CC_FULL = 0;
+
+  // CC_FAST can only perform semi-demand oblivious downgrade
+  // (rate limiting is possible but not implemented), but can scale much more
+  // efficiently than CC_FULL.
+  CC_FAST = 1;
+};
+
+message FastClusterControllerConfig {
+  optional int32 target_num_samples = 1 [default = 200];
+  optional int32 num_threads = 2 [default = 8];
+}
+
 message ClusterAgentConfig {
-  optional FlowAggregatorConfig flow_aggregator = 1;
-  optional ClusterAllocatorConfig allocator = 2;
-  optional ClusterServerConfig server = 3;
+  optional ClusterControllerType controller_type = 1 [default = CC_FULL];
+  optional ClusterServerConfig server = 2;
+
+  // Only used if controller_type == CC_FULL.
+  optional FlowAggregatorConfig flow_aggregator = 3;
+  optional ClusterAllocatorConfig allocator = 4;
+
+  // Only used in controller_type == CC_FAST.
+  optional FastClusterControllerConfig fast_controller_config = 5;
 }

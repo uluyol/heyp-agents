@@ -76,6 +76,27 @@ cc_library(
 )
 
 cc_library(
+    name = "fast-controller",
+    srcs = ["fast-controller.cc"],
+    hdrs = ["fast-controller.h"],
+    deps = [
+        ":fast-aggregator",
+        "//heyp/alg:sampler",
+        "//heyp/alg:unordered-ids",
+        "//heyp/alg/downgrade:impl-hashing",
+        "//heyp/cluster-agent/per-agg-allocators:util",
+        "//heyp/flows:agg-marker",
+        "//heyp/proto:config_cc_proto",
+        "//heyp/proto:heyp_cc_proto",
+        "//heyp/threads:executor",
+        "//heyp/threads:par-indexed-map",
+        "@com_google_absl//absl/container:btree",
+        "@com_google_absl//absl/functional:bind_front",
+        "@com_google_absl//absl/functional:function_ref",
+    ],
+)
+
+cc_library(
     name = "server",
     srcs = ["server.cc"],
     hdrs = ["server.h"],
@@ -132,6 +153,17 @@ cc_test(
         "//heyp/proto:parse-text",
         "//heyp/proto:testing",
         "@com_google_absl//absl/strings",
+    ],
+)
+
+cc_test(
+    name = "fast-controller-test",
+    srcs = ["fast-controller-test.cc"],
+    deps = [
+        ":fast-controller",
+        "//heyp/init:test-main",
+        "//heyp/proto:parse-text",
+        "//heyp/proto:testing",
     ],
 )
 
