@@ -19,8 +19,6 @@ class ClusterController {
 
   void UpdateInfo(ParID bundler_id, const proto::InfoBundle& info);
   void ComputeAndBroadcast();
-  void EnableWaitForBroadcastCompletion();
-  void WaitForBroadcastCompletion();
 
   class Listener;
 
@@ -59,14 +57,8 @@ class ClusterController {
   uint64_t next_lis_id_ ABSL_GUARDED_BY(broadcasting_mu_);
   absl::flat_hash_map<
       int64_t,
-      absl::flat_hash_map<uint64_t, std::function<void(const proto::AllocBundle&, bool)>>>
+      absl::flat_hash_map<uint64_t, std::function<void(const proto::AllocBundle&)>>>
       new_bundle_funcs_ ABSL_GUARDED_BY(broadcasting_mu_);
-
-  // Used for testing
-  absl::Mutex broadcast_wait_mu_;
-  int num_broadcast_completed_ = 0;
-  int want_num_broadcast_completed_ = 0;
-  bool enable_wait_for_broadcast_completion_ = false;
 };
 
 }  // namespace heyp

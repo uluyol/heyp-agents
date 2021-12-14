@@ -43,16 +43,7 @@ std::unique_ptr<ClusterController::Listener> ClusterController::RegisterListener
   MutexLockWarnLong l(&broadcasting_mu_, kLongBcastLockDur, &logger_,
                       "broadcasting_mu_ in RegisterListener");
   lis->lis_id_ = next_lis_id_;
-  new_bundle_funcs_[host_id][next_lis_id_] = [this, on_new_bundle_func](
-                                                 const proto::AllocBundle& alloc,
-                                                 bool wait_completion_enabled) {
-    on_new_bundle_func(alloc);
-    if (wait_completion_enabled) {
-      absl::MutexLock l(&this->broadcast_wait_mu_);
-      ++this->num_broadcast_completed_;
-      std::cerr << "inc num_broadcast_completed_\n";
-    }
-  };
+  new_bundle_funcs_[host_id][next_lis_id_] = on_new_bundle_func;
   next_lis_id_++;
   return lis;
 }
@@ -91,37 +82,16 @@ void ClusterController::ComputeAndBroadcast() {
   broadcasting_mu_.Lock(kLongBcastLockDur, &logger_,
                         "broadcasting_mu_ in ComputeAndBroadcast");
   int num = 0;
-  if (enable_wait_for_broadcast_completion_) {
-    num_broadcast_completed_ = 0;
-  }
   for (auto& [host, bundle] : alloc_bundles) {
     auto iter = new_bundle_funcs_.find(host);
     if (iter != new_bundle_funcs_.end()) {
       for (auto& [id, func] : iter->second) {
-        func(bundle, enable_wait_for_broadcast_completion_);
+        func(bundle);
         ++num;
       }
     }
   }
-  want_num_broadcast_completed_ = enable_wait_for_broadcast_completion_ ? num : 0;
   broadcasting_mu_.Unlock();
-}
-
-void ClusterController::EnableWaitForBroadcastCompletion() {
-  enable_wait_for_broadcast_completion_ = true;
-}
-
-void ClusterController::WaitForBroadcastCompletion() {
-  H_SPDLOG_CHECK(&logger_, enable_wait_for_broadcast_completion_);
-
-  broadcast_wait_mu_.LockWhen(absl::Condition(
-      +[](ClusterController* self) {
-        std::cerr << "check num_broadcast_completed_ [" << self->num_broadcast_completed_
-                  << "] = " << self->want_num_broadcast_completed_ << "\n";
-        return self->num_broadcast_completed_ == self->want_num_broadcast_completed_;
-      },
-      this));
-  broadcast_wait_mu_.Unlock();
 }
 
 }  // namespace heyp

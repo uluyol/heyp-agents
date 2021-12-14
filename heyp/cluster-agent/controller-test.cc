@@ -104,9 +104,7 @@ TEST(ClusterControllerTest, RemoveListener) {
     }
   )"));
 
-  controller.EnableWaitForBroadcastCompletion();
   controller.ComputeAndBroadcast();
-  controller.WaitForBroadcastCompletion();
 
   EXPECT_EQ(num_broadcast_1, 1);
   EXPECT_EQ(num_broadcast_1_1, 1);
@@ -145,9 +143,7 @@ TEST(ClusterControllerTest, RemoveListener) {
     }
   )"));
 
-  controller.EnableWaitForBroadcastCompletion();
   controller.ComputeAndBroadcast();
-  controller.WaitForBroadcastCompletion();
 
   EXPECT_EQ(num_broadcast_1, 1);
   EXPECT_EQ(num_broadcast_1_1, 2);
@@ -206,9 +202,7 @@ TEST(ClusterControllerTest, PlumbsDataCompletely) {
       ewma_usage_bps: 1000
     }
   )"));
-  controller.EnableWaitForBroadcastCompletion();
   controller.ComputeAndBroadcast();
-  controller.WaitForBroadcastCompletion();
 
   EXPECT_EQ(call_count, 2);
 }
@@ -415,9 +409,7 @@ class FixedDemandHostSimulator {
           }});
     }
 
-    controller_->EnableWaitForBroadcastCompletion();
     controller_->ComputeAndBroadcast();
-    controller_->WaitForBroadcastCompletion();
 
     const std::vector<proto::AllocBundle>& bundles = collector_.GetAllocs();
     for (int i = 0; i < true_demands_bps_.size(); ++i) {
