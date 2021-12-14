@@ -14,7 +14,7 @@ namespace {
 TEST(ParIndexedMapTest, One) {
   ParIndexedMap<int64_t, int64_t, absl::flat_hash_map<int64_t, ParID>> parmap;
 
-  ParID id = parmap.GetID(0);
+  ParID id = parmap.GetID(0).id;
   ASSERT_EQ(id, 0);
 
   EXPECT_EQ(parmap.NumIDs(), 1);
@@ -29,10 +29,10 @@ TEST(ParIndexedMapTest, One) {
 TEST(ParIndexedMapTest, BasicSequential) {
   ParIndexedMap<std::string, double, std::unordered_map<std::string, ParID>> parmap;
 
-  ASSERT_EQ(parmap.GetID("c"), 0);
-  ASSERT_EQ(parmap.GetID("b"), 1);
-  ASSERT_EQ(parmap.GetID("a"), 2);
-  ASSERT_EQ(parmap.GetID("c"), 0);
+  ASSERT_THAT(parmap.GetID("c"), testing::Eq(GetResult{0, true}));
+  ASSERT_THAT(parmap.GetID("b"), testing::Eq(GetResult{1, true}));
+  ASSERT_THAT(parmap.GetID("a"), testing::Eq(GetResult{2, true}));
+  ASSERT_THAT(parmap.GetID("c"), testing::Eq(GetResult{0, false}));
 
   parmap.OnID(1, [](double& v) { v = 55; });
   parmap.OnID(2, [](double& v) { v = 33; });
@@ -90,9 +90,9 @@ TEST(ParIndexedMapTest, MultiSpan) {
   ParIndexedMap<int64_t, int64_t, absl::flat_hash_map<int64_t, ParID>> parmap;
 
   for (int i = 0; i < 3001; ++i) {
-    ParID id = parmap.GetID(i);
-    ASSERT_EQ(id, i);
-    parmap.OnID(id, [i](int64_t& val) { val = i; });
+    GetResult res = parmap.GetID(i);
+    ASSERT_THAT(res, testing::Eq(GetResult{i, true}));
+    parmap.OnID(res.id, [i](int64_t& val) { val = i; });
   }
 
   EXPECT_EQ(parmap.NumIDs(), 3001);
@@ -114,9 +114,9 @@ TEST(ParIndexedMapTest, ParWrites) {
   ParIndexedMap<int64_t, int64_t, absl::flat_hash_map<int64_t, ParID>> parmap;
 
   for (int i = 0; i < 3001; ++i) {
-    ParID id = parmap.GetID(i);
-    ASSERT_EQ(id, i);
-    parmap.OnID(id, [](int64_t& val) { val = 55; });
+    GetResult res = parmap.GetID(i);
+    ASSERT_THAT(res, testing::Eq(GetResult{i, true}));
+    parmap.OnID(res.id, [](int64_t& val) { val = 55; });
   }
 
   std::atomic<bool> finish(false);

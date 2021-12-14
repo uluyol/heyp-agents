@@ -77,7 +77,7 @@ FlowAggregator::FlowAggregator(std::unique_ptr<DemandPredictor> agg_demand_predi
       logger_(MakeLogger("flow-aggregator")) {}
 
 ParID FlowAggregator::GetBundlerID(const proto::FlowMarker& bundler) {
-  return bundle_states_.GetID(bundler);
+  return bundle_states_.GetID(bundler).id;
 }
 
 void FlowAggregator::Update(ParID bundler_id, const proto::InfoBundle& bundle) {

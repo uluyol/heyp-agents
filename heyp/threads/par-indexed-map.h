@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <memory>
+#include <ostream>
 
 #include "absl/functional/function_ref.h"
 #include "absl/strings/str_cat.h"
@@ -15,6 +16,14 @@
 namespace heyp {
 
 using ParID = int64_t;
+
+struct GetResult {
+  ParID id = -1;
+  bool just_created = -1;
+};
+
+bool operator==(const GetResult& lhs, const GetResult& rhs);
+std::ostream& operator<<(std::ostream& os, const GetResult& r);
 
 // ParIndexedMap stores a thread-safe map from Key->Value via sequential indicies.
 // Each entry in the map can be operated on in parallel to other entries.
@@ -41,7 +50,7 @@ class ParIndexedMap {
   // GetID looks up the entry id associated with key. It creates one if none exist.
   // Concurrent calls are serialized through a single lock.
   // Returns -1 if we have kMaxEntries.
-  ParID GetID(const Key& key);
+  GetResult GetID(const Key& key);
 
   // OnID is used to read and write entries.
   void OnID(ParID id, absl::FunctionRef<void(Value&)> func);
@@ -74,6 +83,16 @@ class ParIndexedMap {
   KeyToIDMap id_map_ ABSL_GUARDED_BY(add_mu_);
 };
 
+// Implementation //
+
+inline bool operator==(const GetResult& lhs, const GetResult& rhs) {
+  return (lhs.id == rhs.id) && (lhs.just_created == rhs.just_created);
+}
+
+inline std::ostream& operator<<(std::ostream& os, const GetResult& r) {
+  return os << "{ " << r.id << ", just_created = " << r.just_created << "}";
+}
+
 template <typename Key, typename Value, typename KeyToIDMap>
 ParIndexedMap<Key, Value, KeyToIDMap>::~ParIndexedMap() {
   size_t num_spans = NumSpans(len_.load());
@@ -90,15 +109,15 @@ size_t ParIndexedMap<Key, Value, KeyToIDMap>::NumSpans(int64_t len) {
 }
 
 template <typename Key, typename Value, typename KeyToIDMap>
-ParID ParIndexedMap<Key, Value, KeyToIDMap>::GetID(const Key& key) {
+GetResult ParIndexedMap<Key, Value, KeyToIDMap>::GetID(const Key& key) {
   absl::MutexLock l(&add_mu_);
   auto iter = id_map_.find(key);
   if (iter == id_map_.end()) {
     ParID id = AddEntry();
     id_map_[key] = id;
-    return id;
+    return {id, true};
   }
-  return iter->second;
+  return {iter->second, false};
 }
 
 template <typename Key, typename Value, typename KeyToIDMap>
