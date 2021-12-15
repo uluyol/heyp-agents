@@ -81,8 +81,11 @@ class HostReactor
   void OnWriteDone(bool ok) override {
     if (!ok) {
       SPDLOG_LOGGER_ERROR(&service_->logger_, "write failed to {}", peer_);
-      Finish(grpc::Status(grpc::StatusCode::UNKNOWN, "failed write"));
+      if (!finished_) {
+        Finish(grpc::Status(grpc::StatusCode::UNKNOWN, "failed write"));
+      }
       finished_ = true;
+      lis_ = nullptr;
       return;
       // since wip_write_ is still true, we will block all writes
     }

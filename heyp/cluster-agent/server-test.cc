@@ -62,6 +62,7 @@ struct TestClient {
       while (!dying_.load()) {
         proto::AllocBundle b;
         ch_.Read(&b);
+        absl::SleepFor(absl::Milliseconds(100));
       }
     });
   }
@@ -125,6 +126,80 @@ TEST(ClusterAgentTest, NoCrash) {
       MakeClient(server->InProcessChannel({}), 2),
       MakeClient(server->InProcessChannel({}), 3),
       MakeClient(server->InProcessChannel({}), 3),
+  };
+
+  std::atomic<bool> should_exit;
+  std::thread exit_th([&should_exit, &logger] {
+    absl::SleepFor(absl::Seconds(3));
+    SPDLOG_LOGGER_INFO(&logger, "kill compute loop");
+    should_exit.store(true);
+  });
+
+  SPDLOG_LOGGER_INFO(&logger, "run compute loop");
+  service.RunLoop(&should_exit);
+  SPDLOG_LOGGER_INFO(&logger, "compute loop exited");
+  exit_th.join();
+
+  SPDLOG_LOGGER_INFO(&logger, "kill clients");
+  for (auto& c : clients) {
+    c->Die();
+  }
+
+  SPDLOG_LOGGER_INFO(&logger, "wait for clients");
+  for (auto& c : clients) {
+    c->Wait();
+  }
+
+  SPDLOG_LOGGER_INFO(&logger, "kill server");
+  server->Shutdown();
+  server->Wait();
+}
+
+TEST(ClusterAgentTest, NoCrashManyResp) {
+  auto logger = MakeLogger("cluster-agent-test");
+
+  ClusterAgentService service(
+      std::make_unique<FullClusterController>(
+          NewHostToClusterAggregator(
+              std::make_unique<BweDemandPredictor>(absl::Milliseconds(500), 1.2, 30),
+              absl::Seconds(500)),
+          ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+                                     type: CA_HEYP_SIGCOMM20
+                                     enable_burstiness: true
+                                     enable_bonus: true
+                                     oversub_factor: 1.0
+                                     heyp_acceptable_measured_ratio_over_intended_ratio:
+                                         1.0
+                                   )"),
+                                   ParseTextProto<proto::AllocBundle>(R"(
+                                     flow_allocs {
+                                       flow { src_dc: "A" dst_dc: "B" }
+                                       hipri_rate_limit_bps: 50
+                                     }
+                                     flow_allocs {
+                                       flow { src_dc: "A" dst_dc: "C" }
+                                       hipri_rate_limit_bps: 70
+                                     }
+                                   )"),
+                                   1.1)
+              .value()),
+      absl::ZeroDuration());
+  SPDLOG_LOGGER_INFO(&logger, "starting server");
+  int selected_port = 0;
+  std::unique_ptr<grpc::Server> server =
+      grpc::ServerBuilder()
+          .AddListeningPort("127.0.0.1:0", grpc::InsecureServerCredentials(),
+                            &selected_port)
+          .RegisterService(&service)
+          .BuildAndStart();
+  ASSERT_NE(server, nullptr) << "failed to start server";
+
+  SPDLOG_LOGGER_INFO(&logger, "starting clients");
+
+  std::array clients{
+      MakeClient(grpc::CreateChannel(absl::StrCat("127.0.0.1:", selected_port),
+                                     grpc::InsecureChannelCredentials()),
+                 0),
   };
 
   std::atomic<bool> should_exit;
