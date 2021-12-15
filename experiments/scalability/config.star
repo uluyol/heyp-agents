@@ -3,6 +3,7 @@ deploy_pb = proto.file("heyp/proto/deployment.proto")
 heyp_pb = proto.file("heyp/proto/heyp.proto")
 
 def GenConfig(
+        ca_type = "CC_FULL",
         ca_allocator = None,
         ca_limits_to_apply = None,
         host_agent_sim = None,
@@ -10,7 +11,9 @@ def GenConfig(
         limit_hipri = None,
         limit_lopri = None,
         shard_key = "",
-        cluster_control_period = "5s"):
+        cluster_control_period = "5s",
+        fast_target_num_samples = 0,
+        fast_num_threads = 8):
     nodes = []
     clusters = {
         "SRC": {
@@ -69,6 +72,10 @@ def GenConfig(
         nodes = nodes,
         clusters = [c for c in clusters.values()],
         cluster_agent_config = {
+            "controller_type": ca_type,
+            "server": {
+                "control_period": cluster_control_period,
+            },
             "flow_aggregator": {
                 "demand_predictor": {
                     "time_window_dur": "15s",
@@ -77,8 +84,9 @@ def GenConfig(
                 },
             },
             "allocator": ca_allocator,
-            "server": {
-                "control_period": cluster_control_period,
+            "fast_controller_config": {
+                "target_num_samples": fast_target_num_samples,
+                "num_threads": fast_num_threads,
             },
         },
         host_agent_sim = host_agent_sim,
@@ -153,6 +161,13 @@ def QoSDowngradeAndLimitLOPRIConfig(**kwargs):
         **kwargs
     )
 
+def FastDowngradeConfig(**kwargs):
+    return GenConfig(
+        ca_type = "CC_FAST",
+        ca_limits_to_apply = "H",
+        **kwargs
+    )
+
 def HSC20Config(**kwargs):
     # Basically does nothing
     allocator = config_pb.ClusterAllocatorConfig(
@@ -176,8 +191,8 @@ def HSC20Config(**kwargs):
 def Gbps(x):
     return x * 1024 * 1024 * 1024
 
-def AddConfigsRLSweep(configs):
-    def MkArgs(period, num_fg, num_hosts_per_fg):
+def AddConfigsSweep(configs):
+    def MkArgs(period, num_fg, num_hosts_per_fg, target_num_samples):
         limits = []
         fake_fgs = []
 
@@ -188,8 +203,10 @@ def AddConfigsRLSweep(configs):
             fake_fgs.append({
                 "dst_dc": dst_dc,
                 "job": "app",
-                "min_fg_usage": limit,
-                "max_fg_usage": 3 * limit,
+                "min_fg_usage": (9 * limit) // 10,
+                "max_fg_usage": (11 * limit) // 10,
+                "approval_bps": limit,
+                "target_num_samples": target_num_samples,
             })
 
         return {
@@ -201,10 +218,12 @@ def AddConfigsRLSweep(configs):
             },
             "limits": limits,
             "cluster_control_period": period,
+            "fast_target_num_samples": target_num_samples,
+            "fast_num_threads": 8,
         }
 
     tuples = [
-        ("0.4s", 10, 10000),
+        ("0.4s", 1, 2000000, 32768),
         # ("0.2s", 10, 10000),
         # ("0.1s", 10, 10000),
         # ("0.4s", 50, 10000),
@@ -212,15 +231,16 @@ def AddConfigsRLSweep(configs):
         # ("0.1s", 50, 10000),
     ]
 
-    for period, num_fg, num_hosts_per_fg in tuples:
-        configs["rlsweep-{0}-{1}fg-{2}h".format(period, num_fg, num_hosts_per_fg)] = RateLimitConfig(
-            **MkArgs(period, num_fg, num_hosts_per_fg)
+    for period, num_fg, num_hosts_per_fg, target_num_samples in tuples:
+        config_name = "sweep-{0}-{1}fg-{2}h-{3}s".format(period, num_fg, num_hosts_per_fg, target_num_samples)
+        configs[config_name] = FastDowngradeConfig(
+            **MkArgs(period, num_fg, num_hosts_per_fg, target_num_samples)
         )
     return None
 
 def GenConfigs():
     generators = {
-        "rlsweep": AddConfigsRLSweep,
+        "sweep": AddConfigsSweep,
     }
 
     configs = dict()

@@ -17,15 +17,15 @@ outdir=${1%/}
 shift
 configs=("$@")
 if [[ ${#configs[@]} -lt 1 ]]; then
-  configs=(rlsweep)
+  configs=(sweep)
 fi
 
 rm -rf "$outdir"
 
 exec bin/deploy-heyp gen-configs \
-    -i config.star \
-    -o "$outdir/configs" \
-    -oshard "$outdir/shards" \
-    -rspec "$(strjoin ';' rspec*.xml)" \
-    -ssh-user uluyol \
-    "${configs[@]}"
+  -i config.star \
+  -o "$outdir/configs" \
+  -oshard "$outdir/shards" \
+  -rspec "$(strjoin ';' rspec*.xml)" \
+  -ssh-user uluyol \
+  "${configs[@]}"
