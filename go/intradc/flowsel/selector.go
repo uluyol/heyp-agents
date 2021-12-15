@@ -151,11 +151,12 @@ func (s HybridSelector) NewMatcher(matchFrac float64, data SampledUsages) Matche
 	preMatched := make([]int, 0, int((matchFrac)*float64(s.NumRR)+2))
 	pre := make([]int, 0, s.NumRR)
 
+	offset := lopriInterval / 2
 	for i := 0; i < s.NumRR && i < len(data.HostIDs); i++ {
 		id := data.HostIDs[i]
-		// Match every Nth, starting by not matching.
+		// Match every Nth, starting halfway through not matching.
 		// This biases the usage to be over the target, not fall short.
-		if (i+1)%lopriInterval == 0 {
+		if (i+offset)%lopriInterval == 0 {
 			preMatched = append(preMatched, id)
 		}
 		pre = append(pre, id)
