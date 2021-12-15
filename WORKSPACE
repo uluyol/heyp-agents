@@ -46,9 +46,8 @@ boost_deps()
 
 http_archive(
     name = "com_github_grpc_grpc",
-    sha256 = "12a4a6f8c06b96e38f8576ded76d0b79bce13efd7560ed22134c2f433bc496ad",
-    strip_prefix = "grpc-1.41.1",
-    urls = ["https://github.com/grpc/grpc/archive/refs/tags/v1.41.1.tar.gz"],
+    strip_prefix = "grpc-1.42.0",
+    urls = ["https://github.com/grpc/grpc/archive/refs/tags/v1.42.0.tar.gz"],
 )
 
 load("@com_github_grpc_grpc//bazel:grpc_deps.bzl", "grpc_deps")
