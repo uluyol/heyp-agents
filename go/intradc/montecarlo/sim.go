@@ -136,8 +136,8 @@ func shardSize(numHosts int) int {
 func EvalInstance(inst Instance, numRuns int, sem chan Token, res chan<- []InstanceResult) {
 	approval := inst.ApprovalOverExpectedUsage * float64(inst.HostUsages.NumHosts()) * inst.HostUsages.DistMean()
 
-	shardData := make(chan []perSysData, 1)
 	shardSize := shardSize(inst.HostUsages.NumHosts())
+	shardData := make(chan []perSysData, (numRuns/shardSize)+1)
 	numShards := 0
 	for shardStart := 0; shardStart < numRuns; shardStart += shardSize {
 		numShards++
