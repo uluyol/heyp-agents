@@ -1,7 +1,6 @@
 #include "heyp/cluster-agent/fast-controller.h"
 
 #include "absl/functional/bind_front.h"
-#include "heyp/alg/debug.h"
 #include "heyp/flows/agg-marker.h"
 
 namespace heyp {
@@ -167,6 +166,8 @@ void ForEachSelected(const absl::btree_map<uint64_t, ParID>& id2par, UnorderedId
 }
 
 void FastClusterController::ComputeAndBroadcast() {
+  auto start_time = std::chrono::steady_clock::now();
+
   // Step 1: Get a snapshot and catch up on Host, Par IDs
   const std::vector<FastAggInfo> snap_infos = aggregator_.CollectSnapshot(&exec_);
   {
@@ -178,21 +179,15 @@ void FastClusterController::ComputeAndBroadcast() {
   }
 
   std::unique_ptr<TaskGroup> tasks = exec_.NewTaskGroup();
-  const bool should_debug = DebugQosAndRateLimitSelection();
 
   // Step 2: Perform downgrade and update state in parallel for each FG.
   std::vector<std::vector<ParID>> par_ids_to_bcast(snap_infos.size(),
                                                    std::vector<ParID>{});
   for (int agg_id = 0; agg_id < snap_infos.size(); ++agg_id) {
-    tasks->AddTaskNoStatus([&snap_infos, &par_ids_to_bcast, this, should_debug, agg_id] {
+    tasks->AddTaskNoStatus([&snap_infos, &par_ids_to_bcast, this, agg_id] {
       // Step 2.1: Compute LOPRI frac
       const FastAggInfo& info = snap_infos[agg_id];
       int64_t hipri_admission = approval_bps_[agg_id];
-
-      if (should_debug) {
-        SPDLOG_LOGGER_INFO(&logger_, "allocating for time = {}", time);
-        SPDLOG_LOGGER_INFO(&logger_, "hipri admission = {}", hipri_admission);
-      }
 
       const int64_t lopri_bps =
           std::max<int64_t>(0, info.parent().ewma_usage_bps() - hipri_admission);
@@ -200,9 +195,13 @@ void FastClusterController::ComputeAndBroadcast() {
       double frac_lopri = static_cast<double>(lopri_bps) /
                           static_cast<double>(info.parent().ewma_usage_bps());
 
-      if (should_debug) {
-        SPDLOG_LOGGER_INFO(&logger_, "lopri_frac = {}", frac_lopri);
-      }
+      SPDLOG_LOGGER_INFO(&logger_,
+                         "allocating agg = ({}, {}) approval = {} est-usage = {} "
+                         "#samples = {} lopri-frac = {}",
+                         info.parent().flow().src_dc(), info.parent().flow().dst_dc(),
+                         hipri_admission, info.parent().ewma_usage_bps(),
+                         info.children().size(), frac_lopri);
+
       frac_lopri = ClampFracLOPRI(&logger_, frac_lopri);
 
       // Step 2.2: Select LOPRI children
@@ -261,6 +260,10 @@ void FastClusterController::ComputeAndBroadcast() {
     }
   }
   tasks->WaitAllNoStatus();
+
+  absl::Duration elapsed =
+      absl::FromChrono(std::chrono::steady_clock::now() - start_time);
+  SPDLOG_LOGGER_INFO(&logger_, "compute+bcast time = {}", elapsed);
 }
 
 }  // namespace heyp
