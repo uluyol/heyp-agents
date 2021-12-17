@@ -11,6 +11,7 @@ require (
 	github.com/google/renameio v1.0.1
 	github.com/google/subcommands v1.2.0
 	github.com/google/uuid v1.2.0
+	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
 	github.com/planetscale/vtprotobuf v0.2.1-0.20211020080541-088be8c8c872
 	go.starlark.net v0.0.0-20211203141949-70c0e40ae128
 	golang.org/x/exp v0.0.0-20191030013958-a1ab85dbe136
