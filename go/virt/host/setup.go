@@ -121,6 +121,24 @@ func CreateTAP(tapID int) (TAP, error) {
 	return tap, r.Err()
 }
 
+func (t *TAP) ForwardPort(lisIP string, lisPort, vmPort int) error {
+	log.Printf("forward %s:%v to %s:%v", lisIP, lisPort, t.VirtIP(), vmPort)
+	return new(cmdseq.Runner).
+		Run("iptables", "-t", "nat", "-A", "PREROUTING", "-p", "tcp",
+			"-d", lisIP, "--dport", strconv.Itoa(lisPort), "-j", "DNAT",
+			"--to-destination", t.VirtIP()+":"+strconv.Itoa(vmPort)).
+		Err()
+}
+
+func (t *TAP) StopForwardPort(lisIP string, lisPort, vmPort int) error {
+	log.Printf("stop forwarding %s:%v to %s:%v", lisIP, lisPort, t.VirtIP(), vmPort)
+	return new(cmdseq.Runner).
+		Run("iptables", "-t", "nat", "-D", "PREROUTING", "-p", "tcp",
+			"-d", lisIP, "--dport", strconv.Itoa(lisPort), "-j", "DNAT",
+			"--to-destination", t.VirtIP()+":"+strconv.Itoa(vmPort)).
+		Err()
+}
+
 func (t *TAP) Close() error {
 	log.Printf("deleting TAP device %s", t.Device())
 	return new(cmdseq.Runner).

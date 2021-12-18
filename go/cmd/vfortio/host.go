@@ -38,6 +38,10 @@ var _ subcommands.Command = new(initHostCmd)
 type tapCmd struct {
 	id         int
 	ignoreErrs bool
+
+	// Port forwarding
+	lisAddr         string
+	lisPort, vmPort int
 }
 
 func (*tapCmd) Name() string     { return "tap" }
@@ -46,8 +50,8 @@ func (*tapCmd) Synopsis() string { return "manipulate taps" }
 const tapUsage = `tap [args] commands...
 
 Commands will be executed left-to-right until the first error occurs.
-Valid commands: create delete device host-tunnel-ip virt-ip virt-mac
-(All except create and delete print the attribute value).
+Valid commands: create delete device fwdport host-tunnel-ip stopfwdport virt-ip virt-mac
+(device, host-tunnel-ip, virt-ip, and virt-mac print the attribute value).
 `
 
 func (*tapCmd) Usage() string { return tapUsage }
@@ -55,10 +59,14 @@ func (*tapCmd) Usage() string { return tapUsage }
 func (c *tapCmd) SetFlags(fs *flag.FlagSet) {
 	fs.IntVar(&c.id, "id", 0, "tap ID")
 	fs.BoolVar(&c.ignoreErrs, "ignore-errs", false, "ignore errors and execute everything")
+
+	fs.StringVar(&c.lisAddr, "lis-addr", "", "address for host to listen on (fwdport and stopfwdport only)")
+	fs.IntVar(&c.lisPort, "lis-port", -1, "port for host to listen on (fwdport and stopfwdport only)")
+	fs.IntVar(&c.vmPort, "vm-port", -1, "port for host to listen on (fwdport and stopfwdport only)")
 }
 
 func (c *tapCmd) Execute(ctx context.Context, fs *flag.FlagSet, args ...interface{}) subcommands.ExitStatus {
-	tap := host.TAP{c.id}
+	tap := host.TAP{ID: c.id}
 	pcmd := len(fs.Args()) > 1
 	perrf := log.Fatalf
 	if c.ignoreErrs {
@@ -81,8 +89,18 @@ func (c *tapCmd) Execute(ctx context.Context, fs *flag.FlagSet, args ...interfac
 			}
 		case "device":
 			fmt.Printf("%s%s\n", pre, tap.Device())
+		case "fwdport":
+			err := tap.ForwardPort(c.lisAddr, c.lisPort, c.vmPort)
+			if err != nil {
+				perrf("failed to forward port: %v", err)
+			}
 		case "host-tunnel-ip":
 			fmt.Printf("%s%s\n", pre, tap.HostTunnelIP())
+		case "stopfwdport":
+			err := tap.StopForwardPort(c.lisAddr, c.lisPort, c.vmPort)
+			if err != nil {
+				perrf("failed to stop forwarding port: %v", err)
+			}
 		case "virt-ip":
 			fmt.Printf("%s%s\n", pre, tap.VirtIP())
 		case "virt-mac":
