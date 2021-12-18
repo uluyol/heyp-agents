@@ -43,8 +43,12 @@ func (c *vmCreateCmd) Execute(ctx context.Context, fs *flag.FlagSet, args ...int
 	if err := json.Unmarshal(imageConfigData, &imageConfig); err != nil {
 		log.Fatalf("failed to unmarshal ImageData: %v", err)
 	}
+	tap, err := host.CreateTAP(c.id)
+	if err != nil {
+		log.Fatalf("failed to create tap: %v", err)
+	}
 	vm, err := firecracker.CreateVM(c.fcPath, imageConfig, firecracker.Config{
-		TAP:     host.TAP{ID: c.id},
+		TAP:     tap,
 		ID:      c.id,
 		LogFile: c.logFile,
 	})
@@ -84,6 +88,9 @@ func (c *vmKillCmd) Execute(ctx context.Context, fs *flag.FlagSet, args ...inter
 	}
 	if err := vm.Close(); err != nil {
 		log.Fatal(err)
+	}
+	if err := vm.C.TAP.Close(); err != nil {
+		log.Fatalf("failed to delete tap: %v", err)
 	}
 	return subcommands.ExitSuccess
 }
