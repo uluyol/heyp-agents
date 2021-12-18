@@ -52,6 +52,21 @@ const (
 	MaskShort = "/30"
 )
 
+type ipLinkStatus struct {
+	IFIndex   int      `json:"ifindex"`
+	IFName    string   `json:"ifname"`
+	Flags     []string `json:"flags"`
+	MTU       int      `json:"mtu"`
+	Qdisc     string   `json:"qdisc"`
+	OperState string   `json:"operstate"`
+	LinkMode  string   `json:"linkmode"`
+	Group     string   `json:"group"`
+	TXQLen    int      `json:"txqlen"`
+	LinkType  string   `json:"link_type"`
+	Address   string   `json:"address"`
+	Broadcast string   `json:"broadcast"`
+}
+
 type TAP struct{ ID int }
 
 func (t *TAP) Device() string { return fmt.Sprintf("fc-%d-tap0", t.ID) }

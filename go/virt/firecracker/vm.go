@@ -217,5 +217,5 @@ func CreateVM(firecrackerPath string, image ImageData, cfg Config) (*VM, error) 
 }
 
 func (vm *VM) SSHArgs(command string) []string {
-	return []string{"-i", vm.Image.SecretKeyPath, vm.C.TAP.VirtIP(), command}
+	return []string{"-i", vm.Image.SecretKeyPath, "root@" + vm.C.TAP.VirtIP(), command}
 }
