@@ -3,7 +3,9 @@ package host
 import (
 	"fmt"
 	"log"
+	"os/exec"
 	"strconv"
+	"strings"
 
 	"github.com/uluyol/heyp-agents/go/virt/cmdseq"
 )
@@ -11,6 +13,7 @@ import (
 type PrepareForFirecrackerCmd struct {
 	ModuleKVM              string
 	EnablePacketForwarding bool
+	EnableNAT              bool
 	NeighborGCThresh1      int
 	NeighborGCThresh2      int
 	NeighborGCThresh3      int
@@ -20,11 +23,23 @@ func DefaultPrepareForFirecrackerCmd() PrepareForFirecrackerCmd {
 	return PrepareForFirecrackerCmd{
 		ModuleKVM:              "kvm_intel",
 		EnablePacketForwarding: true,
+		EnableNAT:              true,
 		NeighborGCThresh1:      1024,
 		NeighborGCThresh2:      2048,
 		NeighborGCThresh3:      4096,
 	}
 }
+
+// Calling iptables-restore with this clears all existing rules in
+// the nat and filter tables and replaces them with these.
+const iptablesBaseRules = `
+*nat
+-A POSTROUTING -j MASQUERADE
+COMMIT
+*filter
+-A FORWARD -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+COMMIT
+`
 
 func (cmd PrepareForFirecrackerCmd) Run() error {
 	var r cmdseq.Runner
@@ -43,6 +58,15 @@ func (cmd PrepareForFirecrackerCmd) Run() error {
 	r.Run("sysctl", "-w", "net.ipv4.neigh.default.gc_thresh3="+strconv.Itoa(cmd.NeighborGCThresh3))
 	if r.Err() != nil {
 		return fmt.Errorf("%v; output: %s", r.Err(), r.Out())
+	}
+
+	if cmd.EnablePacketForwarding {
+		log.Print("[prepsys] configure iptables")
+		cmd := exec.Command("iptables-restore")
+		cmd.Stdin = strings.NewReader(iptablesBaseRules)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("%v; output: %s", err, out)
+		}
 	}
 	return nil
 }
@@ -93,10 +117,14 @@ func CreateTAP(tapID int) (TAP, error) {
 	r.Run("sysctl", "-w", "net.ipv6.conf."+tap.Device()+".disable_ipv6=1")
 	r.Run("ip", "addr", "add", tap.HostTunnelIP()+MaskShort, "dev", tap.Device())
 	r.Run("ip", "link", "set", "dev", tap.Device(), "up")
+	r.Run("iptables", "-A", "FORWARD", "-i", tap.Device(), "-j", "ACCEPT")
 	return tap, r.Err()
 }
 
 func (t *TAP) Close() error {
 	log.Printf("deleting TAP device %s", t.Device())
-	return new(cmdseq.Runner).Run("ip", "link", "del", t.Device()).Err()
+	return new(cmdseq.Runner).
+		Run("ip", "link", "del", t.Device()).
+		Run("iptables", "-D", "FORWARD", "-i", t.Device(), "-j", "ACCEPT").
+		Err()
 }
