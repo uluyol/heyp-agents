@@ -17,13 +17,11 @@ import (
 )
 
 type InstanceConfig struct {
-	ConfigDir string
-	BinPaths  struct {
-		HostAgent string
-		Fortio    string
-	}
-	Image  firecracker.ImageData
-	Fortio FortioOptions
+	ConfigDir     string
+	HostAgentPath string
+	FortioPath    string
+	Image         firecracker.ImageData
+	Fortio        FortioOptions
 }
 
 type FortioOptions struct {
@@ -79,11 +77,11 @@ func (inst *Instance) InitWithData() error {
 	if err := r.Err(); err != nil {
 		return err
 	}
-	fortioBin, err := os.ReadFile(inst.C.BinPaths.Fortio)
+	fortioBin, err := os.ReadFile(inst.C.FortioPath)
 	if err != nil {
 		return fmt.Errorf("failed to read fortio binary: %w", err)
 	}
-	hostAgentBin, err := os.ReadFile(inst.C.BinPaths.HostAgent)
+	hostAgentBin, err := os.ReadFile(inst.C.HostAgentPath)
 	if err != nil {
 		return fmt.Errorf("failed to read host-agent binary: %w", err)
 	}
