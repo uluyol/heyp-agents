@@ -15,6 +15,7 @@ import (
 type vfortioCreateInstCmd struct {
 	fcPath         string
 	id             int
+	addr           string
 	port           int
 	outdir         string
 	instConfigPath string
@@ -27,6 +28,7 @@ func (*vfortioCreateInstCmd) Usage() string    { return "" }
 func (c *vfortioCreateInstCmd) SetFlags(fs *flag.FlagSet) {
 	fs.StringVar(&c.fcPath, "fc", "firecracker", "name/path of firecracker binary")
 	fs.IntVar(&c.id, "id", 0, "vm/tap ID")
+	fs.StringVar(&c.addr, "addr", "192.168.99.99", "address fortio should listen on")
 	fs.IntVar(&c.port, "port", 7777, "fortio http port")
 	fs.StringVar(&c.outdir, "outdir", "vfortio-out", "output directory")
 	fs.StringVar(&c.instConfigPath, "config", "inst-config.json", "path to instance config")
@@ -42,7 +44,7 @@ func (c *vfortioCreateInstCmd) Execute(ctx context.Context, fs *flag.FlagSet, ar
 		log.Fatalf("failed to unmarshal vfortio.InstanceConfig: %v", err)
 	}
 
-	inst, err := vfortio.CreateInstance(c.fcPath, c.id, c.port, c.outdir, config)
+	inst, err := vfortio.CreateInstance(c.fcPath, c.id, c.addr, c.port, c.outdir, config)
 	if err != nil {
 		log.Fatalf("failed to create instance: %v", err)
 	}

@@ -2,7 +2,6 @@ package vfortio
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -31,15 +30,16 @@ type FortioOptions struct {
 }
 
 type Instance struct {
-	_          struct{}
-	ID         int
-	FortioPort int
-	OutputDir  string
-	C          InstanceConfig
-	VM         *firecracker.VM
+	_             struct{}
+	ID            int
+	FortioLisAddr string
+	FortioPort    int
+	OutputDir     string
+	C             InstanceConfig
+	VM            *firecracker.VM
 }
 
-func CreateInstance(firecrackerPath string, id int, fortioPort int, outdir string, cfg InstanceConfig) (*Instance, error) {
+func CreateInstance(firecrackerPath string, id int, fortiolisAddr string, fortioPort int, outdir string, cfg InstanceConfig) (*Instance, error) {
 	log.Printf("creating vfortio instance %d with output %s", id, outdir)
 	tap, err := host.CreateTAP(id)
 	if err != nil {
@@ -53,7 +53,14 @@ func CreateInstance(firecrackerPath string, id int, fortioPort int, outdir strin
 	if err != nil {
 		return nil, fmt.Errorf("failed to start firecracker %d: %v", id, err)
 	}
-	return &Instance{ID: id, OutputDir: outdir, C: cfg, VM: vm}, nil
+	return &Instance{
+		ID:            id,
+		FortioLisAddr: fortiolisAddr,
+		FortioPort:    fortioPort,
+		OutputDir:     outdir,
+		C:             cfg,
+		VM:            vm,
+	}, nil
 }
 
 func (inst *Instance) Close() error {
@@ -140,8 +147,8 @@ func (inst *Instance) RunServer() error {
 	return nil
 }
 
-func (inst *Instance) ForwardFortioPorts(ports ...int) error {
-	return errors.New("not implemented")
+func (inst *Instance) ForwardFortioPorts() error {
+	return inst.VM.C.TAP.ForwardPort(inst.FortioLisAddr, inst.FortioPort, inst.FortioPort)
 }
 
 func (inst *Instance) CopyLogs() error {
