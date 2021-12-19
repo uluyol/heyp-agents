@@ -52,7 +52,7 @@ func (c *vfortioCreateInstCmd) Execute(ctx context.Context, fs *flag.FlagSet, ar
 	}
 	instPath := filepath.Join(c.outdir, "vfortio.json")
 	if err := os.WriteFile(instPath, instBytes, 0o644); err != nil {
-		log.Fatal("failed to write instance config to %s: %v\nconfig:\n%s", instPath, err, instBytes)
+		log.Fatalf("failed to write instance config to %s: %v\nconfig:\n%s", instPath, err, instBytes)
 	}
 	return subcommands.ExitSuccess
 }

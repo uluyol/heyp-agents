@@ -60,7 +60,7 @@ func (c *vmCreateCmd) Execute(ctx context.Context, fs *flag.FlagSet, args ...int
 		log.Fatalf("failed to marshal vm config: %v", err)
 	}
 	if err := os.WriteFile(c.outConfigPath, vmConfig, 0o644); err != nil {
-		log.Fatal("failed to write vm config to %s: %v\nvm config:\n%s", c.outConfigPath, err, vmConfig)
+		log.Fatalf("failed to write vm config to %s: %v\nvm config:\n%s", c.outConfigPath, err, vmConfig)
 	}
 	return subcommands.ExitSuccess
 }
