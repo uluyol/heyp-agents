@@ -93,17 +93,17 @@ type ipLinkStatus struct {
 
 type TAP struct{ ID int }
 
-func (t *TAP) Device() string { return fmt.Sprintf("fc-%d-tap0", t.ID) }
+func (t TAP) Device() string { return fmt.Sprintf("fc-%d-tap0", t.ID) }
 
-func (t *TAP) HostTunnelIP() string {
+func (t TAP) HostTunnelIP() string {
 	return fmt.Sprintf("169.254.%d.%d", (4*t.ID+2)/256, (4*t.ID+2)%256)
 }
 
-func (t *TAP) VirtIP() string {
+func (t TAP) VirtIP() string {
 	return fmt.Sprintf("169.254.%d.%d", (4*t.ID+1)/256, (4*t.ID+1)%256)
 }
 
-func (t *TAP) VirtMAC() string {
+func (t TAP) VirtMAC() string {
 	return fmt.Sprintf("02:FC:00:00:%02X:%02X", t.ID/256, t.ID%256)
 }
 
@@ -121,7 +121,7 @@ func CreateTAP(tapID int) (TAP, error) {
 	return tap, r.Err()
 }
 
-func (t *TAP) ForwardPort(lisIP string, lisPort, vmPort int) error {
+func (t TAP) ForwardPort(lisIP string, lisPort, vmPort int) error {
 	log.Printf("forward %s:%v to %s:%v", lisIP, lisPort, t.VirtIP(), vmPort)
 	return new(cmdseq.Runner).
 		Run("iptables", "-t", "nat", "-A", "PREROUTING", "-p", "tcp",
@@ -130,7 +130,7 @@ func (t *TAP) ForwardPort(lisIP string, lisPort, vmPort int) error {
 		Err()
 }
 
-func (t *TAP) StopForwardPort(lisIP string, lisPort, vmPort int) error {
+func (t TAP) StopForwardPort(lisIP string, lisPort, vmPort int) error {
 	log.Printf("stop forwarding %s:%v to %s:%v", lisIP, lisPort, t.VirtIP(), vmPort)
 	return new(cmdseq.Runner).
 		Run("iptables", "-t", "nat", "-D", "PREROUTING", "-p", "tcp",
@@ -139,7 +139,7 @@ func (t *TAP) StopForwardPort(lisIP string, lisPort, vmPort int) error {
 		Err()
 }
 
-func (t *TAP) Close() error {
+func (t TAP) Close() error {
 	log.Printf("deleting TAP device %s", t.Device())
 	return new(cmdseq.Runner).
 		Run("ip", "link", "del", t.Device()).
