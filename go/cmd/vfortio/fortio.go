@@ -64,8 +64,8 @@ func (c *vfortioCreateInstCmd) Execute(ctx context.Context, fs *flag.FlagSet, ar
 var _ subcommands.Command = new(vfortioCreateInstCmd)
 
 type vfortioControlInstCmd struct {
-	instConfigPath string
-	ignoreErrs     bool
+	instPath   string
+	ignoreErrs bool
 }
 
 func (*vfortioControlInstCmd) Name() string { return "ctl-inst" }
@@ -81,12 +81,12 @@ Valid commands: kill init-with-data forward-fortio-ports bg-host-agent fg-host-a
 func (*vfortioControlInstCmd) Usage() string { return vfortioControlInstUsage }
 
 func (c *vfortioControlInstCmd) SetFlags(fs *flag.FlagSet) {
-	fs.StringVar(&c.instConfigPath, "inst", "vfortio.json", "path to vforito instance data")
+	fs.StringVar(&c.instPath, "inst", "vfortio.json", "path to vforito instance data")
 	fs.BoolVar(&c.ignoreErrs, "ignore-errs", false, "ignore errors and execute everything")
 }
 
 func (c *vfortioControlInstCmd) Execute(ctx context.Context, fs *flag.FlagSet, args ...interface{}) subcommands.ExitStatus {
-	data, err := os.ReadFile(c.instConfigPath)
+	data, err := os.ReadFile(c.instPath)
 	if err != nil {
 		log.Fatalf("failed to read instance data: %v", err)
 	}
