@@ -118,20 +118,32 @@ func (inst *Instance) InitWithData() error {
 	cmd.Stdin = bytes.NewReader(dataPayload)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to copy host-agent and fortio binaries into VM: %v; output %s", err, out)
+		return fmt.Errorf("failed to copy host-agent and fortio binaries into VM: %w; output %s", err, out)
 	}
 
 	return nil
 }
 
 func (inst *Instance) RunHostAgent() error {
-	log.Printf("vfortio instance %d: start host agent", inst.ID)
-	cmd := exec.Command("ssh", inst.VM.SSHArgs("cd /mnt && env ASAN_OPTIONS=detect_container_overflow=0 TSAN_OPTIONS=report_atomic_races=0 ./host-agent configs/host-agent-config.textproto | tee logs/host-agent.log")...)
-	out, err := cmd.CombinedOutput()
+	cmd, err := inst.StartHostAgent()
 	if err != nil {
-		return fmt.Errorf("failed to copy host-agent and fortio binaries into VM: %v; output %s", err, out)
+		return err
+	}
+	err = cmd.Wait()
+	if err != nil {
+		return fmt.Errorf("failed to run host-agent: %w", err)
 	}
 	return nil
+}
+
+func (inst *Instance) StartHostAgent() (*exec.Cmd, error) {
+	log.Printf("vfortio instance %d: start host agent", inst.ID)
+	cmd := exec.Command("ssh", inst.VM.SSHArgs("cd /mnt && env ASAN_OPTIONS=detect_container_overflow=0 TSAN_OPTIONS=report_atomic_races=0 ./host-agent configs/host-agent-config.textproto | tee logs/host-agent.log")...)
+	err := cmd.Start()
+	if err != nil {
+		return nil, fmt.Errorf("failed to start host-agent: %w", err)
+	}
+	return cmd, nil
 }
 
 func (inst *Instance) RunServer() error {
@@ -140,9 +152,9 @@ func (inst *Instance) RunServer() error {
 	cmd := exec.Command("ssh", inst.VM.SSHArgs(fmt.Sprintf(
 		"cd /mnt && env GOMAXPROCS=4 ./fortio server -http-port %d -maxpayloadsizekb %d | tee logs/fortio-%s-%s-server-port-%d.log",
 		inst.FortioPort, o.MaxPayloadKB, o.FortioGroup, o.FortioName, inst.FortioPort))...)
-	out, err := cmd.CombinedOutput()
+	err := cmd.Run()
 	if err != nil {
-		return fmt.Errorf("failed to copy host-agent and fortio binaries into VM: %v; output %s", err, out)
+		return fmt.Errorf("failed to run fortio: %w", err)
 	}
 	return nil
 }

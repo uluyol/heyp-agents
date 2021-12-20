@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
 
 	"github.com/google/subcommands"
@@ -73,7 +75,7 @@ func (*vfortioControlInstCmd) Synopsis() string { return "control an existing vf
 const vfortioControlInstUsage = `ctl-inst [args] commands...
 
 Commands will be executed left-to-right until the first error occurs.
-Valid commands: kill device host-tunnel-ip virt-ip virt-mac
+Valid commands: kill init-with-data forward-fortio-ports bg-host-agent fg-host-agent run-server copy-logs
 `
 
 func (*vfortioControlInstCmd) Usage() string { return vfortioControlInstUsage }
@@ -93,12 +95,28 @@ func (c *vfortioControlInstCmd) Execute(ctx context.Context, fs *flag.FlagSet, a
 		log.Fatalf("failed to unmarshal vfortio.Instance: %v", err)
 	}
 
-	perrf := log.Fatalf
-	if c.ignoreErrs {
-		perrf = log.Printf
+	var fatalErr error
+	perrf := log.Printf
+	if !c.ignoreErrs {
+		perrf = func(format string, args ...interface{}) {
+			fatalErr = fmt.Errorf(format, args...)
+		}
 	}
 
+	var bgHostAgentCmd *exec.Cmd
+	defer func() {
+		if bgHostAgentCmd != nil {
+			log.Print("kill background host-agent")
+			bgHostAgentCmd.Process.Signal(os.Interrupt)
+			bgHostAgentCmd.Wait()
+		}
+	}()
+
 	for _, cmd := range fs.Args() {
+		if fatalErr != nil {
+			log.Print(fatalErr.Error())
+			break
+		}
 		switch cmd {
 		case "kill":
 			if err := inst.Close(); err != nil {
@@ -112,13 +130,20 @@ func (c *vfortioControlInstCmd) Execute(ctx context.Context, fs *flag.FlagSet, a
 			if err := inst.ForwardFortioPorts(); err != nil {
 				perrf("failed to forward ports: %v", err)
 			}
-		case "run-host-agent":
+		case "bg-host-agent":
+			c, err := inst.StartHostAgent()
+			if err != nil {
+				perrf("%v", err)
+			} else {
+				bgHostAgentCmd = c
+			}
+		case "fg-host-agent":
 			if err := inst.RunHostAgent(); err != nil {
-				perrf("failed to run host agent", err)
+				perrf("%v", err)
 			}
 		case "run-server":
 			if err := inst.RunServer(); err != nil {
-				perrf("failed to run fortio server: %v", err)
+				perrf("%v", err)
 			}
 		case "copy-logs":
 			if err := inst.CopyLogs(); err != nil {
