@@ -17,6 +17,7 @@ import (
 	"github.com/uluyol/heyp-agents/go/deploy/writetar"
 	"github.com/uluyol/heyp-agents/go/multierrgroup"
 	"github.com/uluyol/heyp-agents/go/pb"
+	"github.com/uluyol/heyp-agents/go/virt/host"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
@@ -154,6 +155,7 @@ func DefaultHEYPAgentsConfig() HEYPAgentsConfig {
 type HEYPNodeConfigs struct {
 	ClusterAgentNodes []ClusterAgentNode
 	HostAgentNodes    []HostAgentNode
+	NodeVHostAgents   map[string][]HostAgentNode
 	DCMapperConfig    *pb.StaticDCMapperConfig
 }
 
@@ -178,6 +180,30 @@ func checkNetem(dcPair *pb.SimulatedWanConfig_Pair, netem *pb.NetemConfig, field
 	return nil
 }
 
+func (nodeConfigs *HEYPNodeConfigs) MakeHostAgentConfig(c *pb.DeploymentConfig, startConfig HEYPAgentsConfig, remoteTopdir string, n HostAgentNode) *pb.HostAgentConfig {
+	hostConfig := proto.Clone(c.HostAgentTemplate).(*pb.HostAgentConfig)
+	hostConfig.ThisHostAddrs = []string{n.Host.GetExperimentAddr()}
+	if n.JobName != "" {
+		hostConfig.JobName = proto.String(n.JobName)
+	}
+	hostConfig.Daemon.ClusterAgentAddr = &n.ClusterAgentAddr
+	if startConfig.LogHostStats {
+		hostConfig.Daemon.StatsLogFile = proto.String(
+			path.Join(remoteTopdir, "logs/host-agent-stats.log"))
+	}
+	if startConfig.LogFineGrainedHostStats || c.GetHostAgentLogFineGrainedStats() {
+		hostConfig.Daemon.FineGrainedStatsLogFile = proto.String(
+			path.Join(remoteTopdir, "logs/host-agent-fine-grained-stats.log"))
+	}
+	if startConfig.LogEnforcerState {
+		hostConfig.Enforcer.DebugLogDir = proto.String(
+			path.Join(remoteTopdir, "logs/host-enforcer-debug"))
+	}
+	hostConfig.DcMapper = nodeConfigs.DCMapperConfig
+	n.PatchHostAgentConfigFunc(hostConfig)
+	return hostConfig
+}
+
 func GetAndValidateHEYPNodeConfigs(c *pb.DeploymentConfig) (HEYPNodeConfigs, error) {
 	var nodeConfigs HEYPNodeConfigs
 	nodeConfigs.DCMapperConfig = new(pb.StaticDCMapperConfig)
@@ -200,6 +226,7 @@ func GetAndValidateHEYPNodeConfigs(c *pb.DeploymentConfig) (HEYPNodeConfigs, err
 	numHostsFilled := 0
 	for _, cluster := range c.Clusters {
 		var thisClusterAgentNode *pb.DeployedNode
+		nodesWithNewVHosts := make(map[string]int)
 
 		for _, nodeName := range cluster.NodeNames {
 			n := LookupNode(c, nodeName)
@@ -220,6 +247,7 @@ func GetAndValidateHEYPNodeConfigs(c *pb.DeploymentConfig) (HEYPNodeConfigs, err
 			var (
 				hostAgentConfig HostAgentNode
 				isHostAgent     bool
+				numVHostAgents  int
 				hasJobName      bool
 			)
 			hostAgentConfig.PatchHostAgentConfigFunc = func(*pb.HostAgentConfig) {}
@@ -233,6 +261,14 @@ func GetAndValidateHEYPNodeConfigs(c *pb.DeploymentConfig) (HEYPNodeConfigs, err
 				case role == "host-agent":
 					hostAgentConfig.Host = n
 					isHostAgent = true
+				case strings.HasPrefix(role, "vhost-agents-"):
+					numStr := strings.TrimPrefix(role, "vhost-agents-")
+					num, err := strconv.Atoi(numStr)
+					if err != nil {
+						return nodeConfigs, fmt.Errorf("node '%s': invalid number of vhost agents %q: %w", numStr, err)
+					}
+					numVHostAgents = num
+					hostAgentConfig.Host = n
 				case strings.HasPrefix(role, "job-"):
 					if hasJobName {
 						return nodeConfigs, fmt.Errorf("node '%s': has multiple job names", n.GetName())
@@ -258,13 +294,36 @@ func GetAndValidateHEYPNodeConfigs(c *pb.DeploymentConfig) (HEYPNodeConfigs, err
 			if hasJobName && !isHostAgent {
 				return nodeConfigs, fmt.Errorf("node '%s': has job name but no host-agent role", n.GetName())
 			}
+			if isHostAgent && numVHostAgents > 0 {
+				return nodeConfigs, fmt.Errorf("nodes '%s': cannot have both host-agent and vhost-agent roles", n.GetName())
+			}
 			if isHostAgent {
 				nodeConfigs.HostAgentNodes = append(nodeConfigs.HostAgentNodes, hostAgentConfig)
+			}
+			if numVHostAgents > 0 {
+				for vhi := 0; vhi < numVHostAgents; vhi++ {
+					vhi := vhi
+					c := hostAgentConfig
+					prev := c.PatchHostAgentConfigFunc
+					c.PatchHostAgentConfigFunc = func(c *pb.HostAgentConfig) {
+						prev(c)
+						myAddr := host.TAP{ID: vhi}.VirtIP()
+						c.ThisHostAddrs = []string{myAddr}
+						c.DcMapper = proto.Clone(c.DcMapper).(*pb.StaticDCMapperConfig)
+						c.DcMapper.Mapping.Entries = append(c.DcMapper.Mapping.Entries,
+							&pb.DCMapping_Entry{
+								HostAddr: proto.String(myAddr),
+								Dc:       proto.String(cluster.GetName()),
+							})
+					}
+					nodeConfigs.NodeVHostAgents[n.GetName()] = append(nodeConfigs.NodeVHostAgents[n.GetName()], hostAgentConfig)
+				}
+				nodesWithNewVHosts[n.GetName()] = numVHostAgents
 			}
 		}
 
 		if thisClusterAgentNode == nil {
-			if numHostsFilled < len(nodeConfigs.HostAgentNodes) {
+			if numHostsFilled < len(nodeConfigs.HostAgentNodes) || len(nodesWithNewVHosts) > 0 {
 				return nodeConfigs, fmt.Errorf("cluster '%s': need a node that has role 'cluster-agent'",
 					cluster.GetName())
 			}
@@ -274,6 +333,13 @@ func GetAndValidateHEYPNodeConfigs(c *pb.DeploymentConfig) (HEYPNodeConfigs, err
 					thisClusterAgentNode.GetExperimentAddr() + ":" + strconv.Itoa(int(cluster.GetClusterAgentPort()))
 			}
 			numHostsFilled = len(nodeConfigs.HostAgentNodes)
+			for nodeName := range nodesWithNewVHosts {
+				vhostAgents := nodeConfigs.NodeVHostAgents[nodeName]
+				for i := range vhostAgents {
+					vhostAgents[i].ClusterAgentAddr =
+						thisClusterAgentNode.GetExperimentAddr() + ":" + strconv.Itoa(int(cluster.GetClusterAgentPort()))
+				}
+			}
 		}
 	}
 	return nodeConfigs, nil
@@ -295,7 +361,7 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string, startConfig HE
 			t.Server.Address = &n.Address
 			clusterAgentConfigBytes, err := prototext.MarshalOptions{Indent: "  "}.Marshal(t)
 			if err != nil {
-				return fmt.Errorf("failed to marshal cluster_agent_config: %w", err)
+				return fmt.Errorf("failed to marshal cluster-agent config: %w", err)
 			}
 
 			eg.Go(func() error {
@@ -342,30 +408,11 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string, startConfig HE
 		for _, n := range nodeConfigs.HostAgentNodes {
 			n := n
 			eg.Go(func() error {
-				hostConfig := proto.Clone(c.HostAgentTemplate).(*pb.HostAgentConfig)
-				hostConfig.ThisHostAddrs = []string{n.Host.GetExperimentAddr()}
-				if n.JobName != "" {
-					hostConfig.JobName = proto.String(n.JobName)
-				}
-				hostConfig.Daemon.ClusterAgentAddr = &n.ClusterAgentAddr
-				if startConfig.LogHostStats {
-					hostConfig.Daemon.StatsLogFile = proto.String(
-						path.Join(remoteTopdir, "logs/host-agent-stats.log"))
-				}
-				if startConfig.LogFineGrainedHostStats || c.GetHostAgentLogFineGrainedStats() {
-					hostConfig.Daemon.FineGrainedStatsLogFile = proto.String(
-						path.Join(remoteTopdir, "logs/host-agent-fine-grained-stats.log"))
-				}
-				if startConfig.LogEnforcerState {
-					hostConfig.Enforcer.DebugLogDir = proto.String(
-						path.Join(remoteTopdir, "logs/host-enforcer-debug"))
-				}
-				hostConfig.DcMapper = nodeConfigs.DCMapperConfig
-				n.PatchHostAgentConfigFunc(hostConfig)
+				hostConfig := nodeConfigs.MakeHostAgentConfig(c, startConfig, remoteTopdir, n)
 
 				hostConfigBytes, err := prototext.MarshalOptions{Indent: "  "}.Marshal(hostConfig)
 				if err != nil {
-					return fmt.Errorf("failed to marshal host_agent config: %w", err)
+					return fmt.Errorf("failed to marshal host-agent config: %w", err)
 				}
 
 				vlogArg := ""
