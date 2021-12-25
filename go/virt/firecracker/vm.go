@@ -221,3 +221,16 @@ func CreateVM(firecrackerPath string, image ImageData, cfg Config) (*VM, error) 
 func (vm *VM) SSHArgs(command string) []string {
 	return []string{"-o", "StrictHostKeyChecking=no", "-i", vm.Image.SecretKeyPath, "root@" + vm.C.TAP.VirtIP(), command}
 }
+
+func (vm *VM) WaitUntilCanSSH(ctx context.Context) error {
+	for {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		err := exec.CommandContext(ctx, "ssh", vm.SSHArgs("true")...).Run()
+		if err == nil {
+			return nil
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}

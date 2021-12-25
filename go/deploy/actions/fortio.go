@@ -304,6 +304,7 @@ func FortioStartServers(c *pb.DeploymentConfig, remoteTopdir, envoyLogLevel stri
 								ConfigDir:     path.Join(remoteTopdir, "configs", instName+"-configs"),
 								HostAgentPath: path.Join(remoteTopdir, "heyp/host-agent/host-agent"),
 								FortioPath:    path.Join(remoteTopdir, "aux/fortio"),
+								SSPath:        path.Join(remoteTopdir, "aux/ss"),
 								Image:         virt.ImageData(path.Join(remoteTopdir, "data", "vfortio-image")),
 								Fortio: vfortio.FortioOptions{
 									MaxPayloadKB: maxPayload,

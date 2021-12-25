@@ -8,17 +8,20 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 
 	"github.com/uluyol/heyp-agents/go/deploy/writetar"
 	"github.com/uluyol/heyp-agents/go/virt/cmdseq"
 	"github.com/uluyol/heyp-agents/go/virt/firecracker"
 	"github.com/uluyol/heyp-agents/go/virt/host"
+	"golang.org/x/net/context"
 )
 
 type InstanceConfig struct {
 	ConfigDir     string
 	HostAgentPath string
 	FortioPath    string
+	SSPath        string
 	Image         firecracker.ImageData
 	Fortio        FortioOptions
 }
@@ -77,6 +80,14 @@ func (inst *Instance) Close() error {
 }
 
 func (inst *Instance) InitWithData() error {
+	log.Printf("instance %d: wait for ssh", inst.ID)
+	{
+		sshCtx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+		if err := inst.VM.WaitUntilCanSSH(sshCtx); err != nil {
+			return fmt.Errorf("unable to ssh: %w", err)
+		}
+	}
+
 	log.Printf("instance %d: setup tmpfs", inst.ID)
 	r := new(cmdseq.Runner)
 	r.Run("ssh", inst.VM.SSHArgs("mount -t tmpfs tmpfs /mnt")...)
@@ -92,10 +103,15 @@ func (inst *Instance) InitWithData() error {
 	if err != nil {
 		return fmt.Errorf("failed to read host-agent binary: %w", err)
 	}
+	ssBin, err := os.ReadFile(inst.C.FortioPath)
+	if err != nil {
+		return fmt.Errorf("failed to read ss binary: %w", err)
+	}
 
 	filesToConcat := []writetar.FileToTar{
 		writetar.Add("fortio", fortioBin),
 		writetar.Add("host-agent", hostAgentBin),
+		writetar.Add("ss", ssBin),
 	}
 
 	entries, err := os.ReadDir(inst.C.ConfigDir)
@@ -114,7 +130,7 @@ func (inst *Instance) InitWithData() error {
 	dataPayload := writetar.ConcatInMem(filesToConcat...)
 
 	log.Printf("instance %d: copy binaries", inst.ID)
-	cmd := exec.Command("ssh", inst.VM.SSHArgs("cd /mnt && tar x && chmod +x /mnt/fortio /mnt/host-agent")...)
+	cmd := exec.Command("ssh", inst.VM.SSHArgs("cd /mnt && tar x && chmod +x /mnt/fortio /mnt/host-agent /mnt/ss")...)
 	cmd.Stdin = bytes.NewReader(dataPayload)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
