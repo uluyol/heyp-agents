@@ -150,16 +150,27 @@ SSFlowStateReporter::~SSFlowStateReporter() {
 
 namespace {
 
+boost::filesystem::path SearchPath(std::string ss_binary_name) {
+  if (!absl::StrContains(ss_binary_name, '/')) {
+    return bp::search_path(ss_binary_name);
+  }
+  if (!absl::StartsWith(ss_binary_name, "/")) {
+    return boost::filesystem::relative(ss_binary_name);
+  }
+  return boost::filesystem::path(ss_binary_name);
+}
+
 absl::Status StartDoneMonitor(const std::string& ss_binary_name,
                               std::unique_ptr<bp::ipstream>* out, bp::child* proc,
                               absl::Mutex* proc_mu) {
   try {
     absl::MutexLock l(proc_mu);
     *out = absl::make_unique<bp::ipstream>();
-    *proc = bp::child(bp::search_path(ss_binary_name), "-E", "-i", "-t", "-n", "-H", "-O",
+    *proc = bp::child(SearchPath(ss_binary_name), "-E", "-i", "-t", "-n", "-H", "-O",
                       bp::std_out > **out);
   } catch (const std::system_error& e) {
-    return absl::UnknownError(absl::StrCat("failed to start ss subprocess: ", e.what()));
+    return absl::UnknownError(absl::StrCat(
+        "failed to start ss subprocess (path = ", ss_binary_name, "): ", e.what()));
   }
   return absl::OkStatus();
 }
@@ -222,8 +233,8 @@ absl::Status SSFlowStateReporter::ReportState(
     absl::FunctionRef<bool(const proto::FlowMarker&, spdlog::logger*)> is_lopri) {
   try {
     bp::ipstream out;
-    bp::child c(bp::search_path(impl_->config.ss_binary_name), "-i", "-t", "-n", "-H",
-                "-O", bp::std_out > out);
+    bp::child c(SearchPath(impl_->config.ss_binary_name), "-i", "-t", "-n", "-H", "-O",
+                bp::std_out > out);
 
     absl::Time now = absl::Now();
     std::string line;
@@ -258,7 +269,9 @@ absl::Status SSFlowStateReporter::ReportState(
     impl_->flow_tracker->UpdateFlows(now, flow_updates);
     c.wait();
   } catch (const std::system_error& e) {
-    return absl::InternalError(absl::StrCat("failed to start ss subprocess: ", e.what()));
+    return absl::InternalError(absl::StrCat(
+        "failed to start ss subprocess (path = ", impl_->config.ss_binary_name,
+        "): ", e.what()));
   }
   return absl::OkStatus();
 }
