@@ -56,6 +56,7 @@ func MakeCodeBundle(binDir, auxBinDir, tarballPath string) error {
 		"fortio",
 		"graceful-stop",
 		"host-agent-sim",
+		"ss",
 		"vfortio",
 	}
 
@@ -188,6 +189,11 @@ func (nodeConfigs *HEYPNodeConfigs) MakeHostAgentConfig(c *pb.DeploymentConfig, 
 	if n.JobName != "" {
 		hostConfig.JobName = proto.String(n.JobName)
 	}
+	if hostConfig.FlowStateReporter == nil {
+		hostConfig.FlowStateReporter = new(pb.HostFlowStateReporterConfig)
+	}
+	hostConfig.FlowStateReporter.SsBinaryName = proto.String(
+		path.Join(remoteTopdir, "aux/ss"))
 	hostConfig.Daemon.ClusterAgentAddr = &n.ClusterAgentAddr
 	if startConfig.LogHostStats {
 		hostConfig.Daemon.StatsLogFile = proto.String(
@@ -319,6 +325,7 @@ func GetAndValidateHEYPNodeConfigs(c *pb.DeploymentConfig) (HEYPNodeConfigs, err
 						prev(c)
 						myAddr := host.TAP{ID: vhi}.VirtIP()
 						c.ThisHostAddrs = []string{myAddr}
+						c.FlowStateReporter.SsBinaryName = proto.String("/mnt/ss")
 						c.DcMapper = proto.Clone(c.DcMapper).(*pb.StaticDCMapperConfig)
 						c.DcMapper.Mapping.Entries = append(c.DcMapper.Mapping.Entries,
 							&pb.DCMapping_Entry{

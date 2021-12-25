@@ -36,6 +36,9 @@ for cmd in $TOINSTALL; do
   host-agent-sim)
     GOOS=linux GOARCH=amd64 ./wrapgo.bash build -o $PWD/aux-bin ./go/cmd/host-agent-sim
     ;;
+  prebuilt)
+    cp prebuilt/* aux-bin/
+    ;;
   *)
     echo "unknown cmd $cmd"
     exit 2
