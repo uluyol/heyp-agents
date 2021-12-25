@@ -51,10 +51,12 @@ func MakeCodeBundle(binDir, auxBinDir, tarballPath string) error {
 	auxBins := []string{
 		"collect-host-stats",
 		"envoy",
+		"firecracker",
 		"fortio-client",
 		"fortio",
 		"graceful-stop",
 		"host-agent-sim",
+		"vfortio",
 	}
 
 	for _, b := range auxBins {
@@ -205,8 +207,10 @@ func (nodeConfigs *HEYPNodeConfigs) MakeHostAgentConfig(c *pb.DeploymentConfig, 
 }
 
 func GetAndValidateHEYPNodeConfigs(c *pb.DeploymentConfig) (HEYPNodeConfigs, error) {
-	var nodeConfigs HEYPNodeConfigs
-	nodeConfigs.DCMapperConfig = new(pb.StaticDCMapperConfig)
+	nodeConfigs := HEYPNodeConfigs{
+		NodeVHostAgents: make(map[string][]HostAgentNode),
+		DCMapperConfig:  new(pb.StaticDCMapperConfig),
+	}
 
 	if hostAgentTmpl := c.GetHostAgentTemplate(); hostAgentTmpl != nil {
 		for _, dcPair := range hostAgentTmpl.GetSimulatedWan().DcPairs {
@@ -258,14 +262,20 @@ func GetAndValidateHEYPNodeConfigs(c *pb.DeploymentConfig) (HEYPNodeConfigs, err
 						nodeConfigs.ClusterAgentNodes,
 						ClusterAgentNode{n, cluster, "0.0.0.0:" + strconv.Itoa(int(cluster.GetClusterAgentPort()))})
 					thisClusterAgentNode = n
+				case role == "cluster-agents":
+					return nodeConfigs, fmt.Errorf("node '%s': invalid role \"cluster-agents\", did you mean \"cluster-agent\"?", n.GetName())
 				case role == "host-agent":
 					hostAgentConfig.Host = n
 					isHostAgent = true
+				case role == "host-agents":
+					return nodeConfigs, fmt.Errorf("node '%s': invalid role \"host-agents\", did you mean \"host-agent\"?", n.GetName())
+				case strings.HasPrefix(role, "vhost-agent-"):
+					return nodeConfigs, fmt.Errorf("node '%s': invalid role %q, did you mean %q?", n.GetName(), role, strings.Replace(role, "-agent-", "-agents-", 1))
 				case strings.HasPrefix(role, "vhost-agents-"):
 					numStr := strings.TrimPrefix(role, "vhost-agents-")
 					num, err := strconv.Atoi(numStr)
 					if err != nil {
-						return nodeConfigs, fmt.Errorf("node '%s': invalid number of vhost agents %q: %w", numStr, err)
+						return nodeConfigs, fmt.Errorf("node '%s': invalid number of vhost agents %q: %w", n.GetName(), numStr, err)
 					}
 					numVHostAgents = num
 					hostAgentConfig.Host = n

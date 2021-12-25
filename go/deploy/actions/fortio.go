@@ -2,19 +2,23 @@ package actions
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"os"
+	"path"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/uluyol/heyp-agents/go/deploy/configgen"
 	"github.com/uluyol/heyp-agents/go/deploy/periodic"
+	"github.com/uluyol/heyp-agents/go/deploy/virt"
 	"github.com/uluyol/heyp-agents/go/deploy/writetar"
 	"github.com/uluyol/heyp-agents/go/multierrgroup"
 	"github.com/uluyol/heyp-agents/go/pb"
+	"github.com/uluyol/heyp-agents/go/virt/vfortio"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
@@ -197,8 +201,32 @@ func KillFortio(c *pb.DeploymentConfig) error {
 	return KillSessions(c, "^fortio")
 }
 
+// TODO: kill vfortio properly, reset iptables and all
+
+func syncImageAndInitHost(server *pb.DeployedNode, remoteVfortioPath, remoteImageDir string) error {
+	cmd := TracingCommand(
+		LogWithPrefix("vfortio-sync-image: "),
+		"ssh", server.GetExternalAddr(),
+		fmt.Sprintf(
+			"mkdir -p %[1]s&&"+
+				"tar xzf - -C %[1]s &&"+
+				"(while pgrep firecracker; do sudo killall firecracker; done; sudo %[2]s tap -ignore-errs delete-all; true) &&"+
+				"sudo %[2]s init-host",
+			remoteImageDir, remoteVfortioPath))
+	cmd.SetStdin("image.tar.gz", bytes.NewReader(virt.ImageTarball()))
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("failed to sync image: %v; output:\n%s", err, out)
+	}
+	return nil
+}
+
 func FortioStartServers(c *pb.DeploymentConfig, remoteTopdir, envoyLogLevel string) error {
 	fortio, err := GetAndValidateFortioConfig(c)
+	if err != nil {
+		return err
+	}
+
+	heypNodeConfigs, err := GetAndValidateHEYPNodeConfigs(c)
 	if err != nil {
 		return err
 	}
@@ -214,7 +242,8 @@ func FortioStartServers(c *pb.DeploymentConfig, remoteTopdir, envoyLogLevel stri
 				LogWithPrefix("fortio-start-proxies: "),
 				"ssh", proxy.GetExternalAddr(),
 				fmt.Sprintf(
-					"tar xf - -C %[1]s/configs;"+
+					"mkdir -p %[1]s/configs;"+
+						"tar xf - -C %[1]s/configs;"+
 						"tmux kill-session -t fortio-proxy;"+
 						"tmux new-session -d -s fortio-proxy 'ulimit -Sn unlimited; %[1]s/aux/envoy --log-level %[2]s --concurrency %[3]d --config-path %[1]s/configs/fortio-envoy-config.yaml 2>&1 | tee %[1]s/logs/fortio-proxy.log; sleep 100000'", remoteTopdir, envoyLogLevel, fortio.Config.GetEnvoyNumThreads()))
 			cmd.SetStdin("config.tar", bytes.NewReader(configTar))
@@ -244,22 +273,114 @@ func FortioStartServers(c *pb.DeploymentConfig, remoteTopdir, envoyLogLevel stri
 
 			for _, server := range inst.Servers {
 				server := server
-				for _, port := range inst.Config.GetServePorts() {
+
+				var serverSyncError error
+				serverSynced := make(chan struct{})
+				go func() {
+					serverSyncError = syncImageAndInitHost(server, path.Join(remoteTopdir, "aux", "vfortio"), path.Join(remoteTopdir, "data", "vfortio-image"))
+					close(serverSynced)
+				}()
+
+				for porti, port := range inst.Config.GetServePorts() {
+					porti := porti
 					port := port
-					eg.Go(func() error {
-						cmd := TracingCommand(
-							LogWithPrefix("fortio-start-servers: "),
-							"ssh", server.GetExternalAddr(),
-							fmt.Sprintf(
-								"tmux kill-session -t fortio-%[2]s-%[3]s-server-port-%[4]d;"+
-									"tmux new-session -d -s fortio-%[2]s-%[3]s-server-port-%[4]d 'ulimit -Sn unlimited; env GOMAXPROCS=4 %[1]s/aux/fortio server -http-port %[4]d -maxpayloadsizekb %[5]d 2>&1 | tee %[1]s/logs/fortio-%[2]s-%[3]s-server-port-%[4]d.log; sleep 100000'",
-								remoteTopdir, inst.Config.GetGroup(), inst.Config.GetName(), port, maxPayload))
-						out, err := cmd.CombinedOutput()
-						if err != nil {
-							return fmt.Errorf("failed to start server for %q/%q on Node %q: %w; output: %s", inst.Config.GetGroup(), inst.Config.GetName(), server.GetName(), err, out)
+					if inst.Config.GetServersAreVirt() {
+						vhostAgents := heypNodeConfigs.NodeVHostAgents[server.GetName()]
+						if porti >= len(vhostAgents) {
+							return fmt.Errorf("want to serve %d vfortio instances, but only have %d vhost agents",
+								len(inst.Config.GetServePorts()),
+								len(vhostAgents))
 						}
-						return nil
-					})
+						vhostAgentConfig := heypNodeConfigs.MakeHostAgentConfig(c, DefaultHEYPAgentsConfig(), remoteTopdir, vhostAgents[porti])
+						eg.Go(func() error {
+							<-serverSynced
+							if serverSyncError != nil {
+								return serverSyncError
+							}
+
+							instName := fmt.Sprintf("fortio-%s-%s-server-port-%d",
+								inst.Config.GetGroup(), inst.Config.GetName(), port)
+							vfortioConfig := &vfortio.InstanceConfig{
+								ConfigDir:     path.Join(remoteTopdir, "configs", instName+"-configs"),
+								HostAgentPath: path.Join(remoteTopdir, "heyp/host-agent/host-agent"),
+								FortioPath:    path.Join(remoteTopdir, "aux/fortio"),
+								Image:         virt.ImageData(path.Join(remoteTopdir, "data", "vfortio-image")),
+								Fortio: vfortio.FortioOptions{
+									MaxPayloadKB: maxPayload,
+									FortioGroup:  inst.Config.GetGroup(),
+									FortioName:   inst.Config.GetName(),
+								},
+							}
+							vfortioConfigBytes, err := json.MarshalIndent(vfortioConfig, "", "  ")
+							if err != nil {
+								return fmt.Errorf("failed to marshal *vfortio.InstanceConfig: %v", err)
+							}
+							vhostConfigBytes, err := prototext.MarshalOptions{Indent: "  "}.Marshal(vhostAgentConfig)
+							if err != nil {
+								return fmt.Errorf("failed to marshal *pb.HostAgentConfig: %v", err)
+							}
+							configTar := writetar.ConcatInMem(
+								writetar.Add(instName+"-inst.json", vfortioConfigBytes),
+								writetar.Add(instName+"-configs/host-agent-config.textproto", vhostConfigBytes),
+							)
+							// Write config and start VM
+							cmd := TracingCommand(
+								LogWithPrefix("fortio-start-servers: "),
+								"ssh", server.GetExternalAddr(),
+								fmt.Sprintf(
+									"tar xf - -C %[1]s/configs &&"+
+										"sudo %[1]s/aux/vfortio create-inst "+
+										"-fc %[1]s/aux/firecracker "+
+										"-id %[4]d "+
+										"-addr %[5]s "+
+										"-port %[3]d "+
+										"-outdir %[1]s/logs/%[2]s-vfortio "+
+										"-config %[1]s/configs/%[2]s-inst.json ",
+									remoteTopdir, instName, port, porti, server.GetExperimentAddr()))
+							cmd.SetStdin("config.tar", bytes.NewReader(configTar))
+							out, err := cmd.CombinedOutput()
+							if err != nil {
+								return fmt.Errorf("failed to start vm for %q/%q on Node %q: %w; output: %s", inst.Config.GetGroup(), inst.Config.GetName(), server.GetName(), err, out)
+							}
+
+							// Start servers
+							cmd = TracingCommand(
+								LogWithPrefix("fortio-start-servers: "),
+								"ssh", server.GetExternalAddr(),
+								fmt.Sprintf(
+									"tmux kill-session -t %[2]s;"+
+										"tmux new-session -d -s %[2]s 'sudo %[1]s/aux/vfortio ctl-inst "+
+										"-inst %[1]s/logs/%[2]s-vfortio/vfortio.json "+
+										"init-with-data "+
+										"forward-fortio-ports "+
+										"bg-host-agent "+
+										"run-server "+
+										"copy-logs "+
+										"kill "+
+										" | tee %[1]s/logs/%[2]s-ctl-inst.log; sleep 100000'",
+									remoteTopdir, instName))
+							out, err = cmd.CombinedOutput()
+							if err != nil {
+								return fmt.Errorf("failed to ask vm to start server for %q/%q on Node %q: %w; output: %s", inst.Config.GetGroup(), inst.Config.GetName(), server.GetName(), err, out)
+							}
+							return nil
+						})
+					} else {
+						eg.Go(func() error {
+							cmd := TracingCommand(
+								LogWithPrefix("fortio-start-servers: "),
+								"ssh", server.GetExternalAddr(),
+								fmt.Sprintf(
+									"tmux kill-session -t fortio-%[2]s-%[3]s-server-port-%[4]d;"+
+										"tmux new-session -d -s fortio-%[2]s-%[3]s-server-port-%[4]d 'ulimit -Sn unlimited; env GOMAXPROCS=4 %[1]s/aux/fortio server -http-port %[4]d -maxpayloadsizekb %[5]d 2>&1 | tee %[1]s/logs/fortio-%[2]s-%[3]s-server-port-%[4]d.log; sleep 100000'",
+									remoteTopdir, inst.Config.GetGroup(), inst.Config.GetName(), port, maxPayload))
+							out, err := cmd.CombinedOutput()
+							if err != nil {
+								return fmt.Errorf("failed to start server for %q/%q on Node %q: %w; output: %s", inst.Config.GetGroup(), inst.Config.GetName(), server.GetName(), err, out)
+							}
+							return nil
+						})
+					}
 				}
 			}
 		}
