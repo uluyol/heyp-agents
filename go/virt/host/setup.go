@@ -1,6 +1,7 @@
 package host
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"os/exec"
@@ -9,6 +10,8 @@ import (
 
 	"github.com/uluyol/heyp-agents/go/virt/cmdseq"
 )
+
+// TODO: retry iptables and OS-related syscalls
 
 type PrepareForFirecrackerCmd struct {
 	ModuleKVM              string
@@ -93,6 +96,20 @@ type ipLinkStatus struct {
 
 type TAP struct{ ID int }
 
+func parseTAPDevice(s string) (TAP, bool) {
+	var t TAP
+	if !strings.HasPrefix(s, "fc-") {
+		return t, false
+	}
+	if !strings.HasSuffix(s, "-tap0") {
+		return t, false
+	}
+	idStr := strings.TrimSuffix(strings.TrimPrefix(s, "fc-"), "-tap0")
+	var err error
+	t.ID, err = strconv.Atoi(idStr)
+	return t, err == nil
+}
+
 func (t TAP) Device() string { return fmt.Sprintf("fc-%d-tap0", t.ID) }
 
 func (t TAP) HostTunnelIP() string {
@@ -105,6 +122,25 @@ func (t TAP) VirtIP() string {
 
 func (t TAP) VirtMAC() string {
 	return fmt.Sprintf("02:FC:00:00:%02X:%02X", t.ID/256, t.ID%256)
+}
+
+func ListTAPs() ([]TAP, error) {
+	out, err := exec.Command("ip", "-json", "link").Output()
+	if err != nil {
+		return nil, fmt.Errorf("failed to run ip -json link: %w", err)
+	}
+	var links []ipLinkStatus
+	if err := json.Unmarshal(out, &links); err != nil {
+		return nil, fmt.Errorf("failed to parse ip -json output: %w; output:\n%s", err, out)
+	}
+	var taps []TAP
+	for _, l := range links {
+		tap, ok := parseTAPDevice(l.IFName)
+		if ok {
+			taps = append(taps, tap)
+		}
+	}
+	return taps, nil
 }
 
 func CreateTAP(tapID int) (TAP, error) {
