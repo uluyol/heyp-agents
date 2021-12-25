@@ -9,7 +9,17 @@ def heyp_cc_binary(
         copts = [],
         visibility = None,
         deps = [],
+        fully_static_link = False,
         linkopts = []):
+    features = []
+    if fully_static_link:
+        features = ["fully_static_link"]
+    linkopts = linkopts + [
+        "-fno-builtin-malloc",
+        "-fno-builtin-calloc",
+        "-fno-builtin-realloc",
+        "-fno-builtin-free",
+    ]
     cc_binary(
         name = name,
         srcs = srcs,
@@ -17,6 +27,7 @@ def heyp_cc_binary(
         copts = copts,
         linkopts = linkopts,
         testonly = testonly,
+        features = features,
         linkstatic = 1,
         visibility = visibility,
         malloc = select({

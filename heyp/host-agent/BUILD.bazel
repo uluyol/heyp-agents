@@ -12,6 +12,7 @@ package(
 heyp_cc_binary(
     name = "host-agent",
     srcs = ["host-agent.cc"],
+    fully_static_link = True,
     visibility = ["//visibility:public"],
     deps = [
         ":daemon",

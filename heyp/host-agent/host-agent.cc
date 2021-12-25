@@ -25,6 +25,24 @@
 #include "heyp/proto/config.pb.h"
 #include "heyp/proto/fileio.h"
 
+// This bit of magic was taken from
+// (https://github.com/rook/rook/blob/6e84b161fa8786b271df2c118e75fd77d7d377b7/pkg/cephmgr/cephd/malloc.go)
+// and is used to workaround an issue with glibc 2.24 when replacing memory allocators.
+// Jemalloc and tcmalloc both rely on providing implementations of malloc (calloc, free,
+// etc.) so that the linker drops the need for glib's malloc.o and use jemalloc/tcmalloc's
+// implementation instead. However, in glibc 2.24 fork() now calls internal functions
+// specific to glib's memory allocator. The functions below provide empty implementations
+// so that the linker continues to drop the need for malloc.o and pickup jemalloc/tcmalloc
+// insead. See https://github.com/jemalloc/jemalloc/issues/442#event-840687583 and
+// https://github.com/gperftools/gperftools/issues/856 for more context. Also this was
+// fixed in glibc 2.25 but that is deployed in our dev environment
+// https://sourceware.org/bugzilla/show_bug.cgi?id=20432
+extern "C" {
+void __malloc_fork_lock_parent(void){};
+void __malloc_fork_unlock_parent(void){};
+void __malloc_fork_unlock_child(void){};
+}
+
 static std::atomic<bool> should_exit_flag{false};
 
 static void InterruptHandler(int signal) {
