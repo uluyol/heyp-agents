@@ -36,5 +36,22 @@ TEST(FindDeviceResponsibleForTest, Basic) {
   EXPECT_EQ(dev_or.value(), "lo");
 }
 
+TEST(FindDeviceResponsibleForLessReliableTest, Basic) {
+  auto logger = MakeLogger("test");
+
+  absl::StatusOr<std::string> dev_or =
+      FindDeviceResponsibleForLessReliable({"169.254.0.1"}, &logger, kCommand);
+  ASSERT_THAT(dev_or.status(), testing::Property(&absl::Status::ok, testing::IsTrue()));
+  EXPECT_EQ(dev_or.value(), "eth0");
+
+  dev_or = FindDeviceResponsibleForLessReliable({"128.110.155.6", "192.168.1.2"}, &logger,
+                                                kCommand);
+  ASSERT_THAT(dev_or.status(), testing::Property(&absl::Status::ok, testing::IsFalse()));
+
+  dev_or = FindDeviceResponsibleForLessReliable({"127.0.0.1"}, &logger, kCommand);
+  ASSERT_THAT(dev_or.status(), testing::Property(&absl::Status::ok, testing::IsTrue()));
+  EXPECT_EQ(dev_or.value(), "lo");
+}
+
 }  // namespace
 }  // namespace heyp

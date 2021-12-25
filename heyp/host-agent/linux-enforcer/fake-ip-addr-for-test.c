@@ -1,6 +1,8 @@
+#include <stdbool.h>
 #include <stdio.h>
+#include <string.h>
 
-static char output[] =
+static char kJsonOutput[] =
     "[{\"ifindex\":1,\"ifname\":\"lo\",\"flags\":[\"LOOPBACK\",\"UP\",\"LOWER_UP\"],"
     "\"mtu\":65536,\"qdisc\":\"noqueue\",\"operstate\":\"UNKNOWN\",\"group\":\"default\","
     "\"txqlen\":1000,\"link_type\":\"loopback\",\"address\":\"00:00:00:00:00:00\","
@@ -34,4 +36,29 @@ static char output[] =
     "\"link_type\":\"ether\",\"address\":\"9c:dc:71:5d:12:a1\",\"broadcast\":\"ff:ff:ff:"
     "ff:ff:ff\",\"addr_info\":[]}]";
 
-int main(int argc, char** argv) { puts(output); }
+static char kOnelineOutput[] =
+    "1: lo    inet 127.0.0.1/8 scope host lo\\       valid_lft forever preferred_lft "
+    "forever\n"
+    "2: eth0    inet 169.254.0.1/30 brd 169.254.0.3 scope global eth0\\       valid_lft "
+    "forever preferred_lft forever";
+
+int main(int argc, char** argv) {
+  bool is_json = false;
+  bool is_oneline = false;
+  for (int i = 0; i < argc; ++i) {
+    if (strcmp(argv[i], "-json") == 0) {
+      is_json = true;
+    } else if (strcmp(argv[i], "-oneline") == 0) {
+      is_oneline = true;
+    }
+  }
+  if (is_json && is_oneline) {
+    fprintf(stderr, "cannot pass both -json and -oneline\n");
+  }
+  if (is_json) {
+    puts(kJsonOutput);
+  }
+  if (is_oneline) {
+    puts(kOnelineOutput);
+  }
+}

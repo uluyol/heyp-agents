@@ -134,20 +134,35 @@ absl::Status Run(const proto::HostAgentConfig& c) {
   SPDLOG_LOGGER_INFO(&logger, "creating host enforcer");
   std::unique_ptr<HostEnforcer> enforcer;
   if (kHostIsLinux) {
-    auto device_or = FindDeviceResponsibleFor(
-        {c.this_host_addrs().begin(), c.this_host_addrs().end()}, &logger);
-    if (!device_or.ok()) {
-      return absl::InternalError(
-          absl::StrCat("failed to find device: ", device_or.status().message()));
+    std::string device;
+    {
+      auto device_or = FindDeviceResponsibleFor(
+          {c.this_host_addrs().begin(), c.this_host_addrs().end()}, &logger);
+      if (device_or.ok()) {
+        device = device_or.value();
+      } else {
+        auto device_or2 = FindDeviceResponsibleForLessReliable(
+            {c.this_host_addrs().begin(), c.this_host_addrs().end()}, &logger);
+        if (device_or2.ok()) {
+          device = device_or2.value();
+        } else {
+          return absl::InternalError(absl::StrCat(
+              "failed to find device:\n\terror via reliable method: ",
+              device_or.status().message(),
+              "\n\terror via unreliable method: ", device_or2.status().message()));
+        }
+      }
     }
 
+    SPDLOG_LOGGER_INFO(&logger, "enforcer will control device {}", device);
+
     auto e = LinuxHostEnforcer::Create(
-        device_or.value(), absl::bind_front(&ExpandDestIntoHostsSinglePri, &dc_mapper),
+        device, absl::bind_front(&ExpandDestIntoHostsSinglePri, &dc_mapper),
         c.enforcer());
     absl::Status st = e->ResetDeviceConfig();
     if (!st.ok()) {
-      SPDLOG_LOGGER_ERROR(&logger, "failed to reset config of device '{}': {}",
-                          device_or.value(), st);
+      SPDLOG_LOGGER_ERROR(&logger, "failed to reset config of device '{}': {}", device,
+                          st);
     }
 
     std::string my_dc;
