@@ -50,7 +50,7 @@ func (*tapCmd) Synopsis() string { return "manipulate taps" }
 const tapUsage = `tap [args] commands...
 
 Commands will be executed left-to-right until the first error occurs.
-Valid commands: create delete device fwdport host-tunnel-ip stopfwdport virt-ip virt-mac
+Valid commands: create delete delete-all device fwdport host-tunnel-ip stopfwdport virt-ip virt-mac
 (device, host-tunnel-ip, virt-ip, and virt-mac print the attribute value).
 `
 
@@ -86,6 +86,17 @@ func (c *tapCmd) Execute(ctx context.Context, fs *flag.FlagSet, args ...interfac
 		case "delete":
 			if err := tap.Close(); err != nil {
 				perrf("failed to delete tap: %v", err)
+			}
+		case "delete-all":
+			taps, err := host.ListTAPs()
+			if err == nil {
+				for _, tap := range taps {
+					if err := tap.Close(); err != nil {
+						perrf("failed to delete tap %d: %v", tap.ID, err)
+					}
+				}
+			} else {
+				perrf("failed to list taps: %v", err)
 			}
 		case "device":
 			fmt.Printf("%s%s\n", pre, tap.Device())
