@@ -333,7 +333,7 @@ func GetAndValidateHEYPNodeConfigs(c *pb.DeploymentConfig) (HEYPNodeConfigs, err
 								Dc:       proto.String(cluster.GetName()),
 							})
 					}
-					nodeConfigs.NodeVHostAgents[n.GetName()] = append(nodeConfigs.NodeVHostAgents[n.GetName()], hostAgentConfig)
+					nodeConfigs.NodeVHostAgents[n.GetName()] = append(nodeConfigs.NodeVHostAgents[n.GetName()], c)
 				}
 				nodesWithNewVHosts[n.GetName()] = numVHostAgents
 			}
