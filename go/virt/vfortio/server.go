@@ -40,7 +40,7 @@ type Instance struct {
 }
 
 func CreateInstance(firecrackerPath string, id int, fortiolisAddr string, fortioPort int, outdir string, cfg InstanceConfig) (*Instance, error) {
-	log.Printf("creating vfortio instance %d with output %s", id, outdir)
+	log.Printf("creating instance %d with output %s", id, outdir)
 	tap, err := host.CreateTAP(id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create tap %d: %v", id, err)
@@ -64,7 +64,7 @@ func CreateInstance(firecrackerPath string, id int, fortiolisAddr string, fortio
 }
 
 func (inst *Instance) Close() error {
-	log.Printf("killing vfortio instance %d", inst.ID)
+	log.Printf("killing instance %d", inst.ID)
 	err := inst.VM.Close()
 	if err2 := inst.VM.C.TAP.Close(); err2 != nil {
 		if err == nil {
@@ -77,10 +77,10 @@ func (inst *Instance) Close() error {
 }
 
 func (inst *Instance) InitWithData() error {
-	log.Printf("vfortio instance %d: setup tmpfs", inst.ID)
+	log.Printf("instance %d: setup tmpfs", inst.ID)
 	r := new(cmdseq.Runner)
 	r.Run("ssh", inst.VM.SSHArgs("mount -t tmpfs tmpfs /mnt")...)
-	r.Run("ssh", inst.VM.SSHArgs("mkdir /mnt/out")...)
+	r.Run("ssh", inst.VM.SSHArgs("mkdir /mnt/logs")...)
 	if err := r.Err(); err != nil {
 		return err
 	}
@@ -113,8 +113,8 @@ func (inst *Instance) InitWithData() error {
 
 	dataPayload := writetar.ConcatInMem(filesToConcat...)
 
-	log.Printf("vfortio instance %d: copy binaries", inst.ID)
-	cmd := exec.Command("ssh", inst.VM.SSHArgs("cd /mnt && tar xzf -")...)
+	log.Printf("instance %d: copy binaries", inst.ID)
+	cmd := exec.Command("ssh", inst.VM.SSHArgs("cd /mnt && tar x && chmod +x /mnt/fortio /mnt/host-agent")...)
 	cmd.Stdin = bytes.NewReader(dataPayload)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -137,7 +137,7 @@ func (inst *Instance) RunHostAgent() error {
 }
 
 func (inst *Instance) StartHostAgent() (*exec.Cmd, error) {
-	log.Printf("vfortio instance %d: start host agent", inst.ID)
+	log.Printf("instance %d: start host agent", inst.ID)
 	cmd := exec.Command("ssh", inst.VM.SSHArgs("cd /mnt && env ASAN_OPTIONS=detect_container_overflow=0 TSAN_OPTIONS=report_atomic_races=0 ./host-agent configs/host-agent-config.textproto | tee logs/host-agent.log")...)
 	err := cmd.Start()
 	if err != nil {
@@ -147,14 +147,14 @@ func (inst *Instance) StartHostAgent() (*exec.Cmd, error) {
 }
 
 func (inst *Instance) RunServer() error {
-	log.Printf("vfortio instance %d: start fortio server", inst.ID)
+	log.Printf("instance %d: start fortio server", inst.ID)
 	o := inst.C.Fortio
 	cmd := exec.Command("ssh", inst.VM.SSHArgs(fmt.Sprintf(
 		"cd /mnt && env GOMAXPROCS=4 ./fortio server -http-port %d -maxpayloadsizekb %d | tee logs/fortio-%s-%s-server-port-%d.log",
 		inst.FortioPort, o.MaxPayloadKB, o.FortioGroup, o.FortioName, inst.FortioPort))...)
-	err := cmd.Run()
+	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("failed to run fortio: %w", err)
+		return fmt.Errorf("failed to run fortio: %w; output: %s", err, out)
 	}
 	return nil
 }
@@ -164,7 +164,7 @@ func (inst *Instance) ForwardFortioPorts() error {
 }
 
 func (inst *Instance) CopyLogs() error {
-	log.Printf("vfortio instance %d: copy logs out", inst.ID)
+	log.Printf("instance %d: copy logs out", inst.ID)
 	cmd := exec.Command("ssh", inst.VM.SSHArgs("cd /mnt && tar cf - logs")...)
 	pr, pw := io.Pipe()
 	cmd.Stdout = pw
