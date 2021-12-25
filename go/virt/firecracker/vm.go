@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -144,6 +145,7 @@ func CreateVM(firecrackerPath string, image ImageData, cfg Config) (*VM, error) 
 	vmCmd.Process.Release()
 	vmCmd = nil
 
+	os.MkdirAll(filepath.Dir(cfg.LogFile), 0o755)
 	f, err := os.Create(cfg.LogFile)
 	f.Close()
 	if err != nil {
@@ -217,5 +219,5 @@ func CreateVM(firecrackerPath string, image ImageData, cfg Config) (*VM, error) 
 }
 
 func (vm *VM) SSHArgs(command string) []string {
-	return []string{"-i", vm.Image.SecretKeyPath, "root@" + vm.C.TAP.VirtIP(), command}
+	return []string{"-o", "StrictHostKeyChecking=no", "-i", vm.Image.SecretKeyPath, "root@" + vm.C.TAP.VirtIP(), command}
 }
