@@ -103,7 +103,7 @@ func (inst *Instance) InitWithData() error {
 	if err != nil {
 		return fmt.Errorf("failed to read host-agent binary: %w", err)
 	}
-	ssBin, err := os.ReadFile(inst.C.FortioPath)
+	ssBin, err := os.ReadFile(inst.C.SSPath)
 	if err != nil {
 		return fmt.Errorf("failed to read ss binary: %w", err)
 	}
