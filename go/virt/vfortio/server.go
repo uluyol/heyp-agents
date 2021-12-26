@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/uluyol/heyp-agents/go/deploy/writetar"
@@ -162,6 +163,14 @@ func (inst *Instance) StartHostAgent() (*exec.Cmd, error) {
 	return cmd, nil
 }
 
+func wasSignaled(state *os.ProcessState) bool {
+	sysState, ok := state.Sys().(syscall.WaitStatus)
+	if !ok {
+		return false // not sure
+	}
+	return sysState.Signaled()
+}
+
 func (inst *Instance) RunServer() error {
 	log.Printf("instance %d: start fortio server", inst.ID)
 	o := inst.C.Fortio
@@ -169,8 +178,17 @@ func (inst *Instance) RunServer() error {
 		"cd /mnt && env GOMAXPROCS=4 ./fortio server -http-port %d -maxpayloadsizekb %d | tee logs/fortio-%s-%s-server-port-%d.log",
 		inst.FortioPort, o.MaxPayloadKB, o.FortioGroup, o.FortioName, inst.FortioPort))...)
 	out, err := cmd.CombinedOutput()
-	if err != nil {
+	if err != nil && !wasSignaled(cmd.ProcessState) {
 		return fmt.Errorf("failed to run fortio: %w; output: %s", err, out)
+	}
+	return nil
+}
+
+func (inst *Instance) KillServer() error {
+	log.Printf("instance %d: kill fortio server", inst.ID)
+	cmd := exec.Command("ssh", inst.VM.SSHArgs("killall -SIGTERM fortio")...)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to kill server: %w", err)
 	}
 	return nil
 }
@@ -181,7 +199,7 @@ func (inst *Instance) ForwardFortioPorts() error {
 
 func (inst *Instance) CopyLogs() error {
 	log.Printf("instance %d: copy logs out", inst.ID)
-	cmd := exec.Command("ssh", inst.VM.SSHArgs("cd /mnt && tar cf - logs")...)
+	cmd := exec.Command("ssh", inst.VM.SSHArgs("cd /mnt && tar --warning=no-file-changed -cf - logs")...)
 	pr, pw := io.Pipe()
 	cmd.Stdout = pw
 
