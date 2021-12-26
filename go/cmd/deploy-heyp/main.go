@@ -64,6 +64,18 @@ func (c *configureSysCmd) SetFlags(fs *flag.FlagSet) {
 	fs.IntVar(&c.sys.MinPort, "portmin", c.sys.MinPort, "minimum port number available for ephemeral use")
 	fs.IntVar(&c.sys.MaxPort, "portmax", c.sys.MaxPort, "maximum port number available for ephemeral use")
 	fs.BoolVar(&c.sys.DebugMonitoring, "debugmon", c.sys.DebugMonitoring, "setup for debugging")
+	fs.IntVar(&c.sys.StartDropAfterNumUnauthConns,
+		"sshd-start-drop-after-num-unauth-conns",
+		c.sys.StartDropAfterNumUnauthConns,
+		"see MaxStartups option for sshd")
+	fs.IntVar(&c.sys.StartDropRatePerc,
+		"sshd-start-drop-rate-per",
+		c.sys.StartDropRatePerc,
+		"see MaxStartups option for sshd")
+	fs.IntVar(&c.sys.MaxUnauthConns,
+		"sshd-max-unauth-conns",
+		c.sys.MaxUnauthConns,
+		"see MaxStartups option for sshd")
 }
 
 func (c *configureSysCmd) Execute(ctx context.Context, fs *flag.FlagSet,

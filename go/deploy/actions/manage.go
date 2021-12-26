@@ -561,17 +561,23 @@ func StopCollectingHostStats(c *pb.DeploymentConfig, remoteTopdir string) error 
 }
 
 type SysConfig struct {
-	CongestionControl string
-	MinPort, MaxPort  int
-	DebugMonitoring   bool
+	CongestionControl            string
+	MinPort, MaxPort             int
+	DebugMonitoring              bool
+	StartDropAfterNumUnauthConns int
+	StartDropRatePerc            int
+	MaxUnauthConns               int
 }
 
 func DefaultSysConfig() SysConfig {
 	return SysConfig{
-		CongestionControl: "bbr",
-		MinPort:           1050,
-		MaxPort:           65535,
-		DebugMonitoring:   false,
+		CongestionControl:            "bbr",
+		MinPort:                      1050,
+		MaxPort:                      65535,
+		DebugMonitoring:              false,
+		StartDropAfterNumUnauthConns: 50,
+		StartDropRatePerc:            30,
+		MaxUnauthConns:               5000,
 	}
 }
 
@@ -590,7 +596,13 @@ func ConfigureSys(c *pb.DeploymentConfig, sysConfig *SysConfig) error {
 			cmd := TracingCommand(
 				LogWithPrefix("config-sys: "),
 				"ssh", n.GetExternalAddr(),
-				"sudo tee -a /etc/sysctl.conf && sudo sysctl -p",
+				fmt.Sprintf("sudo tee -a /etc/sysctl.conf &&"+
+					"sudo sysctl -p &&"+
+					"(echo \"MaxStartups %d:%d:%d\" | sudo tee /etc/ssh/sshd_config.d/maxstartup.conf >/dev/null) &&"+
+					"sudo systemctl reload sshd",
+					sysConfig.StartDropAfterNumUnauthConns,
+					sysConfig.StartDropRatePerc,
+					sysConfig.MaxUnauthConns),
 			)
 			sysctlBuf := strings.Join(sysctlLines, "\n") + "\n"
 			cmd.SetStdin("sysctl-tail.conf", strings.NewReader(sysctlBuf))
