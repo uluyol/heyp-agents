@@ -332,6 +332,17 @@ func GetAndValidateHEYPNodeConfigs(c *pb.DeploymentConfig) (HEYPNodeConfigs, err
 								HostAddr: proto.String(myAddr),
 								Dc:       proto.String(cluster.GetName()),
 							})
+
+						if c.GetDaemon().GetStatsLogFile() != "" {
+							c.Daemon.StatsLogFile = proto.String("/mnt/logs/host-agent-stats.log")
+						}
+						if c.GetDaemon().GetFineGrainedStatsLogFile() != "" {
+							c.Daemon.FineGrainedStatsLogFile = proto.String(
+								"/mnt/logs/host-agent-fine-grained-stats.log")
+						}
+						if c.GetEnforcer().GetDebugLogDir() != "" {
+							c.Enforcer.DebugLogDir = proto.String("/mnt/logs/host-enforcer-debug")
+						}
 					}
 					nodeConfigs.NodeVHostAgents[n.GetName()] = append(nodeConfigs.NodeVHostAgents[n.GetName()], c)
 				}
