@@ -28,52 +28,62 @@ run_one() {
     return 0
   fi
 
-  echo "[$HEYP_RUN_NAME] kill existing daemons"
-  local dpids=""
-  bin/deploy-heyp kill-fortio -c $c &
-  dpids="$dpids $!"
-  bin/deploy-heyp kill-heyp-agents -c $c &
-  dpids="$dpids $!"
-  bin/deploy-heyp kill-iperf -c $c &
-  dpids="$dpids $!"
-  wait_all $dpids || return 1
-
-  echo "[$HEYP_RUN_NAME] delete remote logs"
-  bin/deploy-heyp delete-logs -c $c || return 1
-
-  echo "[$HEYP_RUN_NAME] start HEYP agents"
-  bin/deploy-heyp start-heyp-agents -c $c || return 1
-  echo "[$HEYP_RUN_NAME] start fortio servers"
-  bin/deploy-heyp fortio-start-servers -c $c || return 1
-  sleep 10
-  echo "[$HEYP_RUN_NAME] start collecting host stats"
-  bin/deploy-heyp collect-host-stats -c $c || return 1
-  echo "[$HEYP_RUN_NAME] run fortio clients"
-  bin/deploy-heyp fortio-run-clients -c $c || return 1
-  echo "[$HEYP_RUN_NAME] stop heyp agents and host stat collection"
-  dpids=""
-  bin/deploy-heyp collect-host-stats -c $c -stop &
-  dpids="$dpids $!"
-  bin/deploy-heyp stop-heyp-agents -c $c &# graceful shutdown
-  dpids="$dpids $!"
-
-  wait_all $dpids || true # ignore shutdown errors
-
-  sleep 3
-
-  local did_fetch=0
-  local try=1
-  while ((did_fetch == 0)); do
-    echo "[$HEYP_RUN_NAME] fetch data (try = $try)"
-    if bin/deploy-heyp fetch-data -c $c -o $o; then
-      did_fetch=1
-    fi
-    try=$((try + 1))
-  done
-
-  if ((did_fetch == 0)); then
+  local sshmux=$(bin/deploy-heyp mk-ssh-mux -c $c)
+  if [[ $? -ne 0 ]]; then
     return 1
   fi
+  trap 'bin/deploy-heyp del-ssh-mux -mux "$sshmux"' RETURN
+
+  (
+    export PATH=$sshmux:$PATH
+
+    echo "[$HEYP_RUN_NAME] kill existing daemons"
+    local dpids=""
+    bin/deploy-heyp kill-fortio -c $c &
+    dpids="$dpids $!"
+    bin/deploy-heyp kill-heyp-agents -c $c &
+    dpids="$dpids $!"
+    bin/deploy-heyp kill-iperf -c $c &
+    dpids="$dpids $!"
+    wait_all $dpids || exit 1
+
+    echo "[$HEYP_RUN_NAME] delete remote logs"
+    bin/deploy-heyp delete-logs -c $c || exit 1
+
+    echo "[$HEYP_RUN_NAME] start HEYP agents"
+    bin/deploy-heyp start-heyp-agents -c $c || exit 1
+    echo "[$HEYP_RUN_NAME] start fortio servers"
+    bin/deploy-heyp fortio-start-servers -c $c || exit 1
+    sleep 10
+    echo "[$HEYP_RUN_NAME] start collecting host stats"
+    bin/deploy-heyp collect-host-stats -c $c || exit 1
+    echo "[$HEYP_RUN_NAME] run fortio clients"
+    bin/deploy-heyp fortio-run-clients -c $c || exit 1
+    echo "[$HEYP_RUN_NAME] stop heyp agents and host stat collection"
+    dpids=""
+    bin/deploy-heyp collect-host-stats -c $c -stop &
+    dpids="$dpids $!"
+    bin/deploy-heyp stop-heyp-agents -c $c &# graceful shutdown
+    dpids="$dpids $!"
+
+    wait_all $dpids || true # ignore shutdown errors
+
+    sleep 3
+
+    local did_fetch=0
+    local try=1
+    while ((did_fetch == 0)); do
+      echo "[$HEYP_RUN_NAME] fetch data (try = $try)"
+      if bin/deploy-heyp fetch-data -c $c -o $o; then
+        did_fetch=1
+      fi
+      try=$((try + 1))
+    done
+
+    if ((did_fetch == 0)); then
+      exit 1
+    fi
+  ) || return 1
 
   touch "$o/done"
   return 0
