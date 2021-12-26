@@ -2,7 +2,6 @@ package sshmux
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -15,6 +14,7 @@ import (
 	"text/template"
 
 	"github.com/kballard/go-shellquote"
+	"github.com/uluyol/heyp-agents/go/multierrgroup"
 )
 
 type muxData struct {
@@ -128,10 +128,10 @@ func NewMux(muxDir string) *Mux {
 
 func (m *Mux) CreateMaster(dst string) error {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
 	m.d.Counter++
 	id := m.d.Counter
+	m.mu.Unlock()
+
 	socketPath := filepath.Join(m.d.MuxDir, "sock."+strconv.Itoa(id))
 
 	cmd := exec.Command("ssh", "-M", "-S", socketPath, dst)
@@ -141,38 +141,32 @@ func (m *Mux) CreateMaster(dst string) error {
 
 	cmd.Process.Release()
 	cmd = nil
+	m.mu.Lock()
 	m.d.DestSockets[dst] = socketPath
+	m.mu.Unlock()
 	return nil
 }
 
 func (m *Mux) ReleaseAll() error {
+	var eg multierrgroup.Group
 	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	var errs []string
 	for dst := range m.d.DestSockets {
-		if err := m.releaseLocked(dst); err != nil {
-			errs = append(errs, err.Error())
-		}
+		dst := dst
+		sock := m.d.DestSockets[dst]
+		eg.Go(func() error { return release(dst, sock) })
 	}
-	if len(errs) == 0 {
-		return nil
-	} else if len(errs) == 1 {
-		return errors.New(errs[0])
-	} else {
-		return fmt.Errorf("multiple errors:\n\t%s", strings.Join(errs, "\n\t"))
-	}
+	m.mu.Unlock()
+	return eg.Wait()
 }
 
 func (m *Mux) Release(dst string) error {
 	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.releaseLocked(dst)
+	sock := m.d.DestSockets[dst]
+	m.mu.Unlock()
+	return release(dst, sock)
 }
 
-func (m *Mux) releaseLocked(dst string) error {
-	sock := m.d.DestSockets[dst]
-
+func release(dst, sock string) error {
 	out, err := exec.Command("ssh", "-M", "-S", sock, "-O", "exit", dst).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to release master for dst %q: %v; output: %s", dst, err, out)
