@@ -201,8 +201,6 @@ func KillFortio(c *pb.DeploymentConfig) error {
 	return KillSessions(c, "^fortio")
 }
 
-// TODO: kill vfortio properly, reset iptables and all
-
 func syncImageAndInitHost(server *pb.DeployedNode, remoteVfortioPath, remoteImageDir string) error {
 	cmd := TracingCommand(
 		LogWithPrefix("vfortio-sync-image: "),
@@ -218,6 +216,47 @@ func syncImageAndInitHost(server *pb.DeployedNode, remoteVfortioPath, remoteImag
 		return fmt.Errorf("failed to sync image: %v; output:\n%s", err, out)
 	}
 	return nil
+}
+
+func GracefulStopVFortioInstances(c *pb.DeploymentConfig, remoteTopdir string) error {
+	fortio, err := GetAndValidateFortioConfig(c)
+	if err != nil {
+		return err
+	}
+
+	var eg multierrgroup.Group
+	for _, group := range fortio.Groups {
+		group := group
+		for _, inst := range group.Instances {
+			inst := inst
+			for _, server := range inst.Servers {
+				server := server
+				for _, port := range inst.Config.GetServePorts() {
+					port := port
+					if inst.Config.GetServersAreVirt() {
+						eg.Go(func() error {
+							instName := fmt.Sprintf("fortio-%s-%s-server-port-%d",
+								inst.Config.GetGroup(), inst.Config.GetName(), port)
+							// Start servers
+							cmd := TracingCommand(
+								LogWithPrefix("graceful-stop-vfortio-instances: "),
+								"ssh", server.GetExternalAddr(),
+								fmt.Sprintf(
+									"sudo %[1]s/aux/vfortio ctl-inst "+
+										"-inst %[1]s/logs/%[2]s-vfortio/vfortio.json "+
+										"kill-server wait-until-dead", remoteTopdir, instName))
+							out, err := cmd.CombinedOutput()
+							if err != nil {
+								return fmt.Errorf("failed to ask vm to kill fortio server for %q/%q on Node %q: %w; output: %s", inst.Config.GetGroup(), inst.Config.GetName(), server.GetName(), err, out)
+							}
+							return nil
+						})
+					}
+				}
+			}
+		}
+	}
+	return eg.Wait()
 }
 
 func FortioStartServers(c *pb.DeploymentConfig, remoteTopdir, envoyLogLevel string) error {
