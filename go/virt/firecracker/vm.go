@@ -59,6 +59,27 @@ func (vm *VM) client() *http.Client {
 	return vm.lazyClient
 }
 
+func (vm *VM) IsDead() (bool, error) {
+	err := syscall.Kill(vm.FirecrackerPID, 0)
+	if err == syscall.ESRCH {
+		return true, nil
+	}
+	return false, err
+}
+
+func (vm *VM) WaitUntilIsDead(ctx context.Context) error {
+	for {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		isDead, _ := vm.IsDead()
+		if isDead {
+			return nil
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
 func (vm *VM) Close() error {
 	log.Printf("killing firecracker VM %d", vm.C.ID)
 	err := syscall.Kill(vm.FirecrackerPID, syscall.SIGTERM)
