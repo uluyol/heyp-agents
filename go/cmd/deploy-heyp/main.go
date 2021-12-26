@@ -708,6 +708,8 @@ func main() {
 	subcommands.Register(stopHEYPCmd, "")
 	subcommands.Register(deleteLogsCmd, "")
 	subcommands.Register(new(genConfigsCmd), "")
+	subcommands.Register(mkSSHMuxCmd, "ssh")
+	subcommands.Register(new(delSSHMuxCmd), "ssh")
 
 	flag.Parse()
 
