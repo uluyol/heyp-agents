@@ -15,6 +15,7 @@ import (
 	"github.com/uluyol/heyp-agents/go/cmd/flagtypes"
 	"github.com/uluyol/heyp-agents/go/deploy/actions"
 	"github.com/uluyol/heyp-agents/go/deploy/configgen"
+	"github.com/uluyol/heyp-agents/go/multierrgroup"
 	"github.com/uluyol/heyp-agents/go/pb"
 	"google.golang.org/protobuf/encoding/prototext"
 )
@@ -186,7 +187,22 @@ var stopHEYPCmd = &configAndRemDirCmd{
 	name:     "stop-heyp-agents",
 	synopsis: "gracefully stop all HEYP agents",
 	exec: func(c *configAndRemDirCmd, fs *flag.FlagSet) {
-		if err := actions.GracefulStopHEYPAgents(c.config, c.remDir); err != nil {
+		var eg multierrgroup.Group
+		eg.Go(func() error {
+			e := actions.GracefulStopHEYPAgents(c.config, c.remDir)
+			if e != nil {
+				return fmt.Errorf("failed to stop heyp agents: %w", e)
+			}
+			return nil
+		})
+		eg.Go(func() error {
+			e := actions.GracefulStopVFortioInstances(c.config, c.remDir)
+			if e != nil {
+				return fmt.Errorf("failed to stop vfortio instances: %w", e)
+			}
+			return nil
+		})
+		if err := eg.Wait(); err != nil {
 			log.Fatal(err)
 		}
 	},
