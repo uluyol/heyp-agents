@@ -9,8 +9,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 
 	"github.com/google/subcommands"
+	"github.com/uluyol/heyp-agents/go/cmd/flagtypes"
 	"github.com/uluyol/heyp-agents/go/virt/vfortio"
 )
 
@@ -66,6 +68,7 @@ var _ subcommands.Command = new(vfortioCreateInstCmd)
 type vfortioControlInstCmd struct {
 	instPath   string
 	ignoreErrs bool
+	timeout    flagtypes.Duration
 }
 
 func (*vfortioControlInstCmd) Name() string { return "ctl-inst" }
@@ -75,7 +78,7 @@ func (*vfortioControlInstCmd) Synopsis() string { return "control an existing vf
 const vfortioControlInstUsage = `ctl-inst [args] commands...
 
 Commands will be executed left-to-right until the first error occurs.
-Valid commands: kill init-with-data forward-fortio-ports bg-host-agent fg-host-agent run-server copy-logs
+Valid commands: bg-host-agent copy-logs fg-host-agent forward-fortio-ports init-with-data kill kill-server run-server wait-until-dead
 `
 
 func (*vfortioControlInstCmd) Usage() string { return vfortioControlInstUsage }
@@ -83,6 +86,8 @@ func (*vfortioControlInstCmd) Usage() string { return vfortioControlInstUsage }
 func (c *vfortioControlInstCmd) SetFlags(fs *flag.FlagSet) {
 	fs.StringVar(&c.instPath, "inst", "vfortio.json", "path to vforito instance data")
 	fs.BoolVar(&c.ignoreErrs, "ignore-errs", false, "ignore errors and execute everything")
+	c.timeout.D = 10 * time.Second
+	fs.Var(&c.timeout, "timeout", "per-operation timeout as a duration")
 }
 
 func (c *vfortioControlInstCmd) Execute(ctx context.Context, fs *flag.FlagSet, args ...interface{}) subcommands.ExitStatus {
@@ -145,10 +150,20 @@ func (c *vfortioControlInstCmd) Execute(ctx context.Context, fs *flag.FlagSet, a
 			if err := inst.RunServer(); err != nil {
 				perrf("%v", err)
 			}
+		case "kill-server":
+			if err := inst.KillServer(); err != nil {
+				perrf("%v", err)
+			}
 		case "copy-logs":
 			if err := inst.CopyLogs(); err != nil {
 				perrf("failed to copy logs out of the vm: %v", err)
 			}
+		case "wait-until-dead":
+			ctx, cancel := context.WithTimeout(context.Background(), c.timeout.D)
+			if err := inst.VM.WaitUntilIsDead(ctx); err != nil {
+				perrf("failed to wait until vm is dead: %v", err)
+			}
+			cancel()
 		default:
 			log.Fatalf("invalid command %q", cmd)
 		}
