@@ -216,12 +216,21 @@ func CheckNodeConnectivity(c *pb.DeploymentConfig) error {
 				return err
 			}
 
-			cmd := TracingCommandContext(ctx,
-				LogWithPrefix("check-node-connectivity: "),
-				"ssh", n.GetExternalAddr(), "bash",
-			)
-			cmd.SetStdin("curl-runs.bash", &buf)
-			out, err := cmd.CombinedOutput()
+			var err error
+			var out []byte
+			const maxTries = 3
+			for try := 0; try < maxTries; try++ {
+				cmd := TracingCommandContext(ctx,
+					LogWithPrefix("check-node-connectivity: "),
+					"ssh", n.GetExternalAddr(), "bash",
+				)
+				cmd.SetStdin("curl-runs.bash", &buf)
+				out, err = cmd.CombinedOutput()
+				if err == nil {
+					break
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
 
 			if err != nil {
 				return fmt.Errorf("src %s failed to connect to all: %v; output:\n%s", n.GetName(), err, out)
