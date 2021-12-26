@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/uluyol/heyp-agents/go/virt/cmdseq"
 )
@@ -48,26 +49,38 @@ func (cmd PrepareForFirecrackerCmd) Run() error {
 	var r cmdseq.Runner
 	log.Print("[prepsys] preparing system for running firecracker")
 	log.Print("[prepsys] load kvm")
-	r.Run("modprobe", cmd.ModuleKVM)
+	r.TryRunN(retryCount, "modprobe", cmd.ModuleKVM)
 	if cmd.EnablePacketForwarding {
 		log.Print("[prepsys] enable packet forwarding")
-		r.Run("sysctl", "-w", "net.ipv4.conf.all.forwarding=1")
+		r.TryRunN(retryCount, "sysctl", "-w", "net.ipv4.conf.all.forwarding=1")
 	}
 
 	log.Print("[prepsys] set gcthresh to avoid neighbor table overflow")
 	// Avoid "neighbour: arp_cache: neighbor table overflow!"
-	r.Run("sysctl", "-w", "net.ipv4.neigh.default.gc_thresh1="+strconv.Itoa(cmd.NeighborGCThresh1))
-	r.Run("sysctl", "-w", "net.ipv4.neigh.default.gc_thresh2="+strconv.Itoa(cmd.NeighborGCThresh2))
-	r.Run("sysctl", "-w", "net.ipv4.neigh.default.gc_thresh3="+strconv.Itoa(cmd.NeighborGCThresh3))
+	r.TryRunN(retryCount,
+		"sysctl", "-w", "net.ipv4.neigh.default.gc_thresh1="+strconv.Itoa(cmd.NeighborGCThresh1))
+	r.TryRunN(retryCount,
+		"sysctl", "-w", "net.ipv4.neigh.default.gc_thresh2="+strconv.Itoa(cmd.NeighborGCThresh2))
+	r.TryRunN(retryCount,
+		"sysctl", "-w", "net.ipv4.neigh.default.gc_thresh3="+strconv.Itoa(cmd.NeighborGCThresh3))
 	if r.Err() != nil {
 		return fmt.Errorf("%v; output: %s", r.Err(), r.Out())
 	}
 
 	if cmd.EnablePacketForwarding {
 		log.Print("[prepsys] configure iptables")
-		cmd := exec.Command("iptables-restore")
-		cmd.Stdin = strings.NewReader(iptablesBaseRules)
-		if out, err := cmd.CombinedOutput(); err != nil {
+		var out []byte
+		var err error
+		for i := 0; i < retryCount; i++ {
+			cmd := exec.Command("iptables-restore")
+			cmd.Stdin = strings.NewReader(iptablesBaseRules)
+			out, err = cmd.CombinedOutput()
+			if err == nil {
+				break
+			}
+			time.Sleep(4 * time.Millisecond)
+		}
+		if err != nil {
 			return fmt.Errorf("%v; output: %s", err, out)
 		}
 	}
@@ -125,7 +138,15 @@ func (t TAP) VirtMAC() string {
 }
 
 func ListTAPs() ([]TAP, error) {
-	out, err := exec.Command("ip", "-json", "link").Output()
+	var out []byte
+	var err error
+	for i := 0; i < retryCount; i++ {
+		out, err = exec.Command("ip", "-json", "link").Output()
+		if err == nil {
+			break
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to run ip -json link: %w", err)
 	}
@@ -143,24 +164,27 @@ func ListTAPs() ([]TAP, error) {
 	return taps, nil
 }
 
+const retryCount = 10
+
 func CreateTAP(tapID int) (TAP, error) {
 	tap := TAP{tapID}
 	log.Printf("creating TAP device %s", tap.Device())
 	var r cmdseq.Runner
-	r.Run("ip", "link", "del", tap.Device()).Clear()
-	r.Run("ip", "tuntap", "add", "dev", tap.Device(), "mode", "tap")
-	r.Run("sysctl", "-w", "net.ipv4.conf."+tap.Device()+".proxy_arp=1")
-	r.Run("sysctl", "-w", "net.ipv6.conf."+tap.Device()+".disable_ipv6=1")
-	r.Run("ip", "addr", "add", tap.HostTunnelIP()+MaskShort, "dev", tap.Device())
-	r.Run("ip", "link", "set", "dev", tap.Device(), "up")
-	r.Run("iptables", "-A", "FORWARD", "-i", tap.Device(), "-j", "ACCEPT")
+	r.TryRunN(retryCount, "ip", "link", "del", tap.Device()).Clear()
+	r.TryRunN(retryCount, "ip", "tuntap", "add", "dev", tap.Device(), "mode", "tap")
+	r.TryRunN(retryCount, "sysctl", "-w", "net.ipv4.conf."+tap.Device()+".proxy_arp=1")
+	r.TryRunN(retryCount, "sysctl", "-w", "net.ipv6.conf."+tap.Device()+".disable_ipv6=1")
+	r.TryRunN(retryCount, "ip", "addr", "add", tap.HostTunnelIP()+MaskShort, "dev", tap.Device())
+	r.TryRunN(retryCount, "ip", "link", "set", "dev", tap.Device(), "up")
+	r.TryRunN(retryCount, "iptables", "-A", "FORWARD", "-i", tap.Device(), "-j", "ACCEPT")
 	return tap, r.Err()
 }
 
 func (t TAP) ForwardPort(lisIP string, lisPort, vmPort int) error {
 	log.Printf("forward %s:%v to %s:%v", lisIP, lisPort, t.VirtIP(), vmPort)
 	return new(cmdseq.Runner).
-		Run("iptables", "-t", "nat", "-A", "PREROUTING", "-p", "tcp",
+		TryRunN(retryCount,
+			"iptables", "-t", "nat", "-A", "PREROUTING", "-p", "tcp",
 			"-d", lisIP, "--dport", strconv.Itoa(lisPort), "-j", "DNAT",
 			"--to-destination", t.VirtIP()+":"+strconv.Itoa(vmPort)).
 		Err()
@@ -169,7 +193,8 @@ func (t TAP) ForwardPort(lisIP string, lisPort, vmPort int) error {
 func (t TAP) StopForwardPort(lisIP string, lisPort, vmPort int) error {
 	log.Printf("stop forwarding %s:%v to %s:%v", lisIP, lisPort, t.VirtIP(), vmPort)
 	return new(cmdseq.Runner).
-		Run("iptables", "-t", "nat", "-D", "PREROUTING", "-p", "tcp",
+		TryRunN(retryCount,
+			"iptables", "-t", "nat", "-D", "PREROUTING", "-p", "tcp",
 			"-d", lisIP, "--dport", strconv.Itoa(lisPort), "-j", "DNAT",
 			"--to-destination", t.VirtIP()+":"+strconv.Itoa(vmPort)).
 		Err()
@@ -178,7 +203,7 @@ func (t TAP) StopForwardPort(lisIP string, lisPort, vmPort int) error {
 func (t TAP) Close() error {
 	log.Printf("deleting TAP device %s", t.Device())
 	return new(cmdseq.Runner).
-		Run("ip", "link", "del", t.Device()).
-		Run("iptables", "-D", "FORWARD", "-i", t.Device(), "-j", "ACCEPT").
+		TryRunN(retryCount, "ip", "link", "del", t.Device()).
+		TryRunN(retryCount, "iptables", "-D", "FORWARD", "-i", t.Device(), "-j", "ACCEPT").
 		Err()
 }
