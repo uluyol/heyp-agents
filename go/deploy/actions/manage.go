@@ -138,6 +138,15 @@ func hasRole(n *pb.DeployedNode, want string) bool {
 	return false
 }
 
+func hasRolePrefix(n *pb.DeployedNode, wantPre string) bool {
+	for _, r := range n.GetRoles() {
+		if strings.HasPrefix(r, wantPre) {
+			return true
+		}
+	}
+	return false
+}
+
 type HEYPAgentsConfig struct {
 	LogClusterAllocState    bool
 	LogEnforcerState        bool
@@ -194,6 +203,9 @@ func (nodeConfigs *HEYPNodeConfigs) MakeHostAgentConfig(c *pb.DeploymentConfig, 
 	}
 	hostConfig.FlowStateReporter.SsBinaryName = proto.String(
 		path.Join(remoteTopdir, "aux/ss"))
+	if hostConfig.Daemon == nil {
+		hostConfig.Daemon = new(pb.HostDaemonConfig)
+	}
 	hostConfig.Daemon.ClusterAgentAddr = &n.ClusterAgentAddr
 	if startConfig.LogHostStats {
 		hostConfig.Daemon.StatsLogFile = proto.String(
@@ -202,6 +214,9 @@ func (nodeConfigs *HEYPNodeConfigs) MakeHostAgentConfig(c *pb.DeploymentConfig, 
 	if startConfig.LogFineGrainedHostStats || c.GetHostAgentLogFineGrainedStats() {
 		hostConfig.Daemon.FineGrainedStatsLogFile = proto.String(
 			path.Join(remoteTopdir, "logs/host-agent-fine-grained-stats.log"))
+	}
+	if hostConfig.Enforcer == nil {
+		hostConfig.Enforcer = new(pb.HostEnforcerConfig)
 	}
 	if startConfig.LogEnforcerState {
 		hostConfig.Enforcer.DebugLogDir = proto.String(
@@ -219,7 +234,7 @@ func GetAndValidateHEYPNodeConfigs(c *pb.DeploymentConfig) (HEYPNodeConfigs, err
 	}
 
 	if hostAgentTmpl := c.GetHostAgentTemplate(); hostAgentTmpl != nil {
-		for _, dcPair := range hostAgentTmpl.GetSimulatedWan().DcPairs {
+		for _, dcPair := range hostAgentTmpl.GetSimulatedWan().GetDcPairs() {
 			if dcPair.Netem != nil {
 				if err := checkNetem(dcPair, dcPair.Netem, "netem"); err != nil {
 					return nodeConfigs, err
@@ -243,7 +258,7 @@ func GetAndValidateHEYPNodeConfigs(c *pb.DeploymentConfig) (HEYPNodeConfigs, err
 			if n == nil {
 				return nodeConfigs, fmt.Errorf("node not found: %s", nodeName)
 			}
-			if hasRole(n, "host-agent") {
+			if hasRole(n, "host-agent") || hasRolePrefix(n, "vhost-agents-") {
 				if nodeConfigs.DCMapperConfig.Mapping == nil {
 					nodeConfigs.DCMapperConfig.Mapping = new(pb.DCMapping)
 				}
