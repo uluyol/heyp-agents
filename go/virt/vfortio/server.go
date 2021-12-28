@@ -1,13 +1,17 @@
 package vfortio
 
 import (
+	"archive/tar"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -155,7 +159,7 @@ func (inst *Instance) RunHostAgent() error {
 
 func (inst *Instance) StartHostAgent() (*exec.Cmd, error) {
 	log.Printf("instance %d: start host agent", inst.ID)
-	cmd := exec.Command("ssh", inst.VM.SSHArgs("cd /mnt && env ASAN_OPTIONS=detect_container_overflow=0 TSAN_OPTIONS=report_atomic_races=0 ./host-agent configs/host-agent-config.textproto | tee logs/host-agent.log")...)
+	cmd := exec.Command("ssh", inst.VM.SSHArgs("cd /mnt && env ASAN_OPTIONS=detect_container_overflow=0 TSAN_OPTIONS=report_atomic_races=0 ./host-agent configs/host-agent-config.textproto 2>&1 | tee logs/host-agent.log")...)
 	err := cmd.Start()
 	if err != nil {
 		return nil, fmt.Errorf("failed to start host-agent: %w", err)
@@ -199,21 +203,84 @@ func (inst *Instance) ForwardFortioPorts() error {
 
 func (inst *Instance) CopyLogs() error {
 	log.Printf("instance %d: copy logs out", inst.ID)
-	cmd := exec.Command("ssh", inst.VM.SSHArgs("cd /mnt && tar --warning=no-file-changed -cf - logs")...)
+	cmd := exec.Command("ssh", inst.VM.SSHArgs("cd /mnt && tar -cf - logs")...)
 	pr, pw := io.Pipe()
 	cmd.Stdout = pw
 
-	cmdEx := exec.Command("tar", "xf", "-")
-	cmdEx.Dir = inst.OutputDir
-	cmdEx.Stdin = pr
+	uid := os.Getuid()
+	gid := os.Getgid()
+	var stat syscall.Stat_t
+	if syscall.Stat(inst.OutputDir, &stat) == nil {
+		uid = int(stat.Uid)
+		gid = int(stat.Gid)
+	}
+
+	tr := tar.NewReader(pr)
 
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to collect logs in vm: %w", err)
 	}
-	if err := cmdEx.Run(); err != nil {
-		cmd.Process.Kill()
-		return fmt.Errorf("failed to extract logs from vm: %w", err)
+
+	trimPrefix := "logs/"
+
+	errCleanup := func() { cmd.Process.Kill() }
+
+	for {
+		h, err := tr.Next()
+		if err == io.EOF {
+			break
+		} else if err != nil {
+			errCleanup()
+			return fmt.Errorf("failed to extract logs from vm: %w", err)
+		}
+
+		var dstPath string
+		if h.Name == trimPrefix || h.Name == strings.TrimSuffix(trimPrefix, "/") {
+			dstPath = inst.OutputDir
+		} else {
+			dstPath = filepath.Join(inst.OutputDir, strings.TrimPrefix(h.Name, trimPrefix))
+		}
+
+		switch h.Typeflag {
+		case tar.TypeDir:
+			err := os.Mkdir(dstPath, 0o775)
+			if err != nil {
+				if errors.Is(err, fs.ErrExist) {
+					err = os.Chmod(dstPath, 0o755)
+				}
+				if err != nil {
+					errCleanup()
+					return fmt.Errorf("failed to create dir %s: %w", dstPath, err)
+				}
+			}
+			if err := os.Chown(dstPath, uid, gid); err != nil {
+				errCleanup()
+				return fmt.Errorf("failed to set owner of %s: %w", dstPath, err)
+			}
+		case tar.TypeReg:
+			f, err := os.Create(dstPath)
+			if err != nil {
+				errCleanup()
+				return fmt.Errorf("failed to create %s: %w", dstPath, err)
+			}
+			if err := f.Chown(uid, gid); err != nil {
+				errCleanup()
+				f.Close()
+				return fmt.Errorf("failed to set owner of %s: %w", dstPath, err)
+			}
+			if _, err := io.Copy(f, tr); err != nil {
+				errCleanup()
+				f.Close()
+				return fmt.Errorf("failed to write %s: %w", dstPath, err)
+			}
+			f.Close()
+		default:
+			errCleanup()
+			return fmt.Errorf("unknown tar header type %d for %s",
+				h.Typeflag, h.Name)
+		}
 	}
+
 	if err := cmd.Wait(); err != nil {
 		return fmt.Errorf("failed to collect logs in vm: %w", err)
 	}
