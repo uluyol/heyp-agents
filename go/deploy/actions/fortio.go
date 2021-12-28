@@ -369,6 +369,7 @@ func FortioStartServers(c *pb.DeploymentConfig, remoteTopdir, envoyLogLevel stri
 								"ssh", server.GetExternalAddr(),
 								fmt.Sprintf(
 									"tar xf - -C %[1]s/configs &&"+
+										"mkdir -p %[1]s/logs &&"+
 										"sudo %[1]s/aux/vfortio create-inst "+
 										"-fc %[1]s/aux/firecracker "+
 										"-id %[4]d "+
@@ -389,6 +390,7 @@ func FortioStartServers(c *pb.DeploymentConfig, remoteTopdir, envoyLogLevel stri
 								"ssh", server.GetExternalAddr(),
 								fmt.Sprintf(
 									"tmux kill-session -t %[2]s;"+
+										"mkdir -p %[1]s/logs &&"+
 										"tmux new-session -d -s %[2]s 'sudo %[1]s/aux/vfortio ctl-inst "+
 										"-inst %[1]s/logs/%[2]s-vfortio/vfortio.json "+
 										"init-with-data "+
