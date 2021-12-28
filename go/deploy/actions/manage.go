@@ -252,6 +252,7 @@ func GetAndValidateHEYPNodeConfigs(c *pb.DeploymentConfig) (HEYPNodeConfigs, err
 	for _, cluster := range c.Clusters {
 		var thisClusterAgentNode *pb.DeployedNode
 		nodesWithNewVHosts := make(map[string]int)
+		cluster := cluster
 
 		for _, nodeName := range cluster.NodeNames {
 			n := LookupNode(c, nodeName)
