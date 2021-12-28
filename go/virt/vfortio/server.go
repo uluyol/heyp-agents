@@ -17,6 +17,7 @@ import (
 
 	"github.com/uluyol/heyp-agents/go/deploy/writetar"
 	"github.com/uluyol/heyp-agents/go/virt/cmdseq"
+	"github.com/uluyol/heyp-agents/go/virt/filestat"
 	"github.com/uluyol/heyp-agents/go/virt/firecracker"
 	"github.com/uluyol/heyp-agents/go/virt/host"
 	"golang.org/x/net/context"
@@ -206,23 +207,13 @@ func (inst *Instance) CopyLogs() error {
 	cmd := exec.Command("ssh", inst.VM.SSHArgs("cd /mnt && tar -cf - logs")...)
 	pr, pw := io.Pipe()
 	cmd.Stdout = pw
-
-	uid := os.Getuid()
-	gid := os.Getgid()
-	var stat syscall.Stat_t
-	if syscall.Stat(inst.OutputDir, &stat) == nil {
-		uid = int(stat.Uid)
-		gid = int(stat.Gid)
-	}
-
-	tr := tar.NewReader(pr)
-
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to collect logs in vm: %w", err)
 	}
 
+	uid, gid := filestat.GetCurOwnersOutUIDAndGID(inst.OutputDir)
+	tr := tar.NewReader(pr)
 	trimPrefix := "logs/"
-
 	errCleanup := func() { cmd.Process.Kill() }
 
 	for {

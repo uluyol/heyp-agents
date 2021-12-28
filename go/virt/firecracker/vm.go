@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/uluyol/heyp-agents/go/virt/filestat"
 	"github.com/uluyol/heyp-agents/go/virt/host"
 )
 
@@ -166,8 +167,11 @@ func CreateVM(firecrackerPath string, image ImageData, cfg Config) (*VM, error) 
 	vmCmd.Process.Release()
 	vmCmd = nil
 
+	uid, gid := filestat.GetCurOwnersOutUIDAndGID(filepath.Dir(cfg.LogFile))
 	os.MkdirAll(filepath.Dir(cfg.LogFile), 0o755)
+	os.Chown(filepath.Dir(cfg.LogFile), uid, gid)
 	f, err := os.Create(cfg.LogFile)
+	f.Chown(uid, gid)
 	f.Close()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create log file: %w", err)

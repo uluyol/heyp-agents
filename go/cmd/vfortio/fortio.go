@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/subcommands"
 	"github.com/uluyol/heyp-agents/go/cmd/flagtypes"
+	"github.com/uluyol/heyp-agents/go/virt/filestat"
 	"github.com/uluyol/heyp-agents/go/virt/vfortio"
 )
 
@@ -60,6 +61,8 @@ func (c *vfortioCreateInstCmd) Execute(ctx context.Context, fs *flag.FlagSet, ar
 	if err := os.WriteFile(instPath, instBytes, 0o644); err != nil {
 		log.Fatalf("failed to write instance config to %s: %v\nconfig:\n%s", instPath, err, instBytes)
 	}
+	uid, gid := filestat.GetCurOwnersOutUIDAndGID(c.outdir)
+	os.Chown(instPath, uid, gid)
 	return subcommands.ExitSuccess
 }
 
