@@ -548,11 +548,11 @@ func StopCollectingHostStats(c *pb.DeploymentConfig, remoteTopdir string) error 
 	for _, n := range c.GetNodes() {
 		n := n
 		eg.Go(func() error {
-			err := TracingCommand(LogWithPrefix("collect-host-stats: "),
+			out, err := TracingCommand(LogWithPrefix("collect-host-stats: "),
 				"ssh", n.GetExternalAddr(),
-				fmt.Sprintf("%[1]s/aux/collect-host-stats -stop -pid %[1]s/logs/host-stats.pid", remoteTopdir)).Run()
+				fmt.Sprintf("%[1]s/aux/collect-host-stats -stop -pid %[1]s/logs/host-stats.pid", remoteTopdir)).CombinedOutput()
 			if err != nil {
-				return fmt.Errorf("failed to stop stats collection on Node %q: %w", n.GetName(), err)
+				return fmt.Errorf("failed to stop stats collection on Node %q: %w; output: %s", n.GetName(), err, out)
 			}
 			return nil
 		})
