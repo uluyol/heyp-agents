@@ -45,7 +45,7 @@ func metricValues(c counter) []string {
 	}
 }
 
-var hostAgentLogRegex = regexp.MustCompile(`(^|.*/)([^/]+)/logs/host-agent.log$`)
+var hostAgentLogRegex = regexp.MustCompile(`(^|.*/)([^/]+)/logs(/[^/]+)?/host-agent.log$`)
 
 func getHostIDMap(fsys fs.FS) map[uint64]string {
 	paths, _ := regGlobFiles(fsys, hostAgentLogRegex)
@@ -76,7 +76,17 @@ func getHostIDMap(fsys fs.FS) map[uint64]string {
 
 		if found {
 			matches := hostAgentLogRegex.FindStringSubmatch(p)
-			node := matches[2]
+			var subnode string
+			if matches[3] != "" {
+				if strings.HasSuffix(matches[3], "-vfortio") {
+					num := strings.TrimSuffix(matches[3], "-vfortio")
+					idx := strings.LastIndex(num, "-")
+					subnode = num[idx:]
+				} else {
+					log.Printf("unknown vnode name format %s", matches[3])
+				}
+			}
+			node := matches[2] + subnode
 			idMap[id] = node
 		}
 	}
