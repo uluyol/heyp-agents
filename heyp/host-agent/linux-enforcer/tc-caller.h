@@ -32,6 +32,8 @@ class TcCaller {
   absl::optional<simdjson::dom::element> GetResult() const { return result_; }
 
  private:
+  absl::Status DecomposeAndRunBatch(const absl::Cord& input, bool force);
+
   const std::string tc_name_;
   spdlog::logger* logger_;
   simdjson::dom::parser parser_;
