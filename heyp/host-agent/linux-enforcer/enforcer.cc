@@ -373,11 +373,13 @@ LinuxHostEnforcerImpl::FlowSys* LinuxHostEnforcerImpl::GetOrCreateSysInfo(
 absl::Status LinuxHostEnforcerImpl::ResetIptables() { return ipt_controller_.Clear(); }
 
 absl::Status LinuxHostEnforcerImpl::ResetTrafficControl() {
-  return tc_caller_.Batch(
-      absl::Cord(absl::StrFormat("qdisc delete dev %s root\n"
-                                 "qdisc add dev %s root handle 1: htb default 0",
-                                 device_, device_)),
-      /*force=*/true);
+  // First, delete the root qdisc if it exists.
+  // Unfortunately, I don't know how to delete the qdisc only if it exists and otherwise
+  // skip. So always try to delete and ignore any errors.
+  tc_caller_.Call({"qdisc", "delete", "dev", device_, "root"}, false).IgnoreError();
+  return tc_caller_.Call(
+      {"qdisc", "add", "dev", device_, "root", "handle", "1:", "htb", "default", "0"},
+      false);
 }
 
 void LinuxHostEnforcerImpl::StageIptablesForFlow(
