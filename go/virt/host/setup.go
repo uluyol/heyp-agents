@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"text/template"
 	"time"
 
 	"github.com/uluyol/heyp-agents/go/virt/cmdseq"
@@ -36,26 +37,28 @@ func DefaultPrepareForFirecrackerCmd() PrepareForFirecrackerCmd {
 
 // Calling iptables-restore with this clears all existing rules in
 // the nat and filter tables and replaces them with these.
-const iptablesBaseRules = `
+var iptablesBaseRulesTmpl = template.Must(template.New("iptables-state").Parse(`
 *nat
--A POSTROUTING -j MASQUERADE
+{{ range . -}}
+-A POSTROUTING -o {{.}} -j MASQUERADE
+{{ end -}}
 COMMIT
 *filter
 -A FORWARD -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
 COMMIT
-`
+`))
 
 func (cmd PrepareForFirecrackerCmd) Run() error {
 	var r cmdseq.Runner
-	log.Print("[prepsys] preparing system for running firecracker")
-	log.Print("[prepsys] load kvm")
+	log.Print("preparing system for running firecracker")
+	log.Print("load kvm")
 	r.TryRunN(retryCount, "modprobe", cmd.ModuleKVM)
 	if cmd.EnablePacketForwarding {
-		log.Print("[prepsys] enable packet forwarding")
+		log.Print("enable packet forwarding")
 		r.TryRunN(retryCount, "sysctl", "-w", "net.ipv4.conf.all.forwarding=1")
 	}
 
-	log.Print("[prepsys] set gcthresh to avoid neighbor table overflow")
+	log.Print("set gcthresh to avoid neighbor table overflow")
 	// Avoid "neighbour: arp_cache: neighbor table overflow!"
 	r.TryRunN(retryCount,
 		"sysctl", "-w", "net.ipv4.neigh.default.gc_thresh1="+strconv.Itoa(cmd.NeighborGCThresh1))
@@ -68,9 +71,33 @@ func (cmd PrepareForFirecrackerCmd) Run() error {
 	}
 
 	if cmd.EnablePacketForwarding {
-		log.Print("[prepsys] configure iptables")
+		log.Print("find output devices")
+		links, err := ipLinks()
+		if err != nil {
+			return err
+		}
+		var outDevs []string
+		for _, l := range links {
+			if l.IFName == "lo" {
+				continue
+			}
+			if _, isTAP := parseTAPDevice(l.IFName); isTAP {
+				continue
+			}
+			outDevs = append(outDevs, l.IFName)
+		}
+
+		log.Print("configure iptables")
+		var iptablesBaseRules string
+		{
+			var sb strings.Builder
+			if err := iptablesBaseRulesTmpl.Execute(&sb, outDevs); err != nil {
+				return fmt.Errorf("failed to generate iptables rules: %w", err)
+			}
+			iptablesBaseRules = sb.String()
+		}
+
 		var out []byte
-		var err error
 		for i := 0; i < retryCount; i++ {
 			cmd := exec.Command("iptables-restore")
 			cmd.Stdin = strings.NewReader(iptablesBaseRules)
@@ -137,7 +164,7 @@ func (t TAP) VirtMAC() string {
 	return fmt.Sprintf("02:FC:00:00:%02X:%02X", t.ID/256, t.ID%256)
 }
 
-func ListTAPs() ([]TAP, error) {
+func ipLinks() ([]ipLinkStatus, error) {
 	var out []byte
 	var err error
 	for i := 0; i < retryCount; i++ {
@@ -153,6 +180,14 @@ func ListTAPs() ([]TAP, error) {
 	var links []ipLinkStatus
 	if err := json.Unmarshal(out, &links); err != nil {
 		return nil, fmt.Errorf("failed to parse ip -json output: %w; output:\n%s", err, out)
+	}
+	return links, nil
+}
+
+func ListTAPs() ([]TAP, error) {
+	links, err := ipLinks()
+	if err != nil {
+		return nil, err
 	}
 	var taps []TAP
 	for _, l := range links {
