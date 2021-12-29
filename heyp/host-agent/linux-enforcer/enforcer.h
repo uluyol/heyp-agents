@@ -63,8 +63,7 @@ class LinuxHostEnforcer : public HostEnforcer {
   LinuxHostEnforcer(absl::string_view device,
                     const MatchHostFlowsFunc& match_host_flows_fn,
                     const proto::HostEnforcerConfig& config,
-                    std::unique_ptr<TcCallerIface> tc_caller,
-                    std::unique_ptr<iptables::ControllerIface> ipt_controller);
+                    std::unique_ptr<TcCallerIface> tc_caller);
 
   absl::Status ResetDeviceConfig();
 
@@ -112,7 +111,7 @@ class LinuxHostEnforcer : public HostEnforcer {
   TimedMutex mu_;
   absl::Cord tc_batch_input_ ABSL_GUARDED_BY(mu_);
   std::unique_ptr<TcCallerIface> tc_caller_ ABSL_GUARDED_BY(mu_);
-  std::unique_ptr<iptables::ControllerIface> ipt_controller_ ABSL_GUARDED_BY(mu_);
+  iptables::Controller ipt_controller_ ABSL_GUARDED_BY(mu_);
   DebugOutputLogger debug_logger_ ABSL_GUARDED_BY(mu_);
   int32_t next_class_id_ ABSL_GUARDED_BY(mu_);
 

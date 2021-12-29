@@ -6,8 +6,6 @@
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "heyp/log/spdlog.h"
-#include "iptables.h"
-#include "small-string-set.h"
 
 namespace heyp {
 namespace iptables {

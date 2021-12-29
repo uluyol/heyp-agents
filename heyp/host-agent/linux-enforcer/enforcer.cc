@@ -163,16 +163,16 @@ absl::string_view NetemDistToString(proto::NetemDelayDist dist) {
 
 }  // namespace
 
-LinuxHostEnforcer::LinuxHostEnforcer(
-    absl::string_view device, const MatchHostFlowsFunc& match_host_flows_fn,
-    const proto::HostEnforcerConfig& config, std::unique_ptr<TcCallerIface> tc_caller,
-    std::unique_ptr<iptables::ControllerIface> ipt_controller)
+LinuxHostEnforcer::LinuxHostEnforcer(absl::string_view device,
+                                     const MatchHostFlowsFunc& match_host_flows_fn,
+                                     const proto::HostEnforcerConfig& config,
+                                     std::unique_ptr<TcCallerIface> tc_caller)
     : config_(config),
       device_(device),
       match_host_flows_fn_(match_host_flows_fn),
       logger_(MakeLogger("linux-host-enforcer")),
       tc_caller_(std::move(tc_caller)),
-      ipt_controller_(std::move(ipt_controller)),
+      ipt_controller_(device, SmallStringSet({})),
       debug_logger_(config.debug_log_dir()),
       next_class_id_(2) {
   tc_caller_->SetLogger(&logger_);
@@ -181,9 +181,8 @@ LinuxHostEnforcer::LinuxHostEnforcer(
 LinuxHostEnforcer::LinuxHostEnforcer(absl::string_view device,
                                      const MatchHostFlowsFunc& match_host_flows_fn,
                                      const proto::HostEnforcerConfig& config)
-    : LinuxHostEnforcer(
-          device, match_host_flows_fn, config, std::make_unique<TcCaller>(),
-          std::make_unique<iptables::Controller>(device, SmallStringSet({}))) {}
+    : LinuxHostEnforcer(device, match_host_flows_fn, config,
+                        std::make_unique<TcCaller>()) {}
 
 absl::Status LinuxHostEnforcer::ResetDeviceConfig() {
   MutexLockWarnLong l(&mu_, absl::Seconds(1), &logger_, "mu_");
@@ -265,7 +264,7 @@ absl::Status LinuxHostEnforcer::InitSimulatedWan(std::vector<FlowNetemConfig> co
     StageIptablesForFlow(sys->matched.hipri, config_.dscp_hipri(), sys->hipri.class_id);
   }
 
-  st = ipt_controller_->CommitChanges();
+  st = ipt_controller_.CommitChanges();
 
   if (!st.ok()) {
     if (errors.empty()) {
@@ -279,7 +278,7 @@ absl::Status LinuxHostEnforcer::InitSimulatedWan(std::vector<FlowNetemConfig> co
   }
 
   snapshot_mu_.Lock();
-  ipt_snapshot_ = ipt_controller_->AppliedSettings();
+  ipt_snapshot_ = ipt_controller_.AppliedSettings();
   snapshot_mu_.Unlock();
 
   if (!errors.empty()) {
@@ -313,7 +312,7 @@ LinuxHostEnforcer::FlowSys* LinuxHostEnforcer::GetOrCreateSysInfo(
   return sys_info_[f].get();
 }
 
-absl::Status LinuxHostEnforcer::ResetIptables() { return ipt_controller_->Clear(); }
+absl::Status LinuxHostEnforcer::ResetIptables() { return ipt_controller_.Clear(); }
 
 absl::Status LinuxHostEnforcer::ResetTrafficControl() {
   // First, delete the root qdisc if it exists.
@@ -337,7 +336,7 @@ void LinuxHostEnforcer::StageIptablesForFlow(const MatchedHostFlows::Vec& matche
                       "before StageIptablesForFlow");
 
   for (auto f : matched_flows) {
-    ipt_controller_->Stage({
+    ipt_controller_.Stage({
         .src_port = AssertValidPort(f.src_port(), &logger_),
         .dst_port = AssertValidPort(f.dst_port(), &logger_),
         .dst_addr = f.dst_addr(),
@@ -526,13 +525,13 @@ void LinuxHostEnforcer::EnforceAllocs(const FlowStateProvider& flow_state_provid
     }
   }
 
-  st = ipt_controller_->CommitChanges();
+  st = ipt_controller_.CommitChanges();
   if (!st.ok()) {
     SPDLOG_LOGGER_ERROR(&logger_, "failed to commit iptables config: ", st);
     SPDLOG_LOGGER_WARN(&logger_, "will not decrease rate limits");
   } else {
     snapshot_mu_.Lock();
-    ipt_snapshot_ = ipt_controller_->AppliedSettings();
+    ipt_snapshot_ = ipt_controller_.AppliedSettings();
     snapshot_mu_.Unlock();
 
     // ==== Stage 3: Decrease any rate limits ====
@@ -583,7 +582,7 @@ void LinuxHostEnforcer::LogState() {
   if (debug_logger_.should_log()) {
     SPDLOG_LOGGER_INFO(&logger_, "debug logging: gather iptables state");
     absl::Cord mangle_table;
-    ipt_controller_->GetRunner()
+    ipt_controller_.GetRunner()
         .SaveInto(iptables::Table::kMangle, mangle_table)
         .IgnoreError();
     SPDLOG_LOGGER_INFO(&logger_, "debug logging: gather tc qdisc state");
