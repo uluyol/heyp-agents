@@ -56,10 +56,6 @@ std::vector<FlowNetemConfig> AllNetemConfigs(const StaticDCMapper& dc_mapper,
 
 class LinuxHostEnforcer : public HostEnforcer {
  public:
-  static std::unique_ptr<LinuxHostEnforcer> Create(
-      absl::string_view device, const MatchHostFlowsFunc& match_host_flows_fn,
-      const proto::HostEnforcerConfig& config);
-
   LinuxHostEnforcer(absl::string_view device,
                     const MatchHostFlowsFunc& match_host_flows_fn,
                     const proto::HostEnforcerConfig& config);

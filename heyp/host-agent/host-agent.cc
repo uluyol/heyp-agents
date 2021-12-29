@@ -156,7 +156,7 @@ absl::Status Run(const proto::HostAgentConfig& c) {
 
     SPDLOG_LOGGER_INFO(&logger, "enforcer will control device {}", device);
 
-    auto e = LinuxHostEnforcer::Create(
+    auto e = std::make_unique<LinuxHostEnforcer>(
         device, absl::bind_front(&ExpandDestIntoHostsSinglePri, &dc_mapper),
         c.enforcer());
     absl::Status st = e->ResetDeviceConfig();

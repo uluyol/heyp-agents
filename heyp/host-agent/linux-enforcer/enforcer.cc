@@ -621,10 +621,4 @@ IsLopriFunc LinuxHostEnforcer::GetIsLopriFunc() const {
   };
 }
 
-std::unique_ptr<LinuxHostEnforcer> LinuxHostEnforcer::Create(
-    absl::string_view device, const MatchHostFlowsFunc& match_host_flows_fn,
-    const proto::HostEnforcerConfig& config) {
-  return absl::make_unique<LinuxHostEnforcer>(device, match_host_flows_fn, config);
-}
-
 }  // namespace heyp
