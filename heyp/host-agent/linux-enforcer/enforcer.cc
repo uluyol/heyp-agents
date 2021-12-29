@@ -166,13 +166,14 @@ absl::string_view NetemDistToString(proto::NetemDelayDist dist) {
 LinuxHostEnforcer::LinuxHostEnforcer(absl::string_view device,
                                      const MatchHostFlowsFunc& match_host_flows_fn,
                                      const proto::HostEnforcerConfig& config,
-                                     std::unique_ptr<TcCallerIface> tc_caller)
+                                     std::unique_ptr<TcCallerIface> tc_caller,
+                                     std::unique_ptr<iptables::RunnerIface> ipt_runner)
     : config_(config),
       device_(device),
       match_host_flows_fn_(match_host_flows_fn),
       logger_(MakeLogger("linux-host-enforcer")),
       tc_caller_(std::move(tc_caller)),
-      ipt_controller_(device, SmallStringSet({})),
+      ipt_controller_(device, SmallStringSet({}), std::move(ipt_runner)),
       debug_logger_(config.debug_log_dir()),
       next_class_id_(2) {
   tc_caller_->SetLogger(&logger_);
@@ -181,8 +182,8 @@ LinuxHostEnforcer::LinuxHostEnforcer(absl::string_view device,
 LinuxHostEnforcer::LinuxHostEnforcer(absl::string_view device,
                                      const MatchHostFlowsFunc& match_host_flows_fn,
                                      const proto::HostEnforcerConfig& config)
-    : LinuxHostEnforcer(device, match_host_flows_fn, config,
-                        std::make_unique<TcCaller>()) {}
+    : LinuxHostEnforcer(device, match_host_flows_fn, config, std::make_unique<TcCaller>(),
+                        iptables::Runner::Create(iptables::IpFamily::kIpV4)) {}
 
 absl::Status LinuxHostEnforcer::ResetDeviceConfig() {
   MutexLockWarnLong l(&mu_, absl::Seconds(1), &logger_, "mu_");

@@ -73,13 +73,14 @@ void ComputeDiff(SettingBatch& old_batch, SettingBatch& new_batch, SettingBatch*
   }
 }
 
-Controller::Controller(absl::string_view dev, SmallStringSet dscps_to_ignore_class_id)
+Controller::Controller(absl::string_view dev, SmallStringSet dscps_to_ignore_class_id,
+                       std::unique_ptr<iptables::RunnerIface> runner)
     : dev_(dev),
       dscps_to_ignore_class_id_(std::move(dscps_to_ignore_class_id)),
       logger_(MakeLogger("iptables-controller")),
-      runner_(Runner::Create(IpFamily::kIpV4)) {}
+      runner_(std::move(runner)) {}
 
-Runner& Controller::GetRunner() { return *runner_; }
+RunnerIface& Controller::GetRunner() { return *runner_; }
 
 absl::Status Controller::Clear() {
   applied_.settings.clear();

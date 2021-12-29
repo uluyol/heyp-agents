@@ -47,9 +47,10 @@ void ComputeDiff(SettingBatch& old_batch, SettingBatch& new_batch, SettingBatch*
 
 class Controller {
  public:
-  explicit Controller(absl::string_view dev, SmallStringSet dscps_to_ignore_class_id);
+  explicit Controller(absl::string_view dev, SmallStringSet dscps_to_ignore_class_id,
+                      std::unique_ptr<iptables::RunnerIface> runner);
 
-  Runner& GetRunner();
+  RunnerIface& GetRunner();
 
   absl::Status Clear();
   void Stage(SettingBatch::Setting setting);
@@ -61,7 +62,7 @@ class Controller {
   const std::string dev_;
   const SmallStringSet dscps_to_ignore_class_id_;
   spdlog::logger logger_;
-  std::unique_ptr<Runner> runner_;
+  std::unique_ptr<RunnerIface> runner_;
 
   SettingBatch staged_;
   SettingBatch applied_;

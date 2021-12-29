@@ -88,7 +88,22 @@ enum class Operation {
 absl::string_view ToString(Operation op);
 Operation ToOp(RulePosition p);
 
-class Runner {
+struct RestoreFlags {
+  bool flush_tables = true;
+  bool restore_counters = false;
+};
+
+// This interface is just used for mocking. See Runner for docs.
+class RunnerIface {
+ public:
+  virtual ~RunnerIface() = default;
+
+  virtual absl::Status SaveInto(Table table, absl::Cord& buffer) = 0;
+  virtual absl::Status Restore(Table table, const absl::Cord& data,
+                               RestoreFlags flags) = 0;
+};
+
+class Runner : public RunnerIface {
  public:
   static std::unique_ptr<Runner> Create(IpFamily family);
   static std::unique_ptr<Runner> CreateWithIptablesCommands(
@@ -121,19 +136,14 @@ class Runner {
 
   // SaveInto calls `iptables-save` for table and stores result in a given
   // buffer.
-  absl::Status SaveInto(Table table, absl::Cord& buffer);
-
-  struct RestoreFlags {
-    bool flush_tables = true;
-    bool restore_counters = false;
-  };
+  absl::Status SaveInto(Table table, absl::Cord& buffer) override;
 
   // Restore runs `iptables-restore` passing data through []byte.
   // table is the Table to restore
   // data should be formatted like the output of SaveInto()
   // flush sets the presence of the "--noflush" flag. see: FlushFlag
   // counters sets the "--counters" flag. see: RestoreCountersFlag
-  absl::Status Restore(Table table, const absl::Cord& data, RestoreFlags flags);
+  absl::Status Restore(Table table, const absl::Cord& data, RestoreFlags flags) override;
 
   // RestoreAll is the same as Restore except that no table is specified.
   absl::Status RestoreAll(const absl::Cord& data, RestoreFlags flags);
