@@ -76,21 +76,25 @@ func getHostIDMap(fsys fs.FS) map[uint64]string {
 
 		if found {
 			matches := hostAgentLogRegex.FindStringSubmatch(p)
-			var subnode string
-			if matches[3] != "" {
-				if strings.HasSuffix(matches[3], "-vfortio") {
-					num := strings.TrimSuffix(matches[3], "-vfortio")
-					idx := strings.LastIndex(num, "-")
-					subnode = num[idx:]
-				} else {
-					log.Printf("unknown vnode name format %s", matches[3])
-				}
-			}
-			node := matches[2] + subnode
+			node := matches[2] + parseSubnode(matches[3])
 			idMap[id] = node
 		}
 	}
 	return idMap
+}
+
+func parseSubnode(s string) string {
+	if s == "" {
+		return ""
+	}
+	if strings.HasSuffix(s, "-vfortio") {
+		num := strings.TrimSuffix(s, "-vfortio")
+		idx := strings.LastIndex(num, "-")
+		return num[idx:]
+	} else {
+		log.Printf("unknown vnode name format %s", s)
+	}
+	return ""
 }
 
 func PrintDebugClusterFGStats(fsys fs.FS, outfile string, start, end time.Time) error {

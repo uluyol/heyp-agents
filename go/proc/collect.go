@@ -257,7 +257,7 @@ func globToAlignPerHost(fsys fs.FS, r *regexp.Regexp) ([]NamedLog, error) {
 		if matches == nil {
 			continue
 		}
-		node := matches[2]
+		node := matches[2] + parseSubnode(matches[3])
 		ret = append(ret, NamedLog{
 			Name: node,
 			Path: p,
@@ -270,28 +270,28 @@ func globToAlignPerHost(fsys fs.FS, r *regexp.Regexp) ([]NamedLog, error) {
 }
 
 var hostAgentStatsRegex = regexp.MustCompile(
-	`(^|.*/)([^/]+)/logs/host-agent-stats.log$`)
+	`(^|.*/)([^/]+)/logs(/[^/]+)?/host-agent-stats.log$`)
 
 func GlobAndCollectHostAgentStats(fsys fs.FS) ([]NamedLog, error) {
 	return globToAlignPerHost(fsys, hostAgentStatsRegex)
 }
 
 var hostAgentStatsFineGrainedRegex = regexp.MustCompile(
-	`(^|.*/)([^/]+)/logs/host-agent-fine-grained-stats.log$`)
+	`(^|.*/)([^/]+)/logs(/[^/]+)?/host-agent-fine-grained-stats.log$`)
 
 func GlobAndCollectHostAgentStatsFineGrained(fsys fs.FS) ([]NamedLog, error) {
 	return globToAlignPerHost(fsys, hostAgentStatsFineGrainedRegex)
 }
 
 var hostStatsRegex = regexp.MustCompile(
-	`(^|.*/)([^/]+)/logs/host-stats.log$`)
+	`(^|.*/)([^/]+)/logs(/[^/]+)?/host-stats.log$`)
 
 func GlobAndCollectHostStats(fsys fs.FS) ([]NamedLog, error) {
 	return globToAlignPerHost(fsys, hostStatsRegex)
 }
 
 var hostEnforcerLogsRegex = regexp.MustCompile(
-	`(^|.*/)([^/]+)/logs/host-enforcer-debug`)
+	`(^|.*/)([^/]+)/logs(/[^/]+)?/host-enforcer-debug`)
 
 func GlobAndCollectHostEnforcerLogs(fsys fs.FS) ([]NamedLog, error) {
 	files, err := globToAlignPerHost(fsys, hostEnforcerLogsRegex)
@@ -302,8 +302,8 @@ func GlobAndCollectHostEnforcerLogs(fsys fs.FS) ([]NamedLog, error) {
 	var logDirs []NamedLog
 	added := make(map[string]bool)
 	for _, f := range files {
-		i := strings.LastIndex(f.Path, "/logs/host-enforcer-debug")
-		d := f.Path[:i+len("/logs/host-enforcer-debug")]
+		i := strings.LastIndex(f.Path, "/host-enforcer-debug")
+		d := f.Path[:i+len("/host-enforcer-debug")]
 		if !added[d] {
 			added[d] = true
 			logDirs = append(logDirs, NamedLog{Name: f.Name, Path: d})
