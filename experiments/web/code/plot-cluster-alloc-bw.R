@@ -42,6 +42,11 @@ PlotFG <- function(subset, ylabel, output) {
       rainbow(2*(hipri.num + lopri.num))[(hipri.num + lopri.num):(hipri.num + 2*lopri.num)])
   }
 
+  legend.position <- "top"
+  if (length(unique(subset$Host)) > 20) {
+    legend.position <- "none"
+  }
+
   pdf(output, height=2.5, width=5)
   p <- ggplot(subset, aes(x=Time, y=Value, fill=Host)) +
       geom_area(position="stack") +
@@ -52,7 +57,7 @@ PlotFG <- function(subset, ylabel, output) {
       scale_fill_manual(values=colors) +
       theme(
           legend.title=element_blank(),
-          legend.position="top",
+          legend.position=legend.position,
           legend.margin=margin(0, 0, 0, 0),
           legend.box.margin=margin(-4, -4, -8, 0),
           legend.background=element_rect(color="black", fill="white", linetype="blank", size=0),
