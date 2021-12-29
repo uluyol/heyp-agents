@@ -93,6 +93,11 @@ struct RestoreFlags {
   bool restore_counters = false;
 };
 
+inline bool operator==(const RestoreFlags lhs, const RestoreFlags& rhs) {
+  return (lhs.flush_tables == rhs.flush_tables) &&
+         (lhs.restore_counters == rhs.restore_counters);
+}
+
 // This interface is just used for mocking. See Runner for docs.
 class RunnerIface {
  public:
