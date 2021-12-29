@@ -63,6 +63,7 @@ cc_library(
         ":iptables",
         ":small-string-set",
         "//heyp/log:spdlog",
+        "@com_google_absl//absl/cleanup",
         "@com_google_absl//absl/status",
         "@com_google_absl//absl/strings:str_format",
     ],
@@ -114,7 +115,9 @@ cc_test(
     deps = [
         ":enforcer",
         "//heyp/init:test-main",
+        "//heyp/proto:constructors",
         "//heyp/proto:parse-text",
+        "@com_google_absl//absl/functional:bind_front",
     ],
 )
 
