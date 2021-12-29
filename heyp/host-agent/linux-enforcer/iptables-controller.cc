@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <iterator>
 
+#include "absl/cleanup/cleanup.h"
 #include "absl/strings/str_cat.h"
 #include "absl/strings/str_format.h"
 #include "heyp/log/spdlog.h"
@@ -98,9 +99,46 @@ void Controller::Stage(SettingBatch::Setting setting) {
   staged_.settings.push_back(std::move(setting));
 }
 
+namespace {
+constexpr bool kDebugCommitChanges = false;
+}
+
 absl::Status Controller::CommitChanges() {
   ComputeDiff(applied_, staged_, &to_del_, &to_add_);
+  if (kDebugCommitChanges) {
+    std::cerr << "applied:\n";
+    for (auto s : applied_.settings) {
+      std::cerr << "\t" << s << "\n";
+    }
+    std::cerr << "staged:\n";
+    for (auto s : staged_.settings) {
+      std::cerr << "\t" << s << "\n";
+    }
+    std::cerr << "to del:\n";
+    for (auto s : to_del_.settings) {
+      std::cerr << "\t" << s << "\n";
+    }
+    std::cerr << "to add:\n";
+    for (auto s : to_add_.settings) {
+      std::cerr << "\t" << s << "\n";
+    }
+  }
   applied_.settings.clear();
+
+  auto cleanup_fn = absl::MakeCleanup([this] {
+    if (kDebugCommitChanges) {
+      if (kDebugCommitChanges) {
+        std::cerr << "end :: applied:\n";
+        for (auto s : applied_.settings) {
+          std::cerr << "\t" << s << "\n";
+        }
+        std::cerr << "end :: staged:\n";
+        for (auto s : staged_.settings) {
+          std::cerr << "\t" << s << "\n";
+        }
+      }
+    }
+  });
 
   absl::Cord mangle_table;
 
@@ -122,23 +160,26 @@ absl::Status Controller::CommitChanges() {
   AddRuleLinesToAdd(dscps_to_ignore_class_id_, dev_, to_add_, mangle_table);
   mangle_table.Append("COMMIT\n");
 
-  SPDLOG_LOGGER_INFO(&logger_, "updating rules for iptables 'mangle' table");
+  if (mangle_table.size() == std::string_view("*mangle\nCOMMIT\n").size()) {
+    H_SPDLOG_CHECK_EQ(&logger_, mangle_table, "*mangle\nCOMMIT\n");
+    SPDLOG_LOGGER_INFO(&logger_, "no changes to rules for iptables 'mangle' table");
+  } else {
+    SPDLOG_LOGGER_INFO(&logger_, "updating rules for iptables 'mangle' table");
+    SPDLOG_LOGGER_DEBUG(&logger_, "restore input:\n{}" mangle_table);
+    absl::Status st = runner_->Restore(
+        Table::kMangle, mangle_table, {.flush_tables = false, .restore_counters = false});
 
-  SPDLOG_LOGGER_DEBUG(&logger_, "restore input:\n{}" mangle_table);
-
-  absl::Status st = runner_->Restore(Table::kMangle, mangle_table,
-                                     {.flush_tables = false, .restore_counters = false});
-
-  if (!st.ok()) {
-    // We are in between the old and new states. Just make sure that next time
-    // we rollback everything.
-    std::copy(to_add_.settings.begin(), to_add_.settings.end(),
-              std::back_inserter(to_del_.settings));
-    to_add_.settings.clear();
-    applied_.settings.clear();
-    staged_.settings.clear();
-    return absl::InternalError(
-        absl::StrCat("failed to update iptables 'mangle' table: ", st.message()));
+    if (!st.ok()) {
+      // We are in between the old and new states. Just make sure that next time
+      // we rollback everything.
+      std::copy(to_add_.settings.begin(), to_add_.settings.end(),
+                std::back_inserter(to_del_.settings));
+      to_add_.settings.clear();
+      applied_.settings.clear();
+      staged_.settings.clear();
+      return absl::InternalError(
+          absl::StrCat("failed to update iptables 'mangle' table: ", st.message()));
+    }
   }
 
   to_del_.settings.clear();
