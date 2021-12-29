@@ -136,6 +136,7 @@ uint16_t AssertValidPort(int32_t port32, spdlog::logger* logger) {
 }
 
 constexpr int64_t kMaxBandwidthBps = 100 * (static_cast<int64_t>(1) << 30);  // 100 Gbps
+constexpr bool kDebugLimitChanges = false;
 
 template <typename T>
 const T* OptionalToPointer(const std::optional<T>& o) {
@@ -224,6 +225,7 @@ absl::Status LinuxHostEnforcer::InitSimulatedWan(std::vector<FlowNetemConfig> co
         .create_count = &num_created_classes,
         .update_count = &num_updated_classes,
     });
+    sys->hipri.cur_rate_limit_bps = kMaxBandwidthBps;
     StageTrafficControlForFlow({
         .rate_limit_bps = kMaxBandwidthBps,
         .netem_config = OptionalToPointer(c.netem.lopri),
@@ -231,6 +233,7 @@ absl::Status LinuxHostEnforcer::InitSimulatedWan(std::vector<FlowNetemConfig> co
         .create_count = &num_created_classes,
         .update_count = &num_updated_classes,
     });
+    sys->lopri.cur_rate_limit_bps = kMaxBandwidthBps;
   }
 
   SPDLOG_LOGGER_INFO(&logger_, "creating {} rate limiters and netem qdiscs",
@@ -416,36 +419,48 @@ void LinuxHostEnforcer::EnforceAllocs(const FlowStateProvider& flow_state_provid
 
     // Early update for traffic control (HIPRI)
     bool must_create = sys->hipri.class_id.empty() && !sys->matched.hipri.empty();
-    if (must_create ||
-        flow_alloc.hipri_rate_limit_bps() > sys->hipri.cur_rate_limit_bps) {
-      auto limit = flow_alloc.hipri_rate_limit_bps();
-      if (!config_.limit_hipri()) {
-        limit = kMaxBandwidthBps;
+    int64_t new_hipri_limit = flow_alloc.hipri_rate_limit_bps();
+    if (!config_.limit_hipri()) {
+      new_hipri_limit = kMaxBandwidthBps;
+    }
+    if (must_create || new_hipri_limit > sys->hipri.cur_rate_limit_bps) {
+      if (kDebugLimitChanges) {
+        std::cerr << "EARLY HIPRI:: must_create = " << must_create
+                  << " new limit = " << new_hipri_limit
+                  << " cur = " << sys->hipri.cur_rate_limit_bps << "\n";
       }
       StageTrafficControlForFlow({
-          .rate_limit_bps = limit,
+          .rate_limit_bps = new_hipri_limit,
           .sys = &sys->hipri,
           .classes_to_create = &classes_to_create,
           .create_count = &create_count,
           .update_count = &update_count,
       });
       sys->hipri.update_after_ipt_change = false;
-    } else if (flow_alloc.hipri_rate_limit_bps() < sys->hipri.cur_rate_limit_bps) {
+    } else if (new_hipri_limit < sys->hipri.cur_rate_limit_bps) {
+      if (kDebugLimitChanges) {
+        std::cerr << "PRE-LATE HIPRI:: new limit = " << new_hipri_limit
+                  << " cur = " << sys->hipri.cur_rate_limit_bps << "\n";
+      }
       sys->hipri.update_after_ipt_change = true;
     }
-    sys->hipri.cur_rate_limit_bps = flow_alloc.hipri_rate_limit_bps();
+    sys->hipri.cur_rate_limit_bps = new_hipri_limit;
 
     // Early update for traffic control (LOPRI)
     must_create = sys->lopri.class_id.empty() && !sys->matched.lopri.empty();
-    if (must_create ||
-        flow_alloc.lopri_rate_limit_bps() > sys->lopri.cur_rate_limit_bps) {
-      auto limit = flow_alloc.lopri_rate_limit_bps();
-      if (!config_.limit_lopri()) {
-        limit = kMaxBandwidthBps;
+    int64_t new_lopri_limit = flow_alloc.lopri_rate_limit_bps();
+    if (!config_.limit_lopri()) {
+      new_lopri_limit = kMaxBandwidthBps;
+    }
+    if (must_create || new_lopri_limit > sys->lopri.cur_rate_limit_bps) {
+      if (kDebugLimitChanges) {
+        std::cerr << "EARLY LOPRI:: must_create = " << must_create
+                  << " new limit = " << new_lopri_limit
+                  << " cur = " << sys->lopri.cur_rate_limit_bps << "\n";
       }
       auto old_create_count = create_count;
       StageTrafficControlForFlow({
-          .rate_limit_bps = limit,
+          .rate_limit_bps = new_lopri_limit,
           .sys = &sys->lopri,
           .classes_to_create = &classes_to_create,
           .create_count = &create_count,
@@ -456,18 +471,27 @@ void LinuxHostEnforcer::EnforceAllocs(const FlowStateProvider& flow_state_provid
                                              flow_alloc.flow().DebugString() + "}");
       }
       sys->lopri.update_after_ipt_change = false;
-    } else if (flow_alloc.lopri_rate_limit_bps() < sys->lopri.cur_rate_limit_bps) {
+    } else if (new_lopri_limit < sys->lopri.cur_rate_limit_bps) {
+      if (kDebugLimitChanges) {
+        std::cerr << "PRE-LATE LOPRI:: new limit = " << new_lopri_limit
+                  << " cur = " << sys->lopri.cur_rate_limit_bps << "\n";
+      }
       sys->lopri.update_after_ipt_change = true;
     }
-    sys->lopri.cur_rate_limit_bps = flow_alloc.lopri_rate_limit_bps();
+    sys->lopri.cur_rate_limit_bps = new_lopri_limit;
   }
 
-  SPDLOG_LOGGER_INFO(&logger_,
-                     "creating {} rate limiters and increasing {} rate limits; flows "
-                     "with new limiters:{}{}",
-                     create_count, update_count, create_count > 0 ? "\n" : "",
-                     absl::StrJoin(flows_with_created_classes, "\n"));
-  absl::Status st = tc_caller_->Batch(tc_batch_input_, /*force=*/true);
+  absl::Status st = absl::OkStatus();
+  if (tc_batch_input_.empty()) {
+    SPDLOG_LOGGER_INFO(&logger_, "no rate limiters to create or change");
+  } else {
+    SPDLOG_LOGGER_INFO(&logger_,
+                       "creating {} rate limiters and increasing {} rate limits; flows "
+                       "with new limiters:{}{}",
+                       create_count, update_count, create_count > 0 ? "\n" : "",
+                       absl::StrJoin(flows_with_created_classes, "\n"));
+    st = tc_caller_->Batch(tc_batch_input_, /*force=*/true);
+  }
   if (!st.ok()) {
     SPDLOG_LOGGER_ERROR(&logger_,
                         "failed to init or increase rate limits for some flows: {}", st);
@@ -544,32 +568,39 @@ void LinuxHostEnforcer::EnforceAllocs(const FlowStateProvider& flow_state_provid
       FlowSys* sys = GetSysInfo(flow_alloc.flow());
 
       if (sys->hipri.update_after_ipt_change) {
-        auto limit = sys->hipri.cur_rate_limit_bps;
-        if (!config_.limit_hipri()) {
-          limit = kMaxBandwidthBps;
+        if (kDebugLimitChanges) {
+          std::cerr << "LATE HIPRI:: new limit = " << sys->hipri.cur_rate_limit_bps
+                    << "\n";
         }
         StageTrafficControlForFlow({
-            .rate_limit_bps = limit,
+            .rate_limit_bps = sys->hipri.cur_rate_limit_bps,
             .sys = &sys->hipri,
             .create_count = &create_count,
             .update_count = &update_count,
         });
+        sys->hipri.update_after_ipt_change = false;
       }
       if (sys->lopri.update_after_ipt_change) {
-        auto limit = sys->lopri.cur_rate_limit_bps;
-        if (!config_.limit_lopri()) {
-          limit = kMaxBandwidthBps;
+        if (kDebugLimitChanges) {
+          std::cerr << "LATE LOPRI:: new limit = " << sys->lopri.cur_rate_limit_bps
+                    << "\n";
         }
         StageTrafficControlForFlow({
-            .rate_limit_bps = limit,
+            .rate_limit_bps = sys->lopri.cur_rate_limit_bps,
             .sys = &sys->lopri,
             .create_count = &create_count,
             .update_count = &update_count,
         });
+        sys->lopri.update_after_ipt_change = false;
       }
     }
-    SPDLOG_LOGGER_INFO(&logger_, "decreasing {} rate limits", update_count);
-    st = tc_caller_->Batch(tc_batch_input_, /*force=*/true);
+    st = absl::OkStatus();
+    if (tc_batch_input_.empty()) {
+      SPDLOG_LOGGER_INFO(&logger_, "no rate limiters to create or change");
+    } else {
+      SPDLOG_LOGGER_INFO(&logger_, "decreasing {} rate limits", update_count);
+      st = tc_caller_->Batch(tc_batch_input_, /*force=*/true);
+    }
     if (!st.ok()) {
       SPDLOG_LOGGER_ERROR(&logger_, "failed to decrease rate limits for some flows: {}",
                           st);
