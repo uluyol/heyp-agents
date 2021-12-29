@@ -9,17 +9,13 @@
 #include "absl/strings/str_join.h"
 #include "absl/strings/str_split.h"
 #include "google/protobuf/util/message_differencer.h"
-#include "heyp/host-agent/linux-enforcer/iptables-controller.h"
-#include "heyp/host-agent/linux-enforcer/iptables.h"
-#include "heyp/host-agent/linux-enforcer/tc-caller.h"
-#include "heyp/io/debug-output-logger.h"
+#include "heyp/host-agent/linux-enforcer/small-string-set.h"
 #include "heyp/io/subprocess.h"
 #include "heyp/log/spdlog.h"
 #include "heyp/proto/alg.h"
 #include "heyp/proto/config.pb.h"
 #include "heyp/proto/heyp.pb.h"
 #include "heyp/threads/mutex-helpers.h"
-#include "small-string-set.h"
 
 namespace heyp {
 
@@ -138,88 +134,37 @@ uint16_t AssertValidPort(int32_t port32, spdlog::logger* logger) {
   return static_cast<uint16_t>(port32);
 }
 
-// Implementation is separated from interface to reduce #includes in the header file and
-// speed up compilation.
-class LinuxHostEnforcerImpl : public LinuxHostEnforcer {
- public:
-  LinuxHostEnforcerImpl(absl::string_view device,
-                        const MatchHostFlowsFunc& match_host_flows_fn,
-                        const proto::HostEnforcerConfig& config);
-
-  absl::Status ResetDeviceConfig() override;
-
-  absl::Status InitSimulatedWan(std::vector<FlowNetemConfig> configs,
-                                bool contains_all_flows) override;
-
-  void EnforceAllocs(const FlowStateProvider& flow_state_provider,
-                     const proto::AllocBundle& bundle) override;
-
-  void LogState() override;
-
-  IsLopriFunc GetIsLopriFunc() const override;
-
- private:
-  struct FlowSys {
-    struct Priority {
-      std::string class_id;
-      int64_t cur_rate_limit_bps = 0;
-      bool did_create_class = false;
-      bool update_after_ipt_change = false;
-    };
-
-    Priority hipri;
-    Priority lopri;
-
-    MatchedHostFlows matched;
-  };
-
-  struct StageTrafficControlForFlowArgs {
-    int64_t rate_limit_bps;                                        // required
-    const proto::NetemConfig* netem_config = nullptr;              // optional
-    FlowSys::Priority* sys;                                        // required
-    std::vector<FlowSys::Priority*>* classes_to_create = nullptr;  // optional
-    int* create_count;                                             // required
-    int* update_count;                                             // required
-  };
-
-  const proto::HostEnforcerConfig config_;
-  const std::string device_;
-  const MatchHostFlowsFunc match_host_flows_fn_;
-  spdlog::logger logger_;
-  TimedMutex mu_;
-  absl::Cord tc_batch_input_ ABSL_GUARDED_BY(mu_);
-  TcCaller tc_caller_ ABSL_GUARDED_BY(mu_);
-  iptables::Controller ipt_controller_ ABSL_GUARDED_BY(mu_);
-  DebugOutputLogger debug_logger_ ABSL_GUARDED_BY(mu_);
-  int32_t next_class_id_ ABSL_GUARDED_BY(mu_);
-
-  absl::flat_hash_map<proto::FlowMarker, std::unique_ptr<FlowSys>, HashFlowNoJob,
-                      EqFlowNoJob>
-      sys_info_ ABSL_GUARDED_BY(
-          mu_);  // entries are never deleted, values are pointer for stability
-
-  mutable absl::Mutex snapshot_mu_;
-  iptables::SettingBatch ipt_snapshot_ ABSL_GUARDED_BY(snapshot_mu_);
-
-  FlowSys* GetSysInfo(const proto::FlowMarker& flow) ABSL_EXCLUSIVE_LOCKS_REQUIRED(mu_);
-  FlowSys* GetOrCreateSysInfo(const proto::FlowMarker& flow)
-      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mu_);
-
-  absl::Status ResetIptables() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mu_);
-  absl::Status ResetTrafficControl() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mu_);
-
-  void StageTrafficControlForFlow(StageTrafficControlForFlowArgs args)
-      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mu_);
-  void StageIptablesForFlow(const MatchedHostFlows::Vec& matched_flows,
-                            const std::string& dscp, const std::string& class_id)
-      ABSL_EXCLUSIVE_LOCKS_REQUIRED(mu_);
-};
-
 constexpr int64_t kMaxBandwidthBps = 100 * (static_cast<int64_t>(1) << 30);  // 100 Gbps
 
-LinuxHostEnforcerImpl::LinuxHostEnforcerImpl(
-    absl::string_view device, const MatchHostFlowsFunc& match_host_flows_fn,
-    const proto::HostEnforcerConfig& config)
+template <typename T>
+const T* OptionalToPointer(const std::optional<T>& o) {
+  if (o.has_value()) {
+    return &o.value();
+  }
+  return nullptr;
+}
+
+absl::string_view NetemDistToString(proto::NetemDelayDist dist) {
+  switch (dist) {
+    case proto::NETEM_NO_DIST:
+      break;
+    case proto::NETEM_NORMAL:
+      return "normal";
+    case proto::NETEM_UNIFORM:
+      return "uniform";
+    case proto::NETEM_PARETO:
+      return "pareto";
+    case proto::NETEM_PARETONORMAL:
+      return "paretonormal";
+  }
+  return "UNKNOWN_NETEM_DIST";
+}
+
+}  // namespace
+
+LinuxHostEnforcer::LinuxHostEnforcer(absl::string_view device,
+                                     const MatchHostFlowsFunc& match_host_flows_fn,
+                                     const proto::HostEnforcerConfig& config)
     : config_(config),
       device_(device),
       match_host_flows_fn_(match_host_flows_fn),
@@ -229,7 +174,7 @@ LinuxHostEnforcerImpl::LinuxHostEnforcerImpl(
       debug_logger_(config.debug_log_dir()),
       next_class_id_(2) {}
 
-absl::Status LinuxHostEnforcerImpl::ResetDeviceConfig() {
+absl::Status LinuxHostEnforcer::ResetDeviceConfig() {
   MutexLockWarnLong l(&mu_, absl::Seconds(1), &logger_, "mu_");
 
   auto st = ResetTrafficControl();
@@ -245,16 +190,8 @@ absl::Status LinuxHostEnforcerImpl::ResetDeviceConfig() {
   return absl::OkStatus();
 }
 
-template <typename T>
-const T* OptionalToPointer(const std::optional<T>& o) {
-  if (o.has_value()) {
-    return &o.value();
-  }
-  return nullptr;
-}
-
-absl::Status LinuxHostEnforcerImpl::InitSimulatedWan(std::vector<FlowNetemConfig> configs,
-                                                     bool contains_all_flows) {
+absl::Status LinuxHostEnforcer::InitSimulatedWan(std::vector<FlowNetemConfig> configs,
+                                                 bool contains_all_flows) {
   MutexLockWarnLong l(&mu_, absl::Seconds(1), &logger_, "mu_");
 
   int num_created_classes = 0;
@@ -345,8 +282,7 @@ absl::Status LinuxHostEnforcerImpl::InitSimulatedWan(std::vector<FlowNetemConfig
   return absl::OkStatus();
 }
 
-LinuxHostEnforcerImpl::FlowSys* LinuxHostEnforcerImpl::GetSysInfo(
-    const proto::FlowMarker& flow) {
+LinuxHostEnforcer::FlowSys* LinuxHostEnforcer::GetSysInfo(const proto::FlowMarker& flow) {
   auto iter = sys_info_.find(flow);
   if (iter == sys_info_.end()) {
     return nullptr;
@@ -354,7 +290,7 @@ LinuxHostEnforcerImpl::FlowSys* LinuxHostEnforcerImpl::GetSysInfo(
   return iter->second.get();
 }
 
-LinuxHostEnforcerImpl::FlowSys* LinuxHostEnforcerImpl::GetOrCreateSysInfo(
+LinuxHostEnforcer::FlowSys* LinuxHostEnforcer::GetOrCreateSysInfo(
     const proto::FlowMarker& flow) {
   auto iter = sys_info_.find(flow);
   if (iter != sys_info_.end()) {
@@ -366,9 +302,9 @@ LinuxHostEnforcerImpl::FlowSys* LinuxHostEnforcerImpl::GetOrCreateSysInfo(
   return sys_info_[f].get();
 }
 
-absl::Status LinuxHostEnforcerImpl::ResetIptables() { return ipt_controller_.Clear(); }
+absl::Status LinuxHostEnforcer::ResetIptables() { return ipt_controller_.Clear(); }
 
-absl::Status LinuxHostEnforcerImpl::ResetTrafficControl() {
+absl::Status LinuxHostEnforcer::ResetTrafficControl() {
   // First, delete the root qdisc if it exists.
   // Unfortunately, I don't know how to delete the qdisc only if it exists and otherwise
   // skip. So always try to delete and ignore any errors.
@@ -378,9 +314,9 @@ absl::Status LinuxHostEnforcerImpl::ResetTrafficControl() {
       false);
 }
 
-void LinuxHostEnforcerImpl::StageIptablesForFlow(
-    const MatchedHostFlows::Vec& matched_flows, const std::string& dscp,
-    const std::string& class_id) {
+void LinuxHostEnforcer::StageIptablesForFlow(const MatchedHostFlows::Vec& matched_flows,
+                                             const std::string& dscp,
+                                             const std::string& class_id) {
   if (matched_flows.empty()) {
     return;
   }
@@ -400,24 +336,7 @@ void LinuxHostEnforcerImpl::StageIptablesForFlow(
   }
 }
 
-absl::string_view NetemDistToString(proto::NetemDelayDist dist) {
-  switch (dist) {
-    case proto::NETEM_NO_DIST:
-      break;
-    case proto::NETEM_NORMAL:
-      return "normal";
-    case proto::NETEM_UNIFORM:
-      return "uniform";
-    case proto::NETEM_PARETO:
-      return "pareto";
-    case proto::NETEM_PARETONORMAL:
-      return "paretonormal";
-  }
-  return "UNKNOWN_NETEM_DIST";
-}
-
-void LinuxHostEnforcerImpl::StageTrafficControlForFlow(
-    StageTrafficControlForFlowArgs args) {
+void LinuxHostEnforcer::StageTrafficControlForFlow(StageTrafficControlForFlowArgs args) {
   double rate_limit_mbps = std::max(args.rate_limit_bps, config_.min_rate_limit_bps());
   rate_limit_mbps /= 1024.0 * 1024.0;
 
@@ -470,8 +389,8 @@ void LinuxHostEnforcerImpl::StageTrafficControlForFlow(
 //
 // 3. Reduce rate limits for appropriate (FG, QoS) pairs.
 //
-void LinuxHostEnforcerImpl::EnforceAllocs(const FlowStateProvider& flow_state_provider,
-                                          const proto::AllocBundle& bundle) {
+void LinuxHostEnforcer::EnforceAllocs(const FlowStateProvider& flow_state_provider,
+                                      const proto::AllocBundle& bundle) {
   MutexLockWarnLong l(&mu_, absl::Seconds(1), &logger_, "mu_");
   // ==== Stage 1: Initialize qdiscs and increase any rate limits ====
 
@@ -647,7 +566,7 @@ void LinuxHostEnforcerImpl::EnforceAllocs(const FlowStateProvider& flow_state_pr
   }
 }
 
-void LinuxHostEnforcerImpl::LogState() {
+void LinuxHostEnforcer::LogState() {
   MutexLockWarnLong l(&mu_, absl::Seconds(1), &logger_, "mu_");
 
   if (debug_logger_.should_log()) {
@@ -689,7 +608,7 @@ void LinuxHostEnforcerImpl::LogState() {
   }
 }
 
-IsLopriFunc LinuxHostEnforcerImpl::GetIsLopriFunc() const {
+IsLopriFunc LinuxHostEnforcer::GetIsLopriFunc() const {
   snapshot_mu_.Lock();
   iptables::SettingBatch settings = ipt_snapshot_;
   snapshot_mu_.Unlock();
@@ -702,12 +621,10 @@ IsLopriFunc LinuxHostEnforcerImpl::GetIsLopriFunc() const {
   };
 }
 
-}  // namespace
-
 std::unique_ptr<LinuxHostEnforcer> LinuxHostEnforcer::Create(
     absl::string_view device, const MatchHostFlowsFunc& match_host_flows_fn,
     const proto::HostEnforcerConfig& config) {
-  return absl::make_unique<LinuxHostEnforcerImpl>(device, match_host_flows_fn, config);
+  return absl::make_unique<LinuxHostEnforcer>(device, match_host_flows_fn, config);
 }
 
 }  // namespace heyp
