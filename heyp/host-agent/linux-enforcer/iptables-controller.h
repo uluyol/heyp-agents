@@ -45,17 +45,28 @@ bool operator<(const SettingBatch::Setting& lhs, const SettingBatch::Setting& rh
 void ComputeDiff(SettingBatch& old_batch, SettingBatch& new_batch, SettingBatch* to_del,
                  SettingBatch* to_add);
 
-class Controller {
+// This interface is just used for mocking. See Controller for docs.
+class ControllerIface {
+ public:
+  virtual ~ControllerIface() = default;
+  virtual Runner& GetRunner() = 0;
+  virtual absl::Status Clear() = 0;
+  virtual void Stage(SettingBatch::Setting setting) = 0;
+  virtual absl::Status CommitChanges() = 0;
+  virtual const SettingBatch& AppliedSettings() const = 0;
+};
+
+class Controller : public ControllerIface {
  public:
   explicit Controller(absl::string_view dev, SmallStringSet dscps_to_ignore_class_id);
 
-  Runner& GetRunner();
+  Runner& GetRunner() override;
 
-  absl::Status Clear();
-  void Stage(SettingBatch::Setting setting);
-  absl::Status CommitChanges();
+  absl::Status Clear() override;
+  void Stage(SettingBatch::Setting setting) override;
+  absl::Status CommitChanges() override;
 
-  const SettingBatch& AppliedSettings() const;
+  const SettingBatch& AppliedSettings() const override;
 
  private:
   const std::string dev_;

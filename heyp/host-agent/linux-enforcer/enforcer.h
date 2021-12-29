@@ -60,6 +60,12 @@ class LinuxHostEnforcer : public HostEnforcer {
                     const MatchHostFlowsFunc& match_host_flows_fn,
                     const proto::HostEnforcerConfig& config);
 
+  LinuxHostEnforcer(absl::string_view device,
+                    const MatchHostFlowsFunc& match_host_flows_fn,
+                    const proto::HostEnforcerConfig& config,
+                    std::unique_ptr<TcCallerIface> tc_caller,
+                    std::unique_ptr<iptables::ControllerIface> ipt_controller);
+
   absl::Status ResetDeviceConfig();
 
   // InitSimulatedWan creates qdiscs and iptables rules to simulate a wide-area network
@@ -105,8 +111,8 @@ class LinuxHostEnforcer : public HostEnforcer {
   spdlog::logger logger_;
   TimedMutex mu_;
   absl::Cord tc_batch_input_ ABSL_GUARDED_BY(mu_);
-  TcCaller tc_caller_ ABSL_GUARDED_BY(mu_);
-  iptables::Controller ipt_controller_ ABSL_GUARDED_BY(mu_);
+  std::unique_ptr<TcCallerIface> tc_caller_ ABSL_GUARDED_BY(mu_);
+  std::unique_ptr<iptables::ControllerIface> ipt_controller_ ABSL_GUARDED_BY(mu_);
   DebugOutputLogger debug_logger_ ABSL_GUARDED_BY(mu_);
   int32_t next_class_id_ ABSL_GUARDED_BY(mu_);
 

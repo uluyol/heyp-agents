@@ -9,7 +9,8 @@ namespace {
 
 TEST(TcCallerTest, YieldsExpectedResult) {
   auto logger = MakeLogger("test");
-  TcCaller caller(&logger, "heyp/host-agent/linux-enforcer/fake-tc-for-test");
+  TcCaller caller("heyp/host-agent/linux-enforcer/fake-tc-for-test");
+  caller.SetLogger(&logger);
   EXPECT_THAT(caller.Call({"-j", "qdisc", "list"}, true),
               testing::Property(&absl::Status::ok, testing::IsTrue()));
   EXPECT_EQ(caller.GetResult()->at(0)["dev"].get_string().value(), "lo");

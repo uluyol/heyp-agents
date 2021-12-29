@@ -11,9 +11,23 @@
 
 namespace heyp {
 
-class TcCaller {
+// This interface is just used for mocking. See TcCaller for docs.
+class TcCallerIface {
  public:
-  TcCaller(spdlog::logger* logger, const std::string& tc_name = "tc");
+  virtual ~TcCallerIface() = default;
+  virtual void SetLogger(spdlog::logger* logger){};
+  virtual absl::Status Batch(const absl::Cord& input, bool force) = 0;
+  virtual absl::Status Call(const std::vector<std::string>& tc_args,
+                            bool parse_into_json) = 0;
+  virtual std::string RawOut() const = 0;
+  virtual absl::optional<simdjson::dom::element> GetResult() const = 0;
+};
+
+class TcCaller : public TcCallerIface {
+ public:
+  TcCaller(const std::string& tc_name = "tc");
+
+  void SetLogger(spdlog::logger* logger) override { logger_ = logger; };
 
   // Execute a batch of updates. The input should have a line for each tc command.
   //
@@ -25,11 +39,12 @@ class TcCaller {
   //
   // If force is set, tc will not stop at the first error. It will keep trying to apply
   // the requested changes.
-  absl::Status Batch(const absl::Cord& input, bool force);
+  absl::Status Batch(const absl::Cord& input, bool force) override;
 
-  absl::Status Call(const std::vector<std::string>& tc_args, bool parse_into_json);
-  std::string RawOut() const { return buf_; };
-  absl::optional<simdjson::dom::element> GetResult() const { return result_; }
+  absl::Status Call(const std::vector<std::string>& tc_args,
+                    bool parse_into_json) override;
+  std::string RawOut() const override { return buf_; };
+  absl::optional<simdjson::dom::element> GetResult() const override { return result_; }
 
  private:
   absl::Status DecomposeAndRunBatch(const absl::Cord& input, bool force);

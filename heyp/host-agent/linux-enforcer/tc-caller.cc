@@ -34,8 +34,7 @@ std::vector<std::vector<std::string>> DecomposeBatch(const absl::Cord& input_cor
 }
 }  // namespace
 
-TcCaller::TcCaller(spdlog::logger* logger, const std::string& tc_name)
-    : tc_name_(tc_name), logger_(logger) {}
+TcCaller::TcCaller(const std::string& tc_name) : tc_name_(tc_name), logger_(nullptr) {}
 
 absl::Status TcCaller::Batch(const absl::Cord& input, bool force) {
   if (kDebugDecomposeBatch) {

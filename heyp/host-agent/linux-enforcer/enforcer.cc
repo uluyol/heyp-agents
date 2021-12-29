@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <memory>
 
 #include "absl/cleanup/cleanup.h"
 #include "absl/container/flat_hash_map.h"
@@ -162,17 +163,27 @@ absl::string_view NetemDistToString(proto::NetemDelayDist dist) {
 
 }  // namespace
 
-LinuxHostEnforcer::LinuxHostEnforcer(absl::string_view device,
-                                     const MatchHostFlowsFunc& match_host_flows_fn,
-                                     const proto::HostEnforcerConfig& config)
+LinuxHostEnforcer::LinuxHostEnforcer(
+    absl::string_view device, const MatchHostFlowsFunc& match_host_flows_fn,
+    const proto::HostEnforcerConfig& config, std::unique_ptr<TcCallerIface> tc_caller,
+    std::unique_ptr<iptables::ControllerIface> ipt_controller)
     : config_(config),
       device_(device),
       match_host_flows_fn_(match_host_flows_fn),
       logger_(MakeLogger("linux-host-enforcer")),
-      tc_caller_(&logger_),
-      ipt_controller_(device, SmallStringSet({})),
+      tc_caller_(std::move(tc_caller)),
+      ipt_controller_(std::move(ipt_controller)),
       debug_logger_(config.debug_log_dir()),
-      next_class_id_(2) {}
+      next_class_id_(2) {
+  tc_caller_->SetLogger(&logger_);
+}
+
+LinuxHostEnforcer::LinuxHostEnforcer(absl::string_view device,
+                                     const MatchHostFlowsFunc& match_host_flows_fn,
+                                     const proto::HostEnforcerConfig& config)
+    : LinuxHostEnforcer(
+          device, match_host_flows_fn, config, std::make_unique<TcCaller>(),
+          std::make_unique<iptables::Controller>(device, SmallStringSet({}))) {}
 
 absl::Status LinuxHostEnforcer::ResetDeviceConfig() {
   MutexLockWarnLong l(&mu_, absl::Seconds(1), &logger_, "mu_");
@@ -228,7 +239,7 @@ absl::Status LinuxHostEnforcer::InitSimulatedWan(std::vector<FlowNetemConfig> co
     SPDLOG_LOGGER_ERROR(&logger_, "{}: impossible state: updating rate limiters",
                         __func__);
   }
-  absl::Status st = tc_caller_.Batch(tc_batch_input_, /*force=*/true);
+  absl::Status st = tc_caller_->Batch(tc_batch_input_, /*force=*/true);
 
   if (!st.ok()) {
     if (errors.empty()) {
@@ -254,7 +265,7 @@ absl::Status LinuxHostEnforcer::InitSimulatedWan(std::vector<FlowNetemConfig> co
     StageIptablesForFlow(sys->matched.hipri, config_.dscp_hipri(), sys->hipri.class_id);
   }
 
-  st = ipt_controller_.CommitChanges();
+  st = ipt_controller_->CommitChanges();
 
   if (!st.ok()) {
     if (errors.empty()) {
@@ -268,7 +279,7 @@ absl::Status LinuxHostEnforcer::InitSimulatedWan(std::vector<FlowNetemConfig> co
   }
 
   snapshot_mu_.Lock();
-  ipt_snapshot_ = ipt_controller_.AppliedSettings();
+  ipt_snapshot_ = ipt_controller_->AppliedSettings();
   snapshot_mu_.Unlock();
 
   if (!errors.empty()) {
@@ -302,14 +313,14 @@ LinuxHostEnforcer::FlowSys* LinuxHostEnforcer::GetOrCreateSysInfo(
   return sys_info_[f].get();
 }
 
-absl::Status LinuxHostEnforcer::ResetIptables() { return ipt_controller_.Clear(); }
+absl::Status LinuxHostEnforcer::ResetIptables() { return ipt_controller_->Clear(); }
 
 absl::Status LinuxHostEnforcer::ResetTrafficControl() {
   // First, delete the root qdisc if it exists.
   // Unfortunately, I don't know how to delete the qdisc only if it exists and otherwise
   // skip. So always try to delete and ignore any errors.
-  tc_caller_.Call({"qdisc", "delete", "dev", device_, "root"}, false).IgnoreError();
-  return tc_caller_.Call(
+  tc_caller_->Call({"qdisc", "delete", "dev", device_, "root"}, false).IgnoreError();
+  return tc_caller_->Call(
       {"qdisc", "add", "dev", device_, "root", "handle", "1:", "htb", "default", "0"},
       false);
 }
@@ -326,7 +337,7 @@ void LinuxHostEnforcer::StageIptablesForFlow(const MatchedHostFlows::Vec& matche
                       "before StageIptablesForFlow");
 
   for (auto f : matched_flows) {
-    ipt_controller_.Stage({
+    ipt_controller_->Stage({
         .src_port = AssertValidPort(f.src_port(), &logger_),
         .dst_port = AssertValidPort(f.dst_port(), &logger_),
         .dst_addr = f.dst_addr(),
@@ -456,16 +467,16 @@ void LinuxHostEnforcer::EnforceAllocs(const FlowStateProvider& flow_state_provid
                      "with new limiters:{}{}",
                      create_count, update_count, create_count > 0 ? "\n" : "",
                      absl::StrJoin(flows_with_created_classes, "\n"));
-  absl::Status st = tc_caller_.Batch(tc_batch_input_, /*force=*/true);
+  absl::Status st = tc_caller_->Batch(tc_batch_input_, /*force=*/true);
   if (!st.ok()) {
     SPDLOG_LOGGER_ERROR(&logger_,
                         "failed to init or increase rate limits for some flows: {}", st);
     // Find out which classes have not been created
-    st = tc_caller_.Call({"class", "show", "dev", device_}, false);
+    st = tc_caller_->Call({"class", "show", "dev", device_}, false);
 
     if (st.ok()) {
       std::vector<std::string> found_classes;
-      for (auto line : absl::StrSplit(tc_caller_.RawOut(), '\n')) {
+      for (auto line : absl::StrSplit(tc_caller_->RawOut(), '\n')) {
         std::vector<absl::string_view> fields =
             absl::StrSplit(line, absl::ByAnyChar(" \t"));
         if (fields.size() >= 3) {
@@ -515,13 +526,13 @@ void LinuxHostEnforcer::EnforceAllocs(const FlowStateProvider& flow_state_provid
     }
   }
 
-  st = ipt_controller_.CommitChanges();
+  st = ipt_controller_->CommitChanges();
   if (!st.ok()) {
     SPDLOG_LOGGER_ERROR(&logger_, "failed to commit iptables config: ", st);
     SPDLOG_LOGGER_WARN(&logger_, "will not decrease rate limits");
   } else {
     snapshot_mu_.Lock();
-    ipt_snapshot_ = ipt_controller_.AppliedSettings();
+    ipt_snapshot_ = ipt_controller_->AppliedSettings();
     snapshot_mu_.Unlock();
 
     // ==== Stage 3: Decrease any rate limits ====
@@ -558,7 +569,7 @@ void LinuxHostEnforcer::EnforceAllocs(const FlowStateProvider& flow_state_provid
       }
     }
     SPDLOG_LOGGER_INFO(&logger_, "decreasing {} rate limits", update_count);
-    st = tc_caller_.Batch(tc_batch_input_, /*force=*/true);
+    st = tc_caller_->Batch(tc_batch_input_, /*force=*/true);
     if (!st.ok()) {
       SPDLOG_LOGGER_ERROR(&logger_, "failed to decrease rate limits for some flows: {}",
                           st);
@@ -572,21 +583,21 @@ void LinuxHostEnforcer::LogState() {
   if (debug_logger_.should_log()) {
     SPDLOG_LOGGER_INFO(&logger_, "debug logging: gather iptables state");
     absl::Cord mangle_table;
-    ipt_controller_.GetRunner()
+    ipt_controller_->GetRunner()
         .SaveInto(iptables::Table::kMangle, mangle_table)
         .IgnoreError();
     SPDLOG_LOGGER_INFO(&logger_, "debug logging: gather tc qdisc state");
     bool have_qdisc_output = false;
     absl::Cord qdisc_output;
-    if (tc_caller_.Call({"qdisc"}, false).ok()) {
-      qdisc_output.Append(tc_caller_.RawOut());
+    if (tc_caller_->Call({"qdisc"}, false).ok()) {
+      qdisc_output.Append(tc_caller_->RawOut());
       have_qdisc_output = true;
     }
     SPDLOG_LOGGER_INFO(&logger_, "debug logging: gather tc class state");
     bool have_class_output = false;
     absl::Cord class_output;
-    if (tc_caller_.Call({"class", "show", "dev", device_}, false).ok()) {
-      class_output.Append(tc_caller_.RawOut());
+    if (tc_caller_->Call({"class", "show", "dev", device_}, false).ok()) {
+      class_output.Append(tc_caller_->RawOut());
       have_class_output = true;
     }
 
