@@ -201,6 +201,24 @@ func KillFortio(c *pb.DeploymentConfig) error {
 	return KillSessions(c, "^fortio")
 }
 
+func ResetNodesFromVFortio(c *pb.DeploymentConfig, remoteTopdir string) error {
+	var eg multierrgroup.Group
+	for _, n := range c.GetNodes() {
+		n := n
+		eg.Go(func() error {
+			cmd := TracingCommand(
+				LogWithPrefix("reset-nodes-from-vfortio: "),
+				"ssh", n.GetExternalAddr(),
+				fmt.Sprintf("sudo %s/aux/vfortio reset-host", remoteTopdir))
+			if out, err := cmd.CombinedOutput(); err != nil {
+				return fmt.Errorf("failed to reset host (from vfortio): Node %s: %w; out:\n%s", n.GetName(), err, out)
+			}
+			return nil
+		})
+	}
+	return eg.Wait()
+}
+
 func syncImageAndInitHost(server *pb.DeployedNode, remoteVfortioPath, remoteImageDir string) error {
 	cmd := TracingCommand(
 		LogWithPrefix("vfortio-sync-image: "),

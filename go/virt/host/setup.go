@@ -13,7 +13,25 @@ import (
 	"github.com/uluyol/heyp-agents/go/virt/cmdseq"
 )
 
-// TODO: retry iptables and OS-related syscalls
+const iptablesResetRules = "*nat\nCOMMIT\n*filter\nCOMMIT\n"
+
+func ResetSysForNormalUsage() error {
+	var err error
+	var out []byte
+	for i := 0; i < retryCount; i++ {
+		cmd := exec.Command("iptables-restore")
+		cmd.Stdin = strings.NewReader(iptablesResetRules)
+		out, err = cmd.CombinedOutput()
+		if err == nil {
+			break
+		}
+		time.Sleep(4 * time.Millisecond)
+	}
+	if err != nil {
+		return fmt.Errorf("%v; output: %s", err, out)
+	}
+	return nil
+}
 
 type PrepareForFirecrackerCmd struct {
 	ModuleKVM              string

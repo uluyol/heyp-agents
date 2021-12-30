@@ -13,6 +13,7 @@ func main() {
 	subcommands.Register(subcommands.HelpCommand(), "")
 	subcommands.Register(subcommands.FlagsCommand(), "")
 	subcommands.Register(subcommands.CommandsCommand(), "")
+	subcommands.Register(new(resetHostCmd), "host")
 	subcommands.Register(new(initHostCmd), "host")
 	subcommands.Register(new(tapCmd), "host")
 	subcommands.Register(new(vmCreateCmd), "vm")

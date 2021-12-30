@@ -138,10 +138,17 @@ func (c *configCmd) Execute(ctx context.Context, fs *flag.FlagSet,
 	return subcommands.ExitSuccess
 }
 
-var killFortioCmd = &configCmd{
+var killFortioCmd = &configAndRemDirCmd{
 	name:     "kill-fortio",
 	synopsis: "kill all fortio experiments",
-	exec:     actions.KillFortio,
+	exec: func(c *configAndRemDirCmd, fs *flag.FlagSet) {
+		var eg multierrgroup.Group
+		eg.Go(func() error { return actions.KillFortio(c.config) })
+		eg.Go(func() error { return actions.ResetNodesFromVFortio(c.config, c.remDir) })
+		if err := eg.Wait(); err != nil {
+			log.Fatal(err)
+		}
+	},
 }
 
 var killHEYPCmd = &configCmd{

@@ -10,6 +10,22 @@ import (
 	"github.com/uluyol/heyp-agents/go/virt/host"
 )
 
+type resetHostCmd struct{}
+
+func (*resetHostCmd) Name() string           { return "reset-host" }
+func (*resetHostCmd) Synopsis() string       { return "cleans up host after running vfortio instances" }
+func (*resetHostCmd) Usage() string          { return "" }
+func (*resetHostCmd) SetFlags(*flag.FlagSet) {}
+
+func (c *resetHostCmd) Execute(ctx context.Context, fs *flag.FlagSet, args ...interface{}) subcommands.ExitStatus {
+	if err := host.ResetSysForNormalUsage(); err != nil {
+		log.Fatal(err)
+	}
+	return subcommands.ExitSuccess
+}
+
+var _ subcommands.Command = new(resetHostCmd)
+
 type initHostCmd struct{ c host.PrepareForFirecrackerCmd }
 
 func (*initHostCmd) Name() string     { return "init-host" }
