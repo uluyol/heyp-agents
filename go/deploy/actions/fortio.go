@@ -209,7 +209,7 @@ func ResetNodesFromVFortio(c *pb.DeploymentConfig, remoteTopdir string) error {
 			cmd := TracingCommand(
 				LogWithPrefix("reset-nodes-from-vfortio: "),
 				"ssh", n.GetExternalAddr(),
-				fmt.Sprintf("sudo %s/aux/vfortio reset-host", remoteTopdir))
+				fmt.Sprintf("sudo %s/aux/vfortio reset-host -addr %s", remoteTopdir, n.GetExperimentAddr()))
 			if out, err := cmd.CombinedOutput(); err != nil {
 				return fmt.Errorf("failed to reset host (from vfortio): Node %s: %w; out:\n%s", n.GetName(), err, out)
 			}

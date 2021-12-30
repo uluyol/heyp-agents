@@ -13,9 +13,15 @@ import (
 	"github.com/uluyol/heyp-agents/go/virt/cmdseq"
 )
 
-const iptablesResetRules = "*nat\nCOMMIT\n*filter\nCOMMIT\n"
+const iptablesResetRules = "" +
+	"*filter\n" +
+	"COMMIT\n" +
+	"*mangle\n" +
+	"COMMIT\n" +
+	"*nat\n" +
+	"COMMIT\n"
 
-func ResetSysForNormalUsage() error {
+func ResetSysForNormalUsage(addr string) error {
 	var err error
 	var out []byte
 	for i := 0; i < retryCount; i++ {
@@ -30,7 +36,30 @@ func ResetSysForNormalUsage() error {
 	if err != nil {
 		return fmt.Errorf("%v; output: %s", err, out)
 	}
-	return nil
+
+	addrs, err := ipAddrs()
+	if err != nil {
+		return fmt.Errorf("cannot reset tc: %w", err)
+	}
+	for _, st := range addrs {
+		for _, addrInfo := range st.AddrInfo {
+			if addrInfo.Local == addr {
+				device := st.IFName
+				for i := 0; i < 2; i++ {
+					err := exec.Command("tc", "qdisc", "delete", "dev", device, "root").Run()
+					if err == nil {
+						break
+					}
+					time.Sleep(4 * time.Millisecond)
+				}
+				// Unfortunately, I don't know how to delete the qdisc only if it exists
+				// and otherwise skip. So always try to delete (possibly multiple times)
+				// and ignore any errors.
+				return nil
+			}
+		}
+	}
+	return fmt.Errorf("did not find a device for %q: got %+v", addr, addrs)
 }
 
 type PrepareForFirecrackerCmd struct {
@@ -152,6 +181,29 @@ type ipLinkStatus struct {
 	Broadcast string   `json:"broadcast"`
 }
 
+type ipAddrStatus struct {
+	IFIndex   int      `json:"ifindex"`
+	IFName    string   `json:"ifname"`
+	Flags     []string `json:"flags"`
+	MTU       int      `json:"mtu"`
+	Qdisc     string   `json:"qdisc"`
+	OperState string   `json:"operstate"`
+	Group     string   `json:"group"`
+	TXQLen    int      `json:"txqlen"`
+	LinkType  string   `json:"link_type"`
+	Address   string   `json:"address"`
+	Broadcast string   `json:"broadcast"`
+	AddrInfo  []struct {
+		Family            string `json:"family"`
+		Local             string `json:"local"`
+		PrefixLen         int    `json:"prefixlen"`
+		Scope             string `json:"scope"`
+		Label             string `json:"label"`
+		ValidLifeTime     int64  `json:"valid_life_time"`
+		PreferredLifeTime int64  `json:"preferred_life_time"`
+	} `json:"addr_info"`
+}
+
 type TAP struct{ ID int }
 
 func parseTAPDevice(s string) (TAP, bool) {
@@ -182,24 +234,36 @@ func (t TAP) VirtMAC() string {
 	return fmt.Sprintf("02:FC:00:00:%02X:%02X", t.ID/256, t.ID%256)
 }
 
-func ipLinks() ([]ipLinkStatus, error) {
+func retryCommandToJSON(dest interface{}, cmd string, args ...string) error {
 	var out []byte
 	var err error
 	for i := 0; i < retryCount; i++ {
-		out, err = exec.Command("ip", "-json", "link").Output()
+		out, err = exec.Command(cmd, args...).Output()
 		if err == nil {
 			break
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to run ip -json link: %w", err)
+		return fmt.Errorf("failed to run %s %s: %w", cmd, strings.Join(args, " "), err)
 	}
+	if err := json.Unmarshal(out, dest); err != nil {
+		return fmt.Errorf("failed to parse %s %s: %w; output:\n%s",
+			cmd, strings.Join(args, " "), err, out)
+	}
+	return nil
+}
+
+func ipLinks() ([]ipLinkStatus, error) {
 	var links []ipLinkStatus
-	if err := json.Unmarshal(out, &links); err != nil {
-		return nil, fmt.Errorf("failed to parse ip -json output: %w; output:\n%s", err, out)
-	}
-	return links, nil
+	err := retryCommandToJSON(&links, "ip", "-json", "link")
+	return links, err
+}
+
+func ipAddrs() ([]ipAddrStatus, error) {
+	var addrs []ipAddrStatus
+	err := retryCommandToJSON(&addrs, "ip", "-json", "addr")
+	return addrs, err
 }
 
 func ListTAPs() ([]TAP, error) {
