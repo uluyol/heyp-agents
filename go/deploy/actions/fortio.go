@@ -291,6 +291,7 @@ func FortioStartServers(c *pb.DeploymentConfig, remoteTopdir, envoyLogLevel stri
 	var eg multierrgroup.Group
 	for _, proxy := range fortio.Proxies {
 		proxy := proxy
+		startedProxy := make(chan bool)
 		eg.Go(func() error {
 			configTar := writetar.ConcatInMem(writetar.Add(
 				"fortio-envoy-config.yaml", []byte(fortio.GetEnvoyYAML(proxy))))
@@ -305,8 +306,26 @@ func FortioStartServers(c *pb.DeploymentConfig, remoteTopdir, envoyLogLevel stri
 						"tmux new-session -d -s fortio-proxy 'ulimit -Sn unlimited; %[1]s/aux/envoy --log-level %[2]s --concurrency %[3]d --config-path %[1]s/configs/fortio-envoy-config.yaml 2>&1 | tee %[1]s/logs/fortio-proxy.log; sleep 100000'", remoteTopdir, envoyLogLevel, fortio.Config.GetEnvoyNumThreads()))
 			cmd.SetStdin("config.tar", bytes.NewReader(configTar))
 			err := cmd.Run()
+			startedProxy <- err == nil
 			if err != nil {
 				return fmt.Errorf("failed to start proxy on Node %q: %w", proxy.GetName(), err)
+			}
+			return nil
+		})
+
+		eg.Go(func() error {
+			if !<-startedProxy {
+				return nil // original error will be reported
+			}
+			cmd := TracingCommand(
+				LogWithPrefix("fortio-start-monitoring: "),
+				"ssh", proxy.GetExternalAddr(),
+				fmt.Sprintf(
+					"tmux kill-session -t fortio-proxy-monitor;"+
+						"tmux new-session -d -s fortio-proxy-monitor '%[1]s/aux/collect-envoy-stats %[1]s/logs/fortio-proxy-stats %[2]d; sleep 100000'", remoteTopdir, fortio.Config.GetEnvoyAdminPort()))
+			err := cmd.Run()
+			if err != nil {
+				return fmt.Errorf("failed to start proxy monitoring on Node %q: %w", proxy.GetName(), err)
 			}
 			return nil
 		})
