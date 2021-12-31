@@ -68,6 +68,8 @@ func main() {
 	subcommands.Register(new(approvalsCmd), "")
 	subcommands.Register(new(wlStartEndCmd), "")
 	subcommands.Register(new(diffRemoteConfigsCmd), "")
+	subcommands.Register(new(envoySummarizeStats), "fortio-envoy")
+	subcommands.Register(new(envoyDiffStatSummaries), "fortio-envoy")
 
 	flag.Parse()
 
