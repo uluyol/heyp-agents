@@ -49,6 +49,7 @@ func MakeCodeBundle(binDir, auxBinDir, tarballPath string) error {
 	}
 
 	auxBins := []string{
+		"collect-envoy-stats",
 		"collect-host-stats",
 		"envoy",
 		"firecracker",

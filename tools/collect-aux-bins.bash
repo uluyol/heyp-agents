@@ -45,3 +45,5 @@ for cmd in $TOINSTALL; do
     ;;
   esac
 done
+
+chmod +x aux-bin/*
