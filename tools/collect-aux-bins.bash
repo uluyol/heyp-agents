@@ -4,8 +4,7 @@ set -e
 
 TOINSTALL=${@:-envoy fortio collect-host-stats}
 
-ENVOY_URL="https://dl.getenvoy.io/public/raw/files/getenvoy-envoy-1.18.3.p0.g98c1c9e-1p77.gb76c773-linux-glibc-release-x86_64.tar.xz"
-ENVOY_URL="https://archive.tetratelabs.io/envoy/download/v1.19.0/envoy-v1.19.0-linux-amd64.tar.xz"
+ENVOY_URL="https://archive.tetratelabs.io/envoy/download/v1.20.1/envoy-v1.20.1-linux-amd64.tar.xz"
 FIRECRACKER_URL="https://github.com/firecracker-microvm/firecracker/releases/download/v0.25.2/firecracker-v0.25.2-x86_64.tgz"
 
 mkdir -p aux-bin
