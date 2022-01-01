@@ -8,9 +8,11 @@ import (
 	"io"
 	"io/fs"
 	"log"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -24,12 +26,13 @@ import (
 )
 
 type InstanceConfig struct {
-	ConfigDir     string
-	HostAgentPath string
-	FortioPath    string
-	SSPath        string
-	Image         firecracker.ImageData
-	Fortio        FortioOptions
+	ConfigDir       string
+	HostAgentPath   string
+	FortioPath      string
+	SSPath          string
+	MachineSizeFrac float64
+	Image           firecracker.ImageData
+	Fortio          FortioOptions
 }
 
 type FortioOptions struct {
@@ -48,16 +51,29 @@ type Instance struct {
 	VM            *firecracker.VM
 }
 
+func fracOfMachine(f float64) (numCPU int, memMiB int64) {
+	numCPU = int(math.Max(1, math.Round(float64(runtime.NumCPU())*f)))
+	var info syscall.Sysinfo_t
+	syscall.Sysinfo(&info) // OK if fails, we'll just give 1 GiB
+	// Divide 1/2 of the total RAM across the VMs
+	halfTotalMemBytes := float64(int64(info.Unit)*int64(info.Totalram)) / 2
+	memMiB = int64(math.Max(1024, math.Round(halfTotalMemBytes*f/(1024*1024))))
+	return numCPU, memMiB
+}
+
 func CreateInstance(firecrackerPath string, id int, fortiolisAddr string, fortioPort int, outdir string, cfg InstanceConfig) (*Instance, error) {
 	log.Printf("creating instance %d with output %s", id, outdir)
 	tap, err := host.CreateTAP(id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create tap %d: %v", id, err)
 	}
+	numCPU, memMiB := fracOfMachine(cfg.MachineSizeFrac)
 	vm, err := firecracker.CreateVM(firecrackerPath, cfg.Image, firecracker.Config{
 		TAP:     tap,
 		ID:      id,
 		LogFile: filepath.Join(outdir, "firecracker.log"),
+		NumCPU:  numCPU,
+		MemMiB:  memMiB,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to start firecracker %d: %v", id, err)

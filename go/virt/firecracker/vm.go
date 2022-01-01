@@ -31,10 +31,21 @@ type Config struct {
 	TAP     host.TAP
 	ID      int
 	LogFile string
+	NumCPU  int   // default if 0 is 1
+	MemMiB  int64 // default if 0 is 1024 (i.e. 1 GiB)
 }
 
 func (c *Config) apiSock() string {
 	return fmt.Sprintf("/tmp/firecracker-sb%d.sock", c.ID)
+}
+
+func (c *Config) fixDefaults() {
+	if c.NumCPU <= 0 {
+		c.NumCPU = 1
+	}
+	if c.MemMiB <= 0 {
+		c.MemMiB = 1024
+	}
 }
 
 // VM represents an active Firecracker VM and can be serialized/deserialized from disk.
@@ -159,6 +170,7 @@ func CreateVM(firecrackerPath string, image ImageData, cfg Config) (*VM, error) 
 		time.Sleep(15 * time.Millisecond)
 	}
 
+	cfg.fixDefaults()
 	vm := &VM{
 		C:              cfg,
 		Image:          image,
@@ -188,6 +200,20 @@ func CreateVM(firecrackerPath string, image ImageData, cfg Config) (*VM, error) 
 	err = httpError(err, resp)
 	if err != nil {
 		return vm, fmt.Errorf("failed to configure logging: %v", err)
+	}
+	resp.Body.Close()
+
+	log.Printf("configure machine of firecracker VM %d", cfg.ID)
+	resp, err = vm.httpPut("http://localhost/machine-config", "application/json", strings.NewReader(fmt.Sprintf(`
+		{
+			"vcpu_count": %d,
+			"mem_size_mib": %d,
+			"ht_enabled": false
+		}
+	`, cfg.NumCPU, cfg.MemMiB)))
+	err = httpError(err, resp)
+	if err != nil {
+		return vm, fmt.Errorf("failed to configure machine: %v", err)
 	}
 	resp.Body.Close()
 

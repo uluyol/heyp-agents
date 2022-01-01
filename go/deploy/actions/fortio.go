@@ -377,11 +377,12 @@ func FortioStartServers(c *pb.DeploymentConfig, remoteTopdir, envoyLogLevel stri
 							instName := fmt.Sprintf("fortio-%s-%s-server-port-%d",
 								inst.Config.GetGroup(), inst.Config.GetName(), port)
 							vfortioConfig := &vfortio.InstanceConfig{
-								ConfigDir:     path.Join(remoteTopdir, "configs", instName+"-configs"),
-								HostAgentPath: path.Join(remoteTopdir, "heyp/host-agent/host-agent"),
-								FortioPath:    path.Join(remoteTopdir, "aux/fortio"),
-								SSPath:        path.Join(remoteTopdir, "aux/ss"),
-								Image:         virt.ImageData(path.Join(remoteTopdir, "data", "vfortio-image")),
+								ConfigDir:       path.Join(remoteTopdir, "configs", instName+"-configs"),
+								HostAgentPath:   path.Join(remoteTopdir, "heyp/host-agent/host-agent"),
+								FortioPath:      path.Join(remoteTopdir, "aux/fortio"),
+								SSPath:          path.Join(remoteTopdir, "aux/ss"),
+								Image:           virt.ImageData(path.Join(remoteTopdir, "data", "vfortio-image")),
+								MachineSizeFrac: 1 / float64(len(inst.Config.GetServePorts())),
 								Fortio: vfortio.FortioOptions{
 									MaxPayloadKB: maxPayload,
 									FortioGroup:  inst.Config.GetGroup(),
