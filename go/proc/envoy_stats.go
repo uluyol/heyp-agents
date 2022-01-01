@@ -14,6 +14,75 @@ import (
 	"time"
 )
 
+// isPercMetric returns whether the key corresponds to a percentile metric.
+// The format of a perc metric is XXX-perc-NNN (where NNN is a number).
+func isPercMetric(key string) bool {
+	sepPos := strings.LastIndex(key, "-")
+	if sepPos < 0 {
+		return false
+	}
+	for _, c := range key[sepPos+1:] {
+		if (c < '0' || '9' < c) && c != '.' {
+			return false
+		}
+	}
+	return strings.HasSuffix(key[:sepPos], "-perc")
+}
+
+type percMetric struct {
+	suffix string
+	aggVal float64
+}
+
+func parsePercMetrics(s string) ([]percMetric, error) {
+	sOrig := s
+
+	var metrics []percMetric
+	for {
+		nextP := strings.Index(s, "P")
+		if nextP < 0 {
+			if strings.TrimSpace(s) != "" {
+				return nil, fmt.Errorf("unable to parse perc's in %q", sOrig)
+			}
+			break
+		}
+
+		nEnd := nextP + 1
+		for nEnd < len(s) && (s[nEnd] == '.' || ('0' <= s[nEnd] && s[nEnd] <= '9')) {
+			nEnd++
+		}
+		if nEnd == nextP+1 {
+			return nil, fmt.Errorf("failed to find perc num in %q", sOrig)
+		}
+		_, err := strconv.ParseFloat(s[nextP+1:nEnd], 64)
+		if err != nil {
+			return nil, fmt.Errorf("impossible error: %s is all digits but not float: %w",
+				s[nextP+1:nEnd], err)
+		}
+		suffix := "-perc-" + s[nextP+1:nEnd]
+		if nEnd >= len(s) || s[nEnd] != '(' {
+			return nil, fmt.Errorf("missing ( in %q", sOrig)
+		}
+		s = s[nEnd+1:]
+		nextComma := strings.Index(s, ",")
+		if nextComma < 0 {
+			return nil, fmt.Errorf("missing , in %q", sOrig)
+		}
+		s = strings.TrimSpace(s[nextComma+1:])
+		nextCloseParen := strings.Index(s, ")")
+		if nextCloseParen < 0 {
+			return nil, fmt.Errorf("missing ) in %q", sOrig)
+		}
+		v, err := strconv.ParseFloat(s[:nextCloseParen], 64)
+		if err != nil {
+			return nil, fmt.Errorf("bad agg value in %q: %w", sOrig, err)
+		}
+		metrics = append(metrics, percMetric{suffix: suffix, aggVal: v})
+		s = s[nextCloseParen+1:]
+	}
+	return metrics, nil
+}
+
 func readEnvoyStatFile(fsys fs.FS, path string) (map[string]float64, error) {
 	f, err := fsys.Open(path)
 	if err != nil {
@@ -32,6 +101,16 @@ func readEnvoyStatFile(fsys fs.FS, path string) (map[string]float64, error) {
 		val, err := strconv.ParseFloat(valStr, 64)
 		if err == nil {
 			stats[key] = val
+			continue
+		}
+		if strings.HasPrefix(valStr, "P0(") {
+			percs, err := parsePercMetrics(valStr)
+			if err == nil {
+				for _, p := range percs {
+					stats[key+p.suffix] = p.aggVal
+				}
+				continue
+			}
 		}
 	}
 	return stats, s.Err()
