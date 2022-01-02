@@ -77,7 +77,7 @@ static_resources:
 {{- if .AdmissionControl.Enabled }}
           - name: envoy.filters.http.admission_control
             typed_config:
-              "@type": type.googleapis.com/envoy.extensions.filters.http.admission_control.v3alpha.AdmissionControl
+              "@type": type.googleapis.com/envoy.extensions.filters.http.admission_control.v3.AdmissionControl
               enabled:
                 default_value: true
                 runtime_key: "admission_control.enabled"
@@ -159,6 +159,12 @@ static_resources:
         max_connections: {{.MaxConnections}}
         max_pending_requests: {{.MaxPendingRequests}}
         max_requests: {{.MaxRequests}}
+    outlier_detection:
+      consecutive_5xx: 1000
+      max_ejection_percent: 0
+      enforcing_consecutive_5xx: 0
+      enforcing_success_rate: 0
+      failure_percentage_threshold: 100
 {{- end }}
 {{- end }}
 

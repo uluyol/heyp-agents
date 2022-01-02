@@ -79,7 +79,7 @@ func TestEnvoyReverseProxy(t *testing.T) {
           http_filters:
           - name: envoy.filters.http.admission_control
             typed_config:
-              "@type": type.googleapis.com/envoy.extensions.filters.http.admission_control.v3alpha.AdmissionControl
+              "@type": type.googleapis.com/envoy.extensions.filters.http.admission_control.v3.AdmissionControl
               enabled:
                 default_value: true
                 runtime_key: "admission_control.enabled"
@@ -160,6 +160,12 @@ func TestEnvoyReverseProxy(t *testing.T) {
         max_connections: 2
         max_pending_requests: 1234
         max_requests: 421
+    outlier_detection:
+      consecutive_5xx: 1000
+      max_ejection_percent: 0
+      enforcing_consecutive_5xx: 0
+      enforcing_success_rate: 0
+      failure_percentage_threshold: 100
   - name: "backend-2"
     type: STATIC
     connect_timeout: 5s
@@ -190,6 +196,12 @@ func TestEnvoyReverseProxy(t *testing.T) {
         max_connections: 0
         max_pending_requests: 0
         max_requests: 0
+    outlier_detection:
+      consecutive_5xx: 1000
+      max_ejection_percent: 0
+      enforcing_consecutive_5xx: 0
+      enforcing_success_rate: 0
+      failure_percentage_threshold: 100
 
 admin:
   address:
@@ -395,6 +407,12 @@ admin:
         max_connections: 0
         max_pending_requests: 0
         max_requests: 0
+    outlier_detection:
+      consecutive_5xx: 1000
+      max_ejection_percent: 0
+      enforcing_consecutive_5xx: 0
+      enforcing_success_rate: 0
+      failure_percentage_threshold: 100
   - name: "ZzZ"
     type: STATIC
     connect_timeout: 5s
@@ -425,6 +443,12 @@ admin:
         max_connections: 2000
         max_pending_requests: 134
         max_requests: 42
+    outlier_detection:
+      consecutive_5xx: 1000
+      max_ejection_percent: 0
+      enforcing_consecutive_5xx: 0
+      enforcing_success_rate: 0
+      failure_percentage_threshold: 100
   - name: "2"
     type: STATIC
     connect_timeout: 5s
@@ -455,6 +479,12 @@ admin:
         max_connections: 0
         max_pending_requests: 0
         max_requests: 0
+    outlier_detection:
+      consecutive_5xx: 1000
+      max_ejection_percent: 0
+      enforcing_consecutive_5xx: 0
+      enforcing_success_rate: 0
+      failure_percentage_threshold: 100
   - name: "ZzZ2"
     type: STATIC
     connect_timeout: 5s
@@ -485,6 +515,12 @@ admin:
         max_connections: 2000
         max_pending_requests: 134
         max_requests: 42
+    outlier_detection:
+      consecutive_5xx: 1000
+      max_ejection_percent: 0
+      enforcing_consecutive_5xx: 0
+      enforcing_success_rate: 0
+      failure_percentage_threshold: 100
 
 admin:
   address:
