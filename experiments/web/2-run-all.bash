@@ -65,10 +65,9 @@ run_one() {
     dpids="$dpids $!"
     bin/deploy-heyp stop-heyp-agents -c $c &# graceful shutdown
     dpids="$dpids $!"
-    bin/deploy-heyp kill-fortio -c $c &# kill monitoring if nothing else
-    dpids="$dpids $!"
 
-    wait_all $dpids || true # ignore shutdown errors
+    wait_all $dpids || true           # ignore shutdown errors
+    bin/deploy-heyp kill-fortio -c $c # kill monitoring if nothing else
 
     sleep 3
 
