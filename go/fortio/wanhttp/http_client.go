@@ -19,7 +19,6 @@ package wanhttp
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
@@ -33,12 +32,14 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"fortio.org/fortio/fnet"
 	"fortio.org/fortio/log"
 	"fortio.org/fortio/version"
 	"github.com/google/uuid"
+	"golang.org/x/net/http2"
 )
 
 // Fetcher is the Url content fetcher that the different client implements.
@@ -312,7 +313,7 @@ type Client struct {
 	body                 string // original body of the request
 	req                  *http.Request
 	client               *http.Client
-	transport            *http.Transport
+	transport            *http2.Transport
 	pathContainsUUID     bool // if url contains the "{uuid}" pattern (lowercase)
 	rawQueryContainsUUID bool // if any query params contains the "{uuid}" pattern (lowercase)
 	bodyContainsUUID     bool // if body contains the "{uuid}" pattern (lowercase)
@@ -417,6 +418,55 @@ func NewClient(o *HTTPOptions) (Fetcher, error) {
 	return NewFastClient(o)
 }
 
+var stdTransports struct {
+	mu    sync.Mutex
+	known map[*HTTPOptions]*http2.Transport
+}
+
+func getStdTransport(o *HTTPOptions) *http2.Transport {
+	stdTransports.mu.Lock()
+	defer stdTransports.mu.Unlock()
+	if stdTransports.known == nil {
+		stdTransports.known = make(map[*HTTPOptions]*http2.Transport)
+	}
+	tr := stdTransports.known[o]
+	if tr != nil {
+		return tr
+	}
+	tr = &http2.Transport{
+		AllowHTTP:          true,
+		DisableCompression: !o.Compression,
+		DialTLS: func(network, addr string, cfg *tls.Config) (net.Conn, error) {
+			// redirect all connections to resolved ip, and use cn as sni host
+			if o.Resolve != "" {
+				addr = o.Resolve + addr[strings.LastIndex(addr, ":"):]
+			}
+			return (&net.Dialer{
+				Timeout: o.HTTPReqTimeOut,
+			}).Dial(network, addr)
+		},
+	}
+	// tr = &http.Transport{
+	// 	MaxIdleConns:        o.NumConnections,
+	// 	MaxIdleConnsPerHost: o.NumConnections,
+	// 	DisableCompression:  !o.Compression,
+	// 	DisableKeepAlives:   o.DisableKeepAlive,
+	// 	Proxy:               http.ProxyFromEnvironment,
+	// 	DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+	// 		// redirect all connections to resolved ip, and use cn as sni host
+	// 		if o.Resolve != "" {
+	// 			addr = o.Resolve + addr[strings.LastIndex(addr, ":"):]
+	// 		}
+	// 		return (&net.Dialer{
+	// 			Timeout: o.HTTPReqTimeOut,
+	// 		}).DialContext(ctx, network, addr)
+	// 	},
+	// 	TLSHandshakeTimeout: o.HTTPReqTimeOut,
+	// }
+	stdTransports.known[o] = tr
+	return tr
+}
+
 // NewStdClient creates a client object that wraps the net/http standard client.
 func NewStdClient(o *HTTPOptions) (*Client, error) {
 	o.Init(o.URL) // also normalizes NumConnections etc to be valid.
@@ -424,23 +474,7 @@ func NewStdClient(o *HTTPOptions) (*Client, error) {
 	if req == nil {
 		return nil, err
 	}
-	tr := http.Transport{
-		MaxIdleConns:        o.NumConnections,
-		MaxIdleConnsPerHost: o.NumConnections,
-		DisableCompression:  !o.Compression,
-		DisableKeepAlives:   o.DisableKeepAlive,
-		Proxy:               http.ProxyFromEnvironment,
-		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-			// redirect all connections to resolved ip, and use cn as sni host
-			if o.Resolve != "" {
-				addr = o.Resolve + addr[strings.LastIndex(addr, ":"):]
-			}
-			return (&net.Dialer{
-				Timeout: o.HTTPReqTimeOut,
-			}).DialContext(ctx, network, addr)
-		},
-		TLSHandshakeTimeout: o.HTTPReqTimeOut,
-	}
+	tr := getStdTransport(o)
 	if o.https { // nolint: nestif // fine for now
 		tr.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS12}
 		if o.Insecure {
@@ -480,9 +514,9 @@ func NewStdClient(o *HTTPOptions) (*Client, error) {
 		req:                  req,
 		client: &http.Client{
 			Timeout:   o.HTTPReqTimeOut,
-			Transport: &tr,
+			Transport: tr,
 		},
-		transport: &tr,
+		transport: tr,
 	}
 	if !o.FollowRedirects {
 		// Lets us see the raw response instead of auto following redirects.

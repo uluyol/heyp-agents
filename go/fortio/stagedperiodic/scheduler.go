@@ -76,8 +76,15 @@ func (s *qpsScheduler) Run(rec *heypstats.Recorder, stageStates []*stageState, s
 		numCalls := stageStates[stage].numCalls
 
 		var expectedSleep time.Duration
+		// rateLimiter := rate.NewLimiter(rate.Inf, 0)
 		if useQPS {
 			expectedSleep = time.Duration(1e9/qps) * time.Nanosecond
+			// rateLimiter.SetLimit(rate.Every(expectedSleep))
+			// burst := int(rate.Every(expectedSleep) / 100)
+			// if burst < 10 {
+			// 	burst = 10
+			// }
+			// rateLimiter.SetBurst(burst)
 		}
 
 		stageEndTime := runStart.Add(s.cumDurs[stage])
@@ -122,8 +129,14 @@ func (s *qpsScheduler) Run(rec *heypstats.Recorder, stageStates []*stageState, s
 				log.Debugf("target next dur sleep %v", sleepDuration)
 				s.sleepTimes[stage].Record(sleepDuration.Seconds())
 				s.clock.Sleep(sleepDuration)
+				// if rateLimiter.Allow() {
 				s.c <- stage + 1
 				i++
+				// } else {
+				// 	// Drop request, we're sending too many requests.
+				// 	// This can happen when the server is overloaded or when we
+				// 	// don't have enough worker threads.
+				// }
 				select {
 				case <-runnerChan:
 					break MainLoop
