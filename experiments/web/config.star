@@ -1306,7 +1306,7 @@ def AddConfigsDemandSuppression(configs):
     configs[prefix + "-rl"] = RateLimitConfig(**kwargs)
 
 def AddConfigsIncreasing(configs):
-    kwargs = dict({
+    base_kwargs = {
         "AA_approved_bps": int(Gbps(2)),
         "AA_surplus_bps": int(Gbps(10)),
         "AA_servers_are_virt": True,
@@ -1317,16 +1317,8 @@ def AddConfigsIncreasing(configs):
             "AA": DefaultOnAdmissionControl(),
             "WA": DefaultOnAdmissionControl(),
         },
-        # "envoy_group_admission_control_configs": {
-        #     "AA": {
-        #         "enabled": True,
-        #         "sampling_window_sec": 20,
-        #         "success_rate_thresh": 92,
-        #         "aggression": float("1.0"),
-        #         "max_rejection_prob": 98,
-        #     },
-        # },
-    }, **GenWorkloadStagesIncreasing(
+    }
+    wl_kwargs = GenWorkloadStagesIncreasing(
         AA_bps = int(Gbps(12)),
         AA_max_prop_delay_ms = _DEFAULT_AA_prop_delay_ms + _DEFAULT_AA_prop_delay_ms_extra_lopri,
         num_AA_backends = 1,
@@ -1335,18 +1327,19 @@ def AddConfigsIncreasing(configs):
         WA_bps_min = int(Gbps(6)),
         WA_bps_max = int(Gbps(12)),
         enable_timeout = True,
-    ))
-    # kwargs = dict({
-    #     "AA_approved_bps": int(Gbps(8)),
-    #     "AA_surplus_bps": int(Gbps(10)),
-    #     "WA_approved_bps": int(Gbps(6)),
-    #     "shard_key": "inc",
-    # }, **GenWorkloadStagesIncreasing(
-    #     AA_bps = int(Gbps(18)),
-    #     num_AA_backends = 5,
-    #     WA_bps_min = int(Gbps(2)),
-    #     WA_bps_max = int(Gbps(6)),
-    # ))
+    )
+    wl_lo_kwargs = GenWorkloadStagesIncreasing(
+        AA_bps = int(Gbps(2)),
+        AA_max_prop_delay_ms = _DEFAULT_AA_prop_delay_ms + _DEFAULT_AA_prop_delay_ms_extra_lopri,
+        num_AA_backends = 1,
+        num_AA_servers_per_backend_host = AA_NUM_SERVERS_PER_BACKEND_HOST,
+        AA_servers_are_virt = True,
+        WA_bps_min = int(Gbps(6)),
+        WA_bps_max = int(Gbps(12)),
+        enable_timeout = True,
+    )
+    kwargs = dict(base_kwargs, **wl_kwargs)
+    kwargs_lo = dict(base_kwargs, **wl_lo_kwargs)
 
     prefix = "inc"
 
@@ -1355,6 +1348,9 @@ def AddConfigsIncreasing(configs):
     configs[prefix + "-qd"] = QoSDowngradeConfig(**kwargs)
     configs[prefix + "-qdlrl"] = QoSDowngradeAndLimitLOPRIConfig(**kwargs)
     configs[prefix + "-rl"] = RateLimitConfig(**kwargs)
+
+    configs[prefix + "-nl_light"] = NoLimitConfig(**kwargs_lo)
+    configs[prefix + "-rl_light"] = RateLimitConfig(**kwargs_lo)
 
 def AddConfigsIncreasingMPR(configs):
     for mpr in [10, 50, 100, 150, 200, 300, 400, 600, 800, 1000]:

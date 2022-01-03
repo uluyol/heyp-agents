@@ -12,10 +12,12 @@ if (length(args) != 1) {
 SYS_LONG <- new.env(hash=TRUE)
 SYS_LONG[["hsc"]] <- "HSC20"
 SYS_LONG[["nl"]] <- "NoLimit"
+SYS_LONG[["nl_light"]] <- "NoLimit-LightAA"
 SYS_LONG[["qd"]] <- "QD"
 SYS_LONG[["qdlrl"]] <- "QD+LimitLO"
 SYS_LONG[["qdlrlj"]] <- "QDJob+LimitLO"
 SYS_LONG[["rl"]] <- "RateLimit"
+SYS_LONG[["rl_light"]] <- "RateLimit-LightAA"
 SYS_LONG[["flipflop"]] <- "MixedFlipFlop"
 SYS_LONG[["stableqos"]] <- "MixedStable"
 SYS_LONG[["flipflop_nl"]] <- "MixedFlipFlop-NL"
