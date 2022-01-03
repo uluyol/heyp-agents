@@ -826,7 +826,7 @@ def BackendOnEachHost(
 
     timeout_sec = float(0)
     if enable_timeout:
-        timeout_sec = fdiv(float(5 * max_prop_delay_ms), float(1e3))
+        timeout_sec = fdiv(float(4 * max_prop_delay_ms), float(1e3))
 
     server_roles = []
     client_roles = []
@@ -1306,14 +1306,15 @@ def AddConfigsDemandSuppression(configs):
     configs[prefix + "-rl"] = RateLimitConfig(**kwargs)
 
 def AddConfigsIncreasing(configs):
-    # "AA_lopri_is_longer": True,
     kwargs = dict({
         "AA_approved_bps": int(Gbps(2)),
         "AA_surplus_bps": int(Gbps(10)),
         "AA_servers_are_virt": True,
+        "AA_lopri_is_longer": True,
         "WA_approved_bps": int(Gbps(13)),
         "shard_key": "inc",
         "envoy_group_admission_control_configs": {
+            "AA": DefaultOnAdmissionControl(),
             "WA": DefaultOnAdmissionControl(),
         },
         # "envoy_group_admission_control_configs": {
@@ -1327,12 +1328,13 @@ def AddConfigsIncreasing(configs):
         # },
     }, **GenWorkloadStagesIncreasing(
         AA_bps = int(Gbps(12)),
+        AA_max_prop_delay_ms = _DEFAULT_AA_prop_delay_ms + _DEFAULT_AA_prop_delay_ms_extra_lopri,
         num_AA_backends = 1,
         num_AA_servers_per_backend_host = AA_NUM_SERVERS_PER_BACKEND_HOST,
         AA_servers_are_virt = True,
         WA_bps_min = int(Gbps(6)),
         WA_bps_max = int(Gbps(12)),
-        enable_timeout = False,
+        enable_timeout = True,
     ))
     # kwargs = dict({
     #     "AA_approved_bps": int(Gbps(8)),
