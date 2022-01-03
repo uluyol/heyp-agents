@@ -17,8 +17,6 @@ data$Value[data$Metric == "IngressBW" | data$Metric == "EgressBW"] <-
 data <- data[data$Role != "host-agent",]
 
 Plot <- function(subset, output, ylabel, ylimits) {
-  subset <- subset[subset$Stat == "Max",]
-
   if (nrow(subset) > 0) {
     pdf(output, height=2.5, width=5)
     p <- ggplot(subset, aes(x=Role, y=Value)) +
@@ -52,21 +50,20 @@ Plot <- function(subset, output, ylabel, ylimits) {
   }
 }
 
-Plot(
-  data[data$Metric == "IngressBW",],
-  paste(outpre, "IngressBW.pdf", sep=""),
-  "Max Ingress BW (Gbps)",
-  c(0, 10))
-
-Plot(
-  data[data$Metric == "EgressBW",],
-  paste(outpre, "EgressBW.pdf", sep=""),
-  "Max Egress BW (Gbps)",
-  c(0, 10))
-
-Plot(
-  data[data$Metric == "CPU",],
-  paste(outpre, "CPU.pdf", sep=""),
-  "Max CPU Utilization (%)",
-  c(0, 100))
-
+for (stat in c("Max", "Mean")) {
+  Plot(
+    data[data$Metric == "IngressBW" & data$Stat == stat,],
+    paste0(outpre, "IngressBW-", stat, ".pdf"),
+    paste0(stat, " Ingress BW (Gbps)"),
+    c(0, 10))
+  Plot(
+    data[data$Metric == "EgressBW" & data$Stat == stat,],
+    paste0(outpre, "EgressBW-", stat, ".pdf"),
+    paste0(stat, " Egress BW (Gbps)"),
+    c(0, 10))
+  Plot(
+    data[data$Metric == "CPU" & data$Stat == stat,],
+    paste0(outpre, "CPU-", stat, ".pdf"),
+    paste0(stat, " CPU Utilization (%)"),
+    c(0, 100))
+}
