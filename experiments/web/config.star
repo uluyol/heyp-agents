@@ -36,10 +36,12 @@ def NumConnsPerShard(stages, size_dist, num_shards, prop_delay_ms):
 
     num_conns_per_shard = fdiv(max_qps_per_shard, qps_per_conn)
 
-    return int(math.ceil(num_conns_per_shard * float(5)))
+    return int(math.ceil(num_conns_per_shard * float("3")))
 
 AA_FORTIO_STARTING_PORT = 6000
 WA_FORTIO_STARTING_PORT = 6100
+
+AA_NUM_SERVERS_PER_BACKEND_HOST = 3
 
 def GenWorkloadStagesStatic(
         AA_bps = None,
@@ -161,12 +163,14 @@ def GenWorkloadStagesIncreasing(
         AA_bps = None,
         num_AA_backends = None,
         num_AA_servers_per_backend_host = 2,
+        AA_servers_are_virt = False,
         WA_bps_min = None,
         WA_bps_max = None,
         AA_max_prop_delay_ms = _DEFAULT_AA_prop_delay_ms,
         AA_avg_prop_delay_ms = _DEFAULT_AA_prop_delay_ms,
         WA_prop_delay_ms = _DEFAULT_WA_prop_delay_ms,
-        enable_timeout = False):
+        enable_timeout = False,
+        AA_max_pending_requests = 100):
     AA_per_be_bps = int(fdiv(float(AA_bps), float(num_AA_backends)))
 
     AA_instances, AA_client_roles, AA_server_roles_for = BackendOnEachHost(
@@ -183,6 +187,8 @@ def GenWorkloadStagesIncreasing(
         max_prop_delay_ms = AA_max_prop_delay_ms,
         avg_prop_delay_ms = AA_avg_prop_delay_ms,
         enable_timeout = enable_timeout,
+        servers_are_virt = AA_servers_are_virt,
+        max_pending_requests = AA_max_pending_requests,
     )
 
     tick_bps = (WA_bps_max - WA_bps_min) // 60
@@ -457,7 +463,7 @@ def GenWorkloadStagesOscillating(
 
 _DEFAULT_NODE_COUNTS = {
     "EDGE": 2,
-    "AA": 9,
+    "AA": 10,
     "WA": 2,
     "CLIENT": 2,
 }
@@ -488,6 +494,14 @@ def _GetNodeTypeUB(node_counts):
 
     return ubs
 
+def DefaultOnAdmissionControl():
+    return {
+        "enabled": True,
+        "sampling_window_sec": 20,
+        "success_rate_thresh": 98,
+        "max_rejection_prob": 98,
+    }
+
 def GenConfig(
         ca_allocator = None,
         ca_limits_to_apply = None,
@@ -500,6 +514,7 @@ def GenConfig(
         AA_jobs_for = None,
         AA_client_roles = None,
         AA_fortio_instances = None,
+        AA_servers_are_virt = False,
         WA_approved_bps = None,
         WA_surplus_bps = 0,
         WA_server_roles_for = None,
@@ -509,7 +524,7 @@ def GenConfig(
         AA_prop_delay_ms_extra_lopri = _DEFAULT_AA_prop_delay_ms_extra_lopri,
         WA_prop_delay_ms = _DEFAULT_WA_prop_delay_ms,
         envoy_group_names = None,
-        admission_controlled_envoy_groups = list(),
+        envoy_group_admission_control_configs = dict(),
         shard_key = "",
         node_counts = _DEFAULT_NODE_COUNTS,
         host_agent_log_fine_grained_stats = False,
@@ -577,7 +592,7 @@ def GenConfig(
 
     shard_index = 0
     cluster_agent_nodes = []
-    for idx in range(17):
+    for idx in range(20):
         i = idx + 1
         name = "n" + str(i)
         roles = []
@@ -592,32 +607,38 @@ def GenConfig(
             clusters["WA"]["node_names"].append(name)
             clusters["CLIENT"]["node_names"].append(name)
             cluster_agent_nodes.append(name)
+        elif i <= idx_ubs["EDGE"]:
+            roles.append("host-agent")
+            roles.extend(["fortio-{0}-envoy-proxy".format(g) for g in envoy_group_names])
+            clusters["EDGE"]["node_names"].append(name)
+        elif i <= idx_ubs["AA"]:
+            if AA_servers_are_virt:
+                roles.append("vhost-agents-" + str(AA_NUM_SERVERS_PER_BACKEND_HOST))
+            else:
+                roles.append("host-agent")
+            roles.extend(AA_server_roles_for(i - 4, 9))
+            if AA_jobs_for != None:
+                roles.extend(["job-" + job for job in AA_jobs_for(i - 4, 9)])
+            clusters["AA"]["node_names"].append(name)
+        elif i <= idx_ubs["WA"]:
+            roles.append("host-agent")
+            roles.extend(WA_server_roles_for(i - 13, 2))
+            clusters["WA"]["node_names"].append(name)
+        elif i <= idx_ubs["CLIENT"]:
+            roles.append("host-agent")
+            roles.extend(AA_client_roles + WA_client_roles)
+            roles.append("hipri-AF31")
+            clusters["CLIENT"]["node_names"].append(name)
         else:
             roles.append("host-agent")
-            if i <= idx_ubs["EDGE"]:
-                roles.extend(["fortio-{0}-envoy-proxy".format(g) for g in envoy_group_names])
-                clusters["EDGE"]["node_names"].append(name)
-            elif i <= idx_ubs["AA"]:
-                roles.extend(AA_server_roles_for(i - 4, 9))
-                if AA_jobs_for != None:
-                    roles.extend(["job-" + job for job in AA_jobs_for(i - 4, 9)])
-                clusters["AA"]["node_names"].append(name)
-            elif i <= idx_ubs["WA"]:
-                roles.extend(WA_server_roles_for(i - 13, 2))
-                clusters["WA"]["node_names"].append(name)
-            elif i <= idx_ubs["CLIENT"]:
-                roles.extend(AA_client_roles + WA_client_roles)
-                roles.append("hipri-AF31")
-                clusters["CLIENT"]["node_names"].append(name)
-            else:
-                if "UNUSED" not in clusters:
-                    clusters["UNUSED"] = {
-                        "name": "UNUSED",
-                        "node_names": cluster_agent_nodes[:],
-                        "cluster_agent_port": 4600,
-                    }
-                clusters["UNUSED"]["node_names"].append(name)
-                #fail("got idx >= CLIENT upper bound index", idx, idx_ubs["CLIENT"])
+            if "UNUSED" not in clusters:
+                clusters["UNUSED"] = {
+                    "name": "UNUSED",
+                    "node_names": cluster_agent_nodes[:],
+                    "cluster_agent_port": 4600,
+                }
+            clusters["UNUSED"]["node_names"].append(name)
+            #fail("got idx >= CLIENT upper bound index", idx, idx_ubs["CLIENT"])
 
         experiment_ip = "192.168.1." + str(i)
         external_ip, shard_index = ext_addr_for_ip(experiment_ip, shard_key)
@@ -632,16 +653,13 @@ def GenConfig(
     envoy_port_counter = 5001
     fortio_groups = []
     for g in envoy_group_names:
-        admission_control_enabled = g in admission_controlled_envoy_groups
+        admission_control_config = {"enabled": False}
+        if g in envoy_group_admission_control_configs:
+            admission_control_config = envoy_group_admission_control_configs[g]
         fortio_groups.append({
             "name": g,
             "envoy_port": envoy_port_counter,
-            "admission_control": {
-                "enabled": admission_control_enabled,
-                "sampling_window_sec": 20,
-                "success_rate_thresh": 98,
-                "max_rejection_prob": 98,
-            },
+            "admission_control": admission_control_config,
         })
         envoy_port_counter += 1
 
@@ -798,7 +816,9 @@ def BackendOnEachHost(
         max_prop_delay_ms = None,
         lb_policy = "LEAST_REQUEST",
         make_server_roles_for_fn = MakeSameRolesForAllServers,
-        enable_timeout = False):
+        enable_timeout = False,
+        servers_are_virt = False,
+        max_pending_requests = 1000):
     size_dist = [{
         "resp_size_bytes": 51200,
         "weight": 100,
@@ -820,7 +840,13 @@ def BackendOnEachHost(
             "group": envoy_group_name,
             "name": be_name,
             "serve_ports": [cur_port + porti for porti in range(num_servers_per_backend_host)],
+            "servers_are_virt": servers_are_virt,
             "lb_policy": lb_policy,
+            # "max_connections": 1000,  # 9 (number of AA machines) * 8 (number of servers / machine) * 6 (conns / server)
+            # "max_requests": 50000,
+            # "max_requests": NumConnsPerShard(workload_stages_per_backend, size_dist, 2, avg_prop_delay_ms),
+            "max_pending_requests": max_pending_requests,
+            "timeout_sec": timeout_sec,
             "client": {
                 "num_shards": num_shards_per_backend,
                 "num_conns": NumConnsPerShard(workload_stages_per_backend, size_dist, num_shards_per_backend, avg_prop_delay_ms),
@@ -831,7 +857,6 @@ def BackendOnEachHost(
                     "use_fast_client": False,
                 },
             },
-            "timeout_sec": timeout_sec,
         })
         cur_port += num_servers_per_backend_host
 
@@ -1220,7 +1245,9 @@ def AddConfigsSweep(configs):
                         "AA_surplus_bps": int(Gbps(2 + lopri_cap - x - y)),
                         "WA_approved_bps": int(Gbps(y)),
                         "shard_key": str("x{0}-y{1}-c{2}-lcap{3}".format(x, y, c, lopri_cap)),
-                        "admission_controlled_envoy_groups": ["AA"],
+                        "envoy_group_admission_control_configs": {
+                            "AA": DefaultOnAdmissionControl(),
+                        },
                     }, **GenWorkloadStagesStatic(
                         AA_bps = int(c * Gbps(x)),
                         WA_bps = int(Gbps(y)),
@@ -1242,7 +1269,6 @@ def AddConfigsSweep(configs):
                     configs[prefix + "-rl"] = RateLimitConfig(**kwargs)
 
 def AddConfigsMixedVersusFullDowngrade(configs):
-    # "admission_controlled_envoy_groups": ["AA0", "AA1"],
     kwargs = dict({
         "AA_approved_bps": int(Gbps(6)),
         "AA_surplus_bps": int(Gbps(6)),
@@ -1265,8 +1291,11 @@ def AddConfigsDemandSuppression(configs):
         "AA_approved_bps": int(Gbps(9)),
         "AA_surplus_bps": int(Gbps(6)),
         "WA_approved_bps": int(Gbps(6)),
-        "shard_key": "cmpmixed",
-        "admission_controlled_envoy_groups": ["AA0", "AA1"],
+        "shard_key": "demandsuppression",
+        "envoy_group_admission_control_configs": {
+            "AA0": DefaultOnAdmissionControl(),
+            "AA1": DefaultOnAdmissionControl(),
+        },
     }, **GenWorkloadStagesDemandSuppression(
         AA_bps = int(Gbps(9)),
         enable_timeout = True,
@@ -1278,16 +1307,30 @@ def AddConfigsDemandSuppression(configs):
 
 def AddConfigsIncreasing(configs):
     # "AA_lopri_is_longer": True,
-    # "admission_controlled_envoy_groups": ["AA"],
     kwargs = dict({
         "AA_approved_bps": int(Gbps(2)),
         "AA_surplus_bps": int(Gbps(10)),
-        "WA_approved_bps": int(Gbps(12)),
+        "AA_servers_are_virt": True,
+        "WA_approved_bps": int(Gbps(13)),
         "shard_key": "inc",
+        "envoy_group_admission_control_configs": {
+            "WA": DefaultOnAdmissionControl(),
+        },
+        # "envoy_group_admission_control_configs": {
+        #     "AA": {
+        #         "enabled": True,
+        #         "sampling_window_sec": 20,
+        #         "success_rate_thresh": 92,
+        #         "aggression": float("1.0"),
+        #         "max_rejection_prob": 98,
+        #     },
+        # },
     }, **GenWorkloadStagesIncreasing(
-        AA_bps = int(Gbps(16)),
+        AA_bps = int(Gbps(12)),
         num_AA_backends = 1,
-        WA_bps_min = int(Gbps(4)),
+        num_AA_servers_per_backend_host = AA_NUM_SERVERS_PER_BACKEND_HOST,
+        AA_servers_are_virt = True,
+        WA_bps_min = int(Gbps(6)),
         WA_bps_max = int(Gbps(12)),
         enable_timeout = False,
     ))
@@ -1304,15 +1347,73 @@ def AddConfigsIncreasing(configs):
     # ))
 
     prefix = "inc"
-    configs[prefix + "-hsc"] = HSC20Config(**kwargs)
+
+    # configs[prefix + "-hsc"] = HSC20Config(**kwargs)
     configs[prefix + "-nl"] = NoLimitConfig(**kwargs)
     configs[prefix + "-qd"] = QoSDowngradeConfig(**kwargs)
     configs[prefix + "-qdlrl"] = QoSDowngradeAndLimitLOPRIConfig(**kwargs)
     configs[prefix + "-rl"] = RateLimitConfig(**kwargs)
 
+def AddConfigsIncreasingMPR(configs):
+    for mpr in [10, 50, 100, 150, 200, 300, 400, 600, 800, 1000]:
+        kwargs = dict({
+            "AA_approved_bps": int(Gbps(2)),
+            "AA_surplus_bps": int(Gbps(10)),
+            "AA_servers_are_virt": True,
+            "WA_approved_bps": int(Gbps(12)),
+            "shard_key": "inc",
+        }, **GenWorkloadStagesIncreasing(
+            AA_bps = int(Gbps(12)),
+            num_AA_backends = 1,
+            num_AA_servers_per_backend_host = AA_NUM_SERVERS_PER_BACKEND_HOST,
+            AA_servers_are_virt = True,
+            WA_bps_min = int(Gbps(6)),
+            WA_bps_max = int(Gbps(12)),
+            enable_timeout = False,
+            AA_max_pending_requests = mpr,
+        ))
+        prefix = "inc_mpr" + str(mpr)
+
+        configs[prefix + "-nl"] = NoLimitConfig(**kwargs)
+        configs[prefix + "-qd"] = QoSDowngradeConfig(**kwargs)
+
+def AddConfigsStarvedLOPRI(configs):
+    # "AA_lopri_is_longer": True,
+    kwargs = dict({
+        "AA_approved_bps": int(Gbps(2)),
+        "AA_surplus_bps": int(Gbps(10)),
+        "WA_approved_bps": int(Gbps(20)),
+        "shard_key": "starvedlp",
+        "cluster_control_period": "500ms",
+    }, **GenWorkloadStagesIncreasing(
+        AA_bps = int(Gbps(16)),
+        num_AA_backends = 1,
+        WA_bps_min = int(Gbps(8)),
+        WA_bps_max = int(Gbps(16)),
+        enable_timeout = False,
+    ))
+    # kwargs = dict({
+    #     "AA_approved_bps": int(Gbps(8)),
+    #     "AA_surplus_bps": int(Gbps(10)),
+    #     "WA_approved_bps": int(Gbps(6)),
+    #     "shard_key": "inc",
+    # }, **GenWorkloadStagesIncreasing(
+    #     AA_bps = int(Gbps(18)),
+    #     num_AA_backends = 5,
+    #     WA_bps_min = int(Gbps(2)),
+    #     WA_bps_max = int(Gbps(6)),
+    # ))
+
+    prefix = "starvedlp"
+    configs[prefix + "-hsc"] = HSC20Config(**kwargs)
+    configs[prefix + "-nl"] = NoLimitConfig(**kwargs)
+    configs[prefix + "-qd"] = QoSDowngradeConfig(**kwargs)
+    configs[prefix + "-qdlrl"] = QoSDowngradeAndLimitLOPRIConfig(**kwargs)
+    configs[prefix + "-qdhrl"] = QoSDowngradeAndLimitMixedHIPRIConfig(**kwargs)
+    configs[prefix + "-rl"] = RateLimitConfig(**kwargs)
+
 def AddConfigsRateLimitHIPRI(configs):
     # "AA_lopri_is_longer": True,
-    # "admission_controlled_envoy_groups": ["AA"],
     kwargs = dict({
         "AA_approved_bps": int(Gbps(2)),
         "AA_surplus_bps": int(Gbps(10)),
@@ -1479,7 +1580,6 @@ def AddConfigsFlipQoS(configs):
                     WA_prop_delay_ms = WA_lat,
                     run_dur = "150s",
                 ))
-                # "admission_controlled_envoy_groups": ["AA"],
                 # enable_timeout = True,
 
                 prefix = "qflip_cp_{0}_lat_{1}_{2}_{3}_bg{4}".format(cp, AA_lat, WA_lat, AA_lopri_lat, WA_demand_gbps)
@@ -1505,7 +1605,9 @@ def AddConfigsTestAdmissionControl(configs):
             "AA_surplus_bps": int(Gbps(10)),
             "WA_approved_bps": int(Gbps(12)),
             "shard_key": "tac",
-            "admission_controlled_envoy_groups": ["AA"],
+            "envoy_group_admission_control_configs": {
+                "AA": DefaultOnAdmissionControl(),
+            },
         }, **GenWorkloadStagesStatic(
             AA_bps = aa_bps,
             WA_bps = int(Gbps(1)),
@@ -1528,11 +1630,13 @@ def GenConfigs():
         "cmpmixed": AddConfigsMixedVersusFullDowngrade,
         "demandsuppression": AddConfigsDemandSuppression,
         "inc": AddConfigsIncreasing,
+        "inc_mpr": AddConfigsIncreasingMPR,
         "ltd": AddConfigsLossTrainingData,
         "qflip": AddConfigsFlipQoS,
+        "rlhipri": AddConfigsRateLimitHIPRI,
+        "starvedlp": AddConfigsStarvedLOPRI,
         "sweep": AddConfigsSweep,
         "tac": AddConfigsTestAdmissionControl,
-        "rlhipri": AddConfigsRateLimitHIPRI,
     }
 
     configs = dict()
