@@ -209,13 +209,19 @@ func (c *alignHostStatsCmd) Execute(ctx context.Context, fs *flag.FlagSet, args 
 		for _, rs := range accum.cpu.RoleStats() {
 			_, err = fmt.Fprintf(f, "%s,CPU,Max,%f,%s\n", rs.Role, rs.Max, nodes(rs.Nodes))
 			checkErr(err)
+			_, err = fmt.Fprintf(f, "%s,CPU,Mean,%f,%s\n", rs.Role, rs.Mean, nodes(rs.Nodes))
+			checkErr(err)
 		}
 		for _, rs := range accum.ingressBW.RoleStats() {
 			_, err = fmt.Fprintf(f, "%s,IngressBW,Max,%f,%s\n", rs.Role, rs.Max, nodes(rs.Nodes))
 			checkErr(err)
+			_, err = fmt.Fprintf(f, "%s,IngressBW,Mean,%f,%s\n", rs.Role, rs.Mean, nodes(rs.Nodes))
+			checkErr(err)
 		}
 		for _, rs := range accum.egressBW.RoleStats() {
 			_, err = fmt.Fprintf(f, "%s,EgressBW,Max,%f,%s\n", rs.Role, rs.Max, nodes(rs.Nodes))
+			checkErr(err)
+			_, err = fmt.Fprintf(f, "%s,EgressBW,Mean,%f,%s\n", rs.Role, rs.Mean, nodes(rs.Nodes))
 			checkErr(err)
 		}
 

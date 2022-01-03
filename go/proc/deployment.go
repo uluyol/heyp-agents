@@ -44,16 +44,22 @@ func LoadDeploymentConfigData(data []byte, dataPath string) (*DeploymentConfig, 
 	return &cfg, nil
 }
 
+type valStats struct {
+	max   float64
+	sum   float64
+	count float64
+}
+
 type RoleStatsCollector struct {
 	c        *DeploymentConfig
-	maxVals  map[string]float64
+	valStats map[string]*valStats
 	sawNodes map[string]map[string]struct{}
 }
 
 func NewRoleStatsCollector(c *DeploymentConfig) *RoleStatsCollector {
 	col := &RoleStatsCollector{
 		c:        c,
-		maxVals:  make(map[string]float64),
+		valStats: make(map[string]*valStats),
 		sawNodes: make(map[string]map[string]struct{}),
 	}
 
@@ -69,19 +75,25 @@ func NewRoleStatsCollector(c *DeploymentConfig) *RoleStatsCollector {
 func (c *RoleStatsCollector) Record(node string, val float64) {
 	roles := c.c.NodeRoles[node]
 	for _, r := range roles {
-		v, ok := c.maxVals[r]
-		if ok {
-			c.maxVals[r] = math.Max(v, val)
+		st := c.valStats[r]
+		if st != nil {
+			st.max = math.Max(st.max, val)
+			st.sum += val
+			st.count++
 		} else {
-			c.maxVals[r] = val
+			c.valStats[r] = &valStats{
+				max:   val,
+				sum:   val,
+				count: 1,
+			}
 		}
 		c.sawNodes[r][node] = struct{}{}
 	}
 }
 
 func (c *RoleStatsCollector) RoleStats() []RoleStat {
-	stats := make([]RoleStat, 0, len(c.maxVals))
-	for role, max := range c.maxVals {
+	stats := make([]RoleStat, 0, len(c.valStats))
+	for role, st := range c.valStats {
 		sawNodes := make([]string, 0, len(c.sawNodes[role]))
 		for n := range c.sawNodes[role] {
 			sawNodes = append(sawNodes, n)
@@ -90,7 +102,8 @@ func (c *RoleStatsCollector) RoleStats() []RoleStat {
 
 		stats = append(stats, RoleStat{
 			Role:  role,
-			Max:   max,
+			Max:   st.max,
+			Mean:  st.sum / st.count,
 			Nodes: sawNodes,
 		})
 	}
@@ -100,19 +113,8 @@ func (c *RoleStatsCollector) RoleStats() []RoleStat {
 	return stats
 }
 
-func getMax(vals []float64) float64 {
-	if len(vals) == 0 {
-		return math.NaN()
-	}
-	v := vals[0]
-	for _, v2 := range vals[1:] {
-		v = math.Max(v, v2)
-	}
-	return v
-}
-
 type RoleStat struct {
-	Role  string
-	Max   float64
-	Nodes []string
+	Role      string
+	Max, Mean float64
+	Nodes     []string
 }
