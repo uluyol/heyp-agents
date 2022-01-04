@@ -15,6 +15,7 @@ cc_library(
     srcs = ["export.cc"],
     visibility = ["//visibility:private"],
     deps = [
+        "//heyp/alg/downgrade:impl-hashing",
         "//heyp/alg/fairness:max-min-fairness",
         "@com_google_ortools//ortools/algorithms:knapsack_solver_lib",
     ],

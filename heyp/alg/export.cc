@@ -6,8 +6,32 @@
 #include <optional>
 #include <vector>
 
+#include "heyp/alg/downgrade/impl-hashing.h"
 #include "heyp/alg/fairness/max-min-fairness.h"
 #include "ortools/algorithms/knapsack_solver.h"
+
+namespace heyp {
+namespace {
+
+class ExportAggInfoView : public AggInfoView {
+ public:
+  ExportAggInfoView(uint64_t* child_ids, size_t num_children) {
+    info_.reserve(num_children);
+    for (size_t i = 0; i < num_children; ++i) {
+      info_.push_back({.child_id = child_ids[i]});
+    }
+  }
+
+  const proto::FlowInfo& parent() const override { return parent_; }
+  const std::vector<ChildFlowInfo>& children() const override { return info_; }
+
+ private:
+  proto::FlowInfo parent_;
+  std::vector<ChildFlowInfo> info_;
+};
+
+}  // namespace
+}  // namespace heyp
 
 extern "C" {
 int64_t HeypKnapsackUsageLOPRI(int64_t* demands, size_t num_demands,
@@ -44,5 +68,34 @@ int64_t HeypMaxMinFairWaterlevel(int64_t admission, int64_t* demands,
   std::vector<int64_t> demands_vec(demands, demands + num_demands);
   heyp::SingleLinkMaxMinFairnessProblem problem;
   return problem.ComputeWaterlevel(admission, demands_vec);
+}
+
+struct HeypSelectLOPRIHashingCtx {
+  heyp::HashingDowngradeSelector selector;
+  heyp::ExportAggInfoView info_view;
+  spdlog::logger logger;
+};
+
+HeypSelectLOPRIHashingCtx* NewHeypSelectLOPRIHashingCtx(uint64_t* child_ids,
+                                                        size_t num_children) {
+  return new HeypSelectLOPRIHashingCtx{
+      .info_view = heyp::ExportAggInfoView(child_ids, num_children),
+      .logger = heyp::MakeLogger("c-heyp-select-lopri"),
+  };
+}
+
+void FreeHeypSelectLOPRIHashingCtx(HeypSelectLOPRIHashingCtx* ctx) { delete ctx; }
+
+void HeypSelectLOPRIHashing(HeypSelectLOPRIHashingCtx* ctx, double want_frac_lopri,
+                            uint8_t* use_lopris) {
+  std::vector<bool> use_lopri_vec =
+      ctx->selector.PickLOPRIChildren(ctx->info_view, want_frac_lopri, &ctx->logger);
+  for (size_t i = 0; i < use_lopri_vec.size(); ++i) {
+    if (use_lopri_vec[i]) {
+      use_lopris[i] = 1;
+    } else {
+      use_lopris[i] = 0;
+    }
+  }
 }
 }
