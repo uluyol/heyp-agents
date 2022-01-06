@@ -115,7 +115,16 @@ func (s *ActiveScenario) RunMultiIter(n int) MultiIterRec {
 	rec.ItersToConverge = -1
 	for i := 0; i < n; i++ {
 		this := s.RunIter()
-		if this.DowngradeFracInc == 0 && !rec.Converged {
+		if rec.Converged {
+			if this.NumNewlyHIPRI|this.NumNewlyLOPRI != 0 {
+				this2 := this // ensure that 'this' doesn't escape
+				panic(fmt.Errorf(
+					"impossible result: saw upgrade/downgrade after convergence: %v", this2))
+			}
+			if n > rec.ItersToConverge+10 {
+				break // no need to continue, we're just checking invariants
+			}
+		} else if this.DowngradeFracInc == 0 {
 			// Converged
 			rec.ItersToConverge = i // 0 if in the first iter we change nothing, ...
 			rec.Converged = true
