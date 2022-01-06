@@ -12,19 +12,19 @@ import (
 )
 
 type Scenario struct {
-	TrueDemands       []float64               `json:"trueDemands"`
-	WantFracLOPRI     float64                 `json:"wantFracLOPRI"`
-	MaxHostUsage      float64                 `json:"maxHostUsage"`
-	AggAvailableLOPRI float64                 `json:"aggAvailableLOPRI"`
-	NumIters          int                     `json:"numIters"`
-	ShiftTraffic      bool                    `json:"shiftTraffic"`
-	Controller        DowngradeFracController `json:"controller"`
-	RandSeed          uint64                  `json:"randSeed"`
+	TrueDemands             []float64               `json:"trueDemands"`
+	ApprovalOverTotalDemand float64                 `json:"approvalOverTotalDemand"`
+	MaxHostUsage            float64                 `json:"maxHostUsage"`
+	AggAvailableLOPRI       float64                 `json:"aggAvailableLOPRI"`
+	NumIters                int                     `json:"numIters"`
+	ShiftTraffic            bool                    `json:"shiftTraffic"`
+	Controller              DowngradeFracController `json:"controller"`
+	RandSeed                uint64                  `json:"randSeed"`
 }
 
 type scenarioRec struct {
 	HIPRIUsageOverTrueDemand float64 `json:"hipriUsageOverTrueDemand"`
-	SelectDiff               float64 `json:"selectDiff"`
+	DowngradeFracInc         float64 `json:"downgradeFracInc"`
 	NumNewlyHIPRI            int     `json:"numNewlyHIPRI"`
 	NumNewlyLOPRI            int     `json:"numNewlyLOPRI"`
 }
@@ -37,6 +37,7 @@ func (s Scenario) Run(w io.Writer) error {
 		childIDs[i] = rng.Uint64()
 		totalDemand += s.TrueDemands[i]
 	}
+	approval := s.ApprovalOverTotalDemand * totalDemand
 	selector := calg.NewHashingDowngradeSelector(childIDs)
 	defer selector.Free()
 
@@ -65,9 +66,12 @@ func (s Scenario) Run(w io.Writer) error {
 			}
 		}
 
-		actualFracLOPRI := lopriUsage / math.Max(1, lopriUsage+hipriUsage)
-		diff := s.Controller.ReviseFromWantFracLOPRI(actualFracLOPRI, s.WantFracLOPRI)
-		curDowngradeFrac += diff
+		hipriNorm := hipriUsage / approval
+		downgradeFracInc := s.Controller.TrafficFracToDowngrade(hipriNorm, 1, approval/(hipriUsage+lopriUsage), len(isLOPRI))
+		curDowngradeFrac += downgradeFracInc
+
+		copy(prevIsLOPRI, isLOPRI)
+		selector.PickLOPRI(curDowngradeFrac, isLOPRI)
 
 		var numNewlyHIPRI, numNewlyLOPRI int
 		for i := range isLOPRI {
@@ -81,16 +85,13 @@ func (s Scenario) Run(w io.Writer) error {
 
 		rec := scenarioRec{
 			HIPRIUsageOverTrueDemand: hipriUsage / totalDemand,
-			SelectDiff:               diff,
+			DowngradeFracInc:         downgradeFracInc,
 			NumNewlyHIPRI:            numNewlyHIPRI,
 			NumNewlyLOPRI:            numNewlyLOPRI,
 		}
 		if err := enc.Encode(&rec); err != nil {
 			return fmt.Errorf("error writing record: %w", err)
 		}
-
-		copy(prevIsLOPRI, isLOPRI)
-		selector.PickLOPRI(curDowngradeFrac, isLOPRI)
 	}
 	if err := bw.Flush(); err != nil {
 		return fmt.Errorf("error flushing records: %w", err)
