@@ -11,84 +11,120 @@ import (
 	"golang.org/x/exp/rand"
 )
 
-type Scenario struct {
-	TrueDemands             []float64               `json:"trueDemands"`
-	ApprovalOverTotalDemand float64                 `json:"approvalOverTotalDemand"`
-	MaxHostUsage            float64                 `json:"maxHostUsage"`
-	AggAvailableLOPRI       float64                 `json:"aggAvailableLOPRI"`
-	NumIters                int                     `json:"numIters"`
-	ShiftTraffic            bool                    `json:"shiftTraffic"`
-	Controller              DowngradeFracController `json:"controller"`
-	RandSeed                uint64                  `json:"randSeed"`
+type RerunnableScenario struct {
+	Scenario
+	NumIters int    `json:"numIters"`
+	RandSeed uint64 `json:"randSeed"`
 }
 
-type scenarioRec struct {
+type Scenario struct {
+	TrueDemands       []float64               `json:"trueDemands"`
+	Approval          float64                 `json:"approval"`
+	MaxHostUsage      float64                 `json:"maxHostUsage"`
+	AggAvailableLOPRI float64                 `json:"aggAvailableLOPRI"`
+	ShiftTraffic      bool                    `json:"shiftTraffic"`
+	Controller        DowngradeFracController `json:"controller"`
+}
+
+type ActiveScenario struct {
+	// immutable
+	s           Scenario
+	totalDemand float64
+
+	// mutated via use, but fields are never changed
+	rng     *rand.Rand
+	flowsel calg.HashingDowngradeSelector
+
+	// actively mutated
+	prevIsLOPRI, isLOPRI []bool
+	curDowngradeFrac     float64
+	iter                 int
+}
+
+func (s *ActiveScenario) Free() { s.flowsel.Free() }
+
+func NewActiveScenario(s Scenario, rng *rand.Rand) *ActiveScenario {
+	active := &ActiveScenario{
+		s:           s,
+		rng:         rng,
+		prevIsLOPRI: make([]bool, len(s.TrueDemands)),
+		isLOPRI:     make([]bool, len(s.TrueDemands)),
+	}
+
+	childIDs := make([]uint64, len(s.TrueDemands))
+	for i := range childIDs {
+		childIDs[i] = rng.Uint64()
+		active.totalDemand += s.TrueDemands[i]
+	}
+	active.flowsel = calg.NewHashingDowngradeSelector(childIDs)
+	return active
+}
+
+func (s *ActiveScenario) RunIter() ScenarioRec {
+	defer func() {
+		s.iter++
+	}()
+
+	var lopriUsage float64
+	for i, d := range s.s.TrueDemands {
+		if s.isLOPRI[i] {
+			lopriUsage += d
+		}
+	}
+	lopriTryShifted := math.Max(0, lopriUsage-s.s.AggAvailableLOPRI)
+	lopriUsage = math.Min(lopriUsage, s.s.AggAvailableLOPRI)
+
+	var hipriUsage float64
+	for i, d := range s.s.TrueDemands {
+		if !s.isLOPRI[i] {
+			spareCap := s.s.MaxHostUsage - d
+			extraTaken := math.Min(spareCap, lopriTryShifted)
+			lopriTryShifted -= extraTaken
+			hipriUsage += d + extraTaken
+		}
+	}
+
+	hipriNorm := hipriUsage / s.s.Approval
+	downgradeFracInc := s.s.Controller.TrafficFracToDowngrade(
+		hipriNorm, 1, s.s.Approval/(hipriUsage+lopriUsage), len(s.isLOPRI))
+	s.curDowngradeFrac += downgradeFracInc
+
+	copy(s.prevIsLOPRI, s.isLOPRI)
+	s.flowsel.PickLOPRI(s.curDowngradeFrac, s.isLOPRI)
+
+	var numNewlyHIPRI, numNewlyLOPRI int
+	for i := range s.isLOPRI {
+		if s.isLOPRI[i] && !s.prevIsLOPRI[i] {
+			numNewlyLOPRI++
+		}
+		if !s.isLOPRI[i] && s.prevIsLOPRI[i] {
+			numNewlyHIPRI++
+		}
+	}
+
+	return ScenarioRec{
+		HIPRIUsageOverTrueDemand: hipriUsage / s.totalDemand,
+		DowngradeFracInc:         downgradeFracInc,
+		NumNewlyHIPRI:            numNewlyHIPRI,
+		NumNewlyLOPRI:            numNewlyLOPRI,
+	}
+}
+
+type ScenarioRec struct {
 	HIPRIUsageOverTrueDemand float64 `json:"hipriUsageOverTrueDemand"`
 	DowngradeFracInc         float64 `json:"downgradeFracInc"`
 	NumNewlyHIPRI            int     `json:"numNewlyHIPRI"`
 	NumNewlyLOPRI            int     `json:"numNewlyLOPRI"`
 }
 
-func (s Scenario) Run(w io.Writer) error {
+func (s RerunnableScenario) Run(w io.Writer) error {
 	rng := rand.New(rand.NewSource(s.RandSeed))
-	childIDs := make([]uint64, len(s.TrueDemands))
-	var totalDemand float64
-	for i := range childIDs {
-		childIDs[i] = rng.Uint64()
-		totalDemand += s.TrueDemands[i]
-	}
-	approval := s.ApprovalOverTotalDemand * totalDemand
-	selector := calg.NewHashingDowngradeSelector(childIDs)
-	defer selector.Free()
-
+	active := NewActiveScenario(s.Scenario, rng)
+	defer active.Free()
 	bw := bufio.NewWriter(w)
 	enc := json.NewEncoder(bw)
-	var curDowngradeFrac float64
-	prevIsLOPRI := make([]bool, len(childIDs))
-	isLOPRI := make([]bool, len(childIDs))
 	for iter := 0; iter < s.NumIters; iter++ {
-		var lopriUsage float64
-		for i, d := range s.TrueDemands {
-			if isLOPRI[i] {
-				lopriUsage += d
-			}
-		}
-		lopriTryShifted := math.Max(0, lopriUsage-s.AggAvailableLOPRI)
-		lopriUsage = math.Min(lopriUsage, s.AggAvailableLOPRI)
-
-		var hipriUsage float64
-		for i, d := range s.TrueDemands {
-			if !isLOPRI[i] {
-				spareCap := s.MaxHostUsage - d
-				extraTaken := math.Min(spareCap, lopriTryShifted)
-				lopriTryShifted -= extraTaken
-				hipriUsage += d + extraTaken
-			}
-		}
-
-		hipriNorm := hipriUsage / approval
-		downgradeFracInc := s.Controller.TrafficFracToDowngrade(hipriNorm, 1, approval/(hipriUsage+lopriUsage), len(isLOPRI))
-		curDowngradeFrac += downgradeFracInc
-
-		copy(prevIsLOPRI, isLOPRI)
-		selector.PickLOPRI(curDowngradeFrac, isLOPRI)
-
-		var numNewlyHIPRI, numNewlyLOPRI int
-		for i := range isLOPRI {
-			if isLOPRI[i] && !prevIsLOPRI[i] {
-				numNewlyLOPRI++
-			}
-			if !isLOPRI[i] && prevIsLOPRI[i] {
-				numNewlyHIPRI++
-			}
-		}
-
-		rec := scenarioRec{
-			HIPRIUsageOverTrueDemand: hipriUsage / totalDemand,
-			DowngradeFracInc:         downgradeFracInc,
-			NumNewlyHIPRI:            numNewlyHIPRI,
-			NumNewlyLOPRI:            numNewlyLOPRI,
-		}
+		rec := active.RunIter()
 		if err := enc.Encode(&rec); err != nil {
 			return fmt.Errorf("error writing record: %w", err)
 		}

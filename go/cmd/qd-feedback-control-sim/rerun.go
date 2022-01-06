@@ -30,7 +30,7 @@ func (c *rerunCmd) Execute(ctx context.Context, fs *flag.FlagSet, args ...interf
 	if err != nil {
 		log.Fatalf("failed to read scenario config: %v", err)
 	}
-	var scenario feedbacksim.Scenario
+	var scenario feedbacksim.RerunnableScenario
 	if err := yaml.Unmarshal(data, &scenario); err != nil {
 		log.Fatalf("failed to decode scenario config: %v", err)
 	}
