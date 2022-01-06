@@ -110,11 +110,41 @@ func (s *ActiveScenario) RunIter() ScenarioRec {
 	}
 }
 
+func (s *ActiveScenario) RunMultiIter(n int) MultiIterRec {
+	var rec MultiIterRec
+	rec.ItersToConverge = -1
+	for i := 0; i < n; i++ {
+		this := s.RunIter()
+		if this.DowngradeFracInc == 0 && !rec.Converged {
+			// Converged
+			rec.ItersToConverge = i // 0 if in the first iter we change nothing, ...
+			rec.Converged = true
+		}
+		rec.NumUpgraded += this.NumNewlyHIPRI
+		rec.NumDowngraded += this.NumNewlyLOPRI
+	}
+	return rec
+}
+
+type MultiIterRec struct {
+	ItersToConverge int  `json:"itersToConverge"`
+	NumDowngraded   int  `json:"numDowngraded"`
+	NumUpgraded     int  `json:"numUpgraded"`
+	Converged       bool `json:"converged"`
+}
+
 type ScenarioRec struct {
 	HIPRIUsageOverTrueDemand float64 `json:"hipriUsageOverTrueDemand"`
 	DowngradeFracInc         float64 `json:"downgradeFracInc"`
 	NumNewlyHIPRI            int     `json:"numNewlyHIPRI"`
 	NumNewlyLOPRI            int     `json:"numNewlyLOPRI"`
+}
+
+func (s RerunnableScenario) Summary() MultiIterRec {
+	rng := rand.New(rand.NewSource(s.RandSeed))
+	active := NewActiveScenario(s.Scenario, rng)
+	defer active.Free()
+	return active.RunMultiIter(s.NumIters)
 }
 
 func (s RerunnableScenario) Run(w io.Writer) error {

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 
@@ -42,6 +43,8 @@ func (c *rerunCmd) Execute(ctx context.Context, fs *flag.FlagSet, args ...interf
 	if err := scenario.Run(fout); err != nil {
 		log.Fatal(err)
 	}
+	b, _ := yaml.Marshal(scenario.Summary())
+	fmt.Printf("\n=== SUMMARY ===\n%s", b)
 	return subcommands.ExitSuccess
 }
 
