@@ -2,7 +2,7 @@
 
 set -e
 
-TOINSTALL=${@:-envoy fortio collect-host-stats}
+TOINSTALL=${@:-envoy fortio collect-host-stats firecracker graceful-stop host-agent-sim prebuilt}
 
 ENVOY_URL="https://archive.tetratelabs.io/envoy/download/v1.20.1/envoy-v1.20.1-linux-amd64.tar.xz"
 FIRECRACKER_URL="https://github.com/firecracker-microvm/firecracker/releases/download/v0.25.2/firecracker-v0.25.2-x86_64.tgz"
