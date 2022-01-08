@@ -592,7 +592,7 @@ def GenConfig(
 
     shard_index = 0
     cluster_agent_nodes = []
-    for idx in range(20):
+    for idx in range(19):
         i = idx + 1
         name = "n" + str(i)
         roles = []
@@ -1547,7 +1547,7 @@ def AddConfigsFlipQoS(configs):
     ]
 
     # for cp in ["100ms", "200ms", "300ms", "400ms", "500ms", "600ms", "700ms", "800ms", "900ms", "1s", "2s", "3s", "4s", "5s"]:
-    for cp in ["1s", "2s", "3s", "4s", "5s"]:
+    for cp in ["200ms", "300ms", "400ms", "500ms", "600ms", "700ms", "800ms", "900ms", "1s", "2s", "3s", "4s", "5s"]:
         for AA_lat, WA_lat, AA_lopri_lat in latencies:
             for WA_demand_gbps in [float("6.5")]:
                 WA_demand = int(Gbps(WA_demand_gbps))
