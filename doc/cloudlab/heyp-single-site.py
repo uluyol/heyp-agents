@@ -58,6 +58,9 @@ if numNodes < 1:
                               ["nodeCountPairs"]))
 
 componentIds = params.nodeComponentIds.split(",")
+if not params.nodeComponentIds:
+    componentIds = []
+
 if len(componentIds) > 0:
     if len(nodeCounts) != 1:
         pc.reportError(
