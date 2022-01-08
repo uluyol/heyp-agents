@@ -8,6 +8,7 @@ import (
 	"math"
 
 	"github.com/uluyol/heyp-agents/go/calg"
+	"github.com/uluyol/heyp-agents/go/intradc/sampling"
 	"golang.org/x/exp/rand"
 )
 
@@ -23,6 +24,7 @@ type Scenario struct {
 	MaxHostUsage      float64                 `json:"maxHostUsage"`
 	AggAvailableLOPRI float64                 `json:"aggAvailableLOPRI"`
 	ShiftTraffic      bool                    `json:"shiftTraffic"`
+	SamplerFactory    sampling.SamplerFactory `json:"samplerFactory"`
 	Controller        DowngradeFracController `json:"controller"`
 }
 
@@ -30,6 +32,7 @@ type ActiveScenario struct {
 	// immutable
 	s           Scenario
 	totalDemand float64
+	sampler     sampling.Sampler
 
 	// mutated via use, but fields are never changed
 	rng     *rand.Rand
@@ -46,6 +49,7 @@ func (s *ActiveScenario) Free() { s.flowsel.Free() }
 func NewActiveScenario(s Scenario, rng *rand.Rand) *ActiveScenario {
 	active := &ActiveScenario{
 		s:           s,
+		sampler:     s.SamplerFactory.NewSampler(s.Approval, float64(len(s.TrueDemands))),
 		rng:         rng,
 		prevIsLOPRI: make([]bool, len(s.TrueDemands)),
 		isLOPRI:     make([]bool, len(s.TrueDemands)),
@@ -65,28 +69,40 @@ func (s *ActiveScenario) RunIter() ScenarioRec {
 		s.iter++
 	}()
 
-	var lopriUsage float64
+	var trueUsageLOPRI float64
+	estUsageLOPRI := s.sampler.NewAggUsageEstimator()
 	for i, d := range s.s.TrueDemands {
 		if s.isLOPRI[i] {
-			lopriUsage += d
+			if s.sampler.ShouldInclude(s.rng, d) {
+				estUsageLOPRI.RecordSample(d)
+			}
+			trueUsageLOPRI += d
 		}
 	}
-	lopriTryShifted := math.Max(0, lopriUsage-s.s.AggAvailableLOPRI)
-	lopriUsage = math.Min(lopriUsage, s.s.AggAvailableLOPRI)
+	tryShiftFromLOPRI := math.Max(0, trueUsageLOPRI-s.s.AggAvailableLOPRI)
+	trueUsageLOPRI = math.Min(trueUsageLOPRI, s.s.AggAvailableLOPRI)
 
-	var hipriUsage float64
+	var trueUsageHIPRI float64
+	estUsageHIPRI := s.sampler.NewAggUsageEstimator()
 	for i, d := range s.s.TrueDemands {
 		if !s.isLOPRI[i] {
 			spareCap := s.s.MaxHostUsage - d
-			extraTaken := math.Min(spareCap, lopriTryShifted)
-			lopriTryShifted -= extraTaken
-			hipriUsage += d + extraTaken
+			extraTaken := math.Min(spareCap, tryShiftFromLOPRI)
+			tryShiftFromLOPRI -= extraTaken
+			usage := d + extraTaken
+			trueUsageHIPRI += usage
+			if s.sampler.ShouldInclude(s.rng, usage) {
+				estUsageHIPRI.RecordSample(usage)
+			}
 		}
 	}
 
-	hipriNorm := hipriUsage / s.s.Approval
+	approxUsageHIPRI := estUsageHIPRI.EstUsageNoHostCount()
+	approxUsageLOPRI := estUsageLOPRI.EstUsageNoHostCount()
+
+	hipriNorm := approxUsageHIPRI / s.s.Approval
 	downgradeFracInc := s.s.Controller.TrafficFracToDowngrade(
-		hipriNorm, 1, s.s.Approval/(hipriUsage+lopriUsage), len(s.isLOPRI))
+		hipriNorm, 1, s.s.Approval/(approxUsageHIPRI+approxUsageLOPRI), len(s.isLOPRI))
 	s.curDowngradeFrac += downgradeFracInc
 
 	copy(s.prevIsLOPRI, s.isLOPRI)
@@ -103,7 +119,7 @@ func (s *ActiveScenario) RunIter() ScenarioRec {
 	}
 
 	return ScenarioRec{
-		HIPRIUsageOverTrueDemand: hipriUsage / s.totalDemand,
+		HIPRIUsageOverTrueDemand: trueUsageHIPRI / s.totalDemand,
 		DowngradeFracInc:         downgradeFracInc,
 		NumNewlyHIPRI:            numNewlyHIPRI,
 		NumNewlyLOPRI:            numNewlyLOPRI,
@@ -111,17 +127,21 @@ func (s *ActiveScenario) RunIter() ScenarioRec {
 }
 
 func (s *ActiveScenario) RunMultiIter(n int) MultiIterRec {
+	const itersStableToConverge = 5
 	var rec MultiIterRec
 	rec.ItersToConverge = -1
 	for i := 0; i < n; i++ {
 		this := s.RunIter()
 		if rec.Converged {
 			if this.NumNewlyHIPRI|this.NumNewlyLOPRI != 0 {
-				this2 := this // ensure that 'this' doesn't escape
-				panic(fmt.Errorf(
-					"impossible result: saw upgrade/downgrade after convergence: %v", this2))
+				// Because of sampling, it can seem like we converge
+				// but then sampling error causes a divergence.
+				// Wait until we have itersStableToConverge in a row
+				// to call it converged.
+				rec.ItersToConverge = -1
+				rec.Converged = false
 			}
-			if n > rec.ItersToConverge+10 {
+			if n >= rec.ItersToConverge+itersStableToConverge {
 				break // no need to continue, we're just checking invariants
 			}
 		} else if this.DowngradeFracInc == 0 {
@@ -131,6 +151,11 @@ func (s *ActiveScenario) RunMultiIter(n int) MultiIterRec {
 		}
 		rec.NumUpgraded += this.NumNewlyHIPRI
 		rec.NumDowngraded += this.NumNewlyLOPRI
+	}
+	if rec.ItersToConverge > n-itersStableToConverge {
+		// Didn't yet see enough stable iters
+		rec.ItersToConverge = -1
+		rec.Converged = false
 	}
 	return rec
 }
