@@ -11,7 +11,7 @@ prefix=$1
 procdir=$2
 
 rm -rf "$procdir"
-mkdir "$procdir"
+mkdir -p "$procdir"
 
 echo "$prefix" >"$procdir/prefix"
 
@@ -52,6 +52,21 @@ for dataset in "${datasets[@]}"; do
         >>"$procdir/stat-summary.csv"
 done
 
-mkdir "$procdir/plots/"
+mkdir -p "$procdir/plot-summaries/"
 code/plot-oneoffs-qflip.R "$procdir/stat-summary.csv" \
-    "$procdir/plots/"
+    "$procdir/plot-summaries/"
+
+echo "Metric,Dataset,FG,UnixSec,Value" >"$procdir/stat-dists.csv"
+for metric in aux_cwnd; do
+    for dataset in "${datasets[@]}"; do
+        for fg in AA_TO_EDGE WA_TO_EDGE; do
+            awk "{ printf \"$metric,$dataset,$fg,%s\\n\", \$0; }" \
+                "$procdir/stats-$dataset/$fg/$metric" \
+                >>"$procdir/stat-dists.csv"
+        done
+    done
+done
+
+mkdir -p "$procdir/plot-dists"
+code/plot-oneoffs-qflip-dists.R "$procdir/stat-dists.csv" \
+    "$procdir/plot-dists/"
