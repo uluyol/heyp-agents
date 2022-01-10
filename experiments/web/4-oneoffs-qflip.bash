@@ -70,6 +70,9 @@ echo "Metric,Dataset,FG,UnixSec,IsLOPRI,Value" >"$procdir/stat-dists.csv"
 for metric in "${dist_metrics[@]}"; do
     for dataset in "${datasets[@]}"; do
         for fg in AA_TO_EDGE WA_TO_EDGE; do
+            if [[ ! -f "$procdir/stats-$dataset/$fg/$metric" ]]; then
+                continue
+            fi
             awk "{ printf \"$metric,$dataset,$fg,%s\\n\", \$0; }" \
                 "$procdir/stats-$dataset/$fg/$metric" \
                 >>"$procdir/stat-dists.csv"
