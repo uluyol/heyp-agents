@@ -56,8 +56,18 @@ mkdir -p "$procdir/plot-summaries/"
 code/plot-oneoffs-qflip.R "$procdir/stat-summary.csv" \
     "$procdir/plot-summaries/"
 
-echo "Metric,Dataset,FG,UnixSec,Value" >"$procdir/stat-dists.csv"
-for metric in aux_cwnd; do
+dist_metrics=(
+    aux_cwnd
+    aux_bbrBw
+    aux_bbrMinRttMs
+    got_bbr_mode
+    got_probeonly_aux_cwnd
+    got_probeonly_aux_bbrBw
+    got_probeonly_aux_bbrMinRttMs
+)
+
+echo "Metric,Dataset,FG,UnixSec,IsLOPRI,Value" >"$procdir/stat-dists.csv"
+for metric in "${dist_metrics[@]}"; do
     for dataset in "${datasets[@]}"; do
         for fg in AA_TO_EDGE WA_TO_EDGE; do
             awk "{ printf \"$metric,$dataset,$fg,%s\\n\", \$0; }" \

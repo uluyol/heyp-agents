@@ -9,7 +9,7 @@ outpre <- args[2]
 
 data <- read.csv(input, header=TRUE, stringsAsFactors=FALSE)
 colnames(data) <- c("Dataset", "FG", "Metric", "Stat", "Value")
-baseline <- data[data$Dataset == "lopri", c("FG", "Metric", "Stat", "Value")]
+baseline <- data[data$Dataset == "stableqos_oversub", c("FG", "Metric", "Stat", "Value")]
 colnames(baseline) <- c("FG", "Metric", "Stat", "Baseline")
 
 data <- merge(data, baseline)
@@ -22,7 +22,7 @@ Plot <- function(subset, output, stat) {
     p <- ggplot(subset, aes(x=Metric, y=NormValue, fill=Dataset)) +
         geom_bar(stat="identity", position="dodge", width=0.5) +
         xlab("") +
-        ylab(paste0(stat, " with X / ", stat, " with lopri")) +
+        ylab(paste0(stat, " with X / ", stat, " with stableqos_oversub")) +
         coord_cartesian(ylim=c(0, 3.5)) +
         theme_bw() +
         theme(

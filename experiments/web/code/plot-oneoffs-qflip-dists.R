@@ -1,6 +1,7 @@
 #!/usr/bin/env Rscript
 
 library(ggplot2)
+library(parallel)
 library(reshape2)
 
 # Derived from https://github.com/tidyverse/ggplot2/issues/1467#issuecomment-169763396
@@ -59,7 +60,6 @@ Plot <- function(subset, output, metric) {
         stat_myecdf() +
         xlab(metric) +
         ylab("CDF across connections and time") +
-        coord_cartesian(ylim=c(0, 1)) +
         theme_bw() +
         theme(
             legend.title=element_blank(),
@@ -81,6 +81,11 @@ Plot <- function(subset, output, metric) {
             axis.text.x=element_text(color="black", size=11, angle = 90, vjust = 0.5, hjust=1),
             axis.title.y=element_text(size=12, margin=margin(0, 3, 0, 0)),
             axis.title.x=element_blank())
+    if (metric == "aux_bbrMinRttMs" || metric == "got_probeonly_aux_bbrMinRttMs") {
+      p <- p + coord_cartesian(xlim=c(0, 100), ylim=c(0, 1))
+    } else {
+      p <- p + coord_cartesian(ylim=c(0, 1))
+    }
     print(p)
     .junk <- dev.off()
   }
@@ -88,9 +93,21 @@ Plot <- function(subset, output, metric) {
 
 for (metric in unique(data$Metric)) {
   for (fg in unique(data$FG)) {
-    Plot(
+    parallel::mcparallel(Plot(
       data[data$Metric == metric & data$FG == fg,],
       paste0(outpre, metric, "-", fg, ".pdf"),
-      metric)
+      metric))
+
+    parallel::mcparallel(Plot(
+      data[data$Metric == metric & data$FG == fg & data$IsLOPRI == 1,],
+      paste0(outpre, metric, "-", fg, "-lopri.pdf"),
+      metric))
+
+    parallel::mcparallel(Plot(
+      data[data$Metric == metric & data$FG == fg & data$IsLOPRI == 0,],
+      paste0(outpre, metric, "-", fg, "-hipri.pdf"),
+      metric))
   }
 }
+
+.junk <- parallel::mccollect()

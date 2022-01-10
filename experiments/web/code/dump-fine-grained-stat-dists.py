@@ -7,6 +7,17 @@ import shutil
 
 from os.path import join as pjoin
 
+# Copied from https://git.kernel.org/pub/scm/linux/kernel/git/netdev/net-next.git/tree/net/ipv4/tcp_bbr.c
+BBR_UNIT = 1 << 8
+BBR_HIGH_GAIN = BBR_UNIT * 2885 // 1000 + 1
+BBR_DRAIN_GAIN = BBR_UNIT * 1000 // 2885
+BBR_CWND_GAIN = BBR_UNIT * 2
+
+def bbr_gain_is(got, want):
+    # ss divides gains by 256
+    # https://github.com/CumulusNetworks/iproute2/blob/18f156bfecda20166c2fb543ba8c9c6559edef9c/misc/ss.c#L1928
+    return int(got * 256) == want
+
 IS_CUM = 0
 NOT_CUM = 1
 UNKNOWN = 2
@@ -127,6 +138,9 @@ with open(args.aligned_input) as fin:
         for node_id, node_data in rec["data"].items():
             for flow_info in node_data["flowInfos"]:
                 fg = flow_info["flow"]["srcDc"] + "_TO_" + flow_info["flow"]["dstDc"]
+                is_lopri_int = 0
+                if flow_info["currentlyLopri"]:
+                    is_lopri_int = 1
                 outfiles = fg_outfiles.get(fg, None)
                 if outfiles is None:
                     continue
@@ -155,19 +169,47 @@ with open(args.aligned_input) as fin:
                             diff_field = field + "_diff"
                             if diff_field not in outfiles:
                                 outfiles[diff_field] = open(pjoin(args.outdir, fg, diff_field), "w", buffering=819200)
-                            outfiles[diff_field].write("{},{}\n".format(rec["unixSec"], diff))
+                            outfiles[diff_field].write("{},{},{}\n".format(rec["unixSec"], is_lopri_int, diff))
                         elif ftype == NOT_CUM:
                             if field not in outfiles:
                                 outfiles[field] = open(pjoin(args.outdir, fg, field), "w", buffering=819200)
-                            outfiles[field].write("{},{}\n".format(rec["unixSec"], val))
+                            outfiles[field].write("{},{},{}\n".format(rec["unixSec"], is_lopri_int, val))
                         else:
                             raise ValueError
                 field = "got_real_rto"
                 saw_base_rto = flow_info.get("aux", {}).get("rtoMs", None)
                 saw_backoff = flow_info.get("aux", {}).get("backoff", None)
                 if saw_backoff is not None and saw_base_rto is not None:
-                    val = saw_base_rto << int(saw_backoff)
+                    val = int(saw_base_rto) << int(saw_backoff)
                     if field not in outfiles:
                         outfiles[field] = open(pjoin(args.outdir, fg, field), "w")
-                    outfiles[field].write("{},{}\n".format(rec["unixSec"], val))
+                    outfiles[field].write("{},{},{}\n".format(rec["unixSec"], is_lopri_int, val))
+                # infer BBR mode from cwnd and pacing gain as described here:
+                # https://groups.google.com/g/bbr-dev/c/0t4PE2B3KzY/m/jbWEB3CACgAJ
+                field = "got_bbr_mode"
+                saw_bbr_cwnd_gain = flow_info.get("aux", {}).get("bbrCwndGain", None)
+                saw_bbr_pacing_gain = flow_info.get("aux", {}).get("bbrPacingGain", None)
+                if saw_bbr_cwnd_gain is not None and saw_bbr_pacing_gain is not None:
+                    saw_bbr_cwnd_gain = float(saw_bbr_cwnd_gain)
+                    saw_bbr_pacing_gain = float(saw_bbr_pacing_gain)
+                    bbr_mode = 10 # unknown
+                    if bbr_gain_is(saw_bbr_pacing_gain, BBR_HIGH_GAIN) and bbr_gain_is(saw_bbr_cwnd_gain, BBR_HIGH_GAIN):
+                        bbr_mode = 1 # STARTUP
+                    elif bbr_gain_is(saw_bbr_pacing_gain, BBR_DRAIN_GAIN) and bbr_gain_is(saw_bbr_cwnd_gain, BBR_HIGH_GAIN):
+                        bbr_mode = 2 # DRAIN
+                    elif bbr_gain_is(saw_bbr_cwnd_gain, BBR_CWND_GAIN):
+                        bbr_mode = 3 # PROBE_BW
+                    elif bbr_gain_is(saw_bbr_pacing_gain, BBR_UNIT) and bbr_gain_is(saw_bbr_cwnd_gain, BBR_UNIT):
+                        bbr_mode = 4 # PROBE_RTT
+                    if field not in outfiles:
+                        outfiles[field] = open(pjoin(args.outdir, fg, field), "w")
+                    outfiles[field].write("{},{},{}\n".format(rec["unixSec"], is_lopri_int, bbr_mode))
 
+                    if bbr_mode in (3, 4):
+                        for filtered_field in ("cwnd", "bbrBw", "bbrMinRttMs"):
+                            field = "got_probeonly_aux_" + filtered_field
+                            saw_val = flow_info.get("aux", {}).get(filtered_field, None)
+                            if saw_val is not None:
+                                if field not in outfiles:
+                                    outfiles[field] = open(pjoin(args.outdir, fg, field), "w")
+                                outfiles[field].write("{},{},{}\n".format(rec["unixSec"], is_lopri_int, saw_val))
