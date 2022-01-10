@@ -51,6 +51,7 @@ def GenWorkloadStagesStatic(
         AA_avg_prop_delay_ms = _DEFAULT_AA_prop_delay_ms,
         AA_max_prop_delay_ms = _DEFAULT_AA_prop_delay_ms,
         WA_prop_delay_ms = _DEFAULT_WA_prop_delay_ms,
+        WA_has_traffic = True,
         run_dur = "90s",
         enable_timeout = False):
     AA_instances, AA_client_roles, AA_server_roles_for = BackendOnEachHost(
@@ -70,22 +71,29 @@ def GenWorkloadStagesStatic(
         enable_timeout = enable_timeout,
     )
 
-    WA_instances, WA_client_roles, WA_server_roles_for = BackendOnEachHost(
-        num_backends = 1,
-        workload_stages_per_backend = [{
-            "target_average_bps": WA_bps,
-            "run_dur": run_dur,
-        }],
-        num_shards_per_backend = NumShards(WA_bps),
-        num_servers_per_backend_host = 2,
-        name_prefix = "WA_",
-        envoy_group_name = "WA",
-        starting_port = WA_FORTIO_STARTING_PORT,
-        max_prop_delay_ms = WA_prop_delay_ms,
-        avg_prop_delay_ms = WA_prop_delay_ms,
-        lb_policy = WA_lb_policy,
-        enable_timeout = enable_timeout,
-    )
+    envoy_group_names = ["AA"]
+
+    WA_instances = []
+    WA_client_roles = []
+    WA_server_roles_for = MakeSameRolesForAllServers([])
+    if WA_has_traffic:
+        WA_instances, WA_client_roles, WA_server_roles_for = BackendOnEachHost(
+            num_backends = 1,
+            workload_stages_per_backend = [{
+                "target_average_bps": WA_bps,
+                "run_dur": run_dur,
+            }],
+            num_shards_per_backend = NumShards(WA_bps),
+            num_servers_per_backend_host = 2,
+            name_prefix = "WA_",
+            envoy_group_name = "WA",
+            starting_port = WA_FORTIO_STARTING_PORT,
+            max_prop_delay_ms = WA_prop_delay_ms,
+            avg_prop_delay_ms = WA_prop_delay_ms,
+            lb_policy = WA_lb_policy,
+            enable_timeout = enable_timeout,
+        )
+        envoy_group_names.append("WA")
 
     return {
         "AA_fortio_instances": AA_instances,
@@ -94,7 +102,7 @@ def GenWorkloadStagesStatic(
         "WA_fortio_instances": WA_instances,
         "WA_client_roles": WA_client_roles,
         "WA_server_roles_for": WA_server_roles_for,
-        "envoy_group_names": ["AA", "WA"],
+        "envoy_group_names": envoy_group_names,
     }
 
 def GenWorkloadStagesPeriodicSpike(
@@ -1587,6 +1595,7 @@ def AddConfigsFlipQoS(configs):
                     AA_avg_prop_delay_ms = AA_lopri_lat,
                     AA_max_prop_delay_ms = (AA_lat + AA_lopri_lat) // 2,
                     WA_prop_delay_ms = WA_lat,
+                    WA_has_traffic = False,
                     run_dur = "150s",
                 ))
                 # enable_timeout = True,
