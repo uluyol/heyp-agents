@@ -2,6 +2,11 @@ config_pb = proto.file("heyp/proto/config.proto")
 deploy_pb = proto.file("heyp/proto/deployment.proto")
 heyp_pb = proto.file("heyp/proto/heyp.proto")
 
+# Work around cloudlab issues.
+# Enter the integer ID for the bad node and we will skip it.
+# E.g. if "n8" is faulty, enter 8.
+_BAD_NODE_IDS = set([])
+
 def GenConfig(
         ca_type = "CC_FULL",
         ca_allocator = None,
@@ -48,16 +53,26 @@ def GenConfig(
     else:
         fail("got ca_limits_to_apply = ", ca_limits_to_apply, "must be \"H\"/\"HL\"/\"\"")
 
+    NEED_NODES = 16
+    got_nodes = 0
+
     shard_index = 0
-    for idx in range(16):
+    for idx in range(100):
         i = idx + 1
         name = "n" + str(i)
         roles = []
+
+        if got_nodes == NEED_NODES:
+            break
+        if i in _BAD_NODE_IDS:
+            continue
+
         clusters["SRC"]["node_names"].append(name)
-        if i == 1:
+        if got_nodes == 0:
             roles.append("cluster-agent")
         else:
             roles.append("host-agent-sim")
+        got_nodes += 1
 
         experiment_ip = "192.168.1." + str(i)
         external_ip, shard_index = ext_addr_for_ip(experiment_ip, shard_key)
