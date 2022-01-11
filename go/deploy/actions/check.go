@@ -105,7 +105,7 @@ func CheckNodeIPs(c *pb.DeploymentConfig) error {
 		eg.Go(func() error {
 			cmd := TracingCommand(
 				LogWithPrefix("check-node-ips: "),
-				"ssh", "-o 'StrictHostKeyChecking no' ",n.GetExternalAddr(),
+				"ssh",n.GetExternalAddr(),
 				"ip -json addr",
 			)
 			rc, err := cmd.StdoutPipe("ip_addr.json")
