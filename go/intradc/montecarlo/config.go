@@ -18,45 +18,78 @@ type Config struct {
 	NumPastPeriods            []int                 `json:"numPastPeriods"`
 }
 
-func (c *Config) Validate() error {
-	if len(c.HostUsages) == 0 {
-		return errors.New("HostUsages is empty")
+func (c Config) validateData() validateData {
+	return validateData{
+		hostVols:             c.HostUsages,
+		hostVolsName:         "HostUsages",
+		numHosts:             c.NumHosts,
+		aoe:                  c.ApprovalOverExpectedUsage,
+		aoeName:              "ApprovalOverExpectedUsage",
+		numSamplesAtApproval: c.NumSamplesAtApproval,
+		numPastPeriods:       c.NumPastPeriods,
+		checkNumPastPeriods:  true,
 	}
-	for i, dg := range c.HostUsages {
+}
+
+var _ EnumerableConfig = Config{}
+
+type validateData struct {
+	hostVols             []dists.ConfigDistGen
+	hostVolsName         string
+	numHosts             []int
+	aoe                  []float64
+	aoeName              string
+	numSamplesAtApproval []int
+	numPastPeriods       []int
+	checkNumPastPeriods  bool
+}
+
+type EnumerableConfig interface {
+	validateData() validateData
+}
+
+func ValidateConfig(c EnumerableConfig) error {
+	data := c.validateData()
+	if len(data.hostVols) == 0 {
+		return errors.New(data.hostVolsName + " is empty")
+	}
+	for i, dg := range data.hostVols {
 		if dg.Gen == nil {
-			return fmt.Errorf("HostUsages[%d] is nil", i)
+			return fmt.Errorf(data.hostVolsName+"[%d] is nil", i)
 		}
 	}
-	if len(c.NumHosts) == 0 {
+	if len(data.numHosts) == 0 {
 		return errors.New("NumHosts is empty")
 	}
-	for i, numHosts := range c.NumHosts {
+	for i, numHosts := range data.numHosts {
 		if numHosts <= 0 {
 			return fmt.Errorf("NumHosts[%d] must be positive (found %d)", i, numHosts)
 		}
 	}
-	if len(c.ApprovalOverExpectedUsage) == 0 {
-		return errors.New("ApprovalOverExpectedUsage is empty")
+	if len(data.aoe) == 0 {
+		return errors.New(data.aoeName + " is empty")
 	}
-	for i, aod := range c.ApprovalOverExpectedUsage {
+	for i, aod := range data.aoe {
 		if aod <= 0 {
-			return fmt.Errorf("ApprovalOverExpectedUsage[%d] must be positive (found %g)", i, aod)
+			return fmt.Errorf(data.aoeName+"[%d] must be positive (found %g)", i, aod)
 		}
 	}
-	if len(c.NumSamplesAtApproval) == 0 {
+	if len(data.numSamplesAtApproval) == 0 {
 		return errors.New("NumSamplesAtApproval is empty")
 	}
-	for i, numSamples := range c.NumSamplesAtApproval {
+	for i, numSamples := range data.numSamplesAtApproval {
 		if numSamples <= 0 {
 			return fmt.Errorf("NumSamplesAtApproval[%d] must be positive (found %d)", i, numSamples)
 		}
 	}
-	if len(c.NumPastPeriods) == 0 {
-		return errors.New("NumPastPeriods is empty")
-	}
-	for i, numPP := range c.NumPastPeriods {
-		if numPP <= 0 {
-			return fmt.Errorf("NumPastPeriods[%d] must be positive (found %d)", i, numPP)
+	if data.checkNumPastPeriods {
+		if len(data.numPastPeriods) == 0 {
+			return errors.New("NumPastPeriods is empty")
+		}
+		for i, numPP := range data.numPastPeriods {
+			if numPP <= 0 {
+				return fmt.Errorf("NumPastPeriods[%d] must be positive (found %d)", i, numPP)
+			}
 		}
 	}
 	return nil

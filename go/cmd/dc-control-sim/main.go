@@ -24,7 +24,7 @@ func RunConfig(configPath, outPath string, numRuns int) error {
 		return fmt.Errorf("failed to decode config: %w", err)
 	}
 
-	if err := config.Validate(); err != nil {
+	if err := montecarlo.ValidateConfig(config); err != nil {
 		return fmt.Errorf("invalid config: %w", err)
 	}
 
