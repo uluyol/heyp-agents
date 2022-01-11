@@ -22,6 +22,11 @@ SYS_LONG[["qd_hash"]] <- "Hash"
 SYS_LONG[["qdhrl_knap"]] <- "Knapsack+LimitHI"
 SYS_LONG[["qdhrl_hash"]] <- "Hash+LimitHI"
 
+SYS_LONG[["flipflop_oversub"]] <- "MixedFlipFlop-RL"
+SYS_LONG[["stableqos_oversub"]] <- "MixedStable-RL"
+SYS_LONG[["hipri"]] <- "AllHIPRI"
+SYS_LONG[["lopri"]] <- "AllLOPRI"
+
 # Derived from https://github.com/tidyverse/ggplot2/issues/1467#issuecomment-169763396
 stat_myecdf <- function(mapping = NULL, data = NULL, geom = "step",
                       position = "identity", n = NULL, na.rm = FALSE,

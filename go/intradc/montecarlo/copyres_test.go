@@ -14,20 +14,23 @@ type testMergeMetrics struct {
 	M2 metric           `dist:"collect"`
 	M3 metricWithAbsVal `dist:"collect"`
 
-	ToSum float64
+	ToSum    float64
+	ToSumInt int
 }
 
 func TestMergeMetricsInto(t *testing.T) {
 	src := testMergeMetrics{
-		ignored: true,
-		ToSum:   6,
+		ignored:  true,
+		ToSum:    6,
+		ToSumInt: 3,
 	}
 	src.M1.Record(1)
 	src.M2.Record(1.5)
 	src.M3.Record(2)
 
 	dst := testMergeMetrics{
-		ToSum: 1,
+		ToSum:    1,
+		ToSumInt: 7,
 	}
 	dst.M1.Record(10)
 	dst.M2.Record(20)
@@ -57,6 +60,9 @@ func TestMergeMetricsInto(t *testing.T) {
 	}
 	if dst.ToSum != 7 {
 		t.Errorf("ToSum: got %v, want %v", dst.ToSum, 7)
+	}
+	if dst.ToSumInt != 10 {
+		t.Errorf("ToSumInt: got %v, want %v", dst.ToSumInt, 10)
 	}
 }
 

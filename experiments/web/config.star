@@ -51,6 +51,7 @@ def GenWorkloadStagesStatic(
         AA_avg_prop_delay_ms = _DEFAULT_AA_prop_delay_ms,
         AA_max_prop_delay_ms = _DEFAULT_AA_prop_delay_ms,
         WA_prop_delay_ms = _DEFAULT_WA_prop_delay_ms,
+        WA_has_traffic = True,
         run_dur = "90s",
         enable_timeout = False):
     AA_instances, AA_client_roles, AA_server_roles_for = BackendOnEachHost(
@@ -70,22 +71,29 @@ def GenWorkloadStagesStatic(
         enable_timeout = enable_timeout,
     )
 
-    WA_instances, WA_client_roles, WA_server_roles_for = BackendOnEachHost(
-        num_backends = 1,
-        workload_stages_per_backend = [{
-            "target_average_bps": WA_bps,
-            "run_dur": run_dur,
-        }],
-        num_shards_per_backend = NumShards(WA_bps),
-        num_servers_per_backend_host = 2,
-        name_prefix = "WA_",
-        envoy_group_name = "WA",
-        starting_port = WA_FORTIO_STARTING_PORT,
-        max_prop_delay_ms = WA_prop_delay_ms,
-        avg_prop_delay_ms = WA_prop_delay_ms,
-        lb_policy = WA_lb_policy,
-        enable_timeout = enable_timeout,
-    )
+    envoy_group_names = ["AA"]
+
+    WA_instances = []
+    WA_client_roles = []
+    WA_server_roles_for = MakeSameRolesForAllServers([])
+    if WA_has_traffic:
+        WA_instances, WA_client_roles, WA_server_roles_for = BackendOnEachHost(
+            num_backends = 1,
+            workload_stages_per_backend = [{
+                "target_average_bps": WA_bps,
+                "run_dur": run_dur,
+            }],
+            num_shards_per_backend = NumShards(WA_bps),
+            num_servers_per_backend_host = 2,
+            name_prefix = "WA_",
+            envoy_group_name = "WA",
+            starting_port = WA_FORTIO_STARTING_PORT,
+            max_prop_delay_ms = WA_prop_delay_ms,
+            avg_prop_delay_ms = WA_prop_delay_ms,
+            lb_policy = WA_lb_policy,
+            enable_timeout = enable_timeout,
+        )
+        envoy_group_names.append("WA")
 
     return {
         "AA_fortio_instances": AA_instances,
@@ -94,7 +102,7 @@ def GenWorkloadStagesStatic(
         "WA_fortio_instances": WA_instances,
         "WA_client_roles": WA_client_roles,
         "WA_server_roles_for": WA_server_roles_for,
-        "envoy_group_names": ["AA", "WA"],
+        "envoy_group_names": envoy_group_names,
     }
 
 def GenWorkloadStagesPeriodicSpike(
@@ -592,7 +600,7 @@ def GenConfig(
 
     shard_index = 0
     cluster_agent_nodes = []
-    for idx in range(20):
+    for idx in range(19):
         i = idx + 1
         name = "n" + str(i)
         roles = []
@@ -1313,6 +1321,7 @@ def AddConfigsIncreasing(configs):
         "AA_lopri_is_longer": True,
         "WA_approved_bps": int(Gbps(13)),
         "shard_key": "inc",
+        "cluster_control_period": "5s",
         "envoy_group_admission_control_configs": {
             "AA": DefaultOnAdmissionControl(),
             "WA": DefaultOnAdmissionControl(),
@@ -1375,40 +1384,45 @@ def AddConfigsIncreasingMPR(configs):
         configs[prefix + "-nl"] = NoLimitConfig(**kwargs)
         configs[prefix + "-qd"] = QoSDowngradeConfig(**kwargs)
 
-def AddConfigsStarvedLOPRI(configs):
+def AddConfigsStarvedLOPRIBase(configs, name, enable_ac):
     # "AA_lopri_is_longer": True,
     kwargs = dict({
         "AA_approved_bps": int(Gbps(2)),
         "AA_surplus_bps": int(Gbps(10)),
+        "AA_servers_are_virt": True,
+        "AA_lopri_is_longer": True,
         "WA_approved_bps": int(Gbps(20)),
-        "shard_key": "starvedlp",
+        "shard_key": name,
         "cluster_control_period": "500ms",
     }, **GenWorkloadStagesIncreasing(
-        AA_bps = int(Gbps(16)),
+        AA_bps = int(Gbps(12)),
+        AA_max_prop_delay_ms = _DEFAULT_AA_prop_delay_ms + _DEFAULT_AA_prop_delay_ms_extra_lopri,
         num_AA_backends = 1,
+        num_AA_servers_per_backend_host = AA_NUM_SERVERS_PER_BACKEND_HOST,
+        AA_servers_are_virt = True,
         WA_bps_min = int(Gbps(8)),
         WA_bps_max = int(Gbps(16)),
-        enable_timeout = False,
+        enable_timeout = enable_ac,
     ))
-    # kwargs = dict({
-    #     "AA_approved_bps": int(Gbps(8)),
-    #     "AA_surplus_bps": int(Gbps(10)),
-    #     "WA_approved_bps": int(Gbps(6)),
-    #     "shard_key": "inc",
-    # }, **GenWorkloadStagesIncreasing(
-    #     AA_bps = int(Gbps(18)),
-    #     num_AA_backends = 5,
-    #     WA_bps_min = int(Gbps(2)),
-    #     WA_bps_max = int(Gbps(6)),
-    # ))
+    if enable_ac:
+        kwargs["envoy_group_admission_control_configs"] = {
+            "AA": DefaultOnAdmissionControl(),
+            "WA": DefaultOnAdmissionControl(),
+        }
 
-    prefix = "starvedlp"
+    prefix = name
     configs[prefix + "-hsc"] = HSC20Config(**kwargs)
     configs[prefix + "-nl"] = NoLimitConfig(**kwargs)
     configs[prefix + "-qd"] = QoSDowngradeConfig(**kwargs)
     configs[prefix + "-qdlrl"] = QoSDowngradeAndLimitLOPRIConfig(**kwargs)
     configs[prefix + "-qdhrl"] = QoSDowngradeAndLimitMixedHIPRIConfig(**kwargs)
     configs[prefix + "-rl"] = RateLimitConfig(**kwargs)
+
+def AddConfigsStarvedLOPRINoAC(configs):
+    AddConfigsStarvedLOPRIBase(configs, "starvedlp_noac", False)
+
+def AddConfigsStarvedLOPRIWithAC(configs):
+    AddConfigsStarvedLOPRIBase(configs, "starvedlp_withac", True)
 
 def AddConfigsRateLimitHIPRI(configs):
     # "AA_lopri_is_longer": True,
@@ -1534,7 +1548,8 @@ def AddConfigsLossTrainingData(configs):
     AddConfigsLossTrainingDataPeriodicSpikeLOPRI(configs, lopri_latency = "longer")
 
 def AddConfigsFlipQoS(configs):
-    AA_approval = int(Gbps(4))
+    # AA_approval = int(Gbps(4))
+    WA_demand = int(Gbps(1))
 
     # (AA HIPRI, WA, AA LOPRI) triplets, in ms
     latencies = [
@@ -1547,10 +1562,14 @@ def AddConfigsFlipQoS(configs):
     ]
 
     # for cp in ["100ms", "200ms", "300ms", "400ms", "500ms", "600ms", "700ms", "800ms", "900ms", "1s", "2s", "3s", "4s", "5s"]:
-    for cp in ["1s", "2s", "3s", "4s", "5s"]:
+    # for cp in ["200ms", "300ms", "400ms", "500ms", "600ms", "700ms", "800ms", "900ms", "1s", "2s", "3s", "4s", "5s"]:
+    for cp in ["5s"]:
         for AA_lat, WA_lat, AA_lopri_lat in latencies:
-            for WA_demand_gbps in [float("6.5")]:
-                WA_demand = int(Gbps(WA_demand_gbps))
+            # for WA_demand_gbps in [float("0.5"), float("1"), float("2")]:
+            for AA_approval_gbps in [float("4")]:
+                AA_approval = int(Gbps(AA_approval_gbps))
+
+                # WA_demand = int(Gbps(WA_demand_gbps))
                 kwargs_rr = dict({
                     "AA_lopri_is_longer": True,
                     "AA_approved_bps": AA_approval,
@@ -1576,11 +1595,12 @@ def AddConfigsFlipQoS(configs):
                     AA_avg_prop_delay_ms = AA_lopri_lat,
                     AA_max_prop_delay_ms = (AA_lat + AA_lopri_lat) // 2,
                     WA_prop_delay_ms = WA_lat,
+                    WA_has_traffic = False,
                     run_dur = "150s",
                 ))
                 # enable_timeout = True,
 
-                prefix = "qflip_cp_{0}_lat_{1}_{2}_{3}_bg{4}".format(cp, AA_lat, WA_lat, AA_lopri_lat, WA_demand_gbps)
+                prefix = "qflip_cp_{0}_lat_{1}_{2}_{3}_fg{4}".format(cp, AA_lat, WA_lat, AA_lopri_lat, AA_approval_gbps)
 
                 # configs[prefix + "-hipri"] = FixedHostPatternHIPRIConfig(**kwargs_rr)
                 configs[prefix + "-lopri"] = FixedHostPatternLOPRIConfig(**kwargs_rr)
@@ -1632,7 +1652,8 @@ def GenConfigs():
         "ltd": AddConfigsLossTrainingData,
         "qflip": AddConfigsFlipQoS,
         "rlhipri": AddConfigsRateLimitHIPRI,
-        "starvedlp": AddConfigsStarvedLOPRI,
+        "starvedlp_noac": AddConfigsStarvedLOPRINoAC,
+        "starvedlp_withac": AddConfigsStarvedLOPRIWithAC,
         "sweep": AddConfigsSweep,
         "tac": AddConfigsTestAdmissionControl,
     }

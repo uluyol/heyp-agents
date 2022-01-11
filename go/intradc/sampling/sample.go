@@ -13,6 +13,7 @@ const debug = false
 type AggUsageEstimator interface {
 	RecordSample(usage float64)
 	EstUsage(numHosts int) float64
+	EstUsageNoHostCount() float64
 }
 
 type UsageDistEstimator interface {
@@ -48,8 +49,9 @@ func (s UniformSampler) ProbOf(usage float64) float64 { return s.Prob }
 func (s UniformSampler) Name() string                 { return "uniform" }
 
 type uniformAggUsageEstimator struct {
-	sum float64
-	num float64
+	prob float64
+	sum  float64
+	num  float64
 }
 
 func (e *uniformAggUsageEstimator) RecordSample(usage float64) {
@@ -61,8 +63,12 @@ func (e *uniformAggUsageEstimator) EstUsage(numHosts int) float64 {
 	return float64(numHosts) * e.sum / math.Max(e.num, 1)
 }
 
+func (e *uniformAggUsageEstimator) EstUsageNoHostCount() float64 {
+	return e.sum / e.prob
+}
+
 func (s UniformSampler) NewAggUsageEstimator() AggUsageEstimator {
-	return new(uniformAggUsageEstimator)
+	return &uniformAggUsageEstimator{prob: s.Prob}
 }
 
 type uniformUsageDistEstimator struct {
@@ -147,6 +153,7 @@ func (e *thresholdAggUsageEstimator) RecordSample(usage float64) {
 }
 
 func (e *thresholdAggUsageEstimator) EstUsage(numHosts int) float64 { return e.est }
+func (e *thresholdAggUsageEstimator) EstUsageNoHostCount() float64  { return e.est }
 
 func (s ThresholdSampler) NewAggUsageEstimator() AggUsageEstimator {
 	return &thresholdAggUsageEstimator{s: s}

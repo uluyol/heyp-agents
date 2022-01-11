@@ -51,6 +51,9 @@ func mergeMetricsInto(src, dst interface{}) {
 		case *float64:
 			dstP := dstIface.(*float64)
 			*dstP += *srcP
+		case *int:
+			dstP := dstIface.(*int)
+			*dstP += *srcP
 		default:
 			panic(fmt.Errorf("unknown type %T", srcIface))
 		}

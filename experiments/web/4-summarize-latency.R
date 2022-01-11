@@ -75,7 +75,7 @@ PlotLatencyCDFTo <- function(subset, output) {
         p <- ggplot(data=subset, aes(x=LatencyNanos / 1e6, y=Y, color=Sys, linetype=Sys)) +
             geom_step(size=1) +
             xlab("Latency (ms)") +
-            ylab("CDF across time") +
+            ylab("CDF across requests") +
             coord_cartesian(xlim=c(0, 350), ylim=c(0, 1), expand=FALSE) +
             scale_y_continuous(breaks=seq(0, 1, by=0.2)) +
             theme_bw() +
@@ -114,7 +114,7 @@ PlotLatencyCCDFTo <- function(subset, output) {
         p <- ggplot(data=subset, aes(x=LatencyNanos / 1e6, y=Y, color=Sys, linetype=Sys)) +
             geom_step(size=1) +
             xlab("Latency (ms)") +
-            ylab("CCDF across time") +
+            ylab("CCDF across requests") +
             coord_cartesian(xlim=c(0, 450), ylim=c(0.0005, 1), expand=FALSE) +
             scale_y_log10(breaks=c(0.001, 0.01, 0.1, 0.5, 1), labels=c("99.9%", "99%", "90%", "50%", "0%")) +
             theme_bw() +
