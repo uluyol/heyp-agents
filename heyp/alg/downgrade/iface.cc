@@ -81,8 +81,10 @@ std::vector<bool> DiffDowngradeSelectorImpl::PickLOPRIChildren(
     last_is_lopri_[agg_children[i].child_id] = lopri[i];
   }
 
-  SPDLOG_LOGGER_INFO(logger, "picked LOPRI assignment: {}",
-                     absl::StrJoin(lopri, "", BitmapFormatter()));
+  if (logger != nullptr) {
+    SPDLOG_LOGGER_INFO(logger, "picked LOPRI assignment: {}",
+                       absl::StrJoin(lopri, "", BitmapFormatter()));
+  }
 
   return lopri;
 }

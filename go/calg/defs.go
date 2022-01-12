@@ -13,7 +13,8 @@ int64_t HeypMaxMinFairWaterlevel(int64_t admission, int64_t* demands,
 typedef struct HeypSelectLOPRIHashingCtx HeypSelectLOPRIHashingCtx;
 
 HeypSelectLOPRIHashingCtx* NewHeypSelectLOPRIHashingCtx(uint64_t* child_ids,
-                                                        size_t num_children);
+                                                        size_t num_children,
+														int enable_logging);
 
 void FreeHeypSelectLOPRIHashingCtx(HeypSelectLOPRIHashingCtx* ctx);
 
@@ -63,12 +64,16 @@ type HashingDowngradeSelector struct {
 	out []C.uint8_t
 }
 
-func NewHashingDowngradeSelector(childIDs []uint64) HashingDowngradeSelector {
+func NewHashingDowngradeSelector(childIDs []uint64, enableLogging bool) HashingDowngradeSelector {
 	cChildIDs := make([]C.uint64_t, len(childIDs))
 	for i := range childIDs {
 		cChildIDs[i] = C.uint64_t(childIDs[i])
 	}
-	c := C.NewHeypSelectLOPRIHashingCtx(&cChildIDs[0], C.size_t(len(childIDs)))
+	logInt := C.int(0)
+	if enableLogging {
+		logInt = 1
+	}
+	c := C.NewHeypSelectLOPRIHashingCtx(&cChildIDs[0], C.size_t(len(childIDs)), logInt)
 	return HashingDowngradeSelector{c, make([]C.uint8_t, len(childIDs))}
 }
 

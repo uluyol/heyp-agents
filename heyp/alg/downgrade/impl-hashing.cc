@@ -24,7 +24,7 @@ DowngradeDiff HashingDowngradeSelector::PickChildren(const AggInfoView& agg_info
                                                      spdlog::logger* logger) {
   const bool should_debug = DebugQosAndRateLimitSelection();
 
-  if (should_debug) {
+  if (logger != nullptr && should_debug) {
     SPDLOG_LOGGER_INFO(logger, "parent: {}", agg_info.parent().DebugString());
     SPDLOG_LOGGER_INFO(logger, "children: {}",
                        absl::StrJoin(agg_info.children(), "\n", absl::StreamFormatter()));
@@ -42,8 +42,10 @@ DowngradeDiff HashingDowngradeSelector::PickChildren(const AggInfoView& agg_info
       dst = &ret.to_upgrade.ranges;
       break;
     default: {
-      H_SPDLOG_CHECK_MESG(logger, false,
-                          "impossible branch: were new RangeDiffTypes added?")
+      if (logger != nullptr) {
+        H_SPDLOG_CHECK_MESG(logger, false,
+                            "impossible branch: were new RangeDiffTypes added?")
+      }
       break;
     }
   }
@@ -56,11 +58,12 @@ DowngradeDiff HashingDowngradeSelector::PickChildren(const AggInfoView& agg_info
   }
 
   RingRanges matching = lopri_.MatchingRanges();
-  SPDLOG_LOGGER_INFO(logger, "revised lopri ring: {} matches: {} downgrade diff: {}",
-                     lopri_.ToString(), MatchString(matching), ToString(ret));
-
-  if (should_debug) {
-    SPDLOG_LOGGER_INFO(logger, "range diff: {}", ToString(d));
+  if (logger != nullptr) {
+    SPDLOG_LOGGER_INFO(logger, "revised lopri ring: {} matches: {} downgrade diff: {}",
+                       lopri_.ToString(), MatchString(matching), ToString(ret));
+    if (should_debug) {
+      SPDLOG_LOGGER_INFO(logger, "range diff: {}", ToString(d));
+    }
   }
 
   return ret;
