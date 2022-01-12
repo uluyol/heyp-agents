@@ -24,7 +24,11 @@ void HeypSelectLOPRIHashing(HeypSelectLOPRIHashingCtx* ctx, double want_frac_lop
 
 */
 import "C"
-import "unsafe"
+import (
+	"unsafe"
+
+	"github.com/RoaringBitmap/roaring"
+)
 
 func KnapsackUsageLOPRI(demands []int64, wantFracLOPRI float64) ([]int, int64) {
 	if wantFracLOPRI == 0 {
@@ -73,13 +77,14 @@ func (ctx HashingDowngradeSelector) Free() {
 	ctx.c = nil
 }
 
-func (ctx HashingDowngradeSelector) PickLOPRI(wantFracLOPRI float64, isLOPRI []bool) {
+func (ctx HashingDowngradeSelector) PickLOPRI(wantFracLOPRI float64, isLOPRI *roaring.Bitmap) {
 	if ctx.c == nil {
 		panic("nil HashingDowngradeSelector")
 	}
 	C.HeypSelectLOPRIHashing(ctx.c, C.double(wantFracLOPRI), &ctx.out[0])
-	_ = isLOPRI[len(ctx.out)-1]
 	for i := range ctx.out {
-		isLOPRI[i] = ctx.out[i] != 0
+		if ctx.out[i] != 0 {
+			isLOPRI.AddInt(i)
+		}
 	}
 }
