@@ -77,6 +77,10 @@ type FeedbackControlSummary struct {
 }
 
 type BasicDowngradeSummary struct {
+	IntermediateOverage        Stats `json:"intermediateOverage"`
+	IntermediateShortage       Stats `json:"intermediateShortage"`
+	IntermediateOverOrShortage Stats `json:"intermediateOverOrShortage"`
+
 	RealizedOverage        Stats `json:"realizedOverage"`
 	RealizedShortage       Stats `json:"realizedShortage"`
 	RealizedOverOrShortage Stats `json:"realizedOverOrShortage"`

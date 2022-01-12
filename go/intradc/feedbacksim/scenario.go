@@ -67,8 +67,10 @@ func (s *ActiveScenario) DowngradeStats() (overage, shortage float64) {
 		}
 	}
 
-	overage = math.Max(0, trueUsageHIPRI-s.s.Approval)
-	shortage = math.Max(0, s.s.Approval-trueUsageHIPRI)
+	approvedDemand := math.Min(s.s.Approval, s.totalDemand)
+
+	overage = math.Max(0, trueUsageHIPRI-approvedDemand)
+	shortage = math.Max(0, approvedDemand-trueUsageHIPRI)
 	return overage, shortage
 }
 
@@ -219,7 +221,7 @@ type MultiIterRec struct {
 	FinalShortage float64 `json:"finalShortage"`
 
 	IntermediateOverage  []float64 `json:"intermediateOverage"`
-	IntermediateShortage []float64 `jsonl"intermediateShortage"`
+	IntermediateShortage []float64 `json:"intermediateShortage"`
 }
 
 type ScenarioRec struct {
