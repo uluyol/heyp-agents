@@ -108,7 +108,7 @@ func (c *rerunCmd) Execute(ctx context.Context, fs *flag.FlagSet, args ...interf
 		log.Fatal(err)
 	}
 	b, _ := yaml.Marshal(scenario.Summary())
-	fmt.Printf("\n=== SUMMARY ===\n%s", b)
+	fmt.Printf("=== SUMMARY ===\n%s", b)
 	return subcommands.ExitSuccess
 }
 

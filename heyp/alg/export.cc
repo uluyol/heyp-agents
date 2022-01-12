@@ -73,23 +73,31 @@ int64_t HeypMaxMinFairWaterlevel(int64_t admission, int64_t* demands,
 struct HeypSelectLOPRIHashingCtx {
   heyp::HashingDowngradeSelector selector;
   heyp::ExportAggInfoView info_view;
-  spdlog::logger logger;
+  std::optional<spdlog::logger> logger;
 };
 
 HeypSelectLOPRIHashingCtx* NewHeypSelectLOPRIHashingCtx(uint64_t* child_ids,
-                                                        size_t num_children) {
-  return new HeypSelectLOPRIHashingCtx{
+                                                        size_t num_children,
+                                                        int enable_logging) {
+  auto p = new HeypSelectLOPRIHashingCtx{
       .info_view = heyp::ExportAggInfoView(child_ids, num_children),
-      .logger = heyp::MakeLogger("c-heyp-select-lopri"),
   };
+  if (enable_logging) {
+    p->logger.emplace(heyp::MakeLogger("c-heyp-select-lopri"));
+  }
+  return p;
 }
 
 void FreeHeypSelectLOPRIHashingCtx(HeypSelectLOPRIHashingCtx* ctx) { delete ctx; }
 
 void HeypSelectLOPRIHashing(HeypSelectLOPRIHashingCtx* ctx, double want_frac_lopri,
                             uint8_t* use_lopris) {
+  spdlog::logger* logger = nullptr;
+  if (ctx->logger.has_value()) {
+    logger = &ctx->logger.value();
+  }
   std::vector<bool> use_lopri_vec =
-      ctx->selector.PickLOPRIChildren(ctx->info_view, want_frac_lopri, &ctx->logger);
+      ctx->selector.PickLOPRIChildren(ctx->info_view, want_frac_lopri, logger);
   for (size_t i = 0; i < use_lopri_vec.size(); ++i) {
     if (use_lopri_vec[i]) {
       use_lopris[i] = 1;

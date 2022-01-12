@@ -88,7 +88,7 @@ func NewActiveScenario(s Scenario, rng *rand.Rand) *ActiveScenario {
 		childIDs[i] = rng.Uint64()
 		active.totalDemand += s.TrueDemands[i]
 	}
-	active.flowsel = calg.NewHashingDowngradeSelector(childIDs)
+	active.flowsel = calg.NewHashingDowngradeSelector(childIDs, false)
 	return active
 }
 
