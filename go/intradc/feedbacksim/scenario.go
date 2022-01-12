@@ -7,6 +7,7 @@ import (
 	"io"
 	"math"
 
+	"github.com/RoaringBitmap/roaring"
 	"github.com/uluyol/heyp-agents/go/calg"
 	"github.com/uluyol/heyp-agents/go/intradc/sampling"
 	"golang.org/x/exp/rand"
@@ -39,9 +40,36 @@ type ActiveScenario struct {
 	flowsel calg.HashingDowngradeSelector
 
 	// actively mutated
-	prevIsLOPRI, isLOPRI []bool
-	curDowngradeFrac     float64
-	iter                 int
+	prevIsLOPRI      *roaring.Bitmap // only valid when checking which tasks changed
+	isLOPRI          *roaring.Bitmap
+	curDowngradeFrac float64
+	iter             int
+}
+
+func (s *ActiveScenario) DowngradeStats() (overage, shortage float64) {
+	var trueUsageLOPRI float64
+	for i, d := range s.s.TrueDemands {
+		if s.isLOPRI.ContainsInt(i) {
+			trueUsageLOPRI += d
+		}
+	}
+	tryShiftFromLOPRI := math.Max(0, trueUsageLOPRI-s.s.AggAvailableLOPRI)
+	// trueUsageLOPRI = math.Min(trueUsageLOPRI, s.s.AggAvailableLOPRI)
+
+	var trueUsageHIPRI float64
+	for i, d := range s.s.TrueDemands {
+		if !s.isLOPRI.ContainsInt(i) {
+			spareCap := s.s.MaxHostUsage - d
+			extraTaken := math.Min(spareCap, tryShiftFromLOPRI)
+			tryShiftFromLOPRI -= extraTaken
+			usage := d + extraTaken
+			trueUsageHIPRI += usage
+		}
+	}
+
+	overage = math.Max(0, trueUsageHIPRI-s.s.Approval)
+	shortage = math.Max(0, s.s.Approval-trueUsageHIPRI)
+	return overage, shortage
 }
 
 func (s *ActiveScenario) Free() { s.flowsel.Free() }
@@ -51,8 +79,8 @@ func NewActiveScenario(s Scenario, rng *rand.Rand) *ActiveScenario {
 		s:           s,
 		sampler:     s.SamplerFactory.NewSampler(s.Approval, float64(len(s.TrueDemands))),
 		rng:         rng,
-		prevIsLOPRI: make([]bool, len(s.TrueDemands)),
-		isLOPRI:     make([]bool, len(s.TrueDemands)),
+		prevIsLOPRI: roaring.New(),
+		isLOPRI:     roaring.New(),
 	}
 
 	childIDs := make([]uint64, len(s.TrueDemands))
@@ -72,7 +100,7 @@ func (s *ActiveScenario) RunIter() ScenarioRec {
 	var trueUsageLOPRI float64
 	estUsageLOPRI := s.sampler.NewAggUsageEstimator()
 	for i, d := range s.s.TrueDemands {
-		if s.isLOPRI[i] {
+		if s.isLOPRI.ContainsInt(i) {
 			if s.sampler.ShouldInclude(s.rng, d) {
 				estUsageLOPRI.RecordSample(d)
 			}
@@ -85,7 +113,7 @@ func (s *ActiveScenario) RunIter() ScenarioRec {
 	var trueUsageHIPRI float64
 	estUsageHIPRI := s.sampler.NewAggUsageEstimator()
 	for i, d := range s.s.TrueDemands {
-		if !s.isLOPRI[i] {
+		if !s.isLOPRI.ContainsInt(i) {
 			spareCap := s.s.MaxHostUsage - d
 			extraTaken := math.Min(spareCap, tryShiftFromLOPRI)
 			tryShiftFromLOPRI -= extraTaken
@@ -102,21 +130,29 @@ func (s *ActiveScenario) RunIter() ScenarioRec {
 
 	hipriNorm := approxUsageHIPRI / s.s.Approval
 	downgradeFracInc := s.s.Controller.TrafficFracToDowngrade(
-		hipriNorm, 1, s.s.Approval/(approxUsageHIPRI+approxUsageLOPRI), len(s.isLOPRI))
+		hipriNorm, 1, s.s.Approval/(approxUsageHIPRI+approxUsageLOPRI),
+		len(s.s.TrueDemands))
 	s.curDowngradeFrac += downgradeFracInc
 
-	copy(s.prevIsLOPRI, s.isLOPRI)
+	// copy s.isLOPRI to s.prevIsLOPRI
+	s.prevIsLOPRI.Clear()
+	s.prevIsLOPRI.Or(s.isLOPRI)
 	s.flowsel.PickLOPRI(s.curDowngradeFrac, s.isLOPRI)
 
+	s.prevIsLOPRI.Xor(s.isLOPRI)
 	var numNewlyHIPRI, numNewlyLOPRI int
-	for i := range s.isLOPRI {
-		if s.isLOPRI[i] && !s.prevIsLOPRI[i] {
+	s.prevIsLOPRI.Iterate(func(i uint32) bool {
+		// know that prevIsLOPRI[i] != isLOPRI[i] since i is in
+		// prevIsLOPRI XOR isLOPRI.
+		if s.isLOPRI.Contains(i) {
+			// now LOPRI, wasn't before
 			numNewlyLOPRI++
-		}
-		if !s.isLOPRI[i] && s.prevIsLOPRI[i] {
+		} else {
+			// now HIPRI, wasn't before
 			numNewlyHIPRI++
 		}
-	}
+		return true
+	})
 
 	return ScenarioRec{
 		HIPRIUsageOverTrueDemand: trueUsageHIPRI / s.totalDemand,
@@ -126,12 +162,16 @@ func (s *ActiveScenario) RunIter() ScenarioRec {
 	}
 }
 
+// TODO: add a way to get final QoS allocation
 func (s *ActiveScenario) RunMultiIter(n int) MultiIterRec {
 	const itersStableToConverge = 5
 	var rec MultiIterRec
 	rec.ItersToConverge = -1
 	for i := 0; i < n; i++ {
 		this := s.RunIter()
+		overage, shortage := s.DowngradeStats()
+		rec.IntermediateOverage = append(rec.IntermediateOverage, overage)
+		rec.IntermediateShortage = append(rec.IntermediateShortage, shortage)
 		if rec.Converged {
 			if this.NumNewlyHIPRI|this.NumNewlyLOPRI != 0 {
 				// Because of sampling, it can seem like we converge
@@ -157,6 +197,15 @@ func (s *ActiveScenario) RunMultiIter(n int) MultiIterRec {
 		rec.ItersToConverge = -1
 		rec.Converged = false
 	}
+	if rec.Converged {
+		rec.FinalOverage = rec.IntermediateOverage[rec.ItersToConverge]
+		rec.FinalShortage = rec.IntermediateShortage[rec.ItersToConverge]
+		rec.IntermediateOverage = rec.IntermediateOverage[:rec.ItersToConverge]
+		rec.IntermediateShortage = rec.IntermediateShortage[:rec.ItersToConverge]
+	} else if n > 0 {
+		rec.FinalOverage = rec.IntermediateOverage[n-1]
+		rec.FinalShortage = rec.IntermediateShortage[n-1]
+	}
 	return rec
 }
 
@@ -165,6 +214,12 @@ type MultiIterRec struct {
 	NumDowngraded   int  `json:"numDowngraded"`
 	NumUpgraded     int  `json:"numUpgraded"`
 	Converged       bool `json:"converged"`
+
+	FinalOverage  float64 `json:"finalOverage"`
+	FinalShortage float64 `json:"finalShortage"`
+
+	IntermediateOverage  []float64 `json:"intermediateOverage"`
+	IntermediateShortage []float64 `jsonl"intermediateShortage"`
 }
 
 type ScenarioRec struct {
