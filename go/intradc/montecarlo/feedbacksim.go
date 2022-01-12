@@ -9,9 +9,12 @@ import (
 
 type perScenarioData struct {
 	downgrade struct {
-		RealizedOverage        metric
-		RealizedShortage       metric
-		RealizedOverOrShortage metric
+		IntermediateOverage        metric
+		IntermediateShortage       metric
+		IntermediateOverOrShortage metric
+		RealizedOverage            metric
+		RealizedShortage           metric
+		RealizedOverOrShortage     metric
 	}
 	feedbackControl struct {
 		ItersToConverge  metric
@@ -62,7 +65,6 @@ func EvalFeedbackInstance(inst FeedbackInstance, numRuns int, sem chan Token, re
 					exactDemand += v
 				}
 
-				// exactApprovedUsage := math.Min(approval, exactUsage)
 				for scenarioID, scenarioTmpl := range inst.FeedbackScenarios {
 					activeScenario := feedbacksim.NewActiveScenario(
 						feedbacksim.Scenario{
@@ -78,19 +80,18 @@ func EvalFeedbackInstance(inst FeedbackInstance, numRuns int, sem chan Token, re
 					)
 					fcResult := activeScenario.RunMultiIter(inst.NumFeedbackIters)
 
-					// approxUsage := estimateUsage(rng, sampler, usages, sampleTracker)
-
-					// approxRealizedDowngradeFrac := downgradeFracAfterHostSel(
-					// 	hostSel.NewMatcher(approxDowngradeFrac, sortedSampledUsages),
-					// 	usages, exactUsage)
-
-					// realizedError := normByExpected((1-approxRealizedDowngradeFrac)*exactUsage-exactApprovedUsage, exactApprovedUsage)
-					// realizedOverage := math.Max(0, realizedError)
-					// realizedShortage := -math.Min(0, realizedError)
-
-					// data[scenarioID].downgrade.RealizedOverage.Record(realizedOverage)
-					// data[scenarioID].downgrade.RealizedShortage.Record(realizedShortage)
-					// data[scenarioID].downgrade.RealizedOverOrShortage.Record(math.Abs(realizedError))
+					for i, io := range fcResult.IntermediateOverage {
+						io /= approval
+						is := fcResult.IntermediateShortage[i] / approval
+						data[scenarioID].downgrade.IntermediateOverage.Record(io)
+						data[scenarioID].downgrade.IntermediateShortage.Record(is)
+						data[scenarioID].downgrade.IntermediateOverOrShortage.Record(io + is)
+					}
+					fo := fcResult.FinalOverage / approval
+					fs := fcResult.FinalShortage / approval
+					data[scenarioID].downgrade.RealizedOverage.Record(fo)
+					data[scenarioID].downgrade.RealizedShortage.Record(fs)
+					data[scenarioID].downgrade.RealizedOverOrShortage.Record(fo + fs)
 					data[scenarioID].feedbackControl.ItersToConverge.Record(float64(fcResult.ItersToConverge))
 					data[scenarioID].feedbackControl.NumDowngraded.Record(float64(fcResult.NumDowngraded))
 					data[scenarioID].feedbackControl.NumUpgraded.Record(float64(fcResult.NumUpgraded))
