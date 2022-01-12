@@ -36,8 +36,9 @@ type ActiveScenario struct {
 	sampler     sampling.Sampler
 
 	// mutated via use, but fields are never changed
-	rng     *rand.Rand
-	flowsel calg.HashingDowngradeSelector
+	rng            *rand.Rand
+	flowsel        calg.HashingDowngradeSelector
+	usageCollector UsageCollector
 
 	// actively mutated
 	prevIsLOPRI      *roaring.Bitmap // only valid when checking which tasks changed
@@ -47,30 +48,10 @@ type ActiveScenario struct {
 }
 
 func (s *ActiveScenario) DowngradeStats() (overage, shortage float64) {
-	var trueUsageLOPRI float64
-	for i, d := range s.s.TrueDemands {
-		if s.isLOPRI.ContainsInt(i) {
-			trueUsageLOPRI += d
-		}
-	}
-	tryShiftFromLOPRI := math.Max(0, trueUsageLOPRI-s.s.AggAvailableLOPRI)
-	// trueUsageLOPRI = math.Min(trueUsageLOPRI, s.s.AggAvailableLOPRI)
-
-	var trueUsageHIPRI float64
-	for i, d := range s.s.TrueDemands {
-		if !s.isLOPRI.ContainsInt(i) {
-			spareCap := s.s.MaxHostUsage - d
-			extraTaken := math.Min(spareCap, tryShiftFromLOPRI)
-			tryShiftFromLOPRI -= extraTaken
-			usage := d + extraTaken
-			trueUsageHIPRI += usage
-		}
-	}
-
+	usage := s.usageCollector.CollectUsageInfo(nil, s.isLOPRI, nil).Exact
 	approvedDemand := math.Min(s.s.Approval, s.totalDemand)
-
-	overage = math.Max(0, trueUsageHIPRI-approvedDemand)
-	shortage = math.Max(0, approvedDemand-trueUsageHIPRI)
+	overage = math.Max(0, usage.HIPRI-approvedDemand)
+	shortage = math.Max(0, approvedDemand-usage.HIPRI)
 	return overage, shortage
 }
 
@@ -78,8 +59,14 @@ func (s *ActiveScenario) Free() { s.flowsel.Free() }
 
 func NewActiveScenario(s Scenario, rng *rand.Rand) *ActiveScenario {
 	active := &ActiveScenario{
-		s:           s,
-		sampler:     s.SamplerFactory.NewSampler(s.Approval, float64(len(s.TrueDemands))),
+		s:       s,
+		sampler: s.SamplerFactory.NewSampler(s.Approval, float64(len(s.TrueDemands))),
+		usageCollector: UsageCollector{
+			MaxHostUsage:      s.MaxHostUsage,
+			AggAvailableLOPRI: s.AggAvailableLOPRI,
+			TrueDemands:       s.TrueDemands,
+			ShiftTraffic:      s.ShiftTraffic,
+		},
 		rng:         rng,
 		prevIsLOPRI: roaring.New(),
 		isLOPRI:     roaring.New(),
@@ -99,40 +86,10 @@ func (s *ActiveScenario) RunIter() ScenarioRec {
 		s.iter++
 	}()
 
-	var trueUsageLOPRI float64
-	estUsageLOPRI := s.sampler.NewAggUsageEstimator()
-	for i, d := range s.s.TrueDemands {
-		if s.isLOPRI.ContainsInt(i) {
-			if s.sampler.ShouldInclude(s.rng, d) {
-				estUsageLOPRI.RecordSample(d)
-			}
-			trueUsageLOPRI += d
-		}
-	}
-	tryShiftFromLOPRI := math.Max(0, trueUsageLOPRI-s.s.AggAvailableLOPRI)
-	trueUsageLOPRI = math.Min(trueUsageLOPRI, s.s.AggAvailableLOPRI)
-
-	var trueUsageHIPRI float64
-	estUsageHIPRI := s.sampler.NewAggUsageEstimator()
-	for i, d := range s.s.TrueDemands {
-		if !s.isLOPRI.ContainsInt(i) {
-			spareCap := s.s.MaxHostUsage - d
-			extraTaken := math.Min(spareCap, tryShiftFromLOPRI)
-			tryShiftFromLOPRI -= extraTaken
-			usage := d + extraTaken
-			trueUsageHIPRI += usage
-			if s.sampler.ShouldInclude(s.rng, usage) {
-				estUsageHIPRI.RecordSample(usage)
-			}
-		}
-	}
-
-	approxUsageHIPRI := estUsageHIPRI.EstUsageNoHostCount()
-	approxUsageLOPRI := estUsageLOPRI.EstUsageNoHostCount()
-
-	hipriNorm := approxUsageHIPRI / s.s.Approval
+	usage := s.usageCollector.CollectUsageInfo(s.rng, s.isLOPRI, s.sampler)
+	hipriNorm := usage.Approx.HIPRI / s.s.Approval
 	downgradeFracInc := s.s.Controller.TrafficFracToDowngrade(
-		hipriNorm, 1, s.s.Approval/(approxUsageHIPRI+approxUsageLOPRI),
+		hipriNorm, 1, s.s.Approval/(usage.Approx.HIPRI+usage.Approx.LOPRI),
 		len(s.s.TrueDemands))
 	s.curDowngradeFrac += downgradeFracInc
 
@@ -157,7 +114,7 @@ func (s *ActiveScenario) RunIter() ScenarioRec {
 	})
 
 	return ScenarioRec{
-		HIPRIUsageOverTrueDemand: trueUsageHIPRI / s.totalDemand,
+		HIPRIUsageOverTrueDemand: usage.Exact.HIPRI / s.totalDemand,
 		DowngradeFracInc:         downgradeFracInc,
 		NumNewlyHIPRI:            numNewlyHIPRI,
 		NumNewlyLOPRI:            numNewlyLOPRI,
