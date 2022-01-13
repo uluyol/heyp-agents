@@ -27,11 +27,6 @@ type UsageCollector struct {
 func (c *UsageCollector) CollectUsageInfo(rng *rand.Rand, isLOPRI *roaring.Bitmap,
 	sampler sampling.Sampler) UsageInfo {
 
-	// TODO: fix ShiftTraffic == false
-	if !c.ShiftTraffic {
-		panic("not implemented")
-	}
-
 	var usage UsageInfo
 	var estUsageLOPRI, estUsageHIPRI sampling.AggUsageEstimator
 	if sampler != nil {
@@ -40,6 +35,9 @@ func (c *UsageCollector) CollectUsageInfo(rng *rand.Rand, isLOPRI *roaring.Bitma
 	}
 	c.lopriDemands = c.lopriDemands[:0]
 	for i, d := range c.TrueDemands {
+		if d > c.MaxHostUsage {
+			panic("invalid input: found demand > max host usage")
+		}
 		if isLOPRI.ContainsInt(i) {
 			c.lopriDemands = append(c.lopriDemands, d)
 		}
@@ -53,6 +51,10 @@ func (c *UsageCollector) CollectUsageInfo(rng *rand.Rand, isLOPRI *roaring.Bitma
 			estUsageLOPRI.RecordSample(d)
 		}
 		usage.Exact.LOPRI += d
+	}
+
+	if !c.ShiftTraffic {
+		tryShiftFromLOPRI = 0
 	}
 
 	for i, d := range c.TrueDemands {
