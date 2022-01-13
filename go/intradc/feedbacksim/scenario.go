@@ -154,26 +154,21 @@ func (s *MultiIterState) RecordIter(this ScenarioRec, overage, shortage float64)
 	s.i++
 	s.rec.IntermediateOverage = append(s.rec.IntermediateOverage, overage)
 	s.rec.IntermediateShortage = append(s.rec.IntermediateShortage, shortage)
-	if s.rec.Converged {
-		if this.DowngradeFracInc != 0 {
-			// Because of sampling, it can seem like we converge
-			// but then sampling error causes a divergence.
-			// Wait until we have ItersStableToConverge in a row
-			// to call it converged.
-			s.rec.ItersToConverge = -1
-			s.rec.Converged = false
+	if this.DowngradeFracInc == 0 {
+		if !s.rec.Converged {
+			s.rec.ItersToConverge = s.i - 1 // converged since the last iter
+			s.rec.Converged = true
 		}
-		if s.n >= s.rec.ItersToConverge+s.itersStableToConverge {
-			s.i = s.n // no need to continue, we're just checking invariants
-			return
+		if s.i-s.rec.ItersToConverge >= s.itersStableToConverge {
+			s.i = s.n // stable for enough iters, call it converged
 		}
-	} else if this.DowngradeFracInc == 0 {
-		// Converged
-		s.rec.ItersToConverge = s.i // 0 if in the first iter we change nothing, ...
-		s.rec.Converged = true
-		if s.itersStableToConverge == 0 {
-			s.i = s.n // finish
-		}
+	} else if s.rec.Converged {
+		// Because of sampling, it can seem like we converge
+		// but then sampling error causes a divergence.
+		// Wait until we have ItersStableToConverge in a row
+		// to call it converged.
+		s.rec.ItersToConverge = -1
+		s.rec.Converged = false
 	}
 	s.rec.NumUpgraded += this.NumNewlyHIPRI
 	s.rec.NumDowngraded += this.NumNewlyLOPRI
@@ -184,7 +179,6 @@ func (s *MultiIterState) GetRec() MultiIterRec {
 		return s.rec
 	}
 	s.fixedRec = true
-	fmt.Println(s.rec)
 	if s.rec.ItersToConverge+s.itersStableToConverge > s.n {
 		// Didn't yet see enough stable iters
 		s.rec.ItersToConverge = -1
