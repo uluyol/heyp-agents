@@ -98,20 +98,7 @@ func (s *ActiveScenario) RunIter() ScenarioRec {
 	s.prevIsLOPRI.Or(s.isLOPRI)
 	s.flowsel.PickLOPRI(s.curDowngradeFrac, s.isLOPRI)
 
-	s.prevIsLOPRI.Xor(s.isLOPRI)
-	var numNewlyHIPRI, numNewlyLOPRI int
-	s.prevIsLOPRI.Iterate(func(i uint32) bool {
-		// know that prevIsLOPRI[i] != isLOPRI[i] since i is in
-		// prevIsLOPRI XOR isLOPRI.
-		if s.isLOPRI.Contains(i) {
-			// now LOPRI, wasn't before
-			numNewlyLOPRI++
-		} else {
-			// now HIPRI, wasn't before
-			numNewlyHIPRI++
-		}
-		return true
-	})
+	numNewlyHIPRI, numNewlyLOPRI := CountChangedQoS(s.prevIsLOPRI, s.isLOPRI)
 
 	return ScenarioRec{
 		HIPRIUsageOverTrueDemand: usage.Exact.HIPRI / s.totalDemand,
@@ -119,6 +106,27 @@ func (s *ActiveScenario) RunIter() ScenarioRec {
 		NumNewlyHIPRI:            numNewlyHIPRI,
 		NumNewlyLOPRI:            numNewlyLOPRI,
 	}
+}
+
+// CountChangedQoS returns the number of tasks that have their QoS changed
+// from HIPRI to LOPRI (or vice versa).
+//
+// prevIsLOPRI = prevIsLOPRI XOR curIsLOPRI after this call.
+func CountChangedQoS(prevIsLOPRI, curIsLOPRI *roaring.Bitmap) (newHIPRI, newLOPRI int) {
+	prevIsLOPRI.Xor(curIsLOPRI)
+	prevIsLOPRI.Iterate(func(i uint32) bool {
+		// know that prevIsLOPRI[i] != isLOPRI[i] since i is in
+		// prevIsLOPRI XOR isLOPRI.
+		if curIsLOPRI.Contains(i) {
+			// now LOPRI, wasn't before
+			newLOPRI++
+		} else {
+			// now HIPRI, wasn't before
+			newHIPRI++
+		}
+		return true
+	})
+	return newHIPRI, newLOPRI
 }
 
 // TODO: add a way to get final QoS allocation
