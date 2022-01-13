@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/RoaringBitmap/roaring"
+	"github.com/google/go-cmp/cmp"
 	"github.com/uluyol/heyp-agents/go/intradc/feedbacksim"
 )
 
@@ -55,5 +56,190 @@ func TestCountChangedQoS(t *testing.T) {
 		if newLOPRI != test.newLOPRI {
 			t.Errorf("LOPRI: got %d want %d", newLOPRI, test.newLOPRI)
 		}
+	}
+}
+
+func TestMultiIterState_DoesNotConverge(t *testing.T) {
+	state := feedbacksim.NewMultiIterState(4, 0)
+	checkNotDone := func() {
+		t.Helper()
+		if state.Done() {
+			t.Fatal("Done returned true earlier than expected")
+		}
+	}
+	checkNotDone()
+	state.RecordIter(feedbacksim.ScenarioRec{
+		HIPRIUsageOverTrueDemand: 0.55,
+		DowngradeFracInc:         0.01,
+		NumNewlyHIPRI:            0,
+		NumNewlyLOPRI:            0,
+	}, 0.4, 0)
+	checkNotDone()
+	state.RecordIter(feedbacksim.ScenarioRec{
+		HIPRIUsageOverTrueDemand: 0.55,
+		DowngradeFracInc:         0.01,
+		NumNewlyHIPRI:            1,
+		NumNewlyLOPRI:            0,
+	}, 0, 0.1)
+	checkNotDone()
+	state.RecordIter(feedbacksim.ScenarioRec{
+		HIPRIUsageOverTrueDemand: 0.55,
+		DowngradeFracInc:         -0.01,
+		NumNewlyHIPRI:            0,
+		NumNewlyLOPRI:            1,
+	}, 0, 0.1)
+	checkNotDone()
+	state.RecordIter(feedbacksim.ScenarioRec{
+		HIPRIUsageOverTrueDemand: 0.55,
+		DowngradeFracInc:         0.01,
+		NumNewlyHIPRI:            1,
+		NumNewlyLOPRI:            0,
+	}, 0, 0.1)
+	if !state.Done() {
+		t.Fatal("expected done")
+	}
+	rec := state.GetRec()
+	want := feedbacksim.MultiIterRec{
+		ItersToConverge:      -1,
+		NumDowngraded:        1,
+		NumUpgraded:          2,
+		Converged:            false,
+		FinalOverage:         0,
+		FinalShortage:        0.1,
+		IntermediateOverage:  []float64{0.4, 0, 0, 0},
+		IntermediateShortage: []float64{0, 0.1, 0.1, 0.1},
+	}
+	if !cmp.Equal(rec, want) {
+		t.Errorf("got - want: %v", cmp.Diff(want, rec))
+	}
+}
+
+func TestMultiIterState_DoesConvergeNoWait(t *testing.T) {
+	state := feedbacksim.NewMultiIterState(4, 0)
+	checkNotDone := func() {
+		t.Helper()
+		if state.Done() {
+			t.Fatal("Done returned true earlier than expected")
+		}
+	}
+	checkNotDone()
+	state.RecordIter(feedbacksim.ScenarioRec{
+		HIPRIUsageOverTrueDemand: 0.55,
+		DowngradeFracInc:         0.01,
+		NumNewlyHIPRI:            0,
+		NumNewlyLOPRI:            0,
+	}, 0.4, 0)
+	checkNotDone()
+	state.RecordIter(feedbacksim.ScenarioRec{
+		HIPRIUsageOverTrueDemand: 0.55,
+		DowngradeFracInc:         0,
+		NumNewlyHIPRI:            1,
+		NumNewlyLOPRI:            0,
+	}, 0, 0.02)
+	if !state.Done() {
+		t.Fatal("expected done")
+	}
+	rec := state.GetRec()
+	want := feedbacksim.MultiIterRec{
+		ItersToConverge:      2,
+		NumDowngraded:        0,
+		NumUpgraded:          1,
+		Converged:            true,
+		FinalOverage:         0,
+		FinalShortage:        0.02,
+		IntermediateOverage:  []float64{0.4},
+		IntermediateShortage: []float64{0},
+	}
+	if !cmp.Equal(rec, want) {
+		t.Errorf("got - want: %v", cmp.Diff(want, rec))
+	}
+}
+
+func TestMultiIterState_DoesConvergeButNotEnoughWait(t *testing.T) {
+	state := feedbacksim.NewMultiIterState(2, 1)
+	checkNotDone := func() {
+		t.Helper()
+		if state.Done() {
+			t.Fatal("Done returned true earlier than expected")
+		}
+	}
+	checkNotDone()
+	state.RecordIter(feedbacksim.ScenarioRec{
+		HIPRIUsageOverTrueDemand: 0.55,
+		DowngradeFracInc:         0.01,
+		NumNewlyHIPRI:            0,
+		NumNewlyLOPRI:            0,
+	}, 0.4, 0)
+	checkNotDone()
+	state.RecordIter(feedbacksim.ScenarioRec{
+		HIPRIUsageOverTrueDemand: 0.55,
+		DowngradeFracInc:         0,
+		NumNewlyHIPRI:            1,
+		NumNewlyLOPRI:            0,
+	}, 0, 0.02)
+	if !state.Done() {
+		t.Fatal("expected done")
+	}
+	rec := state.GetRec()
+	want := feedbacksim.MultiIterRec{
+		ItersToConverge:      -1,
+		NumDowngraded:        0,
+		NumUpgraded:          1,
+		Converged:            false,
+		FinalOverage:         0,
+		FinalShortage:        0.02,
+		IntermediateOverage:  []float64{0.4, 0},
+		IntermediateShortage: []float64{0, 0.02},
+	}
+	if !cmp.Equal(rec, want) {
+		t.Errorf("got - want: %v", cmp.Diff(want, rec))
+	}
+}
+
+func TestMultiIterState_DoesConvergeWithWait(t *testing.T) {
+	state := feedbacksim.NewMultiIterState(4, 1)
+	checkNotDone := func() {
+		t.Helper()
+		if state.Done() {
+			t.Fatal("Done returned true earlier than expected")
+		}
+	}
+	checkNotDone()
+	state.RecordIter(feedbacksim.ScenarioRec{
+		HIPRIUsageOverTrueDemand: 0.55,
+		DowngradeFracInc:         0.01,
+		NumNewlyHIPRI:            0,
+		NumNewlyLOPRI:            0,
+	}, 0.4, 0)
+	checkNotDone()
+	state.RecordIter(feedbacksim.ScenarioRec{
+		HIPRIUsageOverTrueDemand: 0.55,
+		DowngradeFracInc:         0,
+		NumNewlyHIPRI:            1,
+		NumNewlyLOPRI:            0,
+	}, 0, 0.02)
+	checkNotDone()
+	state.RecordIter(feedbacksim.ScenarioRec{
+		HIPRIUsageOverTrueDemand: 0.53,
+		DowngradeFracInc:         0,
+		NumNewlyHIPRI:            0,
+		NumNewlyLOPRI:            0,
+	}, 0.01, 0.05)
+	if !state.Done() {
+		t.Fatal("expected done")
+	}
+	rec := state.GetRec()
+	want := feedbacksim.MultiIterRec{
+		ItersToConverge:      2,
+		NumDowngraded:        0,
+		NumUpgraded:          1,
+		Converged:            true,
+		FinalOverage:         0,
+		FinalShortage:        0.02,
+		IntermediateOverage:  []float64{0.4},
+		IntermediateShortage: []float64{0},
+	}
+	if !cmp.Equal(rec, want) {
+		t.Errorf("got - want: %v", cmp.Diff(want, rec))
 	}
 }

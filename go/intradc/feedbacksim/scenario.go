@@ -129,51 +129,88 @@ func CountChangedQoS(prevIsLOPRI, curIsLOPRI *roaring.Bitmap) (newHIPRI, newLOPR
 	return newHIPRI, newLOPRI
 }
 
-// TODO: add a way to get final QoS allocation
+type MultiIterState struct {
+	n                     int
+	itersStableToConverge int
+	i                     int
+	rec                   MultiIterRec
+	fixedRec              bool
+}
+
+func NewMultiIterState(n, itersStableToConverge int) *MultiIterState {
+	s := new(MultiIterState)
+	s.n = n
+	s.itersStableToConverge = itersStableToConverge
+	s.rec.ItersToConverge = -1
+	return s
+}
+
+func (s *MultiIterState) Done() bool { return s.i >= s.n }
+
+func (s *MultiIterState) RecordIter(this ScenarioRec, overage, shortage float64) {
+	if s.i >= s.n {
+		return
+	}
+	s.i++
+	s.rec.IntermediateOverage = append(s.rec.IntermediateOverage, overage)
+	s.rec.IntermediateShortage = append(s.rec.IntermediateShortage, shortage)
+	if s.rec.Converged {
+		if this.DowngradeFracInc != 0 {
+			// Because of sampling, it can seem like we converge
+			// but then sampling error causes a divergence.
+			// Wait until we have ItersStableToConverge in a row
+			// to call it converged.
+			s.rec.ItersToConverge = -1
+			s.rec.Converged = false
+		}
+		if s.n >= s.rec.ItersToConverge+s.itersStableToConverge {
+			s.i = s.n // no need to continue, we're just checking invariants
+			return
+		}
+	} else if this.DowngradeFracInc == 0 {
+		// Converged
+		s.rec.ItersToConverge = s.i // 0 if in the first iter we change nothing, ...
+		s.rec.Converged = true
+		if s.itersStableToConverge == 0 {
+			s.i = s.n // finish
+		}
+	}
+	s.rec.NumUpgraded += this.NumNewlyHIPRI
+	s.rec.NumDowngraded += this.NumNewlyLOPRI
+}
+
+func (s *MultiIterState) GetRec() MultiIterRec {
+	if s.fixedRec {
+		return s.rec
+	}
+	s.fixedRec = true
+	fmt.Println(s.rec)
+	if s.rec.ItersToConverge+s.itersStableToConverge > s.n {
+		// Didn't yet see enough stable iters
+		s.rec.ItersToConverge = -1
+		s.rec.Converged = false
+	}
+	if s.rec.Converged {
+		s.rec.FinalOverage = s.rec.IntermediateOverage[s.rec.ItersToConverge-1]
+		s.rec.FinalShortage = s.rec.IntermediateShortage[s.rec.ItersToConverge-1]
+		s.rec.IntermediateOverage = s.rec.IntermediateOverage[:s.rec.ItersToConverge-1]
+		s.rec.IntermediateShortage = s.rec.IntermediateShortage[:s.rec.ItersToConverge-1]
+	} else if s.n > 0 {
+		s.rec.FinalOverage = s.rec.IntermediateOverage[s.n-1]
+		s.rec.FinalShortage = s.rec.IntermediateShortage[s.n-1]
+	}
+	return s.rec
+}
+
 func (s *ActiveScenario) RunMultiIter(n int) MultiIterRec {
 	const itersStableToConverge = 5
-	var rec MultiIterRec
-	rec.ItersToConverge = -1
-	for i := 0; i < n; i++ {
+	state := NewMultiIterState(n, itersStableToConverge)
+	for !state.Done() {
 		this := s.RunIter()
 		overage, shortage := s.DowngradeStats()
-		rec.IntermediateOverage = append(rec.IntermediateOverage, overage)
-		rec.IntermediateShortage = append(rec.IntermediateShortage, shortage)
-		if rec.Converged {
-			if this.NumNewlyHIPRI|this.NumNewlyLOPRI != 0 {
-				// Because of sampling, it can seem like we converge
-				// but then sampling error causes a divergence.
-				// Wait until we have itersStableToConverge in a row
-				// to call it converged.
-				rec.ItersToConverge = -1
-				rec.Converged = false
-			}
-			if n >= rec.ItersToConverge+itersStableToConverge {
-				break // no need to continue, we're just checking invariants
-			}
-		} else if this.DowngradeFracInc == 0 {
-			// Converged
-			rec.ItersToConverge = i // 0 if in the first iter we change nothing, ...
-			rec.Converged = true
-		}
-		rec.NumUpgraded += this.NumNewlyHIPRI
-		rec.NumDowngraded += this.NumNewlyLOPRI
+		state.RecordIter(this, overage, shortage)
 	}
-	if rec.ItersToConverge > n-itersStableToConverge {
-		// Didn't yet see enough stable iters
-		rec.ItersToConverge = -1
-		rec.Converged = false
-	}
-	if rec.Converged {
-		rec.FinalOverage = rec.IntermediateOverage[rec.ItersToConverge]
-		rec.FinalShortage = rec.IntermediateShortage[rec.ItersToConverge]
-		rec.IntermediateOverage = rec.IntermediateOverage[:rec.ItersToConverge]
-		rec.IntermediateShortage = rec.IntermediateShortage[:rec.ItersToConverge]
-	} else if n > 0 {
-		rec.FinalOverage = rec.IntermediateOverage[n-1]
-		rec.FinalShortage = rec.IntermediateShortage[n-1]
-	}
-	return rec
+	return state.GetRec()
 }
 
 type MultiIterRec struct {
