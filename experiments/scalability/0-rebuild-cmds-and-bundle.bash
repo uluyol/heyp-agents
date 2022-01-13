@@ -12,4 +12,4 @@ if [[ $1 == cmdsonly ]]; then
     exit
 fi
 cd "$wd"
-bin/deploy-heyp mk-bundle -bin ../../bazel-bin -auxbin ../../aux-bin
+bin/deploy-heyp mk-bundle -bin ../../bazel-bin -auxbin bin
