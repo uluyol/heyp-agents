@@ -326,3 +326,32 @@ func TestMultiIterState_DoesConvergeWithLongerWait(t *testing.T) {
 		t.Errorf("got - want: %v", cmp.Diff(want, rec))
 	}
 }
+
+func TestCountFlips(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		incs []float64
+		want int
+	}{
+		{nil, 0},
+		{[]float64{}, 0},
+		{[]float64{0}, 0},
+		{[]float64{0.5}, 0},
+		{[]float64{-0.5}, 0},
+		{[]float64{0.5, 1}, 0},
+		{[]float64{0.5, 0, 1}, 0},
+		{[]float64{-0.5, 0, -1}, 0},
+		{[]float64{-0.5, 0, 1}, 1},
+		{[]float64{-0.5, 1}, 1},
+		{[]float64{-0.5, 1, 0.9, -0.1}, 2},
+		{[]float64{-0.5, 1, 0.9, -0.1, 0, -0.4}, 2},
+		{[]float64{-0.5, 1, 0.9, -0.1, 0, -0.4, 0.5}, 3},
+	}
+
+	for _, test := range tests {
+		got := feedbacksim.CountFlips(test.incs)
+		if got != test.want {
+			t.Errorf("CountFlips(%v) got %d want %d", test.incs, got, test.want)
+		}
+	}
+}

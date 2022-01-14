@@ -5,11 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"math"
+	"sync"
 
 	"github.com/RoaringBitmap/roaring"
 	"github.com/uluyol/heyp-agents/go/calg"
 	"github.com/uluyol/heyp-agents/go/intradc/sampling"
+	"github.com/uluyol/heyp-agents/go/printsum"
 	"golang.org/x/exp/rand"
 )
 
@@ -87,10 +90,23 @@ func (s *ActiveScenario) RunIter() ScenarioRec {
 	}()
 
 	usage := s.usageCollector.CollectUsageInfo(s.rng, s.isLOPRI, s.sampler)
-	hipriNorm := usage.Approx.HIPRI / s.s.Approval
-	downgradeFracInc := s.s.Controller.TrafficFracToDowngrade(
-		hipriNorm, 1, s.s.Approval/(usage.Approx.HIPRI+usage.Approx.LOPRI),
-		len(s.s.TrueDemands))
+	approxTotalUsage := usage.Approx.HIPRI + usage.Approx.LOPRI
+	var downgradeFracInc float64
+	if approxTotalUsage < s.s.Approval {
+		downgradeFracInc = -0.2
+		// downgradeFracInc = -s.curDowngradeFrac
+	} else {
+		cur := usage.Approx.HIPRI / approxTotalUsage
+		setpoint := s.s.Approval / approxTotalUsage
+		downgradeFracInc = s.s.Controller.TrafficFracToDowngrade(
+			cur, setpoint, 1,
+			len(s.s.TrueDemands))
+	}
+	if s.curDowngradeFrac+downgradeFracInc > 1 {
+		downgradeFracInc = 1 - s.curDowngradeFrac
+	} else if s.curDowngradeFrac+downgradeFracInc < 0 {
+		downgradeFracInc = -s.curDowngradeFrac
+	}
 	s.curDowngradeFrac += downgradeFracInc
 
 	// copy s.isLOPRI to s.prevIsLOPRI
@@ -134,6 +150,7 @@ type MultiIterState struct {
 	itersStableToConverge int
 	i                     int
 	rec                   MultiIterRec
+	downgradeFracIncs     []float64
 	fixedRec              bool
 }
 
@@ -154,6 +171,7 @@ func (s *MultiIterState) RecordIter(this ScenarioRec, overage, shortage float64)
 	s.i++
 	s.rec.IntermediateOverage = append(s.rec.IntermediateOverage, overage)
 	s.rec.IntermediateShortage = append(s.rec.IntermediateShortage, shortage)
+	s.downgradeFracIncs = append(s.downgradeFracIncs, this.DowngradeFracInc)
 	if this.DowngradeFracInc == 0 {
 		if !s.rec.Converged {
 			s.rec.ItersToConverge = s.i - 1 // converged since the last iter
@@ -185,23 +203,86 @@ func (s *MultiIterState) GetRec() MultiIterRec {
 		s.rec.Converged = false
 	}
 	if s.rec.Converged {
-		s.rec.FinalOverage = s.rec.IntermediateOverage[s.rec.ItersToConverge-1]
-		s.rec.FinalShortage = s.rec.IntermediateShortage[s.rec.ItersToConverge-1]
-		s.rec.IntermediateOverage = s.rec.IntermediateOverage[:s.rec.ItersToConverge-1]
-		s.rec.IntermediateShortage = s.rec.IntermediateShortage[:s.rec.ItersToConverge-1]
+		s.rec.FinalOverage = s.rec.IntermediateOverage[s.rec.ItersToConverge]
+		s.rec.FinalShortage = s.rec.IntermediateShortage[s.rec.ItersToConverge]
+		s.rec.IntermediateOverage = s.rec.IntermediateOverage[:s.rec.ItersToConverge]
+		s.rec.IntermediateShortage = s.rec.IntermediateShortage[:s.rec.ItersToConverge]
+		s.rec.NumOscillations = CountFlips(s.downgradeFracIncs[:s.rec.ItersToConverge])
 	} else if s.n > 0 {
 		s.rec.FinalOverage = s.rec.IntermediateOverage[s.n-1]
 		s.rec.FinalShortage = s.rec.IntermediateShortage[s.n-1]
+		s.rec.NumOscillations = CountFlips(s.downgradeFracIncs)
 	}
 	return s.rec
 }
 
+func CountFlips(incs []float64) int {
+	var prevSign bool
+	var start int
+	for i, inc := range incs {
+		if inc == 0 {
+			continue
+		}
+		prevSign = math.Signbit(inc)
+		start = i + 1
+		break
+	}
+
+	n := 0
+	for i := start; i < len(incs); i++ {
+		inc := incs[i]
+		if inc == 0 {
+			continue
+		}
+		sign := math.Signbit(inc)
+		if sign != prevSign {
+			n++
+		}
+		prevSign = sign
+	}
+	return n
+}
+
+const debugMultiIter = true
+const debugController = true
+
+var debugMultiIterMu sync.Mutex
+
 func (s *ActiveScenario) RunMultiIter(n int) MultiIterRec {
 	const itersStableToConverge = 5
 	state := NewMultiIterState(n, itersStableToConverge)
+
+	if debugMultiIter {
+		debugMultiIterMu.Lock()
+		defer debugMultiIterMu.Unlock()
+
+		log.Printf("new state: %#v", state)
+	}
+	first := true
+	lastDowngradeFracIncSignBit := false
 	for !state.Done() {
 		this := s.RunIter()
 		overage, shortage := s.DowngradeStats()
+		if debugMultiIter {
+			downgradeFracIncSignBit := math.Signbit(this.DowngradeFracInc)
+			didFlip := lastDowngradeFracIncSignBit == downgradeFracIncSignBit
+			if first {
+				didFlip = false
+				first = true
+			}
+			lastDowngradeFracIncSignBit = downgradeFracIncSignBit
+			printsum.Log("ITER DONE", "", []printsum.KV{
+				{"hipri usage/demand", "%g", this.HIPRIUsageOverTrueDemand},
+				{"downgrade frac inc", "%g", this.DowngradeFracInc},
+				{"        oscillated", "%t", didFlip},
+				{"         new hipri", "%d", this.NumNewlyHIPRI},
+				{"         new lopri", "%d", this.NumNewlyLOPRI},
+				{"     overage (rel)", "%g", overage / s.s.Approval},
+				{"    shortage (rel)", "%g", shortage / s.s.Approval},
+				{"          is lopri", "%s", printsum.BitmapString(s.isLOPRI, len(s.s.TrueDemands))},
+				{"           demands", "%s", printsum.RankedDemands(s.s.TrueDemands)},
+			})
+		}
 		state.RecordIter(this, overage, shortage)
 	}
 	return state.GetRec()
@@ -212,6 +293,8 @@ type MultiIterRec struct {
 	NumDowngraded   int  `json:"numDowngraded"`
 	NumUpgraded     int  `json:"numUpgraded"`
 	Converged       bool `json:"converged"`
+
+	NumOscillations int `json:"numOscillations"`
 
 	FinalOverage  float64 `json:"finalOverage"`
 	FinalShortage float64 `json:"finalShortage"`
