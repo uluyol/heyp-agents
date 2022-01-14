@@ -87,6 +87,7 @@ func (ctx HashingDowngradeSelector) PickLOPRI(wantFracLOPRI float64, isLOPRI *ro
 		panic("nil HashingDowngradeSelector")
 	}
 	C.HeypSelectLOPRIHashing(ctx.c, C.double(wantFracLOPRI), &ctx.out[0])
+	isLOPRI.Clear()
 	for i := range ctx.out {
 		if ctx.out[i] != 0 {
 			isLOPRI.AddInt(i)
