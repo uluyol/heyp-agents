@@ -9,7 +9,6 @@ import (
 type FeedbackScenarioTemplate struct {
 	MaxHostUsage               float64                             `json:"maxHostUsage"`
 	LOPRICapOverExpectedDemand float64                             `json:"lopriCapOverExpectedDemand"`
-	ShiftTraffic               bool                                `json:"shiftTraffic"`
 	SamplerFactory             sampling.SamplerFactory             `json:"samplerFactory"`
 	Controller                 feedbacksim.DowngradeFracController `json:"controller"`
 }
@@ -50,7 +49,11 @@ func (c *FeedbackConfig) Enumerate() []FeedbackInstance {
 						ApprovalOverExpectedDemand: aod,
 						NumSamplesAtApproval:       numSamples,
 						NumFeedbackIters:           c.NumFeedbackIters,
-						FeedbackScenarios:          c.FeedbackScenarios,
+						Scenarios: MultiScenario{
+							FeedbackScenarios:  c.FeedbackScenarios,
+							InitDowngradeFracs: []float64{0, 1},
+							ShiftTraffics:      []bool{false, true},
+						},
 					})
 				}
 			}
@@ -65,8 +68,31 @@ type FeedbackInstance struct {
 	ApprovalOverExpectedDemand float64
 	NumSamplesAtApproval       int
 	NumFeedbackIters           int
-	FeedbackScenarios          []FeedbackScenarioTemplate
+	Scenarios                  MultiScenario
 }
+
+type MultiScenario struct {
+	FeedbackScenarios  []FeedbackScenarioTemplate
+	InitDowngradeFracs []float64
+	ShiftTraffics      []bool
+}
+
+func (s *MultiScenario) Num() int {
+	return len(s.FeedbackScenarios) * len(s.InitDowngradeFracs) * len(s.ShiftTraffics)
+}
+
+func (s *MultiScenario) ID(templateID, downgradeFracID, shiftID int) int {
+	return (templateID*len(s.InitDowngradeFracs)+downgradeFracID)*len(s.ShiftTraffics) + shiftID
+}
+
+func (s *MultiScenario) TemplateID(id int) int {
+	return (id / len(s.ShiftTraffics)) / len(s.InitDowngradeFracs)
+}
+func (s *MultiScenario) DowngradeFracID(id int) int {
+	return (id / len(s.ShiftTraffics)) % len(s.InitDowngradeFracs)
+}
+
+func (s *MultiScenario) ShiftID(id int) int { return id % len(s.ShiftTraffics) }
 
 type FeedbackControlSummary struct {
 	ItersToConverge  Stats `json:"itersToConverge"`
@@ -89,6 +115,8 @@ type BasicDowngradeSummary struct {
 
 type ScenarioResult struct {
 	Scenario               FeedbackScenarioTemplate `json:"scenario"`
+	InitDowngradeFrac      float64                  `json:"initDowngradeFrac"`
+	ShiftTraffic           bool                     `json:"shiftTraffic"`
 	NumDataPoints          int                      `json:"numDataPoints"`
 	DowngradeSummary       *BasicDowngradeSummary   `json:"downgradeSummary"`
 	FeedbackControlSummary *FeedbackControlSummary  `json:"feedbackControlSummary"`
