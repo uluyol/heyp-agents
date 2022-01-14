@@ -13,6 +13,7 @@ type UsageInfo struct {
 	Exact, Approx struct {
 		HIPRI, LOPRI float64
 	}
+	MaxSampledTaskUsage float64
 }
 
 type UsageCollector struct {
@@ -49,6 +50,8 @@ func (c *UsageCollector) CollectUsageInfo(rng *rand.Rand, isLOPRI *roaring.Bitma
 		d = math.Min(d, lopriWaterlevel)
 		if sampler != nil && sampler.ShouldInclude(rng, d) {
 			estUsageLOPRI.RecordSample(d)
+			usage.MaxSampledTaskUsage = math.Max(d,
+				usage.MaxSampledTaskUsage)
 		}
 		usage.Exact.LOPRI += d
 	}
@@ -66,6 +69,8 @@ func (c *UsageCollector) CollectUsageInfo(rng *rand.Rand, isLOPRI *roaring.Bitma
 			usage.Exact.HIPRI += u
 			if sampler != nil && sampler.ShouldInclude(rng, u) {
 				estUsageHIPRI.RecordSample(u)
+				usage.MaxSampledTaskUsage = math.Max(d,
+					usage.MaxSampledTaskUsage)
 			}
 		}
 	}

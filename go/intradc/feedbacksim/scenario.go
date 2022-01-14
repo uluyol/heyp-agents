@@ -13,6 +13,7 @@ import (
 	"github.com/uluyol/heyp-agents/go/calg"
 	"github.com/uluyol/heyp-agents/go/intradc/sampling"
 	"github.com/uluyol/heyp-agents/go/printsum"
+	"github.com/uluyol/heyp-agents/go/stats"
 	"golang.org/x/exp/rand"
 )
 
@@ -48,6 +49,7 @@ type ActiveScenario struct {
 	isLOPRI          *roaring.Bitmap
 	curDowngradeFrac float64
 	iter             int
+	ewmaMaxTaskUsage stats.EWMA
 }
 
 func (s *ActiveScenario) DowngradeStats() (overage, shortage float64) {
@@ -90,6 +92,7 @@ func (s *ActiveScenario) RunIter() ScenarioRec {
 	}()
 
 	usage := s.usageCollector.CollectUsageInfo(s.rng, s.isLOPRI, s.sampler)
+	s.ewmaMaxTaskUsage.Record(usage.MaxSampledTaskUsage, 0.3)
 	approxTotalUsage := usage.Approx.HIPRI + usage.Approx.LOPRI
 	var downgradeFracInc float64
 	if approxTotalUsage < s.s.Approval {
@@ -98,9 +101,9 @@ func (s *ActiveScenario) RunIter() ScenarioRec {
 	} else {
 		cur := usage.Approx.HIPRI / approxTotalUsage
 		setpoint := s.s.Approval / approxTotalUsage
+		maxTask, _ := s.ewmaMaxTaskUsage.Get()
 		downgradeFracInc = s.s.Controller.TrafficFracToDowngrade(
-			cur, setpoint, 1,
-			len(s.s.TrueDemands))
+			cur, setpoint, 1, maxTask/approxTotalUsage)
 	}
 	if s.curDowngradeFrac+downgradeFracInc > 1 {
 		downgradeFracInc = 1 - s.curDowngradeFrac
