@@ -206,10 +206,17 @@ func (s *MultiIterState) GetRec() MultiIterRec {
 		s.rec.Converged = false
 	}
 	if s.rec.Converged {
-		s.rec.FinalOverage = s.rec.IntermediateOverage[s.rec.ItersToConverge]
-		s.rec.FinalShortage = s.rec.IntermediateShortage[s.rec.ItersToConverge]
-		s.rec.IntermediateOverage = s.rec.IntermediateOverage[:s.rec.ItersToConverge]
-		s.rec.IntermediateShortage = s.rec.IntermediateShortage[:s.rec.ItersToConverge]
+		if s.rec.ItersToConverge <= 0 {
+			s.rec.FinalOverage = 0
+			s.rec.FinalShortage = 0
+			s.rec.IntermediateOverage = nil
+			s.rec.IntermediateShortage = nil
+			s.rec.NumOscillations = 0
+		}
+		s.rec.FinalOverage = s.rec.IntermediateOverage[s.rec.ItersToConverge-1]
+		s.rec.FinalShortage = s.rec.IntermediateShortage[s.rec.ItersToConverge-1]
+		s.rec.IntermediateOverage = s.rec.IntermediateOverage[:s.rec.ItersToConverge-1]
+		s.rec.IntermediateShortage = s.rec.IntermediateShortage[:s.rec.ItersToConverge-1]
 		s.rec.NumOscillations = CountFlips(s.downgradeFracIncs[:s.rec.ItersToConverge])
 	} else if s.n > 0 {
 		s.rec.FinalOverage = s.rec.IntermediateOverage[s.n-1]
