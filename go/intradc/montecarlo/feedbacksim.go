@@ -1,6 +1,7 @@
 package montecarlo
 
 import (
+	"log"
 	"time"
 
 	"github.com/uluyol/heyp-agents/go/intradc/feedbacksim"
@@ -20,6 +21,7 @@ type perScenarioData struct {
 		ItersToConverge  metric
 		NumDowngraded    metric
 		NumUpgraded      metric
+		NumOscillations  metric
 		NumQoSChanged    metric
 		NumRunsConverged int
 	}
@@ -78,6 +80,7 @@ func EvalFeedbackInstance(inst FeedbackInstance, numRuns int, sem chan Token, re
 						},
 						rng,
 					)
+					log.Printf("%+v", activeScenario)
 					fcResult := activeScenario.RunMultiIter(inst.NumFeedbackIters)
 
 					for i, io := range fcResult.IntermediateOverage {
@@ -95,6 +98,7 @@ func EvalFeedbackInstance(inst FeedbackInstance, numRuns int, sem chan Token, re
 					data[scenarioID].feedbackControl.ItersToConverge.Record(float64(fcResult.ItersToConverge))
 					data[scenarioID].feedbackControl.NumDowngraded.Record(float64(fcResult.NumDowngraded))
 					data[scenarioID].feedbackControl.NumUpgraded.Record(float64(fcResult.NumUpgraded))
+					data[scenarioID].feedbackControl.NumOscillations.Record(float64(fcResult.NumOscillations))
 					data[scenarioID].feedbackControl.NumQoSChanged.Record(float64(fcResult.NumDowngraded + fcResult.NumUpgraded))
 					if fcResult.Converged {
 						data[scenarioID].feedbackControl.NumRunsConverged++

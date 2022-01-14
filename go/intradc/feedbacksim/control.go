@@ -1,6 +1,10 @@
 package feedbacksim
 
-import "math"
+import (
+	"fmt"
+	"log"
+	"math"
+)
 
 type DowngradeFracController struct {
 	// MaxInc is the maximium (absolute) fraction of traffic that
@@ -21,12 +25,27 @@ func (c DowngradeFracController) TrafficFracToDowngrade(cur, setpoint float64,
 	inputToOutputConversion float64, numFlows int) float64 {
 	err := cur - setpoint
 	if 0 < err && err < c.IgnoreErrBelow {
+		if debugController {
+			log.Printf("controller: 0 [in noise]\n")
+		}
 		return 0
 	} else if 0 < err && err < c.IgnoreErrByCountMultiplier/float64(numFlows) {
+		if debugController {
+			log.Printf("controller: 0 [too coarse]\n")
+		}
 		return 0
 	}
 	x := c.PropGain * err
 	x *= inputToOutputConversion
+	if x < -1 || x > 1 {
+		panic(fmt.Errorf("saw invalid pre-clamping downgrade frac inc %g\n"+
+			"cur = %g setpoint = %g i2o = %g #flow = %d"+
+			"controller = %+v", x, cur, setpoint, inputToOutputConversion, numFlows, c))
+	}
 	x = math.Copysign(math.Min(math.Abs(x), c.MaxInc), x)
+	if debugController {
+		log.Printf("controller: %g [cur = %g setpoint = %g i2o = %g #flow = %d]\n", x, cur, setpoint,
+			inputToOutputConversion, numFlows)
+	}
 	return x
 }

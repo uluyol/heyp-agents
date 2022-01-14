@@ -72,6 +72,7 @@ type FeedbackControlSummary struct {
 	ItersToConverge  Stats `json:"itersToConverge"`
 	NumDowngraded    Stats `json:"numDowngraded"`
 	NumUpgraded      Stats `json:"numUpgraded"`
+	NumOscillations  Stats `json:"numOscillations"`
 	NumQoSChanged    Stats `json:"numQoSChanged"`
 	NumRunsConverged int   `json:"numRunsConverged"`
 }
@@ -87,10 +88,10 @@ type BasicDowngradeSummary struct {
 }
 
 type ScenarioResult struct {
-	Scenario               FeedbackScenarioTemplate
-	NumDataPoints          int                     `json:"numDataPoints"`
-	DowngradeSummary       *BasicDowngradeSummary  `json:"downgradeSummary"`
-	FeedbackControlSummary *FeedbackControlSummary `json:"feedbackControlSummary"`
+	Scenario               FeedbackScenarioTemplate `json:"scenario"`
+	NumDataPoints          int                      `json:"numDataPoints"`
+	DowngradeSummary       *BasicDowngradeSummary   `json:"downgradeSummary"`
+	FeedbackControlSummary *FeedbackControlSummary  `json:"feedbackControlSummary"`
 }
 
 type FeedbackInstanceResult struct {
