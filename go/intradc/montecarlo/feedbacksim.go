@@ -1,7 +1,6 @@
 package montecarlo
 
 import (
-	"log"
 	"time"
 
 	"github.com/uluyol/heyp-agents/go/intradc/feedbacksim"
@@ -51,7 +50,7 @@ func EvalFeedbackInstance(inst FeedbackInstance, numRuns int, sem chan Token, re
 			defer func() {
 				<-sem
 			}()
-			data := make([]perScenarioData, len(inst.FeedbackScenarios))
+			data := make([]perScenarioData, inst.Scenarios.Num())
 
 			var (
 				// This simulation is non-deterministic, should be fine
@@ -67,41 +66,47 @@ func EvalFeedbackInstance(inst FeedbackInstance, numRuns int, sem chan Token, re
 					exactDemand += v
 				}
 
-				for scenarioID, scenarioTmpl := range inst.FeedbackScenarios {
-					activeScenario := feedbacksim.NewActiveScenario(
-						feedbacksim.Scenario{
-							TrueDemands:       demands,
-							Approval:          approval,
-							MaxHostUsage:      scenarioTmpl.MaxHostUsage,
-							AggAvailableLOPRI: scenarioTmpl.LOPRICapOverExpectedDemand * expectedDemand,
-							ShiftTraffic:      scenarioTmpl.ShiftTraffic,
-							SamplerFactory:    scenarioTmpl.SamplerFactory,
-							Controller:        scenarioTmpl.Controller,
-						},
-						rng,
-					)
-					log.Printf("%+v", activeScenario)
-					fcResult := activeScenario.RunMultiIter(inst.NumFeedbackIters)
+				for templateID, template := range inst.Scenarios.FeedbackScenarios {
+					for dfID, initDowngradeFrac := range inst.Scenarios.InitDowngradeFracs {
+						for shiftID, shiftTraffic := range inst.Scenarios.ShiftTraffics {
+							activeScenario := feedbacksim.NewActiveScenario(
+								feedbacksim.Scenario{
+									TrueDemands:       demands,
+									Approval:          approval,
+									MaxHostUsage:      template.MaxHostUsage,
+									AggAvailableLOPRI: template.LOPRICapOverExpectedDemand * expectedDemand,
+									InitDowngradeFrac: initDowngradeFrac,
+									ShiftTraffic:      shiftTraffic,
+									SamplerFactory:    template.SamplerFactory,
+									Controller:        template.Controller,
+								},
+								rng,
+							)
+							fcResult := activeScenario.RunMultiIter(inst.NumFeedbackIters)
 
-					for i, io := range fcResult.IntermediateOverage {
-						io /= approval
-						is := fcResult.IntermediateShortage[i] / approval
-						data[scenarioID].downgrade.IntermediateOverage.Record(io)
-						data[scenarioID].downgrade.IntermediateShortage.Record(is)
-						data[scenarioID].downgrade.IntermediateOverOrShortage.Record(io + is)
-					}
-					fo := fcResult.FinalOverage / approval
-					fs := fcResult.FinalShortage / approval
-					data[scenarioID].downgrade.RealizedOverage.Record(fo)
-					data[scenarioID].downgrade.RealizedShortage.Record(fs)
-					data[scenarioID].downgrade.RealizedOverOrShortage.Record(fo + fs)
-					data[scenarioID].feedbackControl.ItersToConverge.Record(float64(fcResult.ItersToConverge))
-					data[scenarioID].feedbackControl.NumDowngraded.Record(float64(fcResult.NumDowngraded))
-					data[scenarioID].feedbackControl.NumUpgraded.Record(float64(fcResult.NumUpgraded))
-					data[scenarioID].feedbackControl.NumOscillations.Record(float64(fcResult.NumOscillations))
-					data[scenarioID].feedbackControl.NumQoSChanged.Record(float64(fcResult.NumDowngraded + fcResult.NumUpgraded))
-					if fcResult.Converged {
-						data[scenarioID].feedbackControl.NumRunsConverged++
+							id := inst.Scenarios.ID(templateID, dfID, shiftID)
+
+							for i, io := range fcResult.IntermediateOverage {
+								io /= approval
+								is := fcResult.IntermediateShortage[i] / approval
+								data[id].downgrade.IntermediateOverage.Record(io)
+								data[id].downgrade.IntermediateShortage.Record(is)
+								data[id].downgrade.IntermediateOverOrShortage.Record(io + is)
+							}
+							fo := fcResult.FinalOverage / approval
+							fs := fcResult.FinalShortage / approval
+							data[id].downgrade.RealizedOverage.Record(fo)
+							data[id].downgrade.RealizedShortage.Record(fs)
+							data[id].downgrade.RealizedOverOrShortage.Record(fo + fs)
+							data[id].feedbackControl.ItersToConverge.Record(float64(fcResult.ItersToConverge))
+							data[id].feedbackControl.NumDowngraded.Record(float64(fcResult.NumDowngraded))
+							data[id].feedbackControl.NumUpgraded.Record(float64(fcResult.NumUpgraded))
+							data[id].feedbackControl.NumOscillations.Record(float64(fcResult.NumOscillations))
+							data[id].feedbackControl.NumQoSChanged.Record(float64(fcResult.NumDowngraded + fcResult.NumUpgraded))
+							if fcResult.Converged {
+								data[id].feedbackControl.NumRunsConverged++
+							}
+						}
 					}
 				}
 			}
@@ -111,19 +116,19 @@ func EvalFeedbackInstance(inst FeedbackInstance, numRuns int, sem chan Token, re
 	}
 
 	go func() {
-		data := make([]perScenarioData, len(inst.FeedbackScenarios))
+		data := make([]perScenarioData, inst.Scenarios.Num())
 		for shard := 0; shard < numShards; shard++ {
 			t := <-shardData
 			for i := range data {
 				data[i].MergeFrom(&t[i])
 			}
 		}
-		results := make([]FeedbackInstanceResult, len(inst.FeedbackScenarios))
+		results := make([]FeedbackInstanceResult, inst.Scenarios.Num())
 		hostDemandsGen := inst.HostDemands.ShortName()
 		numHosts := inst.HostDemands.NumHosts()
 
-		for scenarioID := range results {
-			results[scenarioID] = FeedbackInstanceResult{
+		for id := range results {
+			results[id] = FeedbackInstanceResult{
 				InstanceID:                 inst.ID,
 				HostDemandsGen:             hostDemandsGen,
 				NumHosts:                   numHosts,
@@ -131,12 +136,14 @@ func EvalFeedbackInstance(inst FeedbackInstance, numRuns int, sem chan Token, re
 				NumSamplesAtApproval:       inst.NumSamplesAtApproval,
 				NumFeedbackIters:           inst.NumFeedbackIters,
 				Result: ScenarioResult{
-					Scenario:         inst.FeedbackScenarios[scenarioID],
-					NumDataPoints:    numRuns,
-					DowngradeSummary: populateSummary(&BasicDowngradeSummary{}, &data[scenarioID].downgrade).(*BasicDowngradeSummary),
+					Scenario:          inst.Scenarios.FeedbackScenarios[inst.Scenarios.TemplateID(id)],
+					InitDowngradeFrac: inst.Scenarios.InitDowngradeFracs[inst.Scenarios.DowngradeFracID(id)],
+					ShiftTraffic:      inst.Scenarios.ShiftTraffics[inst.Scenarios.ShiftID(id)],
+					NumDataPoints:     numRuns,
+					DowngradeSummary:  populateSummary(&BasicDowngradeSummary{}, &data[id].downgrade).(*BasicDowngradeSummary),
 					FeedbackControlSummary: populateSummary(&FeedbackControlSummary{
-						NumRunsConverged: data[scenarioID].feedbackControl.NumRunsConverged,
-					}, &data[scenarioID].feedbackControl).(*FeedbackControlSummary),
+						NumRunsConverged: data[id].feedbackControl.NumRunsConverged,
+					}, &data[id].feedbackControl).(*FeedbackControlSummary),
 				},
 			}
 		}

@@ -28,6 +28,7 @@ type Scenario struct {
 	Approval          float64                 `json:"approval"`
 	MaxHostUsage      float64                 `json:"maxHostUsage"`
 	AggAvailableLOPRI float64                 `json:"aggAvailableLOPRI"`
+	InitDowngradeFrac float64                 `json:"initDowngradeFrac"`
 	ShiftTraffic      bool                    `json:"shiftTraffic"`
 	SamplerFactory    sampling.SamplerFactory `json:"samplerFactory"`
 	Controller        DowngradeFracController `json:"controller"`
@@ -72,9 +73,10 @@ func NewActiveScenario(s Scenario, rng *rand.Rand) *ActiveScenario {
 			TrueDemands:       s.TrueDemands,
 			ShiftTraffic:      s.ShiftTraffic,
 		},
-		rng:         rng,
-		prevIsLOPRI: roaring.New(),
-		isLOPRI:     roaring.New(),
+		rng:              rng,
+		prevIsLOPRI:      roaring.New(),
+		isLOPRI:          roaring.New(),
+		curDowngradeFrac: s.InitDowngradeFrac,
 	}
 
 	childIDs := make([]uint64, len(s.TrueDemands))
@@ -83,6 +85,7 @@ func NewActiveScenario(s Scenario, rng *rand.Rand) *ActiveScenario {
 		active.totalDemand += s.TrueDemands[i]
 	}
 	active.flowsel = calg.NewHashingDowngradeSelector(childIDs, false)
+	active.flowsel.PickLOPRI(active.curDowngradeFrac, active.isLOPRI)
 	return active
 }
 
@@ -253,8 +256,8 @@ func CountFlips(incs []float64) int {
 	return n
 }
 
-const debugMultiIter = true
-const debugController = true
+const debugMultiIter = false
+const debugController = false
 
 var debugMultiIterMu sync.Mutex
 
