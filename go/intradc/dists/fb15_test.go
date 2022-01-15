@@ -15,7 +15,7 @@ func assertNear(t *testing.T, name string, got, want, margin float64) {
 func TestFBClusterDemands(t *testing.T) {
 	const Gbps = 1 << 30
 
-	demands := fbClusterDemands()
+	demands := fbClusterDemands(fbDefaultTotalDemandGbps)
 
 	assertNear(t, "Hadoop", demands[fbHadoop], 3.209*Gbps, 0.001*Gbps)
 	assertNear(t, "FE", demands[fbFE], 11.040*Gbps, 0.001*Gbps)
@@ -48,4 +48,5 @@ func TestFB15Gen(t *testing.T) {
 	checkMean(t, FB15Gen{Num: 100}, typicalErrFrac)
 	checkMean(t, FB15Gen{Num: 1000}, typicalErrFrac)
 	checkMean(t, FB15Gen{Num: 50}, 5*typicalErrFrac)
+	checkMean(t, FB15Gen{Num: 50, Mean: 4124}, 5*typicalErrFrac)
 }
