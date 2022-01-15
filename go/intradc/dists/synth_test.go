@@ -42,11 +42,31 @@ func TestUniformGen(t *testing.T) {
 }
 
 func TestElephantsMiceGen(t *testing.T) {
-	checkMean(t, ElephantsMiceGen{Elephants: UniformGen{Low: 100, High: 99999, Num: 3}, Mice: UniformGen{High: 10, Num: 100}}, 0.1) // higher error because there are few elephants
-	checkMean(t, ElephantsMiceGen{Elephants: UniformGen{Low: 11200, High: 1120011, Num: 100}, Mice: UniformGen{High: 10, Num: 10}}, typicalErrFrac)
-	checkMean(t, ElephantsMiceGen{Elephants: UniformGen{Low: 11200, High: 1120011, Num: 100}, Mice: UniformGen{High: 10, Num: 0}}, typicalErrFrac)
-	checkMean(t, ElephantsMiceGen{Elephants: UniformGen{Low: 11200, High: 1120011, Num: 0}, Mice: UniformGen{High: 10, Num: 20}}, typicalErrFrac)
-	checkMean(t, ElephantsMiceGen{Elephants: UniformGen{Low: 11200, High: 1120011, Num: 0}, Mice: UniformGen{High: 10, Num: 0}}, typicalErrFrac)
+	checkMean(t, ElephantsMiceGen{
+		Elephants: UniformFrac{Low: 100, High: 99999, Frac: 0.0292},
+		Mice:      UniformBounds{High: 10},
+		Num:       103,
+	}, 0.1) // higher error because there are few elephants
+	checkMean(t, ElephantsMiceGen{
+		Elephants: UniformFrac{Low: 11200, High: 1120011, Frac: 0.9091},
+		Mice:      UniformBounds{High: 10},
+		Num:       110,
+	}, typicalErrFrac)
+	checkMean(t, ElephantsMiceGen{
+		Elephants: UniformFrac{Low: 11200, High: 1120011, Frac: 1},
+		Mice:      UniformBounds{High: 10},
+		Num:       100,
+	}, typicalErrFrac)
+	checkMean(t, ElephantsMiceGen{
+		Elephants: UniformFrac{Low: 11200, High: 1120011, Frac: 0},
+		Mice:      UniformBounds{High: 10},
+		Num:       20,
+	}, typicalErrFrac)
+	checkMean(t, ElephantsMiceGen{
+		Elephants: UniformFrac{Low: 11200, High: 1120011, Frac: 0},
+		Mice:      UniformBounds{High: 10},
+		Num:       0,
+	}, typicalErrFrac)
 }
 
 func TestExponentialGen(t *testing.T) {
