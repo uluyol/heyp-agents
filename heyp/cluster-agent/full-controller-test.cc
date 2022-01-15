@@ -69,13 +69,13 @@ TEST(FullClusterControllerTest, RemoveListener) {
   int num_broadcast_3 = 0;
 
   std::unique_ptr<ClusterController::Listener> lis1 = controller.RegisterListener(
-      1, [&](const proto::AllocBundle&) { ++num_broadcast_1; });
+      1, [&](const proto::AllocBundle&, const SendBundleAux&) { ++num_broadcast_1; });
   std::unique_ptr<ClusterController::Listener> lis1_1 = controller.RegisterListener(
-      1, [&](const proto::AllocBundle&) { ++num_broadcast_1_1; });
+      1, [&](const proto::AllocBundle&, const SendBundleAux&) { ++num_broadcast_1_1; });
   std::unique_ptr<ClusterController::Listener> lis2 = controller.RegisterListener(
-      2, [&](const proto::AllocBundle&) { ++num_broadcast_2; });
+      2, [&](const proto::AllocBundle&, const SendBundleAux&) { ++num_broadcast_2; });
   std::unique_ptr<ClusterController::Listener> lis3 = controller.RegisterListener(
-      3, [&](const proto::AllocBundle&) { ++num_broadcast_3; });
+      3, [&](const proto::AllocBundle&, const SendBundleAux&) { ++num_broadcast_3; });
 
   // Update some infos
 
@@ -155,7 +155,8 @@ TEST(FullClusterControllerTest, PlumbsDataCompletely) {
   auto controller = MakeFullClusterController();
 
   std::atomic<int> call_count = 0;
-  auto lis1 = controller.RegisterListener(1, [&call_count](const proto::AllocBundle& b1) {
+  auto lis1 = controller.RegisterListener(1, [&call_count](const proto::AllocBundle& b1,
+                                                           const SendBundleAux& aux) {
     EXPECT_THAT(b1, AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
                   flow_allocs {
                     flow { src_dc: "chicago" dst_dc: "new_york" job: "UNSET" host_id: 1 }
@@ -169,7 +170,8 @@ TEST(FullClusterControllerTest, PlumbsDataCompletely) {
                 )")));
     ++call_count;
   });
-  auto lis2 = controller.RegisterListener(2, [&call_count](const proto::AllocBundle& b2) {
+  auto lis2 = controller.RegisterListener(2, [&call_count](const proto::AllocBundle& b2,
+                                                           const SendBundleAux& aux) {
     EXPECT_THAT(b2, AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
                   flow_allocs {
                     flow { src_dc: "chicago" dst_dc: "detroit" job: "UNSET" host_id: 2 }
@@ -222,11 +224,12 @@ class SingleFGAllocBundleCollector {
     alloc_bundles_.resize(num_hosts_, {});
     has_alloc_bundle_.resize(num_hosts_, 0);
     for (int64_t i = 0; i < num_hosts_; ++i) {
-      lis_.push_back(c->RegisterListener(i + 1, [this, i](proto::AllocBundle b) {
-        H_ASSERT(this->has_alloc_bundle_[i] == 0);
-        this->alloc_bundles_[i] = std::move(b);
-        this->has_alloc_bundle_[i] = 1;
-      }));
+      lis_.push_back(c->RegisterListener(
+          i + 1, [this, i](proto::AllocBundle b, const SendBundleAux& aux) {
+            H_ASSERT(this->has_alloc_bundle_[i] == 0);
+            this->alloc_bundles_[i] = std::move(b);
+            this->has_alloc_bundle_[i] = 1;
+          }));
     }
   }
 

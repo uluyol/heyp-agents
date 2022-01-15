@@ -41,13 +41,13 @@ TEST(FastClusterControllerTest, RemoveListener) {
   int num_broadcast_3 = 0;
 
   auto lis1 = controller->RegisterListener(
-      1, [&](const proto::AllocBundle&) { ++num_broadcast_1; });
+      1, [&](const proto::AllocBundle&, const SendBundleAux&) { ++num_broadcast_1; });
   auto lis1_1 = controller->RegisterListener(
-      1, [&](const proto::AllocBundle&) { ++num_broadcast_1_1; });
+      1, [&](const proto::AllocBundle&, const SendBundleAux&) { ++num_broadcast_1_1; });
   auto lis2 = controller->RegisterListener(
-      2, [&](const proto::AllocBundle&) { ++num_broadcast_2; });
+      2, [&](const proto::AllocBundle&, const SendBundleAux&) { ++num_broadcast_2; });
   auto lis3 = controller->RegisterListener(
-      3, [&](const proto::AllocBundle&) { ++num_broadcast_3; });
+      3, [&](const proto::AllocBundle&, const SendBundleAux&) { ++num_broadcast_3; });
 
   // Update some infos
 
@@ -127,8 +127,8 @@ TEST(FastClusterControllerTest, PlumbsDataCompletely) {
   auto controller = MakeFastClusterController();
 
   std::atomic<int> call_count = 0;
-  auto lis1 =
-      controller->RegisterListener(1, [&call_count](const proto::AllocBundle& b1) {
+  auto lis1 = controller->RegisterListener(
+      1, [&call_count](const proto::AllocBundle& b1, const SendBundleAux& aux) {
         EXPECT_THAT(b1, AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
                       flow_allocs {
                         flow { src_dc: "chicago" dst_dc: "new_york" }
@@ -141,8 +141,8 @@ TEST(FastClusterControllerTest, PlumbsDataCompletely) {
                     )")));
         ++call_count;
       });
-  auto lis2 =
-      controller->RegisterListener(2, [&call_count](const proto::AllocBundle& b2) {
+  auto lis2 = controller->RegisterListener(
+      2, [&call_count](const proto::AllocBundle& b2, const SendBundleAux& aux) {
         EXPECT_THAT(b2, AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
                       flow_allocs {
                         flow { src_dc: "chicago" dst_dc: "new_york" }
@@ -155,8 +155,8 @@ TEST(FastClusterControllerTest, PlumbsDataCompletely) {
                     )")));
         ++call_count;
       });
-  auto lis3 =
-      controller->RegisterListener(3, [&call_count](const proto::AllocBundle& b3) {
+  auto lis3 = controller->RegisterListener(
+      3, [&call_count](const proto::AllocBundle& b3, const SendBundleAux& aux) {
         EXPECT_THAT(b3, AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
                       flow_allocs {
                         flow { src_dc: "chicago" dst_dc: "new_york" }
@@ -170,7 +170,8 @@ TEST(FastClusterControllerTest, PlumbsDataCompletely) {
         ++call_count;
       });
   auto lis4 = controller->RegisterListener(
-      9223372036854775809UL, [&call_count](const proto::AllocBundle& b4) {
+      9223372036854775809UL,
+      [&call_count](const proto::AllocBundle& b4, const SendBundleAux& aux) {
         EXPECT_THAT(b4, AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
                       flow_allocs {
                         flow { src_dc: "chicago" dst_dc: "new_york" }

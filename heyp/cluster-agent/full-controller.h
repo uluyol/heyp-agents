@@ -24,8 +24,7 @@ class FullClusterController : public ClusterController {
 
   // on_new_bundle_func should not block.
   std::unique_ptr<ClusterController::Listener> RegisterListener(
-      uint64_t host_id,
-      const std::function<void(const proto::AllocBundle&)>& on_new_bundle_func) override;
+      uint64_t host_id, const OnNewBundleFunc& on_new_bundle_func) override;
 
   ParID GetBundlerID(const proto::FlowMarker& bundler) override;
 
@@ -54,9 +53,7 @@ class FullClusterController : public ClusterController {
 
   TimedMutex broadcasting_mu_;
   uint64_t next_lis_id_ ABSL_GUARDED_BY(broadcasting_mu_);
-  absl::flat_hash_map<
-      uint64_t,
-      absl::flat_hash_map<uint64_t, std::function<void(const proto::AllocBundle&)>>>
+  absl::flat_hash_map<uint64_t, absl::flat_hash_map<uint64_t, OnNewBundleFunc>>
       new_bundle_funcs_ ABSL_GUARDED_BY(broadcasting_mu_);
 };
 

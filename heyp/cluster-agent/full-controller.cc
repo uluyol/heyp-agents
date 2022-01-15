@@ -37,8 +37,7 @@ FullClusterController::Listener::~Listener() {
 }
 
 std::unique_ptr<ClusterController::Listener> FullClusterController::RegisterListener(
-    uint64_t host_id,
-    const std::function<void(const proto::AllocBundle&)>& on_new_bundle_func) {
+    uint64_t host_id, const OnNewBundleFunc& on_new_bundle_func) {
   auto lis = absl::WrapUnique(new Listener());
   lis->host_id_ = host_id;
   lis->controller_ = this;
@@ -88,7 +87,7 @@ void FullClusterController::ComputeAndBroadcast() {
     auto iter = new_bundle_funcs_.find(host);
     if (iter != new_bundle_funcs_.end()) {
       for (auto& [id, func] : iter->second) {
-        func(bundle);
+        func(bundle, SendBundleAux{});
         ++num;
       }
     }
