@@ -52,35 +52,69 @@ func (g UniformGen) WithNumHosts(n int) DistGen {
 	return g
 }
 
+type UniformFrac struct {
+	_    struct{}
+	Low  float64 `json:"low"`
+	High float64 `json:"high"`
+	Frac float64 `json:"frac"`
+}
+
+type UniformBounds struct {
+	_    struct{}
+	Low  float64 `json:"low"`
+	High float64 `json:"high"`
+}
+
 type ElephantsMiceGen struct {
 	_         struct{}
-	Elephants UniformGen `json:"elephants"`
-	Mice      UniformGen `json:"mice"`
+	Elephants UniformFrac   `json:"elephants"`
+	Mice      UniformBounds `json:"mice"`
+	Num       int           `json:"num"`
 }
 
 var _ DistGen = ElephantsMiceGen{}
 
+func (g ElephantsMiceGen) eGen() UniformGen {
+	return UniformGen{
+		Low:  g.Elephants.Low,
+		High: g.Elephants.High,
+		Num:  int(g.Elephants.Frac * float64(g.Num)),
+	}
+}
+
+func (g ElephantsMiceGen) mGen() UniformGen {
+	return UniformGen{
+		Low:  g.Mice.Low,
+		High: g.Mice.High,
+		Num:  g.Num - int(g.Elephants.Frac*float64(g.Num)),
+	}
+}
+
 func (g ElephantsMiceGen) GenDist(rng *rand.Rand, space []float64) []float64 {
+	eg := g.eGen()
+	mg := g.mGen()
 	space = resize(space, g.NumHosts())
-	g.Elephants.GenDist(rng, space[:g.Elephants.Num])
-	g.Mice.GenDist(rng, space[g.Elephants.Num:])
+	eg.GenDist(rng, space[:eg.Num])
+	mg.GenDist(rng, space[eg.Num:])
 	return space
 }
 
 func (g ElephantsMiceGen) DistMean() float64 {
-	s := g.Elephants.DistMean() * float64(g.Elephants.Num)
-	s += g.Mice.DistMean() * float64(g.Mice.Num)
-	return s / float64(g.Elephants.Num+g.Mice.Num)
+	eg := g.eGen()
+	mg := g.mGen()
+	s := eg.DistMean() * float64(eg.Num)
+	s += mg.DistMean() * float64(mg.Num)
+	return s / float64(g.Num)
 }
 
 func (g ElephantsMiceGen) ShortName() string {
-	return "elephantsMice-" + strconv.Itoa(g.Elephants.Num)
+	return "elephantsMice-" + strconv.FormatFloat(g.Elephants.Frac, 'g', -1, 64)
 }
 
-func (g ElephantsMiceGen) NumHosts() int { return g.Elephants.Num + g.Mice.Num }
+func (g ElephantsMiceGen) NumHosts() int { return g.Num }
 
 func (g ElephantsMiceGen) WithNumHosts(n int) DistGen {
-	g.Mice.Num = n - g.Elephants.Num
+	g.Num = n
 	return g
 }
 
