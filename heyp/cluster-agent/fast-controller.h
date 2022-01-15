@@ -39,8 +39,7 @@ class FastClusterController : public ClusterController {
 
   // on_new_bundle_func should not block.
   std::unique_ptr<ClusterController::Listener> RegisterListener(
-      uint64_t host_id,
-      const std::function<void(const proto::AllocBundle&)>& on_new_bundle_func) override;
+      uint64_t host_id, const OnNewBundleFunc& on_new_bundle_func) override;
 
   ParID GetBundlerID(const proto::FlowMarker& bundler) override {
     return 0; /* currently unused by FastClusterController */
@@ -82,8 +81,7 @@ class FastClusterController : public ClusterController {
   std::atomic<uint64_t> next_lis_id_;
   struct ChildState {
     std::vector<bool> agg_is_lopri;
-    absl::flat_hash_map<uint64_t, std::function<void(const proto::AllocBundle&)>>
-        lis_new_bundle_funcs;
+    absl::flat_hash_map<uint64_t, OnNewBundleFunc> lis_new_bundle_funcs;
     int64_t gen_seen = 0;
     bool broadcasted_latest_state = false;
     bool saw_data_this_run = false;
@@ -91,8 +89,10 @@ class FastClusterController : public ClusterController {
   ParIndexedMap<uint64_t, ChildState, absl::flat_hash_map<uint64_t, ParID>> child_states_;
 
   // base_bundle should have flows_allocs[i].flow populated for all aggregate flows.
-  void BroadcastStateUnconditional(proto::AllocBundle* base_bundle, ChildState& state);
-  void BroadcastStateIfUpdated(proto::AllocBundle* base_bundle, ChildState& state);
+  void BroadcastStateUnconditional(const SendBundleAux& aux,
+                                   proto::AllocBundle* base_bundle, ChildState& state);
+  void BroadcastStateIfUpdated(const SendBundleAux& aux, proto::AllocBundle* base_bundle,
+                               ChildState& state);
 
   // A copy of the id map in child_states_ that is maintained so that we don't need to
   // synchronize between UpdateInfo and ComputeAndBroadcast.

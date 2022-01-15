@@ -55,10 +55,11 @@ class HostReactor
       // writes, so it's impossible for concurrent operations to take place.
       mu_.Unlock();
       lis_ = service_->controller_->RegisterListener(
-          info_.bundler().host_id(), [this](const proto::AllocBundle& alloc) {
+          info_.bundler().host_id(),
+          [this](const proto::AllocBundle& alloc, const SendBundleAux& aux) {
             SPDLOG_LOGGER_INFO(&service_->logger_, "sending allocs for {} FGs to {}",
                                alloc.flow_allocs_size(), peer_);
-            UpdateAlloc(alloc);
+            UpdateAlloc(alloc, aux);
           });
       bundler_id_ = service_->controller_->GetBundlerID(info_.bundler());
       mu_.Lock(kLongLockDur, &service_->logger_, "HostReactor.mu_");
@@ -68,9 +69,9 @@ class HostReactor
     DoReadLoop();
   }
 
-  void UpdateAlloc(const proto::AllocBundle& alloc) {
+  void UpdateAlloc(const proto::AllocBundle& alloc, const SendBundleAux& aux) {
     MutexLockWarnLong l(&mu_, kLongLockDur, &service_->logger_, "HostReactor.mu_");
-    *staged_alloc_ = alloc;
+    *staged_alloc_ = BundleAndAux{alloc, aux};
     if (!wip_write_ && !finished_) {
       SendAlloc();
     } else {
@@ -79,6 +80,8 @@ class HostReactor
   }
 
   void OnWriteDone(bool ok) override {
+    // TO DEBUG: Do something with wip_write_alloc_->aux
+
     if (!ok) {
       SPDLOG_LOGGER_ERROR(&service_->logger_, "write failed to {}", peer_);
       if (!finished_) {
@@ -103,24 +106,29 @@ class HostReactor
   static constexpr absl::Duration kLongLockDur = absl::Milliseconds(5);
 
   void SendAlloc() ABSL_EXCLUSIVE_LOCKS_REQUIRED(mu_) {
-    proto::AllocBundle* t = staged_alloc_;
+    BundleAndAux* t = staged_alloc_;
     staged_alloc_ = wip_write_alloc_;
     wip_write_alloc_ = t;
     wip_write_ = true;
-    StartWrite(wip_write_alloc_);
+    StartWrite(&wip_write_alloc_->bundle);
   }
+
+  struct BundleAndAux {
+    proto::AllocBundle bundle;
+    SendBundleAux aux;
+  };
 
   const std::string peer_;
   ClusterAgentService* service_;
   proto::InfoBundle info_;
 
   TimedMutex mu_;
-  proto::AllocBundle b1_ ABSL_GUARDED_BY(mu_);
-  proto::AllocBundle b2_ ABSL_GUARDED_BY(mu_);
+  BundleAndAux b1_ ABSL_GUARDED_BY(mu_);
+  BundleAndAux b2_ ABSL_GUARDED_BY(mu_);
 
   // Write state
-  proto::AllocBundle* staged_alloc_ ABSL_GUARDED_BY(mu_);
-  proto::AllocBundle* wip_write_alloc_ ABSL_GUARDED_BY(mu_);
+  BundleAndAux* staged_alloc_ ABSL_GUARDED_BY(mu_);
+  BundleAndAux* wip_write_alloc_ ABSL_GUARDED_BY(mu_);
   bool wip_write_ ABSL_GUARDED_BY(mu_);
   bool has_staged_ ABSL_GUARDED_BY(mu_);
 

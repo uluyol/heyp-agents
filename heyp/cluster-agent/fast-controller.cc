@@ -75,7 +75,8 @@ constexpr int64_t kMaxChildBandwidthBps =
 }
 
 void FastClusterController::BroadcastStateUnconditional(
-    proto::AllocBundle* base_bundle, FastClusterController::ChildState& state) {
+    const SendBundleAux& aux, proto::AllocBundle* base_bundle,
+    FastClusterController::ChildState& state) {
   H_SPDLOG_CHECK_LE(&logger_, state.agg_is_lopri.size(), base_bundle->flow_allocs_size());
   for (int i = 0; i < base_bundle->flow_allocs_size(); ++i) {
     bool is_lopri = false;
@@ -96,22 +97,22 @@ void FastClusterController::BroadcastStateUnconditional(
     base_bundle->set_gen(state.gen_seen);
   }
   for (auto& [lis_id, on_new_bundle_func] : state.lis_new_bundle_funcs) {
-    on_new_bundle_func(*base_bundle);
+    on_new_bundle_func(*base_bundle, aux);
   }
 }
 
 void FastClusterController::BroadcastStateIfUpdated(
-    proto::AllocBundle* base_bundle, FastClusterController::ChildState& state) {
+    const SendBundleAux& aux, proto::AllocBundle* base_bundle,
+    FastClusterController::ChildState& state) {
   if (state.broadcasted_latest_state) {
     return;
   }
-  BroadcastStateUnconditional(base_bundle, state);
+  BroadcastStateUnconditional(aux, base_bundle, state);
   state.broadcasted_latest_state = true;
 }
 
 std::unique_ptr<ClusterController::Listener> FastClusterController::RegisterListener(
-    uint64_t host_id,
-    const std::function<void(const proto::AllocBundle&)>& on_new_bundle_func) {
+    uint64_t host_id, const OnNewBundleFunc& on_new_bundle_func) {
   GetResult res = child_states_.GetID(host_id);
   if (res.just_created) {
     absl::MutexLock l(&mu_);
@@ -241,6 +242,10 @@ void FastClusterController::ComputeAndBroadcast() {
   }
   tasks->WaitAllNoStatus();
 
+  SendBundleAux aux{
+      .compute_start = start_time,
+  };
+
   // Step 3: Notify (affected) children about any changes.
   tasks = exec_.NewTaskGroup();
   for (int vec_i = 0; vec_i < par_ids_to_bcast.size(); ++vec_i) {
@@ -248,13 +253,13 @@ void FastClusterController::ComputeAndBroadcast() {
     for (int i = 0; i < par_ids_to_bcast[vec_i].size(); i += kBroadcastChunkSize) {
       int start = i;
       int end = std::min<int>(par_ids_to_bcast[vec_i].size(), i + kBroadcastChunkSize);
-      tasks->AddTaskNoStatus([start, end, &par_ids_to_bcast, vec_i, this] {
+      tasks->AddTaskNoStatus([&aux, start, end, &par_ids_to_bcast, vec_i, this] {
         proto::AllocBundle base_bundle = CreateBroadcastBundle(agg_id2flow_);
+        auto bcast_func = [&aux, &base_bundle, this](ChildState& state) {
+          this->BroadcastStateIfUpdated(aux, &base_bundle, state);
+        };
         for (int j = start; j < end; ++j) {
-          child_states_.OnID(
-              par_ids_to_bcast[vec_i][j],
-              absl::bind_front(&FastClusterController::BroadcastStateIfUpdated, this,
-                               &base_bundle));
+          child_states_.OnID(par_ids_to_bcast[vec_i][j], bcast_func);
         }
       });
     }
