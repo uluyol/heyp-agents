@@ -12,10 +12,18 @@ import "golang.org/x/exp/rand"
 //
 // [2015 SIGCOMM paper]: https://conferences.sigcomm.org/sigcomm/2015/pdf/papers/p123.pdf
 type FB15Gen struct {
-	Num int `json:"num"`
+	Num  int     `json:"num"`
+	Mean float64 `json:"mean"`
 }
 
-const fbTotalDemandGbps = 100 << 30 // 100 Gbps
+func (g FB15Gen) mean() float64 {
+	if g.Mean == 0 {
+		return fbDefaultTotalDemandGbps / float64(g.Num)
+	}
+	return g.Mean
+}
+
+const fbDefaultTotalDemandGbps = 100 << 30 // 100 Gbps
 
 type fbCluster int
 
@@ -28,7 +36,7 @@ const (
 	fbNumClusters
 )
 
-func fbClusterDemands() [fbNumClusters]float64 {
+func fbClusterDemands(totalDemand float64) [fbNumClusters]float64 {
 	// Taken from "Inter-DC" row in Table 3 of the paper.
 	const (
 		wHadoop = 2.5
@@ -39,11 +47,11 @@ func fbClusterDemands() [fbNumClusters]float64 {
 		wTotal  = wHadoop + wFE + wSvc + wCache + wDB
 	)
 	return [fbNumClusters]float64{
-		fbHadoop: fbTotalDemandGbps * wHadoop / wTotal,
-		fbFE:     fbTotalDemandGbps * wFE / wTotal,
-		fbSvc:    fbTotalDemandGbps * wSvc / wTotal,
-		fbCache:  fbTotalDemandGbps * wCache / wTotal,
-		fbDB:     fbTotalDemandGbps * wDB / wTotal,
+		fbHadoop: totalDemand * wHadoop / wTotal,
+		fbFE:     totalDemand * wFE / wTotal,
+		fbSvc:    totalDemand * wSvc / wTotal,
+		fbCache:  totalDemand * wCache / wTotal,
+		fbDB:     totalDemand * wDB / wTotal,
 	}
 }
 
@@ -75,7 +83,7 @@ func fbNumHosts(n int) [fbNumClusters]int {
 func (g FB15Gen) GenDist(rng *rand.Rand, space []float64) []float64 {
 	d := resize(space, g.Num)
 	clusterHosts := fbNumHosts(g.Num)
-	clusterDemands := fbClusterDemands()
+	clusterDemands := fbClusterDemands(g.mean() * float64(g.NumHosts()))
 
 	start := 0
 	for cluster, numHosts := range clusterHosts {
@@ -94,7 +102,7 @@ func (g FB15Gen) GenDist(rng *rand.Rand, space []float64) []float64 {
 	return d
 }
 
-func (g FB15Gen) DistMean() float64 { return fbTotalDemandGbps / float64(g.Num) }
+func (g FB15Gen) DistMean() float64 { return g.mean() }
 func (g FB15Gen) ShortName() string { return "fb15" }
 func (g FB15Gen) NumHosts() int     { return g.Num }
 
