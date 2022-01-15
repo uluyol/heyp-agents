@@ -1,6 +1,7 @@
 package feedbacksim
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/RoaringBitmap/roaring"
@@ -37,7 +38,8 @@ func (c *UsageCollector) CollectUsageInfo(rng *rand.Rand, isLOPRI *roaring.Bitma
 	c.lopriDemands = c.lopriDemands[:0]
 	for i, d := range c.TrueDemands {
 		if d > c.MaxHostUsage {
-			panic("invalid input: found demand > max host usage")
+			panic(fmt.Errorf("invalid input: found demand (%g) > max host usage (%g)",
+				d, c.MaxHostUsage))
 		}
 		if isLOPRI.ContainsInt(i) {
 			c.lopriDemands = append(c.lopriDemands, d)
