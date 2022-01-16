@@ -76,16 +76,19 @@ void FastAggregator::UpdateInfo(const proto::InfoBundle& info) {
   active_info_shard_ids_[shard].store(cur_id, std::memory_order_seq_cst);
 }
 
-std::pair<std::vector<FastAggInfo>, std::vector<ThresholdSampler::AggUsageEstimator>>
+std::pair<std::vector<FastAggInfo>, std::vector<FastAggregator::PrioEstimators>>
 FastAggregator::Aggregate(const FastAggregator::InfoShard& shard) {
-  std::vector<ThresholdSampler::AggUsageEstimator> volume_bps;
+  std::vector<PrioEstimators> volume_bps;
   std::vector<FastAggInfo> agg;
   agg.reserve(template_agg_info_.size());
   volume_bps.reserve(template_agg_info_.size());
   for (int i = 0; i < template_agg_info_.size(); ++i) {
     agg.push_back(FastAggInfo());
     agg.back().agg_id_ = i;
-    volume_bps.push_back(samplers_[i].NewAggUsageEstimator());
+    volume_bps.push_back({
+        .hipri = samplers_[i].NewAggUsageEstimator(),
+        .lopri = samplers_[i].NewAggUsageEstimator(),
+    });
   }
 
   for (const Info& info : shard.infos) {
@@ -94,7 +97,11 @@ FastAggregator::Aggregate(const FastAggregator::InfoShard& shard) {
         .volume_bps = info.volume_bps,
         .currently_lopri = info.currently_lopri,
     });
-    volume_bps[info.agg_id].RecordSample(info.volume_bps);
+    if (info.currently_lopri) {
+      volume_bps[info.agg_id].lopri.RecordSample(info.volume_bps);
+    } else {
+      volume_bps[info.agg_id].hipri.RecordSample(info.volume_bps);
+    }
   }
   for (const auto gen : shard.gens) {
     for (FastAggInfo& ai : agg) {
@@ -110,8 +117,7 @@ std::vector<FastAggInfo> FastAggregator::CollectSnapshot(Executor* exec) {
   // Aggregate into one final std::vector<FastAggInfo>.
   std::unique_ptr<TaskGroup> tasks = exec->NewTaskGroup();
   std::array<std::vector<FastAggInfo>, kNumInfoShards> parts;
-  std::array<std::vector<ThresholdSampler::AggUsageEstimator>, kNumInfoShards>
-      parent_volume_bps;
+  std::array<std::vector<PrioEstimators>, kNumInfoShards> parent_volume_bps;
   for (int i = 0; i < kNumInfoShards; ++i) {
     tasks->AddTaskNoStatus([i, this, &parts, &parent_volume_bps] {
       // First swap the existing shard data with the other buffer
@@ -150,12 +156,22 @@ std::vector<FastAggInfo> FastAggregator::CollectSnapshot(Executor* exec) {
     }
 
     int64_t sum_bps = 0;
+    int64_t sum_hipri_bps = 0;
+    int64_t sum_lopri_bps = 0;
     for (int part = 0; part < parts.size(); ++part) {
-      sum_bps += parent_volume_bps[part][i].EstUsage(0 /* unused by ThresholdSampler */);
+      const int64_t hipri_part =
+          parent_volume_bps[part][i].hipri.EstUsage(0 /* unused by ThresholdSampler */);
+      const int64_t lopri_part =
+          parent_volume_bps[part][i].lopri.EstUsage(0 /* unused by ThresholdSampler */);
+      sum_hipri_bps += hipri_part;
+      sum_lopri_bps += lopri_part;
+      sum_bps += hipri_part + lopri_part;
     }
     combined[i].parent_ = template_agg_info_[i].parent_;
     // Just set both so that the whichever is selected is populated.
     combined[i].parent_.set_ewma_usage_bps(sum_bps);
+    combined[i].parent_.set_ewma_hipri_usage_bps(sum_hipri_bps);
+    combined[i].parent_.set_ewma_lopri_usage_bps(sum_lopri_bps);
     combined[i].parent_.set_predicted_demand_bps(sum_bps);
   }
   return combined;

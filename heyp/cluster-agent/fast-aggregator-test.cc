@@ -69,11 +69,15 @@ TEST(FastAggregatorTest, NoSamplingOneFG) {
   EXPECT_EQ(agg_info[0].agg_id(), 0);
   EXPECT_THAT(agg_info[0].parent().flow(), EqProto(TestAggFlow(0)));
   EXPECT_EQ(agg_info[0].parent().ewma_usage_bps(), 0);
+  EXPECT_EQ(agg_info[0].parent().ewma_hipri_usage_bps(), 0);
+  EXPECT_EQ(agg_info[0].parent().ewma_lopri_usage_bps(), 0);
   EXPECT_THAT(agg_info[0].children(), testing::IsEmpty());
 
   EXPECT_EQ(agg_info[1].agg_id(), 1);
   EXPECT_THAT(agg_info[1].parent().flow(), EqProto(TestAggFlow(1)));
   EXPECT_EQ(agg_info[1].parent().ewma_usage_bps(), 352);
+  EXPECT_EQ(agg_info[1].parent().ewma_hipri_usage_bps(), 302);
+  EXPECT_EQ(agg_info[1].parent().ewma_lopri_usage_bps(), 50);
   EXPECT_THAT(
       agg_info[1].children(),
       testing::UnorderedElementsAre(
@@ -84,6 +88,8 @@ TEST(FastAggregatorTest, NoSamplingOneFG) {
   EXPECT_EQ(agg_info[2].agg_id(), 2);
   EXPECT_THAT(agg_info[2].parent().flow(), EqProto(TestAggFlow(2)));
   EXPECT_EQ(agg_info[2].parent().ewma_usage_bps(), 0);
+  EXPECT_EQ(agg_info[2].parent().ewma_hipri_usage_bps(), 0);
+  EXPECT_EQ(agg_info[2].parent().ewma_lopri_usage_bps(), 0);
   EXPECT_THAT(agg_info[2].children(), testing::IsEmpty());
 }
 
@@ -122,6 +128,8 @@ TEST(FastAggregatorTest, NoSamplingMultiFG) {
   EXPECT_EQ(agg_info[0].agg_id(), 0);
   EXPECT_THAT(agg_info[0].parent().flow(), EqProto(TestAggFlow(0)));
   EXPECT_EQ(agg_info[0].parent().ewma_usage_bps(), 50);
+  EXPECT_EQ(agg_info[0].parent().ewma_hipri_usage_bps(), 0);
+  EXPECT_EQ(agg_info[0].parent().ewma_lopri_usage_bps(), 50);
   EXPECT_THAT(agg_info[0].children(),
               testing::UnorderedElementsAre(ChildFlowInfo{
                   .child_id = 44, .volume_bps = 50, .currently_lopri = true}));
@@ -129,6 +137,8 @@ TEST(FastAggregatorTest, NoSamplingMultiFG) {
   EXPECT_EQ(agg_info[1].agg_id(), 1);
   EXPECT_THAT(agg_info[1].parent().flow(), EqProto(TestAggFlow(1)));
   EXPECT_EQ(agg_info[1].parent().ewma_usage_bps(), 100);
+  EXPECT_EQ(agg_info[1].parent().ewma_hipri_usage_bps(), 100);
+  EXPECT_EQ(agg_info[1].parent().ewma_lopri_usage_bps(), 0);
   EXPECT_THAT(agg_info[1].children(),
               testing::UnorderedElementsAre(ChildFlowInfo{
                   .child_id = 101, .volume_bps = 100, .currently_lopri = false}));
@@ -136,6 +146,8 @@ TEST(FastAggregatorTest, NoSamplingMultiFG) {
   EXPECT_EQ(agg_info[2].agg_id(), 2);
   EXPECT_THAT(agg_info[2].parent().flow(), EqProto(TestAggFlow(2)));
   EXPECT_EQ(agg_info[2].parent().ewma_usage_bps(), 202);
+  EXPECT_EQ(agg_info[2].parent().ewma_hipri_usage_bps(), 202);
+  EXPECT_EQ(agg_info[2].parent().ewma_lopri_usage_bps(), 0);
   EXPECT_THAT(agg_info[2].children(),
               testing::UnorderedElementsAre(ChildFlowInfo{
                   .child_id = 999, .volume_bps = 202, .currently_lopri = false}));
@@ -184,6 +196,8 @@ TEST(FastAggregatorTest, WithSamplingOneFG) {
   EXPECT_EQ(agg_info[0].agg_id(), 0);
   EXPECT_THAT(agg_info[0].parent().flow(), EqProto(TestAggFlow(0)));
   EXPECT_EQ(agg_info[0].parent().ewma_usage_bps(), 362);
+  EXPECT_EQ(agg_info[0].parent().ewma_hipri_usage_bps(), 302);
+  EXPECT_EQ(agg_info[0].parent().ewma_lopri_usage_bps(), 60);
   EXPECT_THAT(
       agg_info[0].children(),
       testing::UnorderedElementsAre(
@@ -195,11 +209,15 @@ TEST(FastAggregatorTest, WithSamplingOneFG) {
   EXPECT_EQ(agg_info[1].agg_id(), 1);
   EXPECT_THAT(agg_info[1].parent().flow(), EqProto(TestAggFlow(1)));
   EXPECT_EQ(agg_info[1].parent().ewma_usage_bps(), 0);
+  EXPECT_EQ(agg_info[1].parent().ewma_hipri_usage_bps(), 0);
+  EXPECT_EQ(agg_info[1].parent().ewma_lopri_usage_bps(), 0);
   EXPECT_THAT(agg_info[1].children(), testing::IsEmpty());
 
   EXPECT_EQ(agg_info[2].agg_id(), 2);
   EXPECT_THAT(agg_info[2].parent().flow(), EqProto(TestAggFlow(2)));
   EXPECT_EQ(agg_info[2].parent().ewma_usage_bps(), 0);
+  EXPECT_EQ(agg_info[2].parent().ewma_hipri_usage_bps(), 0);
+  EXPECT_EQ(agg_info[2].parent().ewma_lopri_usage_bps(), 0);
   EXPECT_THAT(agg_info[2].children(), testing::IsEmpty());
 }
 
