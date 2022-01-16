@@ -211,6 +211,117 @@ TEST(FullClusterControllerTest, PlumbsDataCompletely) {
   EXPECT_EQ(call_count, 2);
 }
 
+TEST(FullClusterControllerTest, PlumbsDataCompletely_And_OverridesQoS) {
+  auto controller = MakeFullClusterController();
+
+  std::atomic<int> call_count = 0;
+  auto lis1 = controller.RegisterListener(1, [&call_count](const proto::AllocBundle& b1,
+                                                           const SendBundleAux& aux) {
+    EXPECT_THAT(b1, AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
+                  flow_allocs {
+                    flow { src_dc: "chicago" dst_dc: "new_york" job: "UNSET" host_id: 1 }
+                    hipri_rate_limit_bps: 1000
+                  }
+                  flow_allocs {
+                    flow { src_dc: "chicago" dst_dc: "detroit" job: "UNSET" host_id: 1 }
+                    lopri_rate_limit_bps: 1000
+                  }
+                  gen: 1
+                )")));
+    ++call_count;
+  });
+  auto lis2 = controller.RegisterListener(2, [&call_count](const proto::AllocBundle& b2,
+                                                           const SendBundleAux& aux) {
+    EXPECT_THAT(b2, AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
+                  flow_allocs {
+                    flow { src_dc: "chicago" dst_dc: "detroit" job: "UNSET" host_id: 2 }
+                    hipri_rate_limit_bps: 1000
+                  }
+                )")));
+    ++call_count;
+  });
+
+  UpdateInfo(&controller, ParseTextProto<proto::InfoBundle>(R"(
+    bundler { host_id: 1 }
+    timestamp { seconds: 1 }
+    gen: 1
+    flow_infos {
+      flow { src_dc: "chicago" dst_dc: "detroit" job: "UNSET" host_id: 1 }
+      predicted_demand_bps: 1000
+      ewma_usage_bps: 1000
+      currently_lopri: true
+    }
+    flow_infos {
+      flow { src_dc: "chicago" dst_dc: "new_york" job: "UNSET" host_id: 1 }
+      predicted_demand_bps: 1000
+      ewma_usage_bps: 1000
+    }
+  )"));
+  UpdateInfo(&controller, ParseTextProto<proto::InfoBundle>(R"(
+    bundler { host_id: 2 }
+    timestamp { seconds: 1 }
+    flow_infos {
+      flow { src_dc: "chicago" dst_dc: "detroit" job: "UNSET" host_id: 2 }
+      predicted_demand_bps: 1000
+      ewma_usage_bps: 1000
+    }
+  )"));
+  controller.ComputeAndBroadcast();
+
+  UpdateInfo(&controller, ParseTextProto<proto::InfoBundle>(R"(
+    bundler { host_id: 1 }
+    timestamp { seconds: 1 }
+    gen: 1
+    flow_infos {
+      flow { src_dc: "chicago" dst_dc: "detroit" job: "UNSET" host_id: 1 }
+      predicted_demand_bps: 1000
+      ewma_usage_bps: 900000
+    }
+    flow_infos {
+      flow { src_dc: "chicago" dst_dc: "new_york" job: "UNSET" host_id: 1 }
+      predicted_demand_bps: 1000
+      ewma_usage_bps: 1000
+    }
+  )"));
+
+  int64_t got_parent_ewma_usage = 0;
+  int64_t got_parent_ewma_hipri_usage = 0;
+  int64_t got_parent_ewma_lopri_usage = 0;
+
+  int64_t got_ewma_usage = 0;
+  int64_t got_ewma_hipri_usage = 0;
+  int64_t got_ewma_lopri_usage = 0;
+  bool is_lopri = 0;
+
+  FlowAggregator& aggregator = controller.AggregatorForTesting();
+  aggregator.ForEachAgg([&](absl::Time time, const proto::AggInfo& agg_info) {
+    for (const proto::FlowInfo& child : agg_info.children()) {
+      if (child.flow().src_dc() == "chicago" && child.flow().dst_dc() == "detroit" &&
+          child.flow().host_id() == 1) {
+        got_ewma_usage = child.ewma_usage_bps();
+        got_ewma_hipri_usage = child.ewma_hipri_usage_bps();
+        got_ewma_lopri_usage = child.ewma_lopri_usage_bps();
+        is_lopri = child.currently_lopri();
+
+        got_parent_ewma_usage = agg_info.parent().ewma_usage_bps();
+        got_parent_ewma_hipri_usage = agg_info.parent().ewma_hipri_usage_bps();
+        got_parent_ewma_lopri_usage = agg_info.parent().ewma_lopri_usage_bps();
+      }
+    }
+  });
+
+  EXPECT_EQ(got_ewma_usage, 900000);
+  EXPECT_EQ(got_ewma_hipri_usage, 0);  // unset for host FGs
+  EXPECT_EQ(got_ewma_lopri_usage, 0);  // unset for host FGs
+  EXPECT_TRUE(is_lopri);
+
+  EXPECT_EQ(got_parent_ewma_usage, 901000);
+  EXPECT_EQ(got_parent_ewma_hipri_usage, 1000);    // set for cluster FGs
+  EXPECT_EQ(got_parent_ewma_lopri_usage, 900000);  // set for cluster FGs
+
+  EXPECT_EQ(call_count, 2);
+}
+
 class SingleFGAllocBundleCollector {
  public:
   SingleFGAllocBundleCollector(int num_hosts, FullClusterController* c)

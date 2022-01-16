@@ -8,7 +8,6 @@
 #include "heyp/proto/heyp.pb.h"
 
 namespace heyp {
-namespace {}
 
 static constexpr absl::Duration kLongBcastLockDur = absl::Milliseconds(50);
 static constexpr absl::Duration kLongStateLockDur = absl::Milliseconds(100);
@@ -18,6 +17,7 @@ FullClusterController::FullClusterController(std::unique_ptr<FlowAggregator> agg
     : aggregator_(std::move(aggregator)),
       allocator_(std::move(allocator)),
       logger_(MakeLogger("cluster-ctlr")),
+      last_alloc_bundle_(std::make_shared<const LastBundleMap>()),
       next_lis_id_(1) {}
 
 FullClusterController::Listener::Listener()
@@ -49,8 +49,59 @@ std::unique_ptr<ClusterController::Listener> FullClusterController::RegisterList
   return lis;
 }
 
+// LookupAlloc returns
+// - 0 if the flow is marked to use HIPRI
+// - 1 if the flow is marked to use LOPRI
+// - 2 otherwise
+static int LookupAlloc(const absl::flat_hash_map<uint64_t, proto::AllocBundle>& bundles,
+                       uint64_t host_id, const proto::FlowMarker& flow) {
+  auto biter = bundles.find(host_id);
+  if (biter == bundles.end()) {
+    return 2;
+  }
+  CompareFlowOptions cmp_opt{
+      .cmp_fg = true,
+      .cmp_job = false,
+      .cmp_src_host = false,
+      .cmp_host_flow = false,
+      .cmp_seqnum = false,
+  };
+  for (const proto::FlowAlloc& alloc : biter->second.flow_allocs()) {
+    if (IsSameFlow(alloc.flow(), flow, cmp_opt)) {
+      if (alloc.lopri_rate_limit_bps() > 0) {
+        return 1;
+      }
+      return 0;
+    }
+  }
+  return 2;
+}
+
 void FullClusterController::UpdateInfo(ParID bundler_id, const proto::InfoBundle& info) {
-  aggregator_->Update(bundler_id, info);
+  proto::InfoBundle info_with_intended_qos = info;
+  std::shared_ptr<const LastBundleMap> last_alloc_bundle =
+      std::atomic_load(&last_alloc_bundle_);
+  for (int i = 0; i < info_with_intended_qos.flow_infos_size(); ++i) {
+    proto::FlowInfo* fi = info_with_intended_qos.mutable_flow_infos(i);
+    int alloc = LookupAlloc(*last_alloc_bundle,
+                            info_with_intended_qos.bundler().host_id(), fi->flow());
+    // Per-QoS usage should be unset. It's only used at the Cluster FG level.
+    // Still, reset as a defensive measure.
+    fi->set_ewma_hipri_usage_bps(0);
+    fi->set_ewma_lopri_usage_bps(0);
+    switch (alloc) {
+      case 0:
+        fi->set_currently_lopri(false);
+        break;
+      case 1:
+        fi->set_currently_lopri(true);
+        break;
+      default:
+        // leave QoS alone
+        break;
+    }
+  }
+  aggregator_->Update(bundler_id, info_with_intended_qos);
 }
 
 ParID FullClusterController::GetBundlerID(const proto::FlowMarker& bundler) {
@@ -77,13 +128,13 @@ void FullClusterController::ComputeAndBroadcast() {
     SPDLOG_LOGGER_INFO(&logger_, "got allocs: {}", allocs);
   }
 
-  absl::flat_hash_map<uint64_t, proto::AllocBundle> alloc_bundles =
-      BundleByHost(std::move(allocs));
+  std::shared_ptr<const LastBundleMap> alloc_bundles =
+      std::make_shared<const LastBundleMap>(BundleByHost(std::move(allocs)));
 
   broadcasting_mu_.Lock(kLongBcastLockDur, &logger_,
                         "broadcasting_mu_ in ComputeAndBroadcast");
   int num = 0;
-  for (auto& [host, bundle] : alloc_bundles) {
+  for (auto& [host, bundle] : *alloc_bundles) {
     auto iter = new_bundle_funcs_.find(host);
     if (iter != new_bundle_funcs_.end()) {
       for (auto& [id, func] : iter->second) {
@@ -92,6 +143,7 @@ void FullClusterController::ComputeAndBroadcast() {
       }
     }
   }
+  std::atomic_store(&last_alloc_bundle_, alloc_bundles);
   broadcasting_mu_.Unlock();
 }
 
