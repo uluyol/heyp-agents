@@ -102,7 +102,7 @@ std::vector<proto::FlowAlloc> SimpleDowngradeAllocator::AllocAgg(
           agg_state.ewma_max_child_usage);
     }
     agg_state.downgrade_frac += downgrade_frac_inc;
-    agg_state.downgrade_frac = ClampFracLOPRI(&logger_, agg_state.downgrade_frac);
+    agg_state.downgrade_frac = ClampFracLOPRISilent(agg_state.downgrade_frac);
     frac_lopri = agg_state.downgrade_frac;
   } else {
     frac_lopri =
