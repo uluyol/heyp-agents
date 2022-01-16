@@ -210,13 +210,14 @@ message ClusterAllocatorConfig {
   optional double oversub_factor = 4 [default = 1.15];
 
   optional DowngradeSelector downgrade_selector = 5;
+  optional DowngradeFracController downgrade_frac_controller = 6;
 
-  optional double heyp_acceptable_measured_ratio_over_intended_ratio = 6 [default = 0.9];
-  optional bool heyp_probe_lopri_when_ambiguous = 7 [default = true];
+  optional double heyp_acceptable_measured_ratio_over_intended_ratio = 7 [default = 0.9];
+  optional bool heyp_probe_lopri_when_ambiguous = 8 [default = true];
 
-  optional HipriThrottleConditions simple_downgrade_throttle_hipri = 8 [default = HTC_ALWAYS];
+  optional HipriThrottleConditions simple_downgrade_throttle_hipri = 9 [default = HTC_ALWAYS];
 
-  repeated FixedClusterHostAllocs fixed_host_alloc_patterns = 9;
+  repeated FixedClusterHostAllocs fixed_host_alloc_patterns = 10;
 }
 
 message ClusterServerConfig {
@@ -238,6 +239,7 @@ enum ClusterControllerType {
 message FastClusterControllerConfig {
   optional int32 target_num_samples = 1 [default = 200];
   optional int32 num_threads = 2 [default = 8];
+  optional DowngradeFracController downgrade_frac_controller = 3;
 }
 
 message ClusterAgentConfig {

@@ -34,15 +34,14 @@ std::unique_ptr<FastClusterController> FastClusterController::Create(
     samplers.emplace_back(config.target_num_samples(), agg_config.approval_bps[i]);
   }
   return absl::WrapUnique(new FastClusterController(
-      std::move(agg_config.flow2id), std::move(agg_config.id2flow),
+      config, std::move(agg_config.flow2id), std::move(agg_config.id2flow),
       std::move(agg_config.approval_bps), std::move(samplers), config.num_threads()));
 }
 
-FastClusterController::FastClusterController(ClusterFlowMap<int64_t> agg_flow2id,
-                                             std::vector<proto::FlowMarker> agg_id2flow,
-                                             std::vector<int64_t> approval_bps,
-                                             std::vector<ThresholdSampler> samplers,
-                                             int num_threads)
+FastClusterController::FastClusterController(
+    const proto::FastClusterControllerConfig& config, ClusterFlowMap<int64_t> agg_flow2id,
+    std::vector<proto::FlowMarker> agg_id2flow, std::vector<int64_t> approval_bps,
+    std::vector<ThresholdSampler> samplers, int num_threads)
     : agg_flow2id_(std::move(agg_flow2id)),
       agg_id2flow_(std::move(agg_id2flow)),
       approval_bps_(std::move(approval_bps)),
@@ -50,7 +49,22 @@ FastClusterController::FastClusterController(ClusterFlowMap<int64_t> agg_flow2id
       exec_(num_threads),
       aggregator_(&agg_flow2id_, std::move(samplers)),
       agg_selectors_(approval_bps_.size(), HashingDowngradeSelector{}),
-      next_lis_id_(1) {}
+      next_lis_id_(1) {
+  agg_states_.reserve(approval_bps_.size());
+  if (config.has_downgrade_frac_controller()) {
+    SPDLOG_LOGGER_INFO(&logger_, "using feedback control");
+    for (size_t i = 0; i < approval_bps_.size(); ++i) {
+      agg_states_.push_back(PerAggState{PerAggState{
+          .frac_controller = DowngradeFracController(config.downgrade_frac_controller()),
+      }});
+    }
+  } else {
+    SPDLOG_LOGGER_INFO(&logger_, "not using feedback control");
+    for (size_t i = 0; i < approval_bps_.size(); ++i) {
+      agg_states_.push_back(PerAggState{PerAggState{}});
+    }
+  }
+}
 
 void SetAggIsLOPRI(int agg_id, bool is_lopri, std::vector<bool>* agg_is_lopri) {
   if (agg_id >= agg_is_lopri->size()) {
@@ -191,11 +205,42 @@ void FastClusterController::ComputeAndBroadcast() {
       const FastAggInfo& info = snap_infos[agg_id];
       int64_t hipri_admission = approval_bps_[agg_id];
 
-      const int64_t lopri_bps =
-          std::max<int64_t>(0, info.parent().ewma_usage_bps() - hipri_admission);
+      PerAggState& agg_state = agg_states_[agg_id];
+      double frac_lopri = 0;
+      if (agg_state.frac_controller) {
+        constexpr double kEwmaWeight = 0.3;
+        double max_child_usage = 0;
+        for (auto& child : info.children()) {
+          if (child.volume_bps > max_child_usage) {
+            max_child_usage = child.volume_bps;
+          }
+        }
+        if (agg_state.ewma_max_child_usage < 0) {
+          agg_state.ewma_max_child_usage = max_child_usage;
+        } else {
+          agg_state.ewma_max_child_usage =
+              kEwmaWeight * max_child_usage +
+              (1 - kEwmaWeight) * agg_state.ewma_max_child_usage;
+        }
 
-      double frac_lopri = static_cast<double>(lopri_bps) /
-                          static_cast<double>(info.parent().ewma_usage_bps());
+        double downgrade_frac_inc = 0;
+        if (info.parent().ewma_usage_bps() < hipri_admission) {
+          downgrade_frac_inc = -0.2;
+        } else {
+          downgrade_frac_inc = agg_state.frac_controller->TrafficFracToDowngrade(
+              info.parent().ewma_hipri_usage_bps(), info.parent().ewma_lopri_usage_bps(),
+              hipri_admission, agg_state.ewma_max_child_usage);
+        }
+        agg_state.downgrade_frac += downgrade_frac_inc;
+        agg_state.downgrade_frac = ClampFracLOPRI(&logger_, agg_state.downgrade_frac);
+        frac_lopri = agg_state.downgrade_frac;
+      } else {
+        const int64_t lopri_bps =
+            std::max<int64_t>(0, info.parent().ewma_usage_bps() - hipri_admission);
+        frac_lopri = static_cast<double>(lopri_bps) /
+                     static_cast<double>(info.parent().ewma_usage_bps());
+        frac_lopri = ClampFracLOPRI(&logger_, frac_lopri);
+      }
 
       SPDLOG_LOGGER_INFO(&logger_,
                          "allocating agg = ({}, {}) approval = {} est-usage = {} "
@@ -203,8 +248,6 @@ void FastClusterController::ComputeAndBroadcast() {
                          info.parent().flow().src_dc(), info.parent().flow().dst_dc(),
                          hipri_admission, info.parent().ewma_usage_bps(),
                          info.children().size(), frac_lopri);
-
-      frac_lopri = ClampFracLOPRI(&logger_, frac_lopri);
 
       // Step 2.2: Select LOPRI children
       DowngradeDiff downgrade_diff =
