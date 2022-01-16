@@ -4,6 +4,7 @@
 #include "heyp/alg/debug.h"
 #include "heyp/alg/fairness/max-min-fairness.h"
 #include "heyp/alg/rate-limits.h"
+#include "heyp/cluster-agent/per-agg-allocators/util.h"
 
 namespace heyp {
 
@@ -13,7 +14,8 @@ HeypSigcomm20Allocator::HeypSigcomm20Allocator(
     : config_(config),
       demand_multiplier_(demand_multiplier),
       logger_(MakeLogger("heyp-sigcomm20-alloc")),
-      downgrade_selector_(config_.downgrade_selector()) {
+      downgrade_selectors_(
+          MakeAggDowngradeSelectors(config_.downgrade_selector(), agg_admissions)) {
   for (const auto& flow_alloc_pair : agg_admissions) {
     agg_states_[flow_alloc_pair.first] = {.alloc = flow_alloc_pair.second};
   }
@@ -88,8 +90,10 @@ std::vector<proto::FlowAlloc> HeypSigcomm20Allocator::AllocAgg(
     debug_state->set_burstiness(1);
   }
 
+  auto iter = downgrade_selectors_.find(agg_info.parent().flow());
+  H_SPDLOG_CHECK(&logger_, iter != downgrade_selectors_.end());
   std::vector<bool> lopri_children =
-      downgrade_selector_.PickLOPRIChildren(agg_info, cur_state.frac_lopri_with_probing);
+      iter->second.PickLOPRIChildren(agg_info, cur_state.frac_lopri_with_probing);
 
   std::vector<int64_t> hipri_demands;
   std::vector<int64_t> lopri_demands;

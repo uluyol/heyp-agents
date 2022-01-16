@@ -32,7 +32,7 @@ class HeypSigcomm20Allocator : public PerAggAllocator {
   const double demand_multiplier_;
   spdlog::logger logger_;
   ClusterFlowMap<PerAggState> agg_states_;
-  DowngradeSelector downgrade_selector_;
+  ClusterFlowMap<DowngradeSelector> downgrade_selectors_;
 };
 
 }  // namespace heyp

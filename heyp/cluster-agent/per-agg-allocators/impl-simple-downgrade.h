@@ -22,7 +22,7 @@ class SimpleDowngradeAllocator : public PerAggAllocator {
   const proto::ClusterAllocatorConfig config_;
   const ClusterFlowMap<proto::FlowAlloc> agg_admissions_;
   spdlog::logger logger_;
-  DowngradeSelector downgrade_selector_;
+  ClusterFlowMap<DowngradeSelector> downgrade_selectors_;
   const FVSource downgrade_fv_source_;
 };
 

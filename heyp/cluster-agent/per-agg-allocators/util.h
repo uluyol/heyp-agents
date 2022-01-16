@@ -2,6 +2,7 @@
 #define HEYP_CLUSTER_AGENT_PER_AGG_ALLOCATORS_UTIL_H_
 
 #include "absl/container/flat_hash_map.h"
+#include "heyp/alg/qos-downgrade.h"
 #include "heyp/log/spdlog.h"
 #include "heyp/proto/alg.h"
 #include "heyp/proto/heyp.pb.h"
@@ -16,6 +17,10 @@ using ClusterFlowMap =
 
 ClusterFlowMap<proto::FlowAlloc> ToAdmissionsMap(
     const proto::AllocBundle& cluster_wide_allocs);
+
+ClusterFlowMap<DowngradeSelector> MakeAggDowngradeSelectors(
+    const proto::DowngradeSelector& selector,
+    const ClusterFlowMap<proto::FlowAlloc>& admissions);
 
 // Implementation //
 
