@@ -58,6 +58,8 @@ class FlowAggregator {
     int64_t cum_hipri_usage_bytes = 0;
     int64_t cum_lopri_usage_bytes = 0;
     int64_t sum_ewma_usage_bps = 0;
+    int64_t sum_ewma_hipri_usage_bps = 0;
+    int64_t sum_ewma_lopri_usage_bps = 0;
     std::vector<proto::FlowInfo> children;
   };
 

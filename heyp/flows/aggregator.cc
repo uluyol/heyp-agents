@@ -134,6 +134,13 @@ void FlowAggregator::ForEachAgg(
           wip->cum_lopri_usage_bytes +=
               flow_time_info.second.second.cum_lopri_usage_bytes();
           wip->sum_ewma_usage_bps += flow_time_info.second.second.ewma_usage_bps();
+          if (flow_time_info.second.second.currently_lopri()) {
+            wip->sum_ewma_lopri_usage_bps +=
+                flow_time_info.second.second.ewma_usage_bps();
+          } else {
+            wip->sum_ewma_hipri_usage_bps +=
+                flow_time_info.second.second.ewma_usage_bps();
+          }
           wip->children.push_back(flow_time_info.second.second);
         }
 
@@ -194,6 +201,8 @@ void FlowAggregator::ForEachAgg(
         {
             .time = time,
             .sum_child_usage_bps = wip.sum_ewma_usage_bps,
+            .sum_child_hipri_usage_bps = wip.sum_ewma_hipri_usage_bps,
+            .sum_child_lopri_usage_bps = wip.sum_ewma_lopri_usage_bps,
             .cum_hipri_usage_bytes = wip.cum_hipri_usage_bytes,
             .cum_lopri_usage_bytes = wip.cum_lopri_usage_bytes,
         },

@@ -37,16 +37,30 @@ void AggState::UpdateUsage(const Update u, absl::Duration usage_history_window,
   H_SPDLOG_CHECK_GE(&logger_, u.cum_lopri_usage_bytes, cur_.cum_lopri_usage_bytes());
 
   double measured_usage_bps = u.sum_child_usage_bps;
+  double measured_hipri_usage_bps = u.sum_child_hipri_usage_bps;
+  double measured_lopri_usage_bps = u.sum_child_lopri_usage_bps;
   if (u.aux != nullptr) {
     *cur_.mutable_aux() = *u.aux;
   }
 
   if (was_updated_) {
     const int64_t usage_bits = 8 * (cum_usage_bytes - cur_.cum_usage_bytes());
+    const int64_t hipri_usage_bits =
+        8 * (u.cum_hipri_usage_bytes - cur_.cum_hipri_usage_bytes());
+    const int64_t lopri_usage_bits =
+        8 * (u.cum_lopri_usage_bytes - cur_.cum_lopri_usage_bytes());
     const absl::Duration dur = u.time - updated_time_;
     if (dur > absl::ZeroDuration()) {
       const double measured_mean_usage_bps = usage_bits / absl::ToDoubleSeconds(dur);
       measured_usage_bps = std::max<double>(measured_mean_usage_bps, measured_usage_bps);
+      const double measured_mean_hipri_usage_bps =
+          hipri_usage_bits / absl::ToDoubleSeconds(dur);
+      measured_hipri_usage_bps =
+          std::max<double>(measured_mean_hipri_usage_bps, measured_hipri_usage_bps);
+      const double measured_mean_lopri_usage_bps =
+          lopri_usage_bits / absl::ToDoubleSeconds(dur);
+      measured_lopri_usage_bps =
+          std::max<double>(measured_mean_lopri_usage_bps, measured_lopri_usage_bps);
     }
   } else {
     was_updated_ = true;
@@ -65,11 +79,17 @@ void AggState::UpdateUsage(const Update u, absl::Duration usage_history_window,
 
   if (!have_bps_ || !smooth_usage_) {
     cur_.set_ewma_usage_bps(measured_usage_bps);
+    cur_.set_ewma_hipri_usage_bps(measured_hipri_usage_bps);
+    cur_.set_ewma_lopri_usage_bps(measured_lopri_usage_bps);
     have_bps_ = true;
   } else if (smooth_usage_) {
     constexpr double alpha = 0.3;
     cur_.set_ewma_usage_bps(alpha * (measured_usage_bps) +
                             (1 - alpha) * cur_.ewma_usage_bps());
+    cur_.set_ewma_hipri_usage_bps(alpha * (measured_hipri_usage_bps) +
+                                  (1 - alpha) * cur_.ewma_hipri_usage_bps());
+    cur_.set_ewma_lopri_usage_bps(alpha * (measured_lopri_usage_bps) +
+                                  (1 - alpha) * cur_.ewma_lopri_usage_bps());
   }
 
   if (kDebugFlowUsage && cur_.ewma_usage_bps() > 1.1 * old_ewma_usage_bps) {

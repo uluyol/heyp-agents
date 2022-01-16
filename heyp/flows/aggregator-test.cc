@@ -151,6 +151,8 @@ TEST(ConnToHostAggregatorTest, OneBundleOneTime) {
                flow { src_dc: "east-us" dst_dc: "west-us" job: "UNSET" host_id: 1 }
                predicted_demand_bps: 960
                ewma_usage_bps: 800
+               ewma_hipri_usage_bps: 200
+               ewma_lopri_usage_bps: 600
                cum_usage_bytes: 102000
                cum_hipri_usage_bytes: 100000
                cum_lopri_usage_bytes: 2000
@@ -202,6 +204,8 @@ TEST(ConnToHostAggregatorTest, OneBundleOneTime) {
                flow { src_dc: "east-us" dst_dc: "central-us" job: "UNSET" host_id: 1 }
                predicted_demand_bps: 100
                ewma_usage_bps: 10
+               ewma_hipri_usage_bps: 0
+               ewma_lopri_usage_bps: 10
                cum_usage_bytes: 90000
                cum_hipri_usage_bytes: 0
                cum_lopri_usage_bytes: 90000
@@ -268,6 +272,8 @@ TEST(ConnToHostAggregatorTest, AliveThenDead) {
                      flow { src_dc: "east-us" dst_dc: "west-us" job: "UNSET" host_id: 1 }
                      predicted_demand_bps: 720
                      ewma_usage_bps: 600
+                     ewma_hipri_usage_bps: 0
+                     ewma_lopri_usage_bps: 600
                      cum_usage_bytes: 12000
                      cum_hipri_usage_bytes: 10000
                      cum_lopri_usage_bytes: 2000
@@ -307,6 +313,8 @@ TEST(ConnToHostAggregatorTest, AliveThenDead) {
                      flow { src_dc: "east-us" dst_dc: "west-us" job: "UNSET" host_id: 1 }
                      predicted_demand_bps: 100
                      ewma_usage_bps: 0
+                     ewma_hipri_usage_bps: 0
+                     ewma_lopri_usage_bps: 0
                      cum_usage_bytes: 12000
                      cum_hipri_usage_bytes: 10000
                      cum_lopri_usage_bytes: 2000
@@ -366,6 +374,8 @@ TEST(HostToClusterAggregatorTest, Unaligned) {
                flow { src_dc: "east-us" dst_dc: "west-us" }
                predicted_demand_bps: 880
                ewma_usage_bps: 800
+               ewma_hipri_usage_bps: 200
+               ewma_lopri_usage_bps: 600
                cum_usage_bytes: 102000
                cum_hipri_usage_bytes: 100000
                cum_lopri_usage_bytes: 2000
@@ -395,6 +405,8 @@ TEST(HostToClusterAggregatorTest, Unaligned) {
                flow { src_dc: "east-us" dst_dc: "central-us" }
                predicted_demand_bps: 50
                ewma_usage_bps: 10
+               ewma_hipri_usage_bps: 0
+               ewma_lopri_usage_bps: 10
                cum_usage_bytes: 90000
                cum_hipri_usage_bytes: 0
                cum_lopri_usage_bytes: 90000

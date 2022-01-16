@@ -22,6 +22,8 @@ class AggState {
   struct Update {
     absl::Time time;
     int64_t sum_child_usage_bps = 0;
+    int64_t sum_child_hipri_usage_bps = 0;
+    int64_t sum_child_lopri_usage_bps = 0;
     int64_t cum_hipri_usage_bytes = 0;
     int64_t cum_lopri_usage_bytes = 0;
     const proto::FlowInfo::AuxInfo* aux = nullptr;  // optional
