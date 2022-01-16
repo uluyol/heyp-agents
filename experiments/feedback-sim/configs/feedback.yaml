@@ -1,0 +1,30 @@
+hostDemands:
+  - uniform:
+      high: 4
+  - exponential:
+      mean: 2
+      max: 10
+  - elephantsMice:
+      elephants:
+        high: 30
+        low: 34
+        frac: 0.05
+      mice:
+        high: 0.842105263
+  - fb15:
+      mean: 2
+numHosts: [200]
+approvalOverExpectedDemand: [0.5]
+numSamplesAtApproval: [8]
+numFeedbackIters: 100
+feedbackScenarios:
+  - maxHostUsage: 40
+    lopriCapOverExpectedDemand: 0.25
+    samplerFactory:
+      kind: "threshold"
+      numSamplesAtApproval: 100
+    controller:
+      maxInc: 1
+      propGain: 0.1
+      ignoreErrBelow: 0.05
+      ignoreErrByCountMultiplier: 2
