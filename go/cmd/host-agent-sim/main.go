@@ -8,6 +8,7 @@ import (
 	"os"
 	"sync"
 	"time"
+	"io/ioutil"
 
 	"github.com/uluyol/heyp-agents/go/cmd/flagtypes"
 	"github.com/uluyol/heyp-agents/go/pb"
@@ -30,6 +31,7 @@ func main() {
 
 	log.SetPrefix("fake-host-agent: ")
 	log.SetFlags(0)
+	log.SetOutput(ioutil.Discard)
 
 	flag.Parse()
 
@@ -84,11 +86,11 @@ func main() {
 	}
 
 	time.Sleep(runDur.D)
-	log.Print("stopping fake hosts")
+	// log.Print("stopping fake hosts")
 	cancel()
 
 	wg.Wait()
-	log.Print("finished run")
+	// log.Print("finished run")
 	endTime := time.Now()
 	log.Printf("end-time: %s end-time-unix-ms: %d", endTime.In(time.UTC).Format(time.RFC3339Nano), unixMillis(endTime.In(time.UTC)))
 

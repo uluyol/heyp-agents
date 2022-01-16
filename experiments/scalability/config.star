@@ -5,7 +5,7 @@ heyp_pb = proto.file("heyp/proto/heyp.proto")
 # Work around cloudlab issues.
 # Enter the integer ID for the bad node and we will skip it.
 # E.g. if "n8" is faulty, enter 8.
-_BAD_NODE_IDS = set([])
+_BAD_NODE_IDS = set([13])
 
 def GenConfig(
         ca_type = "CC_FULL",

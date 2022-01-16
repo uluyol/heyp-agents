@@ -78,7 +78,7 @@ func (h *SimulatedHost) trimGenTimes() {
 		ubID := sort.Search(len(h.genTimes), func(i int) bool {
 			return ubTime.Before(h.genTimes[i].Time)
 		})
-		if ubID < 0 || ubID > len(h.genTimes) {
+		if ubID < 0 || ubID >= len(h.genTimes) {
 			return
 		}
 		h.genTimes = h.genTimes[ubID:]
@@ -86,9 +86,11 @@ func (h *SimulatedHost) trimGenTimes() {
 }
 
 func (h *SimulatedHost) pushGenTime(gen int64, t time.Time) {
+	log.Print("[SEND] host ", h.HostID, " acquiring lock at ", time.Now())
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.trimGenTimes()
+	log.Print("[SEND] host ", h.HostID, " lock acquired at ", time.Now())
 	h.genTimes = append(h.genTimes, genAndTime{gen, t})
 }
 
@@ -98,13 +100,13 @@ func (h *SimulatedHost) getGenTime(gen int64) (time.Time, bool) {
 	id := sort.Search(len(h.genTimes), func(i int) bool {
 		return gen <= h.genTimes[i].Gen
 	})
-	if id < 0 || id > len(h.genTimes) || h.genTimes[id].Gen != gen {
+	if id < 0 || id >= len(h.genTimes) || h.genTimes[id].Gen != gen {
 		return time.Time{}, false
 	}
 	return h.genTimes[id].Time, true
 }
 
-func (h *SimulatedHost) RecordGotAlloc(fg FG, gen int64, t time.Time) {
+func (h *SimulatedHost) RecordGotAlloc(fg FG, gen int64, t time.Time, ot time.Time) {
 	s, ok := h.FGStats[fg]
 	if !ok {
 		s = new(FGStats)
@@ -114,7 +116,9 @@ func (h *SimulatedHost) RecordGotAlloc(fg FG, gen int64, t time.Time) {
 	if !ok {
 		return
 	}
+	// log.Print("host time taken to receive info from cluster agent ", t.Sub(ot))
 	s.Durs = append(s.Durs, t.Sub(genTime))
+	
 }
 
 func (h *SimulatedHost) RunLoop(ctx context.Context,
@@ -152,16 +156,19 @@ func (h *SimulatedHost) runEnforceLoop(ctx context.Context, isDone chan<- struct
 	}()
 
 	for {
+		log.Print("[RECV] host ", h.HostID, " waiting to receive info from cluster agent at ", time.Now())
+		then := time.Now()
 		b, err := stream.Recv()
 		if err != nil || ctx.Err() != nil {
 			return
 		}
-
 		if b.Gen <= 0 {
 			continue
 		}
 
 		now := time.Now()
+		log.Print("[RECV] host ", h.HostID, " got new alloc for gen ", b.Gen, " at time ", time.Now() )
+		
 		for _, alloc := range b.GetFlowAllocs() {
 			fg := FG{
 				SrcDC: alloc.GetFlow().SrcDc,
@@ -169,18 +176,19 @@ func (h *SimulatedHost) runEnforceLoop(ctx context.Context, isDone chan<- struct
 				Job:   alloc.GetFlow().Job,
 			}
 
-			h.RecordGotAlloc(fg, b.Gen, now)
+			h.RecordGotAlloc(fg, b.Gen, now, then)
 		}
 	}
 }
 
 func (h *SimulatedHost) runInformLoop(ctx context.Context, isDone chan<- struct{},
 	stream pb.ClusterAgent_RegisterHostClient, period time.Duration) {
-
+	
 	defer func() {
 		isDone <- struct{}{}
 	}()
-
+	
+	log.Print("Running inform loop on the fake agent")
 	rng := rand.New(rand.NewSource(uint64(time.Now().UnixNano())))
 
 	time.Sleep(time.Duration(rng.Int63n(int64(period))))
@@ -188,17 +196,23 @@ func (h *SimulatedHost) runInformLoop(ctx context.Context, isDone chan<- struct{
 	var b pb.InfoBundle
 	var gen int64
 	for {
+		log.Print("[SEND] host ", h.HostID, " restarting for loop at ", time.Now())
 		lastTime := time.Now()
 		pop.populateInfo(rng, &b, lastTime)
 		gen++
 		b.Gen = gen
+		log.Print("[SEND] host ", h.HostID, " done populating bundle, sending.. at ", time.Now())
 		if stream.Send(&b) != nil || ctx.Err() != nil {
+			log.Print("[SEND] host ", h.HostID, " send error at ", time.Now())
 			return
 		}
+		// log.Print("host time taken to send info to cluster agent", time.Now().Sub(lastTime))
+		log.Print("[SEND] host ", h.HostID, " done sending new info with ", gen, " at time ", time.Now())
 		h.pushGenTime(gen, lastTime)
-
+		log.Print("[SEND] host ", h.HostID, " done updating gentime struct with  ", gen, " at time ", time.Now())
 		toSleep := period - time.Since(lastTime)
 		if toSleep > 0 {
+			log.Print("[SEND] host ", h.HostID, " sleeping for ", toSleep)
 			time.Sleep(toSleep)
 		}
 	}

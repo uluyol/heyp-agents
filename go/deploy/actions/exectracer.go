@@ -44,6 +44,7 @@ func TracingCommandContext(ctx context.Context, logf func(format string, args ..
 
 func TracingCommand(logf func(format string, args ...interface{}),
 	name string, args ...string) *TracingCmd {
+	// fmt.Printf("executing command %s %s\n", name, args)
 	return &TracingCmd{Cmd: exec.Command(name, args...), logf: logf}
 }
 

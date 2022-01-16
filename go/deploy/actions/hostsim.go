@@ -121,48 +121,54 @@ func RunHostAgentSims(c *pb.DeploymentConfig, remoteTopdir string, showOut bool)
 
 		const startHostID = 100001
 		numHosts := int32(0)
+		nProcesses := 1
 		hostsPerNode := (int(c.C.GetNumHostsPerFg()) + len(c.Nodes) - 1) / len(c.Nodes)
 		for _, n := range c.Nodes {
 			n := n
+			hostsPerProcess := hostsPerNode/nProcesses
 
-			hostSimConfig := &pb.HostSimulatorConfig{
-				Fgs:       fakeFGs,
-				Hosts:     make([]*pb.FakeHost, 0, hostsPerNode),
-				ReportDur: c.C.ReportDur,
-			}
-			for numMyHosts := 0; numMyHosts < hostsPerNode; numMyHosts++ {
-				if numHosts >= c.C.GetNumHostsPerFg() {
-					break
+			for p:= 0; p < nProcesses; p++ {
+
+
+				hostSimConfig := &pb.HostSimulatorConfig{
+					Fgs:       fakeFGs,
+					Hosts:     make([]*pb.FakeHost, 0, hostsPerProcess),
+					ReportDur: c.C.ReportDur,
 				}
-				hostSimConfig.Hosts = append(hostSimConfig.Hosts, &pb.FakeHost{
-					HostId: proto.Uint64(uint64(numHosts) + startHostID),
-					FgIds:  []int32{-1},
-				})
-				numHosts++
-			}
-
-			hostSimConfigBytes, err := prototext.MarshalOptions{Indent: "  "}.Marshal(hostSimConfig)
-			if err != nil {
-				return fmt.Errorf("failed to marshal host-agent-sim config: %w", err)
-			}
-
-			eg.Go(func() error {
-				cmd := TracingCommand(
-					LogWithPrefix("run-host-agent-sims: "),
-					"ssh", n.GetExternalAddr(),
-					fmt.Sprintf("cat > %[1]s/configs/host-agent-sim.textproto && mkdir -p %[1]s/logs && "+
-						"%[1]s/aux/host-agent-sim -c %[1]s/configs/host-agent-sim.textproto -o %[1]s/logs/host-agent-sim.csv -cluster-agent-addr %[2]s -start-time %[3]s -dur %[4]s 2>&1 | tee %[1]s/logs/host-agent-sim.log; exit ${PIPESTATUS[0]}",
-						remoteTopdir, c.ClusterAgentAddr, startTimestamp, c.C.GetRunDur()))
-				cmd.SetStdin("host-agent-sim.textproto", bytes.NewReader(hostSimConfigBytes))
-				if showOut {
-					cmd.Stdout = os.Stdout
+				for numMyHosts := 0; numMyHosts < hostsPerProcess; numMyHosts++ {
+					if numHosts >= c.C.GetNumHostsPerFg() {
+						break
+					}
+					hostSimConfig.Hosts = append(hostSimConfig.Hosts, &pb.FakeHost{
+						HostId: proto.Uint64(uint64(numHosts) + startHostID),
+						FgIds:  []int32{-1},
+					})
+					numHosts++
 				}
-				err := cmd.Run()
+
+				hostSimConfigBytes, err := prototext.MarshalOptions{Indent: "  "}.Marshal(hostSimConfig)
 				if err != nil {
-					return fmt.Errorf("cluster %q host agent simulator on Node %q failed: %w", c.SrcDC, n.GetName(), err)
+					return fmt.Errorf("failed to marshal host-agent-sim config: %w", err)
 				}
-				return nil
-			})
+
+				eg.Go(func() error {
+					cmd := TracingCommand(
+						LogWithPrefix("run-host-agent-sims: "),
+						"ssh", n.GetExternalAddr(),
+						fmt.Sprintf("cat > %[1]s/configs/host-agent-sim-%[5]d.textproto && mkdir -p %[1]s/logs && ulimit -Sn unlimited && "+
+							"%[1]s/aux/host-agent-sim -c %[1]s/configs/host-agent-sim-%[5]d.textproto -o %[1]s/logs/host-agent-sim-%[5]d.csv -cluster-agent-addr %[2]s -start-time %[3]s -dur %[4]s 2>&1 | tee %[1]s/logs/host-agent-sim-%[5]d.log; exit ${PIPESTATUS[0]}",
+							remoteTopdir, c.ClusterAgentAddr, startTimestamp, c.C.GetRunDur(),p))
+					cmd.SetStdin(fmt.Sprintf("host-agent-sim-%.textproto",p), bytes.NewReader(hostSimConfigBytes))
+					if showOut {
+						cmd.Stdout = os.Stdout
+					}
+					err := cmd.Run()
+					if err != nil {
+						return fmt.Errorf("cluster %q host agent simulator on Node %q failed: %w", c.SrcDC, n.GetName(), err)
+					}
+					return nil
+				})
+			}
 
 		}
 	}

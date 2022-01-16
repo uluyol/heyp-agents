@@ -434,7 +434,7 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string, startConfig HE
 							"sudo chown $USER:$(groups $USER | cut -d: -f2 | awk '{print $1}') %[1]s/logs;"+
 							"sudo chmod 777 %[1]s/logs;"+
 							"tmux kill-session -t heyp-cluster-agent-%[2]s;"+
-							"tmux new-session -d -s heyp-cluster-agent-%[2]s '(date -u; env ASAN_OPTIONS=detect_container_overflow=0 TSAN_OPTIONS=report_atomic_races=0 %[1]s/heyp/cluster-agent/cluster-agent -alloc_logs \"%[3]s\" %[1]s/configs/cluster-agent-config-%[2]s.textproto %[1]s/configs/cluster-limits-%[2]s.textproto 2>&1; echo cluster agent exit status $?; date -u) | tee %[1]s/logs/cluster-agent-%[2]s.log; sleep 100000'", remoteTopdir, n.Cluster.GetName(), allocLogsPath))
+							"tmux new-session -d -s heyp-cluster-agent-%[2]s '(date -u; ulimit -Sn unlimited; env ASAN_OPTIONS=detect_container_overflow=0 TSAN_OPTIONS=report_atomic_races=0 %[1]s/heyp/cluster-agent/cluster-agent -alloc_logs \"%[3]s\" %[1]s/configs/cluster-agent-config-%[2]s.textproto %[1]s/configs/cluster-limits-%[2]s.textproto 2>&1; echo cluster agent exit status $?; date -u) | tee %[1]s/logs/cluster-agent-%[2]s.log; sleep 100000'", remoteTopdir, n.Cluster.GetName(), allocLogsPath))
 				cmd.SetStdin("config.tar", bytes.NewReader(configTar))
 				err = cmd.Run()
 				if err != nil {

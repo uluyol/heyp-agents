@@ -29,7 +29,7 @@ mkdir -p "$procdir/cluster-alloc"
     >> "$procdir/global-host-ts.csv"
 ) &
 
-HOST_AGENT_SIM_PATH=logs/host-agent-sim.csv
+HOST_AGENT_SIM_PATH=logs/host-agent-sim-1.csv
 (
   echo HostID,FG,TimeSinceLastAllocSec
   for zipf in "$outdir"/*.zip; do
