@@ -1,0 +1,8 @@
+hostUsages:
+        - exponential:
+                  mean: 6000
+                  max: 1000000
+numHosts: [8, 16, 32, 64, 128, 256, 512, 1024]
+approvalOverExpectedUsage: [0.5, 0.9, 1, 1.1, 1.5]
+numSamplesAtApproval: [32_768]
+numPastPeriods: [5]

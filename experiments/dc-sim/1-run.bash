@@ -14,6 +14,7 @@ runs=${RUNS:-100}
 mkdir -p "$outdir"
 cp "$config" "$outdir/config.yaml"
 bin/dc-control-sim \
+  sim \
   -c "$outdir/config.yaml" \
   -o "$outdir/sim-data.json" \
   -runs "$runs" \
