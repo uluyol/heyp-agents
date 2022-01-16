@@ -170,7 +170,8 @@ void FastClusterController::ComputeAndBroadcast() {
   auto start_time = std::chrono::steady_clock::now();
 
   // Step 1: Get a snapshot and catch up on Host, Par IDs
-  const std::vector<FastAggInfo> snap_infos = aggregator_.CollectSnapshot(&exec_);
+  const std::vector<FastAggInfo> snap_infos =
+      aggregator_.CollectSnapshot(&exec_, agg_selectors_);
   {
     absl::MutexLock l(&mu_);
     for (auto p : new_host_id_pairs_) {

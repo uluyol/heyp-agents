@@ -5,6 +5,7 @@
 #include <cstdint>
 
 #include "heyp/alg/agg-info-views.h"
+#include "heyp/alg/downgrade/impl-hashing.h"
 #include "heyp/alg/sampler.h"
 #include "heyp/cluster-agent/per-agg-allocators/util.h"
 #include "heyp/threads/executor.h"
@@ -43,7 +44,8 @@ class FastAggregator {
 
   // CollectSnapshot produces a snapshot of usage. It should only be called from
   // one thread at a time but it may be called in parallel to UpdateInfo.
-  std::vector<FastAggInfo> CollectSnapshot(Executor* exec);
+  std::vector<FastAggInfo> CollectSnapshot(
+      Executor* exec, const std::vector<HashingDowngradeSelector>& downgrade_selectors);
 
  private:
   struct PrioEstimators {
@@ -67,7 +69,8 @@ class FastAggregator {
       const ClusterFlowMap<int64_t>* agg_flow_to_id);
   // Aggregate aggregates the info but doesn't populate parent_.
   std::pair<std::vector<FastAggInfo>, std::vector<PrioEstimators>> Aggregate(
-      const InfoShard& shard);
+      const InfoShard& shard,
+      const std::vector<HashingDowngradeSelector>& downgrade_selectors);
 
   const ClusterFlowMap<int64_t>* agg_flow_to_id_;
   const std::vector<ThresholdSampler> samplers_;
