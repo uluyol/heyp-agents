@@ -1,6 +1,7 @@
 #include "heyp/alg/qos-downgrade.h"
 
 #include <algorithm>
+#include <cmath>
 #include <memory>
 
 #include "absl/strings/str_join.h"
@@ -79,6 +80,52 @@ std::vector<bool> DowngradeSelector::PickLOPRIChildren(const proto::AggInfo& agg
     view.emplace(HostLevelView::Create<FVSource::kPredictedDemand>(agg_info));
   }
   return impl_->PickLOPRIChildren(*view, want_frac_lopri, &logger_);
+}
+
+DowngradeFracController::DowngradeFracController(
+    const proto::DowngradeFracController& config)
+    : config_(config), logger_(MakeLogger("downgrade-frac-controller")) {}
+
+// Translated from ../../go/intradc/feedbacksim/control.go
+double DowngradeFracController::TrafficFracToDowngradeRaw(double cur, double setpoint,
+                                                          double input2output_conversion,
+                                                          double max_task_usage_frac) {
+  const double err = cur - setpoint;
+  if (0 < err && err < config_.ignore_overage_below()) {
+    SPDLOG_LOGGER_DEBUG(&logger_, "overage in noise");
+    return 0;
+  }
+  if (0 < err &&
+      config_.ignore_overage_by_coarseness_multiplier() * max_task_usage_frac) {
+    SPDLOG_LOGGER_DEBUG(&logger_, "too coarse to response to overage");
+    return 0;
+  }
+  double x = config_.prop_gain() * err;
+  x *= input2output_conversion;
+  if (x < -1 || x > 1) {
+    SPDLOG_LOGGER_CRITICAL(&logger_,
+                           "saw invalid pre-clamping downgrade frac inc = {} "
+                           "cur = {} setpoint = {} i2o = {} max task = {} "
+                           "controller = {}",
+                           x, cur, setpoint, input2output_conversion, max_task_usage_frac,
+                           config_.ShortDebugString());
+    DumpStackTraceAndExit(1);
+  }
+  x = copysign(fmin(fabs(x), config_.max_inc()), x);
+  SPDLOG_LOGGER_DEBUG(&logger_, "{} [cur = {} setpoint = {} i2o = {} max task = {}]", x,
+                      cur, setpoint, input2output_conversion, max_task_usage_frac);
+  return x;
+}
+
+double DowngradeFracController::TrafficFracToDowngrade(double hipri_usage_bps,
+                                                       double lopri_usage_bps,
+                                                       double hipri_rate_limit_bps,
+                                                       double max_task_usage_bps) {
+  double total_usage_bps = hipri_usage_bps + lopri_usage_bps;
+  double cur = hipri_usage_bps / total_usage_bps;
+  double setpoint = hipri_rate_limit_bps / total_usage_bps;
+  return TrafficFracToDowngradeRaw(cur, setpoint, 1.0,
+                                   max_task_usage_bps / total_usage_bps);
 }
 
 template <FVSource vol_source>
