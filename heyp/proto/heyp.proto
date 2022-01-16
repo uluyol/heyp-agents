@@ -30,6 +30,10 @@ message FlowInfo {
   int64 predicted_demand_bps = 2;
   int64 ewma_usage_bps = 3;
 
+  // Optional: not available at all levels.
+  int64 ewma_hipri_usage_bps = 8;
+  int64 ewma_lopri_usage_bps = 9;
+
   // cum_usage_bytes = cum_hipri_usage_bytes + cum_lopri_usage_bytes
   int64 cum_usage_bytes = 4;
   int64 cum_hipri_usage_bytes = 5;

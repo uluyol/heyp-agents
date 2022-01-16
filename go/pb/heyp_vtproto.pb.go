@@ -532,6 +532,16 @@ func (m *FlowInfo) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0xa2
 	}
+	if m.EwmaLopriUsageBps != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.EwmaLopriUsageBps))
+		i--
+		dAtA[i] = 0x48
+	}
+	if m.EwmaHipriUsageBps != 0 {
+		i = encodeVarint(dAtA, i, uint64(m.EwmaHipriUsageBps))
+		i--
+		dAtA[i] = 0x40
+	}
 	if m.CurrentlyLopri {
 		i--
 		if m.CurrentlyLopri {
@@ -1070,6 +1080,12 @@ func (m *FlowInfo) SizeVT() (n int) {
 	}
 	if m.CurrentlyLopri {
 		n += 2
+	}
+	if m.EwmaHipriUsageBps != 0 {
+		n += 1 + sov(uint64(m.EwmaHipriUsageBps))
+	}
+	if m.EwmaLopriUsageBps != 0 {
+		n += 1 + sov(uint64(m.EwmaLopriUsageBps))
 	}
 	if m.Aux != nil {
 		l = m.Aux.SizeVT()
@@ -2613,6 +2629,44 @@ func (m *FlowInfo) UnmarshalVT(dAtA []byte) error {
 				}
 			}
 			m.CurrentlyLopri = bool(v != 0)
+		case 8:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field EwmaHipriUsageBps", wireType)
+			}
+			m.EwmaHipriUsageBps = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.EwmaHipriUsageBps |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 9:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field EwmaLopriUsageBps", wireType)
+			}
+			m.EwmaLopriUsageBps = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.EwmaLopriUsageBps |= int64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
 		case 20:
 			if wireType != 2 {
 				return fmt.Errorf("proto: wrong wireType = %d for field Aux", wireType)
