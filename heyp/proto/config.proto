@@ -150,6 +150,28 @@ message DowngradeSelector {
   optional HybridHashingConfig hybrid_hashing = 4;
 }
 
+// DowngradeFracController is a feedback controller that computes
+// 'diffs' of how much additional traffic should downgraded
+// (a negative value indicates that traffic should be upgraded).
+message DowngradeFracController {
+  // Diffs will be capped to have an absolute value of at most max_inc.
+  optional double max_inc = 1 [default = 1];
+
+  // prop_gain is a value ranging from 0 to 1 that indicates how much
+  // of the error we should try to address in one control period.
+  optional double prop_gain = 2 [default = 0.75];
+
+  // If the overage is below ignore_overage_below, we return a diff of 0.
+  optional double ignore_overage_below = 3;
+
+  // If the overage is below ignore_overage_by_coarseness_multiplier * max task usage,
+  // we ignore it.
+  //
+  // This is separate from ignore_overage_below because it tries to capture
+  // the "coarseness" of the flowgroup.
+  optional double ignore_overage_by_coarseness_multiplier = 4;
+}
+
 message FixedClusterHostAllocs {
   message FlowAllocAndCount {
     optional FlowAlloc alloc = 1;

@@ -29,6 +29,22 @@ class DowngradeSelector {
   const bool downgrade_usage_;
 };
 
+class DowngradeFracController {
+ public:
+  explicit DowngradeFracController(const proto::DowngradeFracController& config);
+
+  double TrafficFracToDowngradeRaw(double cur, double setpoint,
+                                   double input2output_conversion,
+                                   double max_task_usage_frac);
+
+  double TrafficFracToDowngrade(double hipri_usage_bps, double lopri_usage_bps,
+                                double hipri_rate_limit_bps, double max_task_usage_bps);
+
+ private:
+  proto::DowngradeFracController config_;
+  spdlog::logger logger_;
+};
+
 // FracAdmittedAtLOPRI returns the fraction of traffic that should ideally be sent at
 // LOPRI.
 template <FVSource vol_source>
