@@ -46,6 +46,11 @@ class FastAggregator {
   std::vector<FastAggInfo> CollectSnapshot(Executor* exec);
 
  private:
+  struct PrioEstimators {
+    ThresholdSampler::AggUsageEstimator hipri;
+    ThresholdSampler::AggUsageEstimator lopri;
+  };
+
   struct Info {
     int64_t agg_id;
     uint64_t child_id;
@@ -61,8 +66,8 @@ class FastAggregator {
   static std::vector<FastAggInfo> ComputeTemplateAggInfo(
       const ClusterFlowMap<int64_t>* agg_flow_to_id);
   // Aggregate aggregates the info but doesn't populate parent_.
-  std::pair<std::vector<FastAggInfo>, std::vector<ThresholdSampler::AggUsageEstimator>>
-  Aggregate(const InfoShard& shard);
+  std::pair<std::vector<FastAggInfo>, std::vector<PrioEstimators>> Aggregate(
+      const InfoShard& shard);
 
   const ClusterFlowMap<int64_t>* agg_flow_to_id_;
   const std::vector<ThresholdSampler> samplers_;
