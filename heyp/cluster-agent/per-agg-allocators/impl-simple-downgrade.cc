@@ -4,6 +4,7 @@
 #include "heyp/alg/debug.h"
 #include "heyp/alg/fairness/max-min-fairness.h"
 #include "heyp/alg/rate-limits.h"
+#include "heyp/cluster-agent/per-agg-allocators/util.h"
 
 namespace heyp {
 namespace {
@@ -17,7 +18,8 @@ SimpleDowngradeAllocator::SimpleDowngradeAllocator(
     : config_(config),
       agg_admissions_(agg_admissions),
       logger_(MakeLogger("downgrade-alloc")),
-      downgrade_selector_(config_.downgrade_selector()),
+      downgrade_selectors_(
+          MakeAggDowngradeSelectors(config_.downgrade_selector(), agg_admissions_)),
       downgrade_fv_source_(config_.downgrade_selector().downgrade_usage()
                                ? FVSource::kUsage
                                : FVSource::kPredictedDemand) {}
@@ -77,7 +79,9 @@ std::vector<proto::FlowAlloc> SimpleDowngradeAllocator::AllocAgg(
 
   std::vector<bool> lopri_children;
   if (frac_lopri > 0) {
-    lopri_children = downgrade_selector_.PickLOPRIChildren(agg_info, frac_lopri);
+    auto iter = downgrade_selectors_.find(agg_info.parent().flow());
+    H_SPDLOG_CHECK(&logger_, iter != downgrade_selectors_.end());
+    lopri_children = iter->second.PickLOPRIChildren(agg_info, frac_lopri);
   } else {
     lopri_children = std::vector<bool>(agg_info.children_size(), false);
   }

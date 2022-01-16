@@ -102,6 +102,7 @@ cc_library(
     srcs = ["util.cc"],
     hdrs = ["util.h"],
     deps = [
+        "//heyp/alg:qos-downgrade",
         "//heyp/log:spdlog",
         "//heyp/proto:alg",
         "//heyp/proto:heyp_cc_proto",
