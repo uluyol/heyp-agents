@@ -13,7 +13,9 @@ SYS_LONG <- new.env(hash=TRUE)
 SYS_LONG[["hsc"]] <- "HSC20"
 SYS_LONG[["nl"]] <- "NoLimit"
 SYS_LONG[["qd"]] <- "QD"
+SYS_LONG[["qd_fc"]] <- "QD+FC"
 SYS_LONG[["qdlrl"]] <- "QD+LimitLO"
+SYS_LONG[["qdlrl_fc"]] <- "QD+FC+LimitLO"
 SYS_LONG[["qdhrl"]] <- "QD+LimitHI"
 SYS_LONG[["rl"]] <- "RateLimit"
 

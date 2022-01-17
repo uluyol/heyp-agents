@@ -920,6 +920,29 @@ def QoSDowngradeConfig(ds_selector_type = "DS_KNAPSACK_SOLVER", **kwargs):
         **kwargs
     )
 
+def QoSDowngradeFeedbackControlConfig(ds_selector_type = "DS_HASHING", **kwargs):
+    allocator = config_pb.ClusterAllocatorConfig(
+        type = "CA_SIMPLE_DOWNGRADE",
+        downgrade_selector = {"type": ds_selector_type, "downgrade_usage": True},
+        downgrade_frac_controller = {
+            "max_inc": 1,
+            "prop_gain": float("0.5"),
+            "ignore_overage_below": float("0.05"),
+            "ignore_overage_by_coarseness_multiplier": 2,
+        },
+        enable_burstiness = True,
+        enable_bonus = True,
+        oversub_factor = OVERSUB_FACTOR,
+    )
+
+    return GenConfig(
+        ca_allocator = allocator,
+        ca_limits_to_apply = "HL",
+        limit_hipri = False,
+        limit_lopri = False,
+        **kwargs
+    )
+
 def QoSDowngradeAndLimitMixedHIPRIConfig(ds_selector_type = "DS_KNAPSACK_SOLVER", **kwargs):
     allocator = config_pb.ClusterAllocatorConfig(
         type = "CA_SIMPLE_DOWNGRADE",
@@ -942,6 +965,29 @@ def QoSDowngradeAndLimitLOPRIConfig(**kwargs):
     allocator = config_pb.ClusterAllocatorConfig(
         type = "CA_SIMPLE_DOWNGRADE",
         downgrade_selector = {"type": "DS_KNAPSACK_SOLVER", "downgrade_usage": True},
+        enable_burstiness = True,
+        enable_bonus = True,
+        oversub_factor = OVERSUB_FACTOR,
+    )
+
+    return GenConfig(
+        ca_allocator = allocator,
+        ca_limits_to_apply = "HL",
+        limit_hipri = False,
+        limit_lopri = True,
+        **kwargs
+    )
+
+def QoSDowngradeFeedbackControlAndLimitLOPRIConfig(ds_selector_type = "DS_HASHING", **kwargs):
+    allocator = config_pb.ClusterAllocatorConfig(
+        type = "CA_SIMPLE_DOWNGRADE",
+        downgrade_selector = {"type": ds_selector_type, "downgrade_usage": True},
+        downgrade_frac_controller = {
+            "max_inc": 1,
+            "prop_gain": float("0.5"),
+            "ignore_overage_below": float("0.05"),
+            "ignore_overage_by_coarseness_multiplier": 2,
+        },
         enable_burstiness = True,
         enable_bonus = True,
         oversub_factor = OVERSUB_FACTOR,
@@ -1356,6 +1402,8 @@ def AddConfigsIncreasing(configs):
     configs[prefix + "-nl"] = NoLimitConfig(**kwargs)
     configs[prefix + "-qd"] = QoSDowngradeConfig(**kwargs)
     configs[prefix + "-qdlrl"] = QoSDowngradeAndLimitLOPRIConfig(**kwargs)
+    configs[prefix + "-qd_fc"] = QoSDowngradeFeedbackControlConfig(**kwargs)
+    configs[prefix + "-qdlrl_fc"] = QoSDowngradeFeedbackControlAndLimitLOPRIConfig(**kwargs)
     configs[prefix + "-rl"] = RateLimitConfig(**kwargs)
 
     configs[prefix + "-nl_light"] = NoLimitConfig(**kwargs_lo)
