@@ -167,18 +167,57 @@ def GenWorkloadStagesPeriodicSpike(
         "envoy_group_names": ["AA", "WA"],
     }
 
-def GenWorkloadStagesIncreasing(
+def AAConfig(
+        num_servers_per_backend_host = 2,
+        name_prefix = "AA_",
+        envoy_group_name = "AA",
+        servers_are_virt = False,
+        starting_port = AA_FORTIO_STARTING_PORT,
+        max_prop_delay_ms = _DEFAULT_AA_prop_delay_ms,
+        avg_prop_delay_ms = _DEFAULT_AA_prop_delay_ms,
+        enable_timeout = False,
+        max_pending_requests = 100):
+    return {
+        "num_servers_per_backend_host": num_servers_per_backend_host,
+        "name_prefix": name_prefix,
+        "envoy_group_name": envoy_group_name,
+        "servers_are_virt": servers_are_virt,
+        "starting_port": starting_port,
+        "max_prop_delay_ms": max_prop_delay_ms,
+        "avg_prop_delay_ms": avg_prop_delay_ms,
+        "enable_timeout": enable_timeout,
+        "max_pending_requests": max_pending_requests,
+    }
+
+def WAConfig(
+        num_servers_per_backend_host = 4,
+        name_prefix = "WA_",
+        envoy_group_name = "WA",
+        servers_are_virt = False,
+        starting_port = WA_FORTIO_STARTING_PORT,
+        max_prop_delay_ms = _DEFAULT_WA_prop_delay_ms,
+        avg_prop_delay_ms = _DEFAULT_WA_prop_delay_ms,
+        enable_timeout = False,
+        max_pending_requests = 1000):
+    return {
+        "num_servers_per_backend_host": num_servers_per_backend_host,
+        "name_prefix": name_prefix,
+        "envoy_group_name": envoy_group_name,
+        "servers_are_virt": servers_are_virt,
+        "starting_port": starting_port,
+        "max_prop_delay_ms": max_prop_delay_ms,
+        "avg_prop_delay_ms": avg_prop_delay_ms,
+        "enable_timeout": enable_timeout,
+        "max_pending_requests": max_pending_requests,
+    }
+
+def GenWorkloadStagesJump(
         AA_bps = None,
         num_AA_backends = None,
-        num_AA_servers_per_backend_host = 2,
-        AA_servers_are_virt = False,
+        AA_config = AAConfig(),
         WA_bps_min = None,
         WA_bps_max = None,
-        AA_max_prop_delay_ms = _DEFAULT_AA_prop_delay_ms,
-        AA_avg_prop_delay_ms = _DEFAULT_AA_prop_delay_ms,
-        WA_prop_delay_ms = _DEFAULT_WA_prop_delay_ms,
-        enable_timeout = False,
-        AA_max_pending_requests = 100):
+        WA_config = WAConfig()):
     AA_per_be_bps = int(fdiv(float(AA_bps), float(num_AA_backends)))
 
     AA_instances, AA_client_roles, AA_server_roles_for = BackendOnEachHost(
@@ -188,15 +227,52 @@ def GenWorkloadStagesIncreasing(
             "run_dur": "150s",
         }],
         num_shards_per_backend = NumShards(AA_per_be_bps),
-        num_servers_per_backend_host = num_AA_servers_per_backend_host,
-        name_prefix = "AA_",
-        envoy_group_name = "AA",
-        starting_port = AA_FORTIO_STARTING_PORT,
-        max_prop_delay_ms = AA_max_prop_delay_ms,
-        avg_prop_delay_ms = AA_avg_prop_delay_ms,
-        enable_timeout = enable_timeout,
-        servers_are_virt = AA_servers_are_virt,
-        max_pending_requests = AA_max_pending_requests,
+        **AA_config
+    )
+
+    WA_instances, WA_client_roles, WA_server_roles_for = BackendOnEachHost(
+        num_backends = 1,
+        workload_stages_per_backend = [
+            {
+                "target_average_bps": WA_bps_min,
+                "run_dur": "45s",
+            },
+            {
+                "target_average_bps": WA_bps_max,
+                "run_dur": "105s",
+            },
+        ],
+        num_shards_per_backend = NumShards(WA_bps_max),
+        **WA_config
+    )
+
+    return {
+        "AA_fortio_instances": AA_instances,
+        "AA_client_roles": AA_client_roles,
+        "AA_server_roles_for": AA_server_roles_for,
+        "WA_fortio_instances": WA_instances,
+        "WA_client_roles": WA_client_roles,
+        "WA_server_roles_for": WA_server_roles_for,
+        "envoy_group_names": ["AA", "WA"],
+    }
+
+def GenWorkloadStagesIncreasing(
+        AA_bps = None,
+        num_AA_backends = None,
+        AA_config = AAConfig(),
+        WA_bps_min = None,
+        WA_bps_max = None,
+        WA_config = WAConfig()):
+    AA_per_be_bps = int(fdiv(float(AA_bps), float(num_AA_backends)))
+
+    AA_instances, AA_client_roles, AA_server_roles_for = BackendOnEachHost(
+        num_backends = num_AA_backends,
+        workload_stages_per_backend = [{
+            "target_average_bps": AA_per_be_bps,
+            "run_dur": "150s",
+        }],
+        num_shards_per_backend = NumShards(AA_per_be_bps),
+        **AA_config
     )
 
     tick_bps = (WA_bps_max - WA_bps_min) // 60
@@ -221,13 +297,7 @@ def GenWorkloadStagesIncreasing(
         num_backends = 1,
         workload_stages_per_backend = WA_stages,
         num_shards_per_backend = NumShards(WA_bps_max),
-        num_servers_per_backend_host = 4,
-        name_prefix = "WA_",
-        envoy_group_name = "WA",
-        starting_port = WA_FORTIO_STARTING_PORT,
-        max_prop_delay_ms = WA_prop_delay_ms,
-        avg_prop_delay_ms = WA_prop_delay_ms,
-        enable_timeout = enable_timeout,
+        **WA_config
     )
 
     return {
@@ -1375,23 +1445,29 @@ def AddConfigsIncreasing(configs):
     }
     wl_kwargs = GenWorkloadStagesIncreasing(
         AA_bps = int(Gbps(12)),
-        AA_max_prop_delay_ms = _DEFAULT_AA_prop_delay_ms + _DEFAULT_AA_prop_delay_ms_extra_lopri,
         num_AA_backends = 1,
-        num_AA_servers_per_backend_host = AA_NUM_SERVERS_PER_BACKEND_HOST,
-        AA_servers_are_virt = True,
+        AA_config = AAConfig(
+            servers_are_virt = True,
+            max_prop_delay_ms = _DEFAULT_AA_prop_delay_ms + _DEFAULT_AA_prop_delay_ms_extra_lopri,
+            num_servers_per_backend_host = AA_NUM_SERVERS_PER_BACKEND_HOST,
+            enable_timeout = True,
+        ),
         WA_bps_min = int(Gbps(6)),
         WA_bps_max = int(Gbps(12)),
-        enable_timeout = True,
+        WA_config = WAConfig(enable_timeout = True),
     )
     wl_lo_kwargs = GenWorkloadStagesIncreasing(
         AA_bps = int(Gbps(2)),
-        AA_max_prop_delay_ms = _DEFAULT_AA_prop_delay_ms + _DEFAULT_AA_prop_delay_ms_extra_lopri,
         num_AA_backends = 1,
-        num_AA_servers_per_backend_host = AA_NUM_SERVERS_PER_BACKEND_HOST,
-        AA_servers_are_virt = True,
+        AA_config = AAConfig(
+            servers_are_virt = True,
+            max_prop_delay_ms = _DEFAULT_AA_prop_delay_ms + _DEFAULT_AA_prop_delay_ms_extra_lopri,
+            num_servers_per_backend_host = AA_NUM_SERVERS_PER_BACKEND_HOST,
+            enable_timeout = True,
+        ),
         WA_bps_min = int(Gbps(6)),
         WA_bps_max = int(Gbps(12)),
-        enable_timeout = True,
+        WA_config = WAConfig(enable_timeout = True),
     )
     kwargs = dict(base_kwargs, **wl_kwargs)
     kwargs_lo = dict(base_kwargs, **wl_lo_kwargs)
@@ -1409,28 +1485,42 @@ def AddConfigsIncreasing(configs):
     configs[prefix + "-nl_light"] = NoLimitConfig(**kwargs_lo)
     configs[prefix + "-rl_light"] = RateLimitConfig(**kwargs_lo)
 
-def AddConfigsIncreasingMPR(configs):
-    for mpr in [10, 50, 100, 150, 200, 300, 400, 600, 800, 1000]:
-        kwargs = dict({
-            "AA_approved_bps": int(Gbps(2)),
-            "AA_surplus_bps": int(Gbps(10)),
-            "AA_servers_are_virt": True,
-            "WA_approved_bps": int(Gbps(12)),
-            "shard_key": "inc",
-        }, **GenWorkloadStagesIncreasing(
-            AA_bps = int(Gbps(12)),
-            num_AA_backends = 1,
-            num_AA_servers_per_backend_host = AA_NUM_SERVERS_PER_BACKEND_HOST,
-            AA_servers_are_virt = True,
-            WA_bps_min = int(Gbps(6)),
-            WA_bps_max = int(Gbps(12)),
-            enable_timeout = False,
-            AA_max_pending_requests = mpr,
-        ))
-        prefix = "inc_mpr" + str(mpr)
+def AddConfigsJump(configs):
+    base_kwargs = {
+        "AA_approved_bps": int(Gbps(2)),
+        "AA_surplus_bps": int(Gbps(10)),
+        "AA_servers_are_virt": True,
+        "AA_lopri_is_longer": True,
+        "WA_approved_bps": int(Gbps(13)),
+        "shard_key": "jump",
+        "cluster_control_period": "5s",
+        "envoy_group_admission_control_configs": {
+            "AA": DefaultOnAdmissionControl(),
+            "WA": DefaultOnAdmissionControl(),
+        },
+    }
+    wl_kwargs = GenWorkloadStagesJump(
+        AA_bps = int(Gbps(12)),
+        num_AA_backends = 1,
+        AA_config = AAConfig(
+            servers_are_virt = True,
+            max_prop_delay_ms = _DEFAULT_AA_prop_delay_ms + _DEFAULT_AA_prop_delay_ms_extra_lopri,
+            num_servers_per_backend_host = AA_NUM_SERVERS_PER_BACKEND_HOST,
+            enable_timeout = True,
+        ),
+        WA_bps_min = int(Gbps(6)),
+        WA_bps_max = int(Gbps(12)),
+        WA_config = WAConfig(enable_timeout = True),
+    )
+    kwargs = dict(base_kwargs, **wl_kwargs)
 
-        configs[prefix + "-nl"] = NoLimitConfig(**kwargs)
-        configs[prefix + "-qd"] = QoSDowngradeConfig(**kwargs)
+    prefix = "jump"
+
+    configs[prefix + "-qd"] = QoSDowngradeConfig(**kwargs)
+    configs[prefix + "-qdlrl"] = QoSDowngradeAndLimitLOPRIConfig(**kwargs)
+    configs[prefix + "-qd_fc"] = QoSDowngradeFeedbackControlConfig(**kwargs)
+    configs[prefix + "-qdlrl_fc"] = QoSDowngradeFeedbackControlAndLimitLOPRIConfig(**kwargs)
+    configs[prefix + "-rl"] = RateLimitConfig(**kwargs)
 
 def AddConfigsStarvedLOPRIBase(configs, name, enable_ac):
     # "AA_lopri_is_longer": True,
@@ -1444,13 +1534,16 @@ def AddConfigsStarvedLOPRIBase(configs, name, enable_ac):
         "cluster_control_period": "500ms",
     }, **GenWorkloadStagesIncreasing(
         AA_bps = int(Gbps(12)),
-        AA_max_prop_delay_ms = _DEFAULT_AA_prop_delay_ms + _DEFAULT_AA_prop_delay_ms_extra_lopri,
         num_AA_backends = 1,
-        num_AA_servers_per_backend_host = AA_NUM_SERVERS_PER_BACKEND_HOST,
-        AA_servers_are_virt = True,
+        AA_config = AAConfig(
+            servers_are_virt = True,
+            max_prop_delay_ms = _DEFAULT_AA_prop_delay_ms + _DEFAULT_AA_prop_delay_ms_extra_lopri,
+            num_servers_per_backend_host = AA_NUM_SERVERS_PER_BACKEND_HOST,
+            enable_timeout = enable_ac,
+        ),
         WA_bps_min = int(Gbps(8)),
         WA_bps_max = int(Gbps(16)),
-        enable_timeout = enable_ac,
+        WA_config = WAConfig(enable_timeout = enable_ac),
     ))
     if enable_ac:
         kwargs["envoy_group_admission_control_configs"] = {
@@ -1485,19 +1578,7 @@ def AddConfigsRateLimitHIPRI(configs):
         num_AA_backends = 1,
         WA_bps_min = int(Gbps(4)),
         WA_bps_max = int(Gbps(12)),
-        enable_timeout = False,
     ))
-    # kwargs = dict({
-    #     "AA_approved_bps": int(Gbps(8)),
-    #     "AA_surplus_bps": int(Gbps(10)),
-    #     "WA_approved_bps": int(Gbps(6)),
-    #     "shard_key": "inc",
-    # }, **GenWorkloadStagesIncreasing(
-    #     AA_bps = int(Gbps(18)),
-    #     num_AA_backends = 5,
-    #     WA_bps_min = int(Gbps(2)),
-    #     WA_bps_max = int(Gbps(6)),
-    # ))
 
     prefix = "rlhipri"
     configs[prefix + "-qd_knap"] = QoSDowngradeConfig(ds_selector_type = "DS_KNAPSACK_SOLVER", **kwargs)
@@ -1518,7 +1599,6 @@ def AddConfigsLossTrainingDataIncreasing(configs, lopri_latency = "same"):
         num_AA_backends = 1,
         WA_bps_min = int(Gbps(1)),
         WA_bps_max = int(Gbps(12)),
-        enable_timeout = False,
     ))
 
     prefix = "ltd_inc_" + lopri_latency
@@ -1539,7 +1619,6 @@ def AddConfigsLossTrainingDataIncreasingLOPRI(configs, lopri_latency = "same"):
         num_AA_backends = 1,
         WA_bps_min = int(Gbps(1)),
         WA_bps_max = int(Gbps(12)),
-        enable_timeout = False,
     ))
 
     prefix = "ltd_inc_lp_" + lopri_latency
@@ -1772,7 +1851,7 @@ def GenConfigs():
         "cmpmixed": AddConfigsMixedVersusFullDowngrade,
         "demandsuppression": AddConfigsDemandSuppression,
         "inc": AddConfigsIncreasing,
-        "inc_mpr": AddConfigsIncreasingMPR,
+        "jump": AddConfigsJump,
         "ltd": AddConfigsLossTrainingData,
         "qflip": AddConfigsFlipQoS,
         "rlhipri": AddConfigsRateLimitHIPRI,
