@@ -510,26 +510,26 @@ _DEFAULT_NODE_COUNTS = {
 # Work around cloudlab issues
 _BAD_NODE_IDS = set([])
 
-def _GetNodeTypeUB(node_counts):
+def _ID2NodeSets(node_counts):
     ubs = dict()
 
-    def _get_ub(next_id, count):
-        added = 0
+    def _get_set(next_id, count):
+        added = []
         for _ in range(2000):  # starlark lacks while loop
-            if added >= count:
+            if len(added) >= count:
                 break
             if next_id not in _BAD_NODE_IDS:
-                added += 1
+                added.append(next_id)
             next_id += 1
-        return next_id, next_id - 1
+        return next_id, set(added)
 
     # IDs start from 1
     next_id = 1
-    next_id, ubs["cluster-agent"] = _get_ub(next_id, 1)  # cluster-agent
-    next_id, ubs["EDGE"] = _get_ub(next_id, node_counts["EDGE"])
-    next_id, ubs["AA"] = _get_ub(next_id, node_counts["AA"])
-    next_id, ubs["WA"] = _get_ub(next_id, node_counts["WA"])
-    next_id, ubs["CLIENT"] = _get_ub(next_id, node_counts["CLIENT"])
+    next_id, ubs["cluster-agent"] = _get_set(next_id, 1)  # cluster-agent
+    next_id, ubs["EDGE"] = _get_set(next_id, node_counts["EDGE"])
+    next_id, ubs["AA"] = _get_set(next_id, node_counts["AA"])
+    next_id, ubs["WA"] = _get_set(next_id, node_counts["WA"])
+    next_id, ubs["CLIENT"] = _get_set(next_id, node_counts["CLIENT"])
 
     return ubs
 
@@ -627,7 +627,7 @@ def GenConfig(
     else:
         fail("got ca_limits_to_apply = ", ca_limits_to_apply, "must be \"H\"/\"HL\"/\"\"")
 
-    idx_ubs = _GetNodeTypeUB(node_counts)
+    id2nodesets = _ID2NodeSets(node_counts)
 
     shard_index = 0
     cluster_agent_nodes = []
@@ -639,18 +639,18 @@ def GenConfig(
         if i in _BAD_NODE_IDS:
             continue
 
-        if i <= idx_ubs["cluster-agent"]:
+        if i in id2nodesets["cluster-agent"]:
             roles.append("cluster-agent")
             clusters["EDGE"]["node_names"].append(name)
             clusters["AA"]["node_names"].append(name)
             clusters["WA"]["node_names"].append(name)
             clusters["CLIENT"]["node_names"].append(name)
             cluster_agent_nodes.append(name)
-        elif i <= idx_ubs["EDGE"]:
+        elif i in id2nodesets["EDGE"]:
             roles.append("host-agent")
             roles.extend(["fortio-{0}-envoy-proxy".format(g) for g in envoy_group_names])
             clusters["EDGE"]["node_names"].append(name)
-        elif i <= idx_ubs["AA"]:
+        elif i in id2nodesets["AA"]:
             if AA_servers_are_virt:
                 roles.append("vhost-agents-" + str(AA_NUM_SERVERS_PER_BACKEND_HOST))
             else:
@@ -659,11 +659,11 @@ def GenConfig(
             if AA_jobs_for != None:
                 roles.extend(["job-" + job for job in AA_jobs_for(i - 4, 9)])
             clusters["AA"]["node_names"].append(name)
-        elif i <= idx_ubs["WA"]:
+        elif i in id2nodesets["WA"]:
             roles.append("host-agent")
             roles.extend(WA_server_roles_for(i - 13, 2))
             clusters["WA"]["node_names"].append(name)
-        elif i <= idx_ubs["CLIENT"]:
+        elif i in id2nodesets["CLIENT"]:
             roles.append("host-agent")
             roles.extend(AA_client_roles + WA_client_roles)
             roles.append("hipri-AF31")
@@ -1390,7 +1390,12 @@ def AddConfigsDemandSuppression(configs):
     configs[prefix + "-nl"] = NoLimitConfig(**kwargs)
     configs[prefix + "-rl"] = RateLimitConfig(**kwargs)
 
-def AddConfigsIncreasing(configs):
+def AddConfigsIncreasingBase(
+        configs,
+        name = None,
+        lb_policy = None,
+        enable_ac_AA = None,
+        enable_ac_WA = None):
     base_kwargs = {
         "AA_approved_bps": int(Gbps(2)),
         "AA_surplus_bps": int(Gbps(10)),
@@ -1399,11 +1404,14 @@ def AddConfigsIncreasing(configs):
         "WA_approved_bps": int(Gbps(13)),
         "shard_key": "inc",
         "cluster_control_period": "5s",
-        "envoy_group_admission_control_configs": {
-            "AA": DefaultOnAdmissionControl(),
-            "WA": DefaultOnAdmissionControl(),
-        },
     }
+    if enable_ac_AA or enable_ac_WA:
+        ac_configs = dict()
+        if enable_ac_AA:
+            ac_configs["AA"] = DefaultOnAdmissionControl()
+        if enable_ac_WA:
+            ac_configs["WA"] = DefaultOnAdmissionControl()
+        base_kwargs["envoy_group_admission_control_configs"] = ac_configs
     wl_kwargs = GenWorkloadStagesIncreasing(
         AA_bps = int(Gbps(12)),
         num_AA_backends = 1,
@@ -1411,11 +1419,12 @@ def AddConfigsIncreasing(configs):
             servers_are_virt = True,
             max_prop_delay_ms = _DEFAULT_AA_prop_delay_ms + _DEFAULT_AA_prop_delay_ms_extra_lopri,
             num_servers_per_backend_host = AA_NUM_SERVERS_PER_BACKEND_HOST,
-            enable_timeout = True,
+            enable_timeout = enable_ac_AA,
+            lb_policy = lb_policy,
         ),
         WA_bps_min = int(Gbps(6)),
         WA_bps_max = int(Gbps(12)),
-        WA_config = WAConfig(enable_timeout = True),
+        WA_config = WAConfig(enable_timeout = enable_ac_WA),
     )
     wl_lo_kwargs = GenWorkloadStagesIncreasing(
         AA_bps = int(Gbps(2)),
@@ -1424,16 +1433,17 @@ def AddConfigsIncreasing(configs):
             servers_are_virt = True,
             max_prop_delay_ms = _DEFAULT_AA_prop_delay_ms + _DEFAULT_AA_prop_delay_ms_extra_lopri,
             num_servers_per_backend_host = AA_NUM_SERVERS_PER_BACKEND_HOST,
-            enable_timeout = True,
+            enable_timeout = enable_ac_AA,
+            lb_policy = lb_policy,
         ),
         WA_bps_min = int(Gbps(6)),
         WA_bps_max = int(Gbps(12)),
-        WA_config = WAConfig(enable_timeout = True),
+        WA_config = WAConfig(enable_timeout = enable_ac_WA),
     )
     kwargs = dict(base_kwargs, **wl_kwargs)
     kwargs_lo = dict(base_kwargs, **wl_lo_kwargs)
 
-    prefix = "inc"
+    prefix = name
 
     # configs[prefix + "-hsc"] = HSC20Config(**kwargs)
     configs[prefix + "-nl"] = NoLimitConfig(**kwargs)
@@ -1445,6 +1455,42 @@ def AddConfigsIncreasing(configs):
 
     configs[prefix + "-nl_light"] = NoLimitConfig(**kwargs_lo)
     configs[prefix + "-rl_light"] = RateLimitConfig(**kwargs_lo)
+
+def AddConfigsIncreasing_LR_AC_ALL(configs):
+    AddConfigsIncreasingBase(
+        configs,
+        name = "inc_lr_acALL",
+        lb_policy = "LEAST_REQUEST",
+        enable_ac_AA = True,
+        enable_ac_WA = True,
+    )
+
+def AddConfigsIncreasing_LR_AC_WA(configs):
+    AddConfigsIncreasingBase(
+        configs,
+        name = "inc_lr_acWA",
+        lb_policy = "LEAST_REQUEST",
+        enable_ac_AA = False,
+        enable_ac_WA = True,
+    )
+
+def AddConfigsIncreasing_RR_AC_ALL(configs):
+    AddConfigsIncreasingBase(
+        configs,
+        name = "inc_rr_acALL",
+        lb_policy = "ROUND_ROBIN",
+        enable_ac_AA = True,
+        enable_ac_WA = True,
+    )
+
+def AddConfigsIncreasing_RR_AC_WA(configs):
+    AddConfigsIncreasingBase(
+        configs,
+        name = "inc_rr_acWA",
+        lb_policy = "ROUND_ROBIN",
+        enable_ac_AA = False,
+        enable_ac_WA = True,
+    )
 
 def AddConfigsJump(configs):
     base_kwargs = {
@@ -1837,11 +1883,27 @@ def AddConfigsTestAdmissionControl(configs):
         # configs[prefix + "-qdlrl"] = QoSDowngradeAndLimitLOPRIConfig(**kwargs)
         configs[prefix + "-rl"] = RateLimitConfig(**kwargs)
 
+def MakeAddAll(*args):
+    def AddConfigs(configs):
+        for gen in args:
+            gen(configs)
+
+    return AddConfigs
+
 def GenConfigs():
     generators = {
         "cmpmixed": AddConfigsMixedVersusFullDowngrade,
         "demandsuppression": AddConfigsDemandSuppression,
-        "inc": AddConfigsIncreasing,
+        "inc_lr_acALL": AddConfigsIncreasing_LR_AC_ALL,
+        "inc_lr_acWA": AddConfigsIncreasing_LR_AC_WA,
+        "inc_rr_acALL": AddConfigsIncreasing_RR_AC_ALL,
+        "inc_rr_acWA": AddConfigsIncreasing_RR_AC_WA,
+        "inc": MakeAddAll(
+            AddConfigsIncreasing_LR_AC_ALL,
+            AddConfigsIncreasing_LR_AC_WA,
+            AddConfigsIncreasing_RR_AC_ALL,
+            AddConfigsIncreasing_RR_AC_WA,
+        ),
         "jump": AddConfigsJump,
         "ltd": AddConfigsLossTrainingData,
         "qflip": AddConfigsFlipQoS,
