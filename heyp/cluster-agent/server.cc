@@ -98,6 +98,9 @@ class HostReactor
       has_staged_ = false;
       SendAlloc();
     }
+    absl::Duration elapsed =
+      absl::FromChrono(std::chrono::steady_clock::now() - wip_write_alloc_->aux.compute_start);
+    SPDLOG_LOGGER_INFO(&service_->logger_, "broadcast complete time = {}", elapsed);
   }
 
   void OnDone() override { delete this; }
