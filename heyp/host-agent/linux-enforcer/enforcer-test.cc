@@ -226,11 +226,17 @@ std::string WantInitWanIpt() {
   std::string s =
       "*mangle\n"
       "-A OUTPUT -o eth1 -p tcp -m tcp -d 10.0.0.2 -j CLASSIFY --set-class 1:2\n"
+      "-A FORWARD -o eth1 -p tcp -m tcp -d 10.0.0.2 -j CLASSIFY --set-class 1:2\n"
       "-A OUTPUT -o eth1 -p tcp -m tcp -d 10.0.0.2 -j DSCP --set-dscp-class AF21\n"
+      "-A FORWARD -o eth1 -p tcp -m tcp -d 10.0.0.2 -j DSCP --set-dscp-class AF21\n"
       "-A OUTPUT -o eth1 -p tcp -m tcp -d 10.0.0.2 -j RETURN\n"
+      "-A FORWARD -o eth1 -p tcp -m tcp -d 10.0.0.2 -j RETURN\n"
       "-A OUTPUT -o eth1 -p tcp -m tcp -d 10.0.0.3 -j CLASSIFY --set-class 1:2\n"
+      "-A FORWARD -o eth1 -p tcp -m tcp -d 10.0.0.3 -j CLASSIFY --set-class 1:2\n"
       "-A OUTPUT -o eth1 -p tcp -m tcp -d 10.0.0.3 -j DSCP --set-dscp-class AF21\n"
+      "-A FORWARD -o eth1 -p tcp -m tcp -d 10.0.0.3 -j DSCP --set-dscp-class AF21\n"
       "-A OUTPUT -o eth1 -p tcp -m tcp -d 10.0.0.3 -j RETURN\n"
+      "-A FORWARD -o eth1 -p tcp -m tcp -d 10.0.0.3 -j RETURN\n"
       "COMMIT\n";
   return s;
 }
@@ -366,17 +372,29 @@ TEST(LinuxHostEnforcer, ChangedAllocsAndPri) {
   std::string change_ipt =
       "*mangle\n"
       "-D OUTPUT -o eth1 -p tcp -m tcp -d 10.0.0.2 -j CLASSIFY --set-class 1:2\n"
+      "-D FORWARD -o eth1 -p tcp -m tcp -d 10.0.0.2 -j CLASSIFY --set-class 1:2\n"
       "-D OUTPUT -o eth1 -p tcp -m tcp -d 10.0.0.2 -j DSCP --set-dscp-class AF21\n"
+      "-D FORWARD -o eth1 -p tcp -m tcp -d 10.0.0.2 -j DSCP --set-dscp-class AF21\n"
       "-D OUTPUT -o eth1 -p tcp -m tcp -d 10.0.0.2 -j RETURN\n"
+      "-D FORWARD -o eth1 -p tcp -m tcp -d 10.0.0.2 -j RETURN\n"
       "-D OUTPUT -o eth1 -p tcp -m tcp -d 10.0.0.3 -j CLASSIFY --set-class 1:2\n"
+      "-D FORWARD -o eth1 -p tcp -m tcp -d 10.0.0.3 -j CLASSIFY --set-class 1:2\n"
       "-D OUTPUT -o eth1 -p tcp -m tcp -d 10.0.0.3 -j DSCP --set-dscp-class AF21\n"
+      "-D FORWARD -o eth1 -p tcp -m tcp -d 10.0.0.3 -j DSCP --set-dscp-class AF21\n"
       "-D OUTPUT -o eth1 -p tcp -m tcp -d 10.0.0.3 -j RETURN\n"
+      "-D FORWARD -o eth1 -p tcp -m tcp -d 10.0.0.3 -j RETURN\n"
       "-A OUTPUT -o eth1 -p tcp -m tcp -d 10.0.0.2 -j CLASSIFY --set-class 1:3\n"
+      "-A FORWARD -o eth1 -p tcp -m tcp -d 10.0.0.2 -j CLASSIFY --set-class 1:3\n"
       "-A OUTPUT -o eth1 -p tcp -m tcp -d 10.0.0.2 -j DSCP --set-dscp-class BE\n"
+      "-A FORWARD -o eth1 -p tcp -m tcp -d 10.0.0.2 -j DSCP --set-dscp-class BE\n"
       "-A OUTPUT -o eth1 -p tcp -m tcp -d 10.0.0.2 -j RETURN\n"
+      "-A FORWARD -o eth1 -p tcp -m tcp -d 10.0.0.2 -j RETURN\n"
       "-A OUTPUT -o eth1 -p tcp -m tcp -d 10.0.0.3 -j CLASSIFY --set-class 1:3\n"
+      "-A FORWARD -o eth1 -p tcp -m tcp -d 10.0.0.3 -j CLASSIFY --set-class 1:3\n"
       "-A OUTPUT -o eth1 -p tcp -m tcp -d 10.0.0.3 -j DSCP --set-dscp-class BE\n"
+      "-A FORWARD -o eth1 -p tcp -m tcp -d 10.0.0.3 -j DSCP --set-dscp-class BE\n"
       "-A OUTPUT -o eth1 -p tcp -m tcp -d 10.0.0.3 -j RETURN\n"
+      "-A FORWARD -o eth1 -p tcp -m tcp -d 10.0.0.3 -j RETURN\n"
       "COMMIT\n";
 
   auto& tc_exp1 =
@@ -489,17 +507,29 @@ TEST(LinuxHostEnforcer, ChangedButIngoredLOPRIAllocs) {
   std::string change_ipt =
       "*mangle\n"
       "-D OUTPUT -o eth1 -p tcp -m tcp -d 10.0.0.2 -j CLASSIFY --set-class 1:2\n"
+      "-D FORWARD -o eth1 -p tcp -m tcp -d 10.0.0.2 -j CLASSIFY --set-class 1:2\n"
       "-D OUTPUT -o eth1 -p tcp -m tcp -d 10.0.0.2 -j DSCP --set-dscp-class AF21\n"
+      "-D FORWARD -o eth1 -p tcp -m tcp -d 10.0.0.2 -j DSCP --set-dscp-class AF21\n"
       "-D OUTPUT -o eth1 -p tcp -m tcp -d 10.0.0.2 -j RETURN\n"
+      "-D FORWARD -o eth1 -p tcp -m tcp -d 10.0.0.2 -j RETURN\n"
       "-D OUTPUT -o eth1 -p tcp -m tcp -d 10.0.0.3 -j CLASSIFY --set-class 1:2\n"
+      "-D FORWARD -o eth1 -p tcp -m tcp -d 10.0.0.3 -j CLASSIFY --set-class 1:2\n"
       "-D OUTPUT -o eth1 -p tcp -m tcp -d 10.0.0.3 -j DSCP --set-dscp-class AF21\n"
+      "-D FORWARD -o eth1 -p tcp -m tcp -d 10.0.0.3 -j DSCP --set-dscp-class AF21\n"
       "-D OUTPUT -o eth1 -p tcp -m tcp -d 10.0.0.3 -j RETURN\n"
+      "-D FORWARD -o eth1 -p tcp -m tcp -d 10.0.0.3 -j RETURN\n"
       "-A OUTPUT -o eth1 -p tcp -m tcp -d 10.0.0.2 -j CLASSIFY --set-class 1:3\n"
+      "-A FORWARD -o eth1 -p tcp -m tcp -d 10.0.0.2 -j CLASSIFY --set-class 1:3\n"
       "-A OUTPUT -o eth1 -p tcp -m tcp -d 10.0.0.2 -j DSCP --set-dscp-class BE\n"
+      "-A FORWARD -o eth1 -p tcp -m tcp -d 10.0.0.2 -j DSCP --set-dscp-class BE\n"
       "-A OUTPUT -o eth1 -p tcp -m tcp -d 10.0.0.2 -j RETURN\n"
+      "-A FORWARD -o eth1 -p tcp -m tcp -d 10.0.0.2 -j RETURN\n"
       "-A OUTPUT -o eth1 -p tcp -m tcp -d 10.0.0.3 -j CLASSIFY --set-class 1:3\n"
+      "-A FORWARD -o eth1 -p tcp -m tcp -d 10.0.0.3 -j CLASSIFY --set-class 1:3\n"
       "-A OUTPUT -o eth1 -p tcp -m tcp -d 10.0.0.3 -j DSCP --set-dscp-class BE\n"
+      "-A FORWARD -o eth1 -p tcp -m tcp -d 10.0.0.3 -j DSCP --set-dscp-class BE\n"
       "-A OUTPUT -o eth1 -p tcp -m tcp -d 10.0.0.3 -j RETURN\n"
+      "-A FORWARD -o eth1 -p tcp -m tcp -d 10.0.0.3 -j RETURN\n"
       "COMMIT\n";
 
   auto& tc_exp1 =
