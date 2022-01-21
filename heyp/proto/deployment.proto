@@ -16,6 +16,7 @@ message DeployedNode {
   optional string name = 1;
   optional string external_addr = 2;
   optional string experiment_addr = 3;
+  repeated string all_experiment_addrs = 4;
 
   // Valid roles:
   // - host-agent

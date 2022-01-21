@@ -228,6 +228,13 @@ func (nodeConfigs *HEYPNodeConfigs) MakeHostAgentConfig(c *pb.DeploymentConfig, 
 	return hostConfig
 }
 
+func allExperimentAddrs(n *pb.DeployedNode) []string {
+	if len(n.AllExperimentAddrs) == 0 {
+		return []string{n.GetExperimentAddr()}
+	}
+	return n.AllExperimentAddrs
+}
+
 func GetAndValidateHEYPNodeConfigs(c *pb.DeploymentConfig) (HEYPNodeConfigs, error) {
 	nodeConfigs := HEYPNodeConfigs{
 		NodeVHostAgents: make(map[string][]HostAgentNode),
@@ -264,12 +271,14 @@ func GetAndValidateHEYPNodeConfigs(c *pb.DeploymentConfig) (HEYPNodeConfigs, err
 				if nodeConfigs.DCMapperConfig.Mapping == nil {
 					nodeConfigs.DCMapperConfig.Mapping = new(pb.DCMapping)
 				}
-				nodeConfigs.DCMapperConfig.Mapping.Entries = append(
-					nodeConfigs.DCMapperConfig.Mapping.Entries,
-					&pb.DCMapping_Entry{
-						HostAddr: proto.String(n.GetExperimentAddr()),
-						Dc:       proto.String(cluster.GetName()),
-					})
+				for _, addr := range allExperimentAddrs(n) {
+					nodeConfigs.DCMapperConfig.Mapping.Entries = append(
+						nodeConfigs.DCMapperConfig.Mapping.Entries,
+						&pb.DCMapping_Entry{
+							HostAddr: proto.String(addr),
+							Dc:       proto.String(cluster.GetName()),
+						})
+				}
 			}
 			var (
 				hostAgentConfig HostAgentNode

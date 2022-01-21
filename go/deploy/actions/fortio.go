@@ -10,6 +10,7 @@ import (
 	"path"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/uluyol/heyp-agents/go/deploy/configgen"
@@ -18,6 +19,7 @@ import (
 	"github.com/uluyol/heyp-agents/go/deploy/writetar"
 	"github.com/uluyol/heyp-agents/go/multierrgroup"
 	"github.com/uluyol/heyp-agents/go/pb"
+	"github.com/uluyol/heyp-agents/go/virt/relay"
 	"github.com/uluyol/heyp-agents/go/virt/vfortio"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/encoding/prototext"
@@ -27,12 +29,19 @@ import (
 type FortioConfig struct {
 	Config  *pb.DeployedFortioConfig
 	Proxies []*pb.DeployedNode
+	Relays  []*pb.DeployedNode
 	Groups  map[string]*FortioGroup
+
+	cache struct {
+		mu           sync.Mutex
+		sortedGroups []string
+	}
 }
 
 type FortioGroup struct {
 	Config       *pb.DeployedFortioGroup
 	GroupProxies []*pb.DeployedNode
+	GroupRelays  []*pb.DeployedNode
 	Instances    map[string]*FortioInstance
 }
 
@@ -42,15 +51,110 @@ type FortioInstance struct {
 	Clients []*pb.DeployedNode
 }
 
-func (fc *FortioConfig) GetEnvoyYAML(proxyNode *pb.DeployedNode) string {
-	groups := make([]string, 0, len(fc.Groups))
-	for g := range fc.Groups {
-		groups = append(groups, g)
+type FortioFwdKey struct {
+	Group      string
+	Inst       string
+	ServePort  int32
+	ServerAddr string
+}
+
+func (fc *FortioConfig) UseRelays() bool { return len(fc.Relays) > 0 }
+
+func (fc *FortioConfig) sortedGroups() []string {
+	fc.cache.mu.Lock()
+	defer fc.cache.mu.Unlock()
+	if fc.cache.sortedGroups == nil {
+		gs := make([]string, 0, len(fc.Groups))
+		for g := range fc.Groups {
+			gs = append(gs, g)
+		}
+		sort.Strings(gs)
+		fc.cache.sortedGroups = gs
 	}
-	sort.Strings(groups)
+	return fc.cache.sortedGroups
+}
+
+func (fc *FortioConfig) GetNATRules(relayNode *pb.DeployedNode) relay.NATRules {
+	fwdMap := fc.GetForwardMap(relayNode)
+	lisAddr := relayNode.GetExperimentAddr()
+	rules := relay.NATRules{
+		ForwardRules: make([]relay.ForwardRule, 0, len(fwdMap)),
+	}
+	for key, lisPort := range fwdMap {
+		rules.ForwardRules = append(rules.ForwardRules, relay.ForwardRule{
+			ListenAddr: lisAddr,
+			ListenPort: int(lisPort),
+			DestAddr:   key.ServerAddr,
+			DestPort:   int(key.ServePort),
+		})
+	}
+	sort.Slice(rules.ForwardRules, func(i, j int) bool {
+		return rules.ForwardRules[i].ListenPort < rules.ForwardRules[j].ListenPort
+	})
+	return rules
+}
+
+func (fc *FortioConfig) GetForwardMap(relayNode *pb.DeployedNode) map[FortioFwdKey]int32 {
+	groups := fc.sortedGroups()
+	fwdMap := make(map[FortioFwdKey]int32)
+	relayPort := int32(7000)
+
+	for _, group := range groups {
+		g := fc.Groups[group]
+
+		skip := true
+		for _, n := range g.GroupRelays {
+			if n == relayNode {
+				skip = false
+				break
+			}
+		}
+		if skip {
+			continue
+		}
+
+		instNames := make([]string, 0, len(g.Instances))
+		for _, inst := range g.Instances {
+			instNames = append(instNames, inst.Config.GetName())
+		}
+		sort.Strings(instNames)
+
+		for _, instName := range instNames {
+			inst := g.Instances[instName]
+			for _, port := range inst.Config.GetServePorts() {
+				for _, s := range inst.Servers {
+					key := FortioFwdKey{
+						g.Config.GetName(),
+						instName,
+						port,
+						s.GetExperimentAddr(),
+					}
+					fwdMap[key] = relayPort
+					relayPort++
+				}
+			}
+		}
+	}
+
+	return fwdMap
+}
+
+func (fc *FortioConfig) GetEnvoyYAML(proxyNode *pb.DeployedNode) string {
+	groups := fc.sortedGroups()
 
 	c := configgen.EnvoyReverseProxy{
 		AdminPort: int(fc.Config.GetEnvoyAdminPort()),
+	}
+
+	var relayNode *pb.DeployedNode
+	var fwdMap map[FortioFwdKey]int32
+	if fc.UseRelays() {
+		for i, n := range fc.Proxies {
+			if n == proxyNode {
+				relayNode = fc.Relays[i]
+			}
+		}
+		fwdMap = fc.GetForwardMap(relayNode)
 	}
 
 	for _, group := range groups {
@@ -90,10 +194,22 @@ func (fc *FortioConfig) GetEnvoyYAML(proxyNode *pb.DeployedNode) string {
 			}
 			for _, port := range inst.Config.GetServePorts() {
 				for _, s := range inst.Servers {
+					beAddr := s.GetExperimentAddr()
+					bePort := port
+					if fc.UseRelays() {
+						key := FortioFwdKey{
+							group,
+							inst.Config.GetName(),
+							port,
+							s.GetExperimentAddr(),
+						}
+						beAddr = relayNode.GetExperimentAddr()
+						bePort = fwdMap[key]
+					}
 					be.Remotes = append(be.Remotes,
 						configgen.AddrAndPort{
-							Addr: s.GetExperimentAddr(),
-							Port: int(port),
+							Addr: beAddr,
+							Port: int(bePort),
 						})
 				}
 			}
@@ -127,6 +243,7 @@ func GetAndValidateFortioConfig(dc *pb.DeploymentConfig) (*FortioConfig, error) 
 	}
 
 	isProxy := make(map[*pb.DeployedNode]bool)
+	isRelay := make(map[*pb.DeployedNode]bool)
 	for _, n := range dc.GetNodes() {
 		for _, role := range n.GetRoles() {
 			if !strings.HasPrefix(role, "fortio-") {
@@ -144,6 +261,16 @@ func GetAndValidateFortioConfig(dc *pb.DeploymentConfig) (*FortioConfig, error) 
 				if !isProxy[n] {
 					out.Proxies = append(out.Proxies, n)
 					isProxy[n] = true
+				}
+			case strings.HasSuffix(role, "-envoy-relay"):
+				g := strings.TrimSuffix(role, "-envoy-relay")
+				if out.Groups[g] == nil {
+					return nil, fmt.Errorf("role %q matches non-existent fortio group %q", origRole, g)
+				}
+				out.Groups[g].GroupRelays = append(out.Groups[g].GroupRelays, n)
+				if !isRelay[n] {
+					out.Relays = append(out.Relays, n)
+					isRelay[n] = true
 				}
 			case strings.HasSuffix(role, "-server"):
 				fields := strings.Split(strings.TrimSuffix(role, "-server"), "-")
@@ -181,6 +308,10 @@ func GetAndValidateFortioConfig(dc *pb.DeploymentConfig) (*FortioConfig, error) 
 
 	if len(out.Proxies) == 0 {
 		return nil, errors.New("no proxies found for any fortio group")
+	}
+	if out.UseRelays() && len(out.Relays) != len(out.Proxies) {
+		return nil, fmt.Errorf("number of proxies (%d) does not match number of relays (%d)",
+			len(out.Proxies), len(out.Relays))
 	}
 
 	// validate that fields are populated
@@ -289,6 +420,34 @@ func FortioStartServers(c *pb.DeploymentConfig, remoteTopdir, envoyLogLevel stri
 	}
 
 	var eg multierrgroup.Group
+	for _, relay := range fortio.Relays {
+		relay := relay
+		eg.Go(func() error {
+			fwdConfig, err := json.MarshalIndent(fortio.GetNATRules(relay), "", "  ")
+			if err != nil {
+				return err
+			}
+			configTar := writetar.ConcatInMem(writetar.Add(
+				"fortio-relay-config.json", fwdConfig))
+
+			cmd := TracingCommand(
+				LogWithPrefix("fortio-start-relays: "),
+				"ssh", relay.GetExternalAddr(),
+				fmt.Sprintf(
+					"mkdir -p %[1]s/configs;"+
+						"tar xf - -C %[1]s/configs;"+
+						"sudo %[1]s/aux/vfortio init-host &&"+
+						"sudo %[1]s/aux/vfortio relay -c %[1]s/configs/fortio-relay-config.json",
+					remoteTopdir))
+			cmd.SetStdin("config.tar", bytes.NewReader(configTar))
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				return fmt.Errorf("failed to init relay on Node %q: %w; output: %s", relay.GetName(), err, out)
+			}
+			return nil
+		})
+	}
+
 	for _, proxy := range fortio.Proxies {
 		proxy := proxy
 		startedProxy := make(chan bool)

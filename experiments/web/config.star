@@ -2,6 +2,12 @@ config_pb = proto.file("heyp/proto/config.proto")
 deploy_pb = proto.file("heyp/proto/deployment.proto")
 heyp_pb = proto.file("heyp/proto/heyp.proto")
 
+_NUM_BIG_NODES = 6  # number of nodes that need to use a gateway to talk to fortio
+_USE_RELAY = _NUM_BIG_NODES > 0
+
+# Work around cloudlab issues
+_BAD_NODE_IDS = set([])
+
 _DEFAULT_AA_prop_delay_ms = 30
 _DEFAULT_WA_prop_delay_ms = 50
 _DEFAULT_AA_prop_delay_ms_extra_lopri = 60
@@ -507,29 +513,48 @@ _DEFAULT_NODE_COUNTS = {
     "CLIENT": 2,
 }
 
-# Work around cloudlab issues
-_BAD_NODE_IDS = set([])
-
 def _ID2NodeSets(node_counts):
     ubs = dict()
 
-    def _get_set(next_id, count):
+    def _get_set(next_id, count, node_type):
         added = []
         for _ in range(2000):  # starlark lacks while loop
             if len(added) >= count:
                 break
+            if node_type == "any":
+                pass
+            elif node_type == "fortio":
+                if next_id <= _NUM_BIG_NODES:
+                    next_id += 1
+                    continue
+            elif node_type == "big":
+                if next_id > _NUM_BIG_NODES:
+                    fail("not enough big nodes: have {} want at least {}".format(
+                        _NUM_BIG_NODES,
+                        next_id,
+                    ))
+            else:
+                fail("invalid node type: " + node_type)
             if next_id not in _BAD_NODE_IDS:
                 added.append(next_id)
             next_id += 1
         return next_id, set(added)
 
+    node_type_big = "any"
+    if _USE_RELAY:
+        node_type_big = "big"
+
     # IDs start from 1
     next_id = 1
-    next_id, ubs["cluster-agent"] = _get_set(next_id, 1)  # cluster-agent
-    next_id, ubs["EDGE"] = _get_set(next_id, node_counts["EDGE"])
-    next_id, ubs["AA"] = _get_set(next_id, node_counts["AA"])
-    next_id, ubs["WA"] = _get_set(next_id, node_counts["WA"])
-    next_id, ubs["CLIENT"] = _get_set(next_id, node_counts["CLIENT"])
+    next_id, ubs["cluster-agent"] = _get_set(next_id, 1, node_type_big)  # cluster-agent
+    next_id, ubs["CLIENT"] = _get_set(next_id, node_counts["CLIENT"], node_type_big)
+    next_id, ubs["EDGE"] = _get_set(next_id, node_counts["EDGE"], node_type_big)
+    if _USE_RELAY:
+        next_id, ubs["RELAY"] = _get_set(next_id, node_counts["EDGE"], "fortio")
+    else:
+        ubs["RELAY"] = set()
+    next_id, ubs["AA"] = _get_set(next_id, node_counts["AA"], "fortio")
+    next_id, ubs["WA"] = _get_set(next_id, node_counts["WA"], "fortio")
 
     return ubs
 
@@ -631,10 +656,11 @@ def GenConfig(
 
     shard_index = 0
     cluster_agent_nodes = []
-    for idx in range(19):
+    for idx in range(26):
         i = idx + 1
         name = "n" + str(i)
         roles = []
+        is_fortio_be = False
 
         if i in _BAD_NODE_IDS:
             continue
@@ -650,7 +676,12 @@ def GenConfig(
             roles.append("host-agent")
             roles.extend(["fortio-{0}-envoy-proxy".format(g) for g in envoy_group_names])
             clusters["EDGE"]["node_names"].append(name)
+        elif i in id2nodesets["RELAY"]:
+            roles.append("host-agent")
+            roles.extend(["fortio-{0}-envoy-relay".format(g) for g in envoy_group_names])
+            clusters["EDGE"]["node_names"].append(name)
         elif i in id2nodesets["AA"]:
+            is_fortio_be = True
             if AA_servers_are_virt:
                 roles.append("vhost-agents-" + str(AA_NUM_SERVERS_PER_BACKEND_HOST))
             else:
@@ -660,6 +691,7 @@ def GenConfig(
                 roles.extend(["job-" + job for job in AA_jobs_for(i - 4, 9)])
             clusters["AA"]["node_names"].append(name)
         elif i in id2nodesets["WA"]:
+            is_fortio_be = True
             roles.append("host-agent")
             roles.extend(WA_server_roles_for(i - 13, 2))
             clusters["WA"]["node_names"].append(name)
@@ -680,11 +712,18 @@ def GenConfig(
             #fail("got idx >= CLIENT upper bound index", idx, idx_ubs["CLIENT"])
 
         experiment_ip = "192.168.1." + str(i)
+        all_experiment_ips = [experiment_ip]
+        if _USE_RELAY and is_fortio_be:
+            experiment_ip = "192.168.2." + str(i)
+            all_experiment_ips.append(experiment_ip)
+        elif i in id2nodesets["RELAY"]:
+            all_experiment_ips.append("192.168.2." + str(i))
         external_ip, shard_index = ext_addr_for_ip(experiment_ip, shard_key)
         nodes.append({
             "name": name,
             "external_addr": external_ip,
             "experiment_addr": experiment_ip,
+            "all_experiment_addrs": all_experiment_ips,
             "roles": roles,
         })
 
