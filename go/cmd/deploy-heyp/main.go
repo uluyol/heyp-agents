@@ -546,6 +546,38 @@ func (l substList) Apply(data []byte) []byte {
 	return data
 }
 
+type clDualNetFixCmd struct {
+	rspecPath string
+	sshUser   string
+	verbose   bool
+}
+
+func (*clDualNetFixCmd) Name() string     { return "cloudlab-dualnet-fix" }
+func (*clDualNetFixCmd) Synopsis() string { return "fix routes for the dualnet cloudlab config" }
+func (*clDualNetFixCmd) Usage() string    { return "" }
+
+func (c *clDualNetFixCmd) SetFlags(fs *flag.FlagSet) {
+	fs.StringVar(&c.rspecPath, "rspec", "rspec0.xml", "cloudlab manifest file")
+	fs.StringVar(&c.sshUser, "ssh-user", "uluyol", "ssh username to connect with")
+	fs.BoolVar(&c.verbose, "v", false, "enable verbose logging")
+}
+
+func (c *clDualNetFixCmd) Execute(ctx context.Context, fs *flag.FlagSet,
+	args ...interface{}) subcommands.ExitStatus {
+	data, err := os.ReadFile(c.rspecPath)
+	if err != nil {
+		log.Fatalf("failed to read %s: %v", c.rspecPath, err)
+	}
+	rspec, err := configgen.DecodeRSpec(bytes.NewReader(data))
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := actions.CloudlabDualNetFix(&rspec, c.sshUser, c.verbose); err != nil {
+		log.Fatal(err)
+	}
+	return subcommands.ExitSuccess
+}
+
 type genConfigsCmd struct {
 	rspecPaths   flagtypes.StringList
 	sshUser      string
@@ -709,6 +741,7 @@ func main() {
 	subcommands.Register(measureNodesBandwidthCmd, "check")
 	subcommands.Register(killIPerfCmd, "check")
 	subcommands.Register(new(reportPriBWCmd), "check")
+	subcommands.Register(new(clDualNetFixCmd), "")
 	subcommands.Register(new(updateConfigCmd), "")
 	subcommands.Register(new(collectHostStatsCmd), "")
 	subcommands.Register(killHEYPCmd, "")
