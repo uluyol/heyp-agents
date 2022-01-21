@@ -677,7 +677,7 @@ def GenConfig(
             roles.extend(["fortio-{0}-envoy-proxy".format(g) for g in envoy_group_names])
             clusters["EDGE"]["node_names"].append(name)
         elif i in id2nodesets["RELAY"]:
-            roles.append("host-agent")
+            roles.append("host-agent-addr1")
             roles.extend(["fortio-{0}-envoy-relay".format(g) for g in envoy_group_names])
             clusters["EDGE"]["node_names"].append(name)
         elif i in id2nodesets["AA"]:
