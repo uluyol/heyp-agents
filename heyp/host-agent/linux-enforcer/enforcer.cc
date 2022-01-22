@@ -378,8 +378,9 @@ void LinuxHostEnforcer::StageTrafficControlForFlow(StageTrafficControlForFlowArg
                                    NetemDistToString(args.netem_config->delay_dist()));
       }
       tc_batch_input_.Append(absl::StrFormat(
-          "qdisc add dev %s parent %s handle %s netem delay %dms%s\n", device_,
-          args.sys->class_id, netem_handle, args.netem_config->delay_ms(), dist_str));
+          "qdisc add dev %s parent %s handle %s netem limit 100000 delay %dms%s\n",
+          device_, args.sys->class_id, netem_handle, args.netem_config->delay_ms(),
+          dist_str));
     }
     if (args.classes_to_create != nullptr) {
       args.classes_to_create->push_back(args.sys);
