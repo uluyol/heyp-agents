@@ -904,7 +904,7 @@ def BackendOnEachHost(
 
     timeout_sec = float(0)
     if enable_timeout:
-        timeout_sec = fdiv(float(4 * max_prop_delay_ms), float(1e3))
+        timeout_sec = fdiv(float(2 * max_prop_delay_ms), float(1e3))
 
     server_roles = []
     client_roles = []
