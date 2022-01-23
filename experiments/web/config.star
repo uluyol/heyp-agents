@@ -298,6 +298,76 @@ def GenWorkloadStagesIncreasing(
         "envoy_group_names": ["AA", "WA"],
     }
 
+def GenWorkloadStagesIncDec(
+        AA_bps = None,
+        num_AA_backends = None,
+        AA_config = AAConfig(),
+        WA_bps_min = None,
+        WA_bps_max = None,
+        WA_config = WAConfig(),
+        max_util = None):
+    tick_bps = (WA_bps_max - WA_bps_min) // 60
+    WA_stages = [{
+        "target_average_bps": WA_bps_min,
+        "run_dur": "15s",
+    }]
+
+    AA_per_be_bps = int(fdiv(min(float(AA_bps), float(max_util - WA_bps_min)), float(num_AA_backends)))
+    AA_stages = [{
+        "target_average_bps": AA_per_be_bps,
+        "run_dur": "15s",
+    }]
+
+    for tick in range(60):
+        bps = WA_bps_min + tick_bps * tick
+        WA_stages.append({
+            "target_average_bps": bps,
+            "run_dur": "2s",
+        })
+
+        AA_per_be_bps = int(fdiv(min(float(AA_bps), float(max_util - bps)), float(num_AA_backends)))
+
+        # print(AA_per_be_bps, max_util)
+        AA_stages.append({
+            "target_average_bps": AA_per_be_bps,
+            "run_dur": "2s",
+        })
+
+    WA_stages.append({
+        "target_average_bps": WA_bps_max,
+        "run_dur": "15s",
+    })
+
+    AA_per_be_bps = int(fdiv(min(float(AA_bps), float(max_util - WA_bps_max)), float(num_AA_backends)))
+    AA_stages.append({
+        "target_average_bps": AA_per_be_bps,
+        "run_dur": "15s",
+    })
+
+    AA_instances, AA_client_roles, AA_server_roles_for = BackendOnEachHost(
+        num_backends = num_AA_backends,
+        workload_stages_per_backend = AA_stages,
+        num_shards_per_backend = NumShards(int(fdiv(float(AA_bps), float(num_AA_backends)))),
+        **AA_config
+    )
+
+    WA_instances, WA_client_roles, WA_server_roles_for = BackendOnEachHost(
+        num_backends = 1,
+        workload_stages_per_backend = WA_stages,
+        num_shards_per_backend = NumShards(WA_bps_max),
+        **WA_config
+    )
+
+    return {
+        "AA_fortio_instances": AA_instances,
+        "AA_client_roles": AA_client_roles,
+        "AA_server_roles_for": AA_server_roles_for,
+        "WA_fortio_instances": WA_instances,
+        "WA_client_roles": WA_client_roles,
+        "WA_server_roles_for": WA_server_roles_for,
+        "envoy_group_names": ["AA", "WA"],
+    }
+
 def GenWorkloadStagesIncreasingTwoAAJobs(
         AA_bps = None,
         num_AA_backends = None,
@@ -1494,6 +1564,25 @@ def AddConfigsIncreasingBase(
 
     configs[prefix + "-nl_light"] = NoLimitConfig(**kwargs_lo)
     configs[prefix + "-rl_light"] = RateLimitConfig(**kwargs_lo)
+
+    for util in [float("16"), float("16.5"), float("17"), float("17.5"), float("18"), float("18.5")]:
+        wl_x_kwargs = GenWorkloadStagesIncDec(
+            AA_bps = int(Gbps(12)),
+            num_AA_backends = 1,
+            AA_config = AAConfig(
+                servers_are_virt = True,
+                max_prop_delay_ms = _DEFAULT_AA_prop_delay_ms + _DEFAULT_AA_prop_delay_ms_extra_lopri,
+                num_servers_per_backend_host = AA_NUM_SERVERS_PER_BACKEND_HOST,
+                enable_timeout = enable_ac_AA,
+                lb_policy = lb_policy,
+            ),
+            WA_bps_min = int(Gbps(6)),
+            WA_bps_max = int(Gbps(12)),
+            WA_config = WAConfig(enable_timeout = enable_ac_WA),
+            max_util = int(Gbps(util)),
+        )
+        kwargs_x = dict(base_kwargs, **wl_x_kwargs)
+        configs[prefix + "-nl_x_{0}".format(int(10 * util))] = NoLimitConfig(**kwargs_x)
 
 def AddConfigsIncreasing_LR_AC_ALL(configs):
     AddConfigsIncreasingBase(

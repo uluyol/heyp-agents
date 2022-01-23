@@ -36,6 +36,10 @@ SYS_LONG[["stableqos_oversub"]] <- "MixedStable-RL"
 SYS_LONG[["stableqos_rl"]] <- "MixedStable-RLTight"
 SYS_LONG[["stableqos"]] <- "MixedStable"
 
+for (max_util in c("16.0", "16.5", "17.0", "17.5", "18.0", "18.5")) {
+    SYS_LONG[[paste0("nl_x_", gsub("\\.", "", max_util))]] <- paste0("NoLimit-MLU-", max_util)
+}
+
 # Derived from https://github.com/tidyverse/ggplot2/issues/1467#issuecomment-169763396
 stat_myecdf <- function(mapping = NULL, data = NULL, geom = "step",
                       position = "identity", n = NULL, na.rm = FALSE,

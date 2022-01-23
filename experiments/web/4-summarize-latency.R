@@ -36,6 +36,10 @@ SYS_LONG[["stableqos_oversub"]] <- "MixedStable-RL"
 SYS_LONG[["stableqos_rl"]] <- "MixedStable-RLTight"
 SYS_LONG[["stableqos"]] <- "MixedStable"
 
+for (max_util in c("16.0", "16.5", "17.0", "17.5", "18.0", "18.5")) {
+    SYS_LONG[[paste0("nl_x_", gsub("\\.", "", max_util))]] <- paste0("NoLimit-MLU-", max_util)
+}
+
 PlotLatencyCumCountsTo <- function(ymax, subset, output) {
     if (nrow(subset) > 0) {
         # subset$Sys <- factor(subset$Sys, levels=c("NoLimit", "AllHIPRI", "MixedStable", "MixedFlipFlop", "AllLOPRI"))
