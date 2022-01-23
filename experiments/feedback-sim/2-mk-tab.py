@@ -46,7 +46,37 @@ TABLE_COLS = [
     "InitDownFrac",
 ]
 
-TABLE_COLS_SET = set(TABLE_COLS)
+TABLE_COLS_SET = frozenset(TABLE_COLS)
+
+PAPER_NAMES_AND_ORDER = [
+    ("Demands", "Demand Dist."),
+    ("#task", "No. of tasks"),
+    ("LPCap", "LOPRI Cap. Frac"),
+    ("InitDownFrac", "Init. Frac. Downgraded"),
+    ("ShiftT", "Unsat. Demand Shifts to HIPRI?"),
+    ("NumConv", "No. of Converged Runs"),
+    ("ConvIters", "Convergence Time (#iters)"),
+    ("UndoneQoS", "Undone QoS (TODO units)"),
+    ("NumOscil", "No. of Oscillations"),
+    ("FinOver", "Final Overage"),
+    ("FinShort", "Final Shortage"),
+    ("InterOver", "Intermediate Overage"),
+    ("InterShort", "Intermediate Shortage"),
+]
+
+PAPER_NAMES_MAP = {n[0]: n[1] for n in PAPER_NAMES_AND_ORDER}
+
+def check_paper_names():
+    paper_names_set = set(n[0] for n in PAPER_NAMES_AND_ORDER)
+    all_names = paper_names_set.union(SEP_TABLES)
+    if len(all_names) != len(FIELD_NAMES):
+        raise ValueError("missing paper names: len(all_names): {} vs len(FIELD_NAMES): {}".format(
+            len(all_names), len(FIELD_NAMES)))
+    for fname in FIELD_NAMES:
+        if fname not in all_names:
+            raise ValueError("did not find {} in {}".format(fname, all_names))
+
+check_paper_names()
 
 def get_key_for_table(r):
     return tuple(r[k] for k in TABLE_COLS)
@@ -144,20 +174,44 @@ SEP = "\t"
 END = ""
 if args.latex:
     SEP = " & "
-    END = " \\\\"
+    END = " \\\\ \\hline"
 
 for table_key, table_vals in tables.items():
     print(" ".join('{0}={1}'.format(*k) for k in table_key))
 
     sorted_table_vals = sorted(table_vals, key=get_key_for_table)
-    for fname in FIELD_NAMES:
+    names = FIELD_NAMES
+    if args.latex:
+        names = (n[0] for n in PAPER_NAMES_AND_ORDER)
+    for fname in names:
         if fname in SEP_TABLES:
             continue
         row = [fname]
+        if args.latex:
+            row = [PAPER_NAMES_MAP[fname]]
         for v in sorted_table_vals:
             t = v[fname]
             if fname in REWRITES:
                 t = REWRITES[fname](t)
             row.append(t)
+        if args.latex:
+            newrow = []
+            cur = None
+            count = 0
+            for r in row:
+                if r != cur:
+                    if count == 1:
+                        newrow.append(cur)
+                    elif count > 0:
+                        newrow.append("\multicolumn{{{0}}}{{c|}}{{{1}}}".format(count, cur))
+                    cur = r
+                    count = 0
+                count += 1
+            if count == 1:
+                newrow.append(cur)
+            elif count > 0:
+                newrow.append("\multicolumn{{{0}}}{{c|}}{{{1}}}".format(count, cur))
+            row = newrow
+
         print(SEP.join(row) + END)
     print("\n")
