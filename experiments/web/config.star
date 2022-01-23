@@ -12,6 +12,13 @@ _DEFAULT_AA_prop_delay_ms = 30
 _DEFAULT_WA_prop_delay_ms = 50
 _DEFAULT_AA_prop_delay_ms_extra_lopri = 60
 
+_DEFAULT_NODE_COUNTS = {
+    "EDGE": 2,
+    "AA": 14,
+    "WA": 4,
+    "CLIENT": 2,
+}
+
 def NumShards(load_bps):
     inflated_load = float(2 * load_bps)
     one_gbps = float(Gbps(1)) * float("1.5")
@@ -47,10 +54,10 @@ def NumConnsPerShard(stages, size_dist, num_shards, prop_delay_ms):
 AA_FORTIO_STARTING_PORT = 6000
 WA_FORTIO_STARTING_PORT = 6100
 
-AA_NUM_SERVERS_PER_BACKEND_HOST = 3
+AA_NUM_SERVERS_PER_BACKEND_HOST = 4
 
 def AAConfig(
-        num_servers_per_backend_host = 2,
+        num_servers_per_backend_host = AA_NUM_SERVERS_PER_BACKEND_HOST,
         name_prefix = "AA_",
         envoy_group_name = "AA",
         servers_are_virt = False,
@@ -505,13 +512,6 @@ def GenWorkloadStagesOscillating(
         "WA_server_roles_for": WA_server_roles_for,
         "envoy_group_names": ["AA", "WA"],
     }
-
-_DEFAULT_NODE_COUNTS = {
-    "EDGE": 2,
-    "AA": 10,
-    "WA": 2,
-    "CLIENT": 2,
-}
 
 def _ID2NodeSets(node_counts):
     ubs = dict()
