@@ -1734,9 +1734,11 @@ def AddConfigsFlipQoS(configs):
 
     # for cp in ["100ms", "200ms", "300ms", "400ms", "500ms", "600ms", "700ms", "800ms", "900ms", "1s", "2s", "3s", "4s", "5s"]:
     # for cp in ["200ms", "300ms", "400ms", "500ms", "600ms", "700ms", "800ms", "900ms", "1s", "2s", "3s", "4s", "5s"]:
+    # for cp in ["5s"]:
     for cp in ["5s", "10s", "15s", "20s", "25s", "30s", "35s", "40s", "45s", "50s", "55s", "60s"]:
         for AA_lat, WA_lat, AA_lopri_lat in latencies:
             # for WA_demand_gbps in [float("0.5"), float("1"), float("2")]:
+            # for AA_approval_gbps in [float("4"), float("5"), float("6"), float("7"), float("8")]:
             for AA_approval_gbps in [float("4")]:
                 AA_approval = int(Gbps(AA_approval_gbps))
 
@@ -1831,54 +1833,6 @@ def AddConfigsFlipQoS(configs):
                 # configs[prefix + "-flipflop_rl"] = FixedHostPatternAlternatingQoSConfig(AA_admission_bps = AA_approval, **kwargs)
                 # configs[prefix + "-stableqos_rl"] = FixedHostPatternStableQoSConfig(AA_admission_bps = AA_approval, **kwargs)
                 prefix = "qflip_rr_cp_{0}_lat_{1}_{2}_{3}_fg{4}".format(cp, AA_lat, WA_lat, AA_lopri_lat, AA_approval_gbps)
-                configs[prefix + "-lopri"] = FixedHostPatternLOPRIConfig(**kwargs)
-                configs[prefix + "-flipflop_nl"] = FixedHostPatternAlternatingQoSConfig(**kwargs)
-                configs[prefix + "-stableqos_nl"] = FixedHostPatternStableQoSConfig(**kwargs)
-                configs[prefix + "-flipflop_oversub"] = FixedHostPatternAlternatingQoSConfig(AA_admission_bps = int(OVERSUB_FACTOR * AA_approval), **kwargs)
-                configs[prefix + "-stableqos_oversub"] = FixedHostPatternStableQoSConfig(AA_admission_bps = int(OVERSUB_FACTOR * AA_approval), **kwargs)
-
-                kwargs = dict({
-                    "AA_lopri_is_longer": True,
-                    "AA_approved_bps": AA_approval,
-                    "AA_surplus_bps": AA_approval,
-                    "WA_approved_bps": WA_demand,
-                    "AA_prop_delay_ms": AA_lat,
-                    "WA_prop_delay_ms": WA_lat,
-                    "AA_prop_delay_ms_extra_lopri": AA_lopri_lat - AA_lat,
-                    "shard_key": "qflip_cp_{0}_lat_{1}_{2}_{3}".format(cp, AA_lat, WA_lat, AA_lopri_lat),
-                    "node_counts": {
-                        "EDGE": 2,
-                        "AA": 8,
-                        "WA": 2,
-                        "CLIENT": 2,
-                    },
-                    "cluster_control_period": cp,
-                    "host_agent_log_fine_grained_stats": True,  # for analysis
-                }, **GenWorkloadStagesStatic(
-                    AA_bps = 2 * AA_approval,
-                    AA_config = AAConfig(
-                        lb_policy = "RANDOM",
-                        avg_prop_delay_ms = AA_lopri_lat,
-                        max_prop_delay_ms = (AA_lat + AA_lopri_lat) // 2,
-                        num_servers_per_backend_host = 1,
-                        max_pending_requests = 1000,
-                    ),
-                    WA_bps = WA_demand,
-                    WA_config = WAConfig(
-                        lb_policy = "RANDOM",
-                        avg_prop_delay_ms = WA_lat,
-                        max_prop_delay_ms = WA_lat,
-                        num_servers_per_backend_host = 2,
-                    ),
-                    WA_has_traffic = False,
-                    run_dur = "150s",
-                ))
-                # enable_timeout = True,
-
-                # configs[prefix + "-hipri"] = FixedHostPatternHIPRIConfig(**kwargs)
-                # configs[prefix + "-flipflop_rl"] = FixedHostPatternAlternatingQoSConfig(AA_admission_bps = AA_approval, **kwargs)
-                # configs[prefix + "-stableqos_rl"] = FixedHostPatternStableQoSConfig(AA_admission_bps = AA_approval, **kwargs)
-                prefix = "qflip_rd_cp_{0}_lat_{1}_{2}_{3}_fg{4}".format(cp, AA_lat, WA_lat, AA_lopri_lat, AA_approval_gbps)
                 configs[prefix + "-lopri"] = FixedHostPatternLOPRIConfig(**kwargs)
                 configs[prefix + "-flipflop_nl"] = FixedHostPatternAlternatingQoSConfig(**kwargs)
                 configs[prefix + "-stableqos_nl"] = FixedHostPatternStableQoSConfig(**kwargs)
