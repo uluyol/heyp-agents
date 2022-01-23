@@ -15,7 +15,6 @@ hostDemands:
       mean: 2
 numHosts: [200]
 approvalOverExpectedDemand: [0.5]
-numSamplesAtApproval: [8]
 numFeedbackIters: 100
 feedbackScenarios:
   - maxHostUsage: 40

@@ -133,7 +133,6 @@ func EvalFeedbackInstance(inst FeedbackInstance, numRuns int, sem chan Token, re
 				HostDemandsGen:             hostDemandsGen,
 				NumHosts:                   numHosts,
 				ApprovalOverExpectedDemand: inst.ApprovalOverExpectedDemand,
-				NumSamplesAtApproval:       inst.NumSamplesAtApproval,
 				NumFeedbackIters:           inst.NumFeedbackIters,
 				Result: ScenarioResult{
 					Scenario:          inst.Scenarios.FeedbackScenarios[inst.Scenarios.TemplateID(id)],
