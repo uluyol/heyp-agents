@@ -10,26 +10,31 @@ if (length(args) != 1) {
 }
 
 SYS_LONG <- new.env(hash=TRUE)
-SYS_LONG[["hsc"]] <- "HSC20"
-SYS_LONG[["nl"]] <- "NoLimit"
-SYS_LONG[["nl_light"]] <- "NoLimit-LightAA"
-SYS_LONG[["qd"]] <- "QD"
-SYS_LONG[["qd_fc"]] <- "QD+FC"
-SYS_LONG[["qdlrl"]] <- "QD+LimitLO"
-SYS_LONG[["qdlrl_fc"]] <- "QD+FC+LimitLO"
-SYS_LONG[["qdhrl"]] <- "QD+LimitHI"
-SYS_LONG[["rl"]] <- "RateLimit"
-SYS_LONG[["rl_light"]] <- "RateLimit-LightAA"
-
-SYS_LONG[["qd_knap"]] <- "Knapsack"
-SYS_LONG[["qd_hash"]] <- "Hash"
-SYS_LONG[["qdhrl_knap"]] <- "Knapsack+LimitHI"
-SYS_LONG[["qdhrl_hash"]] <- "Hash+LimitHI"
-
+SYS_LONG[["flipflop_nl"]] <- "MixedFlipFlop-NL"
 SYS_LONG[["flipflop_oversub"]] <- "MixedFlipFlop-RL"
-SYS_LONG[["stableqos_oversub"]] <- "MixedStable-RL"
+SYS_LONG[["flipflop_rl"]] <- "MixedFlipFlop-RLTight"
+SYS_LONG[["flipflop"]] <- "MixedFlipFlop"
 SYS_LONG[["hipri"]] <- "AllHIPRI"
+SYS_LONG[["hsc"]] <- "HSC20"
 SYS_LONG[["lopri"]] <- "AllLOPRI"
+SYS_LONG[["nl_light"]] <- "NoLimit-LightAA"
+SYS_LONG[["nl"]] <- "NoLimit"
+SYS_LONG[["qd_fc"]] <- "QD+FC"
+SYS_LONG[["qd_hash"]] <- "Hash"
+SYS_LONG[["qd_knap"]] <- "Knapsack"
+SYS_LONG[["qd"]] <- "QD"
+SYS_LONG[["qdhrl_hash"]] <- "Hash+LimitHI"
+SYS_LONG[["qdhrl_knap"]] <- "Knapsack+LimitHI"
+SYS_LONG[["qdhrl"]] <- "QD+LimitHI"
+SYS_LONG[["qdlrl_fc"]] <- "QD+FC+LimitLO"
+SYS_LONG[["qdlrl"]] <- "QD+LimitLO"
+SYS_LONG[["qdlrlj"]] <- "QDJob+LimitLO"
+SYS_LONG[["rl_light"]] <- "RateLimit-LightAA"
+SYS_LONG[["rl"]] <- "RateLimit"
+SYS_LONG[["stableqos_nl"]] <- "MixedStable-NL"
+SYS_LONG[["stableqos_oversub"]] <- "MixedStable-RL"
+SYS_LONG[["stableqos_rl"]] <- "MixedStable-RLTight"
+SYS_LONG[["stableqos"]] <- "MixedStable"
 
 # Derived from https://github.com/tidyverse/ggplot2/issues/1467#issuecomment-169763396
 stat_myecdf <- function(mapping = NULL, data = NULL, geom = "step",
