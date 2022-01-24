@@ -199,6 +199,9 @@ func (h *SimulatedHost) runInformLoop(ctx context.Context, isDone chan<- struct{
 		log.Print("[SEND] host ", h.HostID, " restarting for loop at ", time.Now())
 		lastTime := time.Now()
 		pop.populateInfo(rng, &b, lastTime)
+		if len(b.FlowInfos) == 0 {
+			continue
+		}
 		gen++
 		b.Gen = gen
 		log.Print("[SEND] host ", h.HostID, " done populating bundle, sending.. at ", time.Now())
