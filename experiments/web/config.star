@@ -1565,7 +1565,7 @@ def AddConfigsIncreasingBase(
     configs[prefix + "-nl_light"] = NoLimitConfig(**kwargs_lo)
     configs[prefix + "-rl_light"] = RateLimitConfig(**kwargs_lo)
 
-    for util in [float("16"), float("16.5"), float("17"), float("17.5"), float("18"), float("18.5")]:
+    for util in [float("16.5"), float("17"), float("17.5"), float("18")]:
         wl_x_kwargs = GenWorkloadStagesIncDec(
             AA_bps = int(Gbps(12)),
             num_AA_backends = 1,
