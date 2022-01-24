@@ -613,11 +613,13 @@ for (cfgGroup in cfgGroups) {
                 data.frame(
                     UnixTime=qos.retained.ts$UnixTime,
                     FracChanged=1-qos.retained.ts$FracHIPRIRetained,
+                    NumChanged=qos.retained.ts$NumToLOPRI,
                     Kind=rep.int("HI to LOPRI", nrow(qos.retained.ts)),
                     Sys=rep.int(sys_name, nrow(qos.retained.ts))),
                 data.frame(
                     UnixTime=qos.retained.ts$UnixTime,
                     FracChanged=1-qos.retained.ts$FracLOPRIRetained,
+                    NumChanged=qos.retained.ts$NumToHIPRI,
                     Kind=rep.int("LO to HIPRI", nrow(qos.retained.ts)),
                     Sys=rep.int(sys_name, nrow(qos.retained.ts)))))
 
