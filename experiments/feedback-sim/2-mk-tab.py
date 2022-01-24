@@ -55,8 +55,8 @@ PAPER_NAMES_AND_ORDER = [
     ("InitDownFrac", "Init. Frac. Downgraded"),
     ("ShiftT", "Unsat. Demand Shifts to HIPRI?"),
     ("NumConv", "No. of Converged Runs"),
-    ("ConvIters", "Convergence Time (#iters)"),
-    ("UndoneQoS", "Undone QoS (TODO units)"),
+    ("ConvIters", "Convergence Time (#periods)"),
+    ("UndoneQoS", "No. of QoS changes undone"),
     ("NumOscil", "No. of Oscillations"),
     ("FinOver", "Final Overage"),
     ("FinShort", "Final Shortage"),
@@ -111,7 +111,7 @@ def should_upgrade_data():
 
 def rewrite_demands(s):
     if s.startswith("elephantsMice-"):
-        return "EM-" + s[len("elephantsMice-"):]
+        return "EM-" + str(int(100*float(s[len("elephantsMice-"):]))) + "%"
     if s == "exponential":
         return "EXP"
     if s == "fb15":
@@ -120,8 +120,8 @@ def rewrite_demands(s):
         return "UNI"
     return s
 
-def rewrite_float2(s):
-    return "{:.2f}".format(float(s))
+def rewrite_float2pct(s):
+    return "{:.0f}".format(100*float(s))
 
 def rewrite_yn(s):
     if s == "true":
@@ -133,10 +133,12 @@ def rewrite_yn(s):
 REWRITES = {
     "Demands": rewrite_demands,
     "ShiftT": rewrite_yn,
-    "FinOver": rewrite_float2,
-    "FinShort": rewrite_float2,
-    "InterOver": rewrite_float2,
-    "InterShort": rewrite_float2,
+    "LPCap": rewrite_float2pct,
+    "InitDownFrac": rewrite_float2pct,
+    "FinOver": rewrite_float2pct,
+    "FinShort": rewrite_float2pct,
+    "InterOver": rewrite_float2pct,
+    "InterShort": rewrite_float2pct,
 }
 
 # aoe >= 1: no downgrade
@@ -176,7 +178,10 @@ if args.latex:
     SEP = " & "
     END = " \\\\ \\hline"
 
-for table_key, table_vals in tables.items():
+table_keys = sorted(tables.keys())
+
+for table_key in table_keys:
+    table_vals = tables[table_key]
     print(" ".join('{0}={1}'.format(*k) for k in table_key))
 
     sorted_table_vals = sorted(table_vals, key=get_key_for_table)
@@ -194,7 +199,7 @@ for table_key, table_vals in tables.items():
             if fname in REWRITES:
                 t = REWRITES[fname](t)
             row.append(t)
-        if args.latex:
+        if args.latex and fname in TABLE_COLS_SET:
             newrow = []
             cur = None
             count = 0

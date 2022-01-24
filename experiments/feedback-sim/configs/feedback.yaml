@@ -3,7 +3,7 @@ hostDemands:
       high: 4
   - exponential:
       mean: 2
-      max: 10
+      max: 40
   - elephantsMice:
       elephants:
         high: 30
