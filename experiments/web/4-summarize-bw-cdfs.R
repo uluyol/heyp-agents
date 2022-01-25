@@ -596,7 +596,8 @@ for (cfgGroup in cfgGroups) {
         shortage.this <- shortage.this[,c("Sys", "FG", "QoS", "ShortageGbps", "ShortageFrac")]
         shortage <- rbind(shortage, shortage.this)
 
-        err.this$ErrGbps <- pmax(err.this$Overage, err.this$ShortageGbps)
+        err.this$ErrGbps <- err.this$Overage
+        err.this$ErrGbps[err.this$ErrGbps <= 0] <- -err.this$ShortageGbps[err.this$ErrGbps <= 0]
         err.this$RelErr <- err.this$ErrGbps / err.this$Admission
         err.this$RelErr[err.this$ErrGbps == 0 & err.this$Admission == 0] <- 0
 
