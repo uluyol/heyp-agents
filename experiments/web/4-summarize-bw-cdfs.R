@@ -600,7 +600,7 @@ for (cfgGroup in cfgGroups) {
         err.this$RelErr <- err.this$ErrGbps / err.this$Admission
         err.this$RelErr[err.this$ErrGbps == 0 & err.this$Admission == 0] <- 0
 
-        err.this <- err.this[,c("Sys", "FG", "QoS", "ErrGbps", "RelErr")]
+        err.this <- err.this[,c("UnixTime", "Sys", "FG", "QoS", "ErrGbps", "RelErr")]
         err <- rbind(err, err.this)
 
         retransmits.agg.this <- aggregate(cbind(RetransSegs, IngressBps, EgressBps) ~ UnixTime, data=host.ts, FUN=sum)
