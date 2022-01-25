@@ -8,7 +8,8 @@ import (
 	"os"
 	"sync"
 	"time"
-	"io/ioutil"
+	"runtime"
+	"runtime/pprof"
 
 	"github.com/uluyol/heyp-agents/go/cmd/flagtypes"
 	"github.com/uluyol/heyp-agents/go/pb"
@@ -21,6 +22,7 @@ func main() {
 	var (
 		configPath       = flag.String("c", "config.textproto", "path to HostSimulatorConfig")
 		outPath          = flag.String("o", "out.csv", "path to output")
+		mutexProfPath	 = flag.String("m", "mut.out", "path to mutex profile")
 		runDur           = flagtypes.Duration{D: 10 * time.Second}
 		startTime        = flagtypes.RFC3339NanoTime{T: time.Now().Add(5 * time.Second), OK: true}
 		clusterAgentAddr = flag.String("cluster-agent-addr", "127.0.0.1:3000", "address of cluster agent")
@@ -31,9 +33,11 @@ func main() {
 
 	log.SetPrefix("fake-host-agent: ")
 	log.SetFlags(0)
-	log.SetOutput(ioutil.Discard)
+	// log.SetOutput(ioutil.Discard)
 
 	flag.Parse()
+
+	runtime.SetMutexProfileFraction(1)
 
 	configBytes, err := os.ReadFile(*configPath)
 	if err != nil {
@@ -54,6 +58,7 @@ func main() {
 	for time.Now().Before(startTime.T) {
 		clientConn, err = grpc.Dial(*clusterAgentAddr, grpc.WithInsecure(), grpc.WithBlock())
 		if err == nil {
+			log.Print("successfully connected to cluster agent")
 			break
 		}
 	}
@@ -78,7 +83,23 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
 	wg.Add(len(fakeHosts))
+
+	// hostsPerConn := 500
+	// hostCounter := 0
+
 	for _, h := range fakeHosts {
+		// hostCounter++
+		// if hostCounter % hostsPerConn == 0 {
+		// 	log.Print("initializing new clientconn since hostCounter is", hostCounter)
+		// 	var clientConn *grpc.ClientConn
+		// 	clientConn, err = grpc.Dial(*clusterAgentAddr, grpc.WithInsecure(), grpc.WithBlock())
+		// 	if err != nil {
+		// 		log.Fatalf("failed to connect to cluster agent: %v", err)
+		// 	} else {
+		// 		log.Print("client connection successfull", hostCounter)
+		// 		client = pb.NewClusterAgentClient(clientConn)
+		// 	}
+		// }
 		go func(h *SimulatedHost) {
 			defer wg.Done()
 			h.RunLoop(ctx, client, reportDur)
@@ -94,6 +115,18 @@ func main() {
 	endTime := time.Now()
 	log.Printf("end-time: %s end-time-unix-ms: %d", endTime.In(time.UTC).Format(time.RFC3339Nano), unixMillis(endTime.In(time.UTC)))
 
+	m, err := os.Create(*mutexProfPath)
+	if err != nil {
+		log.Fatalf("failed to create mutex out file: %v", err)
+	}
+
+	mp := pprof.Lookup("mutex")
+	mp.WriteTo(m,1)
+
+	if err := m.Close(); err != nil {
+		log.Fatalf("failed to close output: %v", err)
+	}
+	
 	f, err := os.Create(*outPath)
 	if err != nil {
 		log.Fatalf("failed to create output file: %v", err)
