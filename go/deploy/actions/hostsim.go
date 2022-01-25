@@ -107,13 +107,14 @@ func RunHostAgentSims(c *pb.DeploymentConfig, remoteTopdir string, showOut bool)
 		c := &simConfigs[i]
 
 		fakeFGs := make([]*pb.FakeFG, len(c.C.FakeFgs))
+		hostsPerNode := (int(c.C.GetNumHostsPerFg()) + len(c.Nodes) - 1) / len(c.Nodes)
 		for j := range fakeFGs {
 			fakeFGs[j] = &pb.FakeFG{
 				SrcDc:            &c.SrcDC,
 				DstDc:            c.C.FakeFgs[j].DstDc,
 				Job:              c.C.FakeFgs[j].Job,
-				MinHostUsage:     proto.Int64(c.C.FakeFgs[j].GetMinFgUsage() / int64(len(c.Nodes))),
-				MaxHostUsage:     proto.Int64(c.C.FakeFgs[j].GetMaxFgUsage() / int64(len(c.Nodes))),
+				MinHostUsage:     proto.Int64(c.C.FakeFgs[j].GetMinFgUsage() / int64(c.C.GetNumHostsPerFg())),
+				MaxHostUsage:     proto.Int64(c.C.FakeFgs[j].GetMaxFgUsage() / int64(c.C.GetNumHostsPerFg())),
 				ApprovalBps:      proto.Int64(c.C.FakeFgs[j].GetApprovalBps()),
 				TargetNumSamples: proto.Int32(c.C.FakeFgs[j].GetTargetNumSamples()),
 			}
@@ -122,7 +123,7 @@ func RunHostAgentSims(c *pb.DeploymentConfig, remoteTopdir string, showOut bool)
 		const startHostID = 100001
 		numHosts := int32(0)
 		nProcesses := 1
-		hostsPerNode := (int(c.C.GetNumHostsPerFg()) + len(c.Nodes) - 1) / len(c.Nodes)
+		
 		for _, n := range c.Nodes {
 			n := n
 			hostsPerProcess := hostsPerNode/nProcesses
@@ -156,7 +157,7 @@ func RunHostAgentSims(c *pb.DeploymentConfig, remoteTopdir string, showOut bool)
 						LogWithPrefix("run-host-agent-sims: "),
 						"ssh", n.GetExternalAddr(),
 						fmt.Sprintf("cat > %[1]s/configs/host-agent-sim-%[5]d.textproto && mkdir -p %[1]s/logs && ulimit -Sn unlimited && "+
-							"%[1]s/aux/host-agent-sim -c %[1]s/configs/host-agent-sim-%[5]d.textproto -o %[1]s/logs/host-agent-sim-%[5]d.csv -cluster-agent-addr %[2]s -start-time %[3]s -dur %[4]s 2>&1 | tee %[1]s/logs/host-agent-sim-%[5]d.log; exit ${PIPESTATUS[0]}",
+							"%[1]s/aux/host-agent-sim -m %[1]s/configs/host-agent-sim-%[5]d.mutex.out -c %[1]s/configs/host-agent-sim-%[5]d.textproto -o %[1]s/logs/host-agent-sim-%[5]d.csv -cluster-agent-addr %[2]s -dur %[4]s 2>&1 | tee %[1]s/logs/host-agent-sim-%[5]d.log; exit ${PIPESTATUS[0]}",
 							remoteTopdir, c.ClusterAgentAddr, startTimestamp, c.C.GetRunDur(),p))
 					cmd.SetStdin(fmt.Sprintf("host-agent-sim-%.textproto",p), bytes.NewReader(hostSimConfigBytes))
 					if showOut {
