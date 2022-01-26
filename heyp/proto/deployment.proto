@@ -37,7 +37,7 @@ message DeployedCluster {
   repeated string node_names = 2;
 
   optional AllocBundle limits = 3;
-  optional int32 cluster_agent_port = 4;
+  repeated int32 cluster_agent_ports = 4;
 }
 
 message DeployedTestLopriInstance {

@@ -221,7 +221,9 @@ message ClusterAllocatorConfig {
 }
 
 message ClusterServerConfig {
-  optional string address = 1 [default = "0.0.0.0:1415"];
+  // List of addresses to listen on.
+  // Format: 0.0.0.0:1415
+  repeated string addresses = 1;
   optional string control_period = 2 [default = "5s"];
 }
 

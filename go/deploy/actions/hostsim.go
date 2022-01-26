@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/uluyol/heyp-agents/go/deploy/periodic"
@@ -17,10 +16,10 @@ import (
 )
 
 type HostAgentSimConfig struct {
-	SrcDC            string
-	ClusterAgentAddr string
-	C                *pb.DeployedHostAgentSimConfig
-	Nodes            []*pb.DeployedNode
+	SrcDC             string
+	ClusterAgentAddrs []string
+	C                 *pb.DeployedHostAgentSimConfig
+	Nodes             []*pb.DeployedNode
 }
 
 func GetAndValidateHostAgentSimConfigs(c *pb.DeploymentConfig) ([]HostAgentSimConfig, error) {
@@ -40,7 +39,7 @@ func GetAndValidateHostAgentSimConfigs(c *pb.DeploymentConfig) ([]HostAgentSimCo
 			for _, role := range n.Roles {
 				switch {
 				case role == "cluster-agent":
-					simConfig.ClusterAgentAddr = n.GetExperimentAddr() + ":" + strconv.Itoa(int(cluster.GetClusterAgentPort()))
+					simConfig.ClusterAgentAddrs = makeClusterAgentAddrs(n.GetExperimentAddr(), cluster.GetClusterAgentPorts())
 				case role == "host-agent-sim":
 					simConfig.Nodes = append(simConfig.Nodes, n)
 				}
@@ -52,7 +51,7 @@ func GetAndValidateHostAgentSimConfigs(c *pb.DeploymentConfig) ([]HostAgentSimCo
 			continue
 		}
 
-		if simConfig.ClusterAgentAddr == "" {
+		if len(simConfig.ClusterAgentAddrs) == 0 {
 			return nil, fmt.Errorf("cluster '%s': need a node that has role 'cluster-agent' to simulate host agents",
 				cluster.GetName())
 		}
@@ -122,7 +121,7 @@ func RunHostAgentSims(c *pb.DeploymentConfig, remoteTopdir string, showOut bool)
 		const startHostID = 100001
 		numHosts := int32(0)
 		hostsPerNode := (int(c.C.GetNumHostsPerFg()) + len(c.Nodes) - 1) / len(c.Nodes)
-		for _, n := range c.Nodes {
+		for nidx, n := range c.Nodes {
 			n := n
 
 			hostSimConfig := &pb.HostSimulatorConfig{
@@ -146,13 +145,14 @@ func RunHostAgentSims(c *pb.DeploymentConfig, remoteTopdir string, showOut bool)
 				return fmt.Errorf("failed to marshal host-agent-sim config: %w", err)
 			}
 
+			clusterAgentAddr := c.ClusterAgentAddrs[nidx%len(c.ClusterAgentAddrs)]
 			eg.Go(func() error {
 				cmd := TracingCommand(
 					LogWithPrefix("run-host-agent-sims: "),
 					"ssh", n.GetExternalAddr(),
 					fmt.Sprintf("cat > %[1]s/configs/host-agent-sim.textproto && mkdir -p %[1]s/logs && "+
 						"%[1]s/aux/host-agent-sim -c %[1]s/configs/host-agent-sim.textproto -o %[1]s/logs/host-agent-sim.csv -cluster-agent-addr %[2]s -start-time %[3]s -dur %[4]s 2>&1 | tee %[1]s/logs/host-agent-sim.log; exit ${PIPESTATUS[0]}",
-						remoteTopdir, c.ClusterAgentAddr, startTimestamp, c.C.GetRunDur()))
+						remoteTopdir, clusterAgentAddr, startTimestamp, c.C.GetRunDur()))
 				cmd.SetStdin("host-agent-sim.textproto", bytes.NewReader(hostSimConfigBytes))
 				if showOut {
 					cmd.Stdout = os.Stdout

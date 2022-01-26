@@ -153,7 +153,7 @@ clusters {
   node_names: "n1"
   node_names: "n2"
   node_names: "n3"
-  cluster_agent_port: 4560
+  cluster_agent_ports: 4560
 }
 clusters {
   name: "AA"

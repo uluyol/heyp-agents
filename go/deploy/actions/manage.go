@@ -181,9 +181,9 @@ type HostAgentNode struct {
 }
 
 type ClusterAgentNode struct {
-	Node    *pb.DeployedNode
-	Cluster *pb.DeployedCluster
-	Address string
+	Node      *pb.DeployedNode
+	Cluster   *pb.DeployedCluster
+	Addresses []string
 }
 
 func checkNetem(dcPair *pb.SimulatedWanConfig_Pair, netem *pb.NetemConfig, fieldName string) error {
@@ -238,6 +238,14 @@ func allExperimentAddrs(n *pb.DeployedNode) []string {
 		return []string{n.GetExperimentAddr()}
 	}
 	return n.AllExperimentAddrs
+}
+
+func makeClusterAgentAddrs(addrWithoutPort string, ports []int32) []string {
+	addrs := make([]string, len(ports))
+	for pi, port := range ports {
+		addrs[pi] = addrWithoutPort + ":" + strconv.Itoa(int(port))
+	}
+	return addrs
 }
 
 func GetAndValidateHEYPNodeConfigs(c *pb.DeploymentConfig) (HEYPNodeConfigs, error) {
@@ -298,7 +306,7 @@ func GetAndValidateHEYPNodeConfigs(c *pb.DeploymentConfig) (HEYPNodeConfigs, err
 				case role == "cluster-agent":
 					nodeConfigs.ClusterAgentNodes = append(
 						nodeConfigs.ClusterAgentNodes,
-						ClusterAgentNode{n, cluster, "0.0.0.0:" + strconv.Itoa(int(cluster.GetClusterAgentPort()))})
+						ClusterAgentNode{n, cluster, makeClusterAgentAddrs("0.0.0.0", cluster.GetClusterAgentPorts())})
 					thisClusterAgentNode = n
 				case role == "cluster-agents":
 					return nodeConfigs, fmt.Errorf("node '%s': invalid role \"cluster-agents\", did you mean \"cluster-agent\"?", n.GetName())
@@ -399,16 +407,25 @@ func GetAndValidateHEYPNodeConfigs(c *pb.DeploymentConfig) (HEYPNodeConfigs, err
 					cluster.GetName())
 			}
 		} else {
+			clusterAgentAddrs := makeClusterAgentAddrs(
+				thisClusterAgentNode.GetExperimentAddr(),
+				cluster.GetClusterAgentPorts())
+
+			nextAddrID := 0
+			getNextClusterAgentAddr := func() string {
+				addr := clusterAgentAddrs[nextAddrID%len(clusterAgentAddrs)]
+				nextAddrID++
+				return addr
+			}
+
 			for i := numHostsFilled; i < len(nodeConfigs.HostAgentNodes); i++ {
-				nodeConfigs.HostAgentNodes[i].ClusterAgentAddr =
-					thisClusterAgentNode.GetExperimentAddr() + ":" + strconv.Itoa(int(cluster.GetClusterAgentPort()))
+				nodeConfigs.HostAgentNodes[i].ClusterAgentAddr = getNextClusterAgentAddr()
 			}
 			numHostsFilled = len(nodeConfigs.HostAgentNodes)
 			for nodeName := range nodesWithNewVHosts {
 				vhostAgents := nodeConfigs.NodeVHostAgents[nodeName]
 				for i := range vhostAgents {
-					vhostAgents[i].ClusterAgentAddr =
-						thisClusterAgentNode.GetExperimentAddr() + ":" + strconv.Itoa(int(cluster.GetClusterAgentPort()))
+					vhostAgents[i].ClusterAgentAddr = getNextClusterAgentAddr()
 				}
 			}
 		}
@@ -429,7 +446,7 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string, startConfig HE
 			n := n
 
 			t := c.ClusterAgentConfig
-			t.Server.Address = &n.Address
+			t.Server.Addresses = n.Addresses
 			clusterAgentConfigBytes, err := prototext.MarshalOptions{Indent: "  "}.Marshal(t)
 			if err != nil {
 				return fmt.Errorf("failed to marshal cluster-agent config: %w", err)

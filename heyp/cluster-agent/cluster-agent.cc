@@ -5,6 +5,7 @@
 #include "absl/flags/flag.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
+#include "absl/strings/str_split.h"
 #include "absl/time/time.h"
 #include "grpcpp/grpcpp.h"
 #include "heyp/cli/parse.h"
@@ -47,7 +48,7 @@ absl::Status Run(const proto::ClusterAgentConfig& c, const proto::AllocBundle& a
   }
 
   std::unique_ptr<NdjsonLogger> alloc_recorder;
-  std::unique_ptr<ClusterController> controller;
+  std::shared_ptr<ClusterController> controller;
   if (c.controller_type() == proto::CC_FULL) {
     if (!alloc_records_file.empty()) {
       auto alloc_recorder_or = CreateNdjsonLogger(alloc_records_file);
@@ -64,7 +65,7 @@ absl::Status Run(const proto::ClusterAgentConfig& c, const proto::AllocBundle& a
     if (!cluster_alloc_or.ok()) {
       return cluster_alloc_or.status();
     }
-    controller = std::make_unique<FullClusterController>(
+    controller = std::make_shared<FullClusterController>(
         NewHostToClusterAggregator(std::move(agg_demand_predictor), demand_time_window),
         std::move(*cluster_alloc_or));
   } else if (c.controller_type() == proto::CC_FAST) {
@@ -73,21 +74,37 @@ absl::Status Run(const proto::ClusterAgentConfig& c, const proto::AllocBundle& a
     return absl::InvalidArgumentError("unknown controller type");
   }
 
-  ClusterAgentService service(std::move(controller), *control_period_or);
-  std::unique_ptr<grpc::Server> server(
-      grpc::ServerBuilder()
-          .AddListeningPort(c.server().address(), grpc::InsecureServerCredentials())
-          .RegisterService(&service)
-          .BuildAndStart());
   auto logger = MakeLogger("main");
-  SPDLOG_LOGGER_INFO(&logger, "Server listening on {}", c.server().address());
+  std::vector<std::unique_ptr<ClusterAgentService>> services;
+  std::vector<std::unique_ptr<grpc::Server>> servers;
+  services.reserve(c.server().addresses_size());
+  servers.reserve(c.server().addresses_size());
+  for (const auto& address : c.server().addresses()) {
+    std::vector<std::string> parts = absl::StrSplit(address, ":");
+    int id = 0;
+    if (!absl::SimpleAtoi(parts[parts.size() - 1], &id)) {
+      SPDLOG_LOGGER_INFO(
+          &logger, "failed to parse port in {}: service ids may not be useful", address);
+    }
 
-  service.RunLoop(&should_exit_flag);
+    auto service = std::make_unique<ClusterAgentService>(controller, id);
+    servers.push_back(grpc::ServerBuilder()
+                          .AddListeningPort(address, grpc::InsecureServerCredentials())
+                          .RegisterService(service.get())
+                          .BuildAndStart());
+    services.push_back(std::move(service));
+    SPDLOG_LOGGER_INFO(&logger, "Server listening on {}", address);
+  }
+
+  RunLoop(controller, *control_period_or, &should_exit_flag, &logger);
   if (alloc_recorder != nullptr) {
     alloc_recorder->Close().IgnoreError();
   }
-  server->Shutdown();
-  server->Wait();
+
+  for (std::unique_ptr<grpc::Server>& server : servers) {
+    server->Shutdown();
+    server->Wait();
+  }
   return absl::OkStatus();
 }
 
