@@ -86,11 +86,11 @@ func (h *SimulatedHost) trimGenTimes() {
 }
 
 func (h *SimulatedHost) pushGenTime(gen int64, t time.Time) {
-	log.Print("[SEND] host ", h.HostID, " acquiring lock at ", time.Now())
+	// log.Print("[SEND] host ", h.HostID, " acquiring lock at ", time.Now())
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.trimGenTimes()
-	log.Print("[SEND] host ", h.HostID, " lock acquired at ", time.Now())
+	// log.Print("[SEND] host ", h.HostID, " lock acquired at ", time.Now())
 	h.genTimes = append(h.genTimes, genAndTime{gen, t})
 }
 
@@ -156,7 +156,7 @@ func (h *SimulatedHost) runEnforceLoop(ctx context.Context, isDone chan<- struct
 	}()
 
 	for {
-		log.Print("[RECV] host ", h.HostID, " waiting to receive info from cluster agent at ", time.Now())
+		// log.Print("[RECV] host ", h.HostID, " waiting to receive info from cluster agent at ", time.Now())
 		then := time.Now()
 		b, err := stream.Recv()
 		if err != nil || ctx.Err() != nil {
@@ -188,7 +188,7 @@ func (h *SimulatedHost) runInformLoop(ctx context.Context, isDone chan<- struct{
 		isDone <- struct{}{}
 	}()
 	
-	log.Print("Running inform loop on the fake agent")
+	// log.Print("Running inform loop on the fake agent")
 	rng := rand.New(rand.NewSource(uint64(time.Now().UnixNano())))
 
 	time.Sleep(time.Duration(rng.Int63n(int64(period))))
@@ -196,26 +196,26 @@ func (h *SimulatedHost) runInformLoop(ctx context.Context, isDone chan<- struct{
 	var b pb.InfoBundle
 	var gen int64
 	for {
-		log.Print("[SEND] host ", h.HostID, " restarting for loop at ", time.Now())
+		// log.Print("[SEND] host ", h.HostID, " restarting for loop at ", time.Now())
 		lastTime := time.Now()
 		pop.populateInfo(rng, &b, lastTime)
-		if len(b.FlowInfos) == 0 {
-			continue
+		// log.Print("[SEND] host ", h.HostID, " done populating bundle, sending.. at ", time.Now())
+		if len(b.FlowInfos) != 0 {
+			gen++
+			b.Gen = gen
+			if stream.Send(&b) != nil || ctx.Err() != nil {
+				// log.Print("[SEND] host ", h.HostID, " send error at ", time.Now())
+				return
+			}
+			h.pushGenTime(gen, lastTime)
 		}
-		gen++
-		b.Gen = gen
-		log.Print("[SEND] host ", h.HostID, " done populating bundle, sending.. at ", time.Now())
-		if stream.Send(&b) != nil || ctx.Err() != nil {
-			log.Print("[SEND] host ", h.HostID, " send error at ", time.Now())
-			return
-		}
+		
 		// log.Print("host time taken to send info to cluster agent", time.Now().Sub(lastTime))
-		log.Print("[SEND] host ", h.HostID, " done sending new info with ", gen, " at time ", time.Now())
-		h.pushGenTime(gen, lastTime)
+		// log.Print("[SEND] host ", h.HostID, " done sending new info with ", gen, " at time ", time.Now())
 		log.Print("[SEND] host ", h.HostID, " done updating gentime struct with  ", gen, " at time ", time.Now())
 		toSleep := period - time.Since(lastTime)
 		if toSleep > 0 {
-			log.Print("[SEND] host ", h.HostID, " sleeping for ", toSleep)
+			// log.Print("[SEND] host ", h.HostID, " sleeping for ", toSleep)
 			time.Sleep(toSleep)
 		}
 	}
@@ -271,6 +271,7 @@ func (pop *infoPopulator) populateInfo(rng *rand.Rand, b *pb.InfoBundle, now tim
 			pop.infoState[i].PredictedDemandBps = ewmaUsage + ewmaUsage/10 // ewmaUsage * 1.1
 			pop.infoState[i].EwmaUsageBps = ewmaUsage
 			pop.infoState[i].CumUsageBytes += usageBytes
+			log.Println("Usage:", pop.h.HostID, ewmaUsage, usage, pop.infoState[i].CumUsageBytes*8)
 			pop.infoState[i].CumHipriUsageBytes += usageBytes
 
 			b.FlowInfos = append(b.FlowInfos, &pop.infoState[i])
