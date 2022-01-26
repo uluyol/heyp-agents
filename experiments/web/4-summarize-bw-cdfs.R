@@ -10,22 +10,35 @@ if (length(args) != 1) {
 }
 
 SYS_LONG <- new.env(hash=TRUE)
-SYS_LONG[["hsc"]] <- "HSC20"
-SYS_LONG[["nl"]] <- "NoLimit"
-SYS_LONG[["qd"]] <- "QD"
-SYS_LONG[["qdlrl"]] <- "QD+LimitLO"
-SYS_LONG[["qdhrl"]] <- "QD+LimitHI"
-SYS_LONG[["rl"]] <- "RateLimit"
-
-SYS_LONG[["qd_knap"]] <- "Knapsack"
-SYS_LONG[["qd_hash"]] <- "Hash"
-SYS_LONG[["qdhrl_knap"]] <- "Knapsack+LimitHI"
-SYS_LONG[["qdhrl_hash"]] <- "Hash+LimitHI"
-
+SYS_LONG[["flipflop_nl"]] <- "MixedFlipFlop-NL"
 SYS_LONG[["flipflop_oversub"]] <- "MixedFlipFlop-RL"
-SYS_LONG[["stableqos_oversub"]] <- "MixedStable-RL"
+SYS_LONG[["flipflop_rl"]] <- "MixedFlipFlop-RLTight"
+SYS_LONG[["flipflop"]] <- "MixedFlipFlop"
 SYS_LONG[["hipri"]] <- "AllHIPRI"
+SYS_LONG[["hsc"]] <- "HSC20"
 SYS_LONG[["lopri"]] <- "AllLOPRI"
+SYS_LONG[["nl_light"]] <- "NoLimit-LightAA"
+SYS_LONG[["nl"]] <- "NoLimit"
+SYS_LONG[["qd_fc"]] <- "QD+FC"
+SYS_LONG[["qd_hash"]] <- "Hash"
+SYS_LONG[["qd_knap"]] <- "Knapsack"
+SYS_LONG[["qd"]] <- "QD"
+SYS_LONG[["qdhrl_hash"]] <- "Hash+LimitHI"
+SYS_LONG[["qdhrl_knap"]] <- "Knapsack+LimitHI"
+SYS_LONG[["qdhrl"]] <- "QD+LimitHI"
+SYS_LONG[["qdlrl_fc"]] <- "QD+FC+LimitLO"
+SYS_LONG[["qdlrl"]] <- "QD+LimitLO"
+SYS_LONG[["qdlrlj"]] <- "QDJob+LimitLO"
+SYS_LONG[["rl_light"]] <- "RateLimit-LightAA"
+SYS_LONG[["rl"]] <- "RateLimit"
+SYS_LONG[["stableqos_nl"]] <- "MixedStable-NL"
+SYS_LONG[["stableqos_oversub"]] <- "MixedStable-RL"
+SYS_LONG[["stableqos_rl"]] <- "MixedStable-RLTight"
+SYS_LONG[["stableqos"]] <- "MixedStable"
+
+for (max_util in c("16.0", "16.5", "17.0", "17.5", "18.0", "18.5")) {
+    SYS_LONG[[paste0("nl_x_", gsub("\\.", "", max_util))]] <- paste0("NoLimit-MLU-", max_util)
+}
 
 # Derived from https://github.com/tidyverse/ggplot2/issues/1467#issuecomment-169763396
 stat_myecdf <- function(mapping = NULL, data = NULL, geom = "step",
@@ -447,6 +460,7 @@ cfgGroups <- basename(unique(gsub("-[^-]+$", "", Sys.glob(file.path(outdir, "pro
 for (cfgGroup in cfgGroups) {
     procdirs <- Sys.glob(file.path(outdir, "proc-indiv", paste0(cfgGroup, "*")))
 
+    err <- data.frame()
     shortage <- data.frame()
     overage <- data.frame()
     goodput <- data.frame()
@@ -499,10 +513,12 @@ for (cfgGroup in cfgGroups) {
             FUN=sum,
             data=usage.ts)
 
+        usage.summed$Admission <- rep.int(-1, nrow(usage.summed))
         usage.summed$Overage <- rep.int(-1, nrow(usage.summed))
         usage.summed$OverageFrac <- rep.int(-1, nrow(usage.summed))
 
         mask <- usage.summed$FG == "AA_TO_EDGE" & usage.summed$QoS == "HIPRI"
+        usage.summed$Admission[mask] <- aa2edge.hipri
         usage.summed$Overage[mask] <-
             pmax(0, usage.summed$UsageGbps[mask] - aa2edge.hipri)
         usage.summed$OverageFrac[mask] <-
@@ -510,6 +526,7 @@ for (cfgGroup in cfgGroups) {
         usage.summed$OverageFrac[mask & usage.summed$Overage == 0] <- 0
 
         mask <- usage.summed$FG == "AA_TO_EDGE" & usage.summed$QoS == "LOPRI"
+        usage.summed$Admission[mask] <- aa2edge.lopri
         usage.summed$Overage[mask] <-
             pmax(0, usage.summed$UsageGbps[mask] - aa2edge.lopri)
         usage.summed$OverageFrac[mask] <-
@@ -517,6 +534,7 @@ for (cfgGroup in cfgGroups) {
         usage.summed$OverageFrac[mask & usage.summed$Overage == 0] <- 0
 
         mask <- usage.summed$FG == "WA_TO_EDGE" & usage.summed$QoS == "HIPRI"
+        usage.summed$Admission[mask] <- wa2edge.hipri
         usage.summed$Overage[mask] <-
             pmax(0, usage.summed$UsageGbps[mask] - wa2edge.hipri)
         usage.summed$OverageFrac[mask] <-
@@ -524,6 +542,7 @@ for (cfgGroup in cfgGroups) {
         usage.summed$OverageFrac[mask & usage.summed$Overage == 0] <- 0
 
         mask <- usage.summed$FG == "WA_TO_EDGE" & usage.summed$QoS == "LOPRI"
+        usage.summed$Admission[mask] <- wa2edge.lopri
         usage.summed$Overage[mask] <-
             pmax(0, usage.summed$UsageGbps[mask] - wa2edge.lopri)
         usage.summed$OverageFrac[mask] <-
@@ -570,10 +589,20 @@ for (cfgGroup in cfgGroups) {
         shortage.this$ShortageGbps <- pmax(0, shortage.this$WantGbps - shortage.this$UsageGbps)
         shortage.this$ShortageFrac <- shortage.this$ShortageGbps / shortage.this$WantGbps
         shortage.this$ShortageFrac[shortage.this$WantGbps == 0] <- 0
-
         shortage.this$Sys <- rep.int(sys_name, nrow(shortage.this))
+
+        err.this <- shortage.this
+
         shortage.this <- shortage.this[,c("Sys", "FG", "QoS", "ShortageGbps", "ShortageFrac")]
         shortage <- rbind(shortage, shortage.this)
+
+        err.this$ErrGbps <- err.this$Overage
+        err.this$ErrGbps[err.this$ErrGbps <= 0] <- -err.this$ShortageGbps[err.this$ErrGbps <= 0]
+        err.this$RelErr <- err.this$ErrGbps / err.this$Admission
+        err.this$RelErr[err.this$ErrGbps == 0 & err.this$Admission == 0] <- 0
+
+        err.this <- err.this[,c("UnixTime", "Sys", "FG", "QoS", "ErrGbps", "RelErr")]
+        err <- rbind(err, err.this)
 
         retransmits.agg.this <- aggregate(cbind(RetransSegs, IngressBps, EgressBps) ~ UnixTime, data=host.ts, FUN=sum)
         retransmits.agg.this$Sys <- rep.int(sys_name, nrow(retransmits.agg.this))
@@ -585,11 +614,13 @@ for (cfgGroup in cfgGroups) {
                 data.frame(
                     UnixTime=qos.retained.ts$UnixTime,
                     FracChanged=1-qos.retained.ts$FracHIPRIRetained,
+                    NumChanged=qos.retained.ts$NumToLOPRI,
                     Kind=rep.int("HI to LOPRI", nrow(qos.retained.ts)),
                     Sys=rep.int(sys_name, nrow(qos.retained.ts))),
                 data.frame(
                     UnixTime=qos.retained.ts$UnixTime,
                     FracChanged=1-qos.retained.ts$FracLOPRIRetained,
+                    NumChanged=qos.retained.ts$NumToHIPRI,
                     Kind=rep.int("LO to HIPRI", nrow(qos.retained.ts)),
                     Sys=rep.int(sys_name, nrow(qos.retained.ts)))))
 
@@ -611,6 +642,7 @@ for (cfgGroup in cfgGroups) {
     }
 
     write.csv(goodput, file.path(summarydir, paste0(cfgGroup, "-goodput.csv")), quote=FALSE, row.names=FALSE)
+    write.csv(err, file.path(summarydir, paste0(cfgGroup, "-err.csv")), quote=FALSE, row.names=FALSE)
     write.csv(overage, file.path(summarydir, paste0(cfgGroup, "-overage.csv")), quote=FALSE, row.names=FALSE)
     write.csv(shortage, file.path(summarydir, paste0(cfgGroup, "-shortage.csv")), quote=FALSE, row.names=FALSE)
     write.csv(retransmits.agg, file.path(summarydir, paste0(cfgGroup, "-retransmits_agg.csv")), quote=FALSE, row.names=FALSE)

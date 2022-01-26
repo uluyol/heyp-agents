@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/uluyol/heyp-agents/go/deploy/periodic"
@@ -17,10 +16,10 @@ import (
 )
 
 type HostAgentSimConfig struct {
-	SrcDC            string
-	ClusterAgentAddr string
-	C                *pb.DeployedHostAgentSimConfig
-	Nodes            []*pb.DeployedNode
+	SrcDC             string
+	ClusterAgentAddrs []string
+	C                 *pb.DeployedHostAgentSimConfig
+	Nodes             []*pb.DeployedNode
 }
 
 func GetAndValidateHostAgentSimConfigs(c *pb.DeploymentConfig) ([]HostAgentSimConfig, error) {
@@ -40,7 +39,7 @@ func GetAndValidateHostAgentSimConfigs(c *pb.DeploymentConfig) ([]HostAgentSimCo
 			for _, role := range n.Roles {
 				switch {
 				case role == "cluster-agent":
-					simConfig.ClusterAgentAddr = n.GetExperimentAddr() + ":" + strconv.Itoa(int(cluster.GetClusterAgentPort()))
+					simConfig.ClusterAgentAddrs = makeClusterAgentAddrs(n.GetExperimentAddr(), cluster.GetClusterAgentPorts())
 				case role == "host-agent-sim":
 					simConfig.Nodes = append(simConfig.Nodes, n)
 				}
@@ -52,7 +51,7 @@ func GetAndValidateHostAgentSimConfigs(c *pb.DeploymentConfig) ([]HostAgentSimCo
 			continue
 		}
 
-		if simConfig.ClusterAgentAddr == "" {
+		if len(simConfig.ClusterAgentAddrs) == 0 {
 			return nil, fmt.Errorf("cluster '%s': need a node that has role 'cluster-agent' to simulate host agents",
 				cluster.GetName())
 		}

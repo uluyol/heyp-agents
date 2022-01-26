@@ -18,11 +18,33 @@ SimpleDowngradeAllocator::SimpleDowngradeAllocator(
     : config_(config),
       agg_admissions_(agg_admissions),
       logger_(MakeLogger("downgrade-alloc")),
-      downgrade_selectors_(
-          MakeAggDowngradeSelectors(config_.downgrade_selector(), agg_admissions_)),
       downgrade_fv_source_(config_.downgrade_selector().downgrade_usage()
                                ? FVSource::kUsage
-                               : FVSource::kPredictedDemand) {}
+                               : FVSource::kPredictedDemand) {
+  if (config_.has_downgrade_frac_controller()) {
+    SPDLOG_LOGGER_INFO(&logger_, "using feedback control");
+    for (const auto& [flow, alloc] : agg_admissions_) {
+      agg_states_.insert(std::pair<proto::FlowMarker, PerAggState>{
+          flow,
+          PerAggState{
+              .frac_controller =
+                  DowngradeFracController(config_.downgrade_frac_controller()),
+              .selector = DowngradeSelector(config_.downgrade_selector()),
+          },
+      });
+    }
+  } else {
+    SPDLOG_LOGGER_INFO(&logger_, "not using feedback control");
+    for (const auto& [flow, alloc] : agg_admissions_) {
+      agg_states_.insert(std::pair<proto::FlowMarker, PerAggState>{
+          flow,
+          PerAggState{
+              .selector = DowngradeSelector(config_.downgrade_selector()),
+          },
+      });
+    }
+  }
+}
 
 std::vector<proto::FlowAlloc> SimpleDowngradeAllocator::AllocAgg(
     absl::Time time, const proto::AggInfo& agg_info,
@@ -50,9 +72,44 @@ std::vector<proto::FlowAlloc> SimpleDowngradeAllocator::AllocAgg(
   const int64_t lopri_bps = std::max<int64_t>(
       0, GetFlowVolume(agg_info.parent(), downgrade_fv_source_) - hipri_admission);
 
-  double frac_lopri =
-      static_cast<double>(lopri_bps) /
-      static_cast<double>(GetFlowVolume(agg_info.parent(), downgrade_fv_source_));
+  auto agg_state_iter = agg_states_.find(agg_info.parent().flow());
+  H_SPDLOG_CHECK(&logger_, agg_state_iter != agg_states_.end());
+  PerAggState& agg_state = agg_state_iter->second;
+
+  double frac_lopri = 0;
+  if (agg_state.frac_controller) {
+    constexpr double kEwmaWeight = 0.3;
+    double max_child_usage = 0;
+    for (auto& child : agg_info.children()) {
+      if (child.ewma_usage_bps() > max_child_usage) {
+        max_child_usage = child.ewma_usage_bps();
+      }
+    }
+    if (agg_state.ewma_max_child_usage < 0) {
+      agg_state.ewma_max_child_usage = max_child_usage;
+    } else {
+      agg_state.ewma_max_child_usage = kEwmaWeight * max_child_usage +
+                                       (1 - kEwmaWeight) * agg_state.ewma_max_child_usage;
+    }
+
+    double downgrade_frac_inc = 0;
+    if (agg_info.parent().ewma_usage_bps() < hipri_admission) {
+      downgrade_frac_inc = -0.2;
+    } else {
+      downgrade_frac_inc = agg_state.frac_controller->TrafficFracToDowngrade(
+          agg_info.parent().ewma_hipri_usage_bps(),
+          agg_info.parent().ewma_lopri_usage_bps(), hipri_admission,
+          agg_state.ewma_max_child_usage);
+    }
+    agg_state.downgrade_frac += downgrade_frac_inc;
+    agg_state.downgrade_frac = ClampFracLOPRISilent(agg_state.downgrade_frac);
+    frac_lopri = agg_state.downgrade_frac;
+  } else {
+    frac_lopri =
+        static_cast<double>(lopri_bps) /
+        static_cast<double>(GetFlowVolume(agg_info.parent(), downgrade_fv_source_));
+    frac_lopri = ClampFracLOPRI(&logger_, frac_lopri);
+  }
 
   *debug_state->mutable_parent_alloc() = admissions;
   debug_state->set_frac_lopri_initial(frac_lopri);
@@ -61,8 +118,6 @@ std::vector<proto::FlowAlloc> SimpleDowngradeAllocator::AllocAgg(
   if (should_debug) {
     SPDLOG_LOGGER_INFO(&logger_, "lopri_frac = {}", frac_lopri);
   }
-
-  frac_lopri = ClampFracLOPRI(&logger_, frac_lopri);
 
   // Burstiness matters for selecting children and assigning them rate limits.
   if (config_.enable_burstiness()) {
@@ -78,11 +133,10 @@ std::vector<proto::FlowAlloc> SimpleDowngradeAllocator::AllocAgg(
   }
 
   std::vector<bool> lopri_children;
-  if (frac_lopri > 0) {
-    auto iter = downgrade_selectors_.find(agg_info.parent().flow());
-    H_SPDLOG_CHECK(&logger_, iter != downgrade_selectors_.end());
-    lopri_children = iter->second.PickLOPRIChildren(agg_info, frac_lopri);
-  } else {
+  lopri_children = agg_state.selector.PickLOPRIChildren(agg_info, frac_lopri);
+  if (frac_lopri <= 0) {
+    // Call PickLOPRIChildren if frac_lopri == 0 in case it is maintaining state.
+    // But also replace the chosen allocation just in case it picks some HIPRI tasks.
     lopri_children = std::vector<bool>(agg_info.children_size(), false);
   }
 

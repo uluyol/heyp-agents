@@ -16,6 +16,7 @@ func main() {
 	subcommands.Register(new(resetHostCmd), "host")
 	subcommands.Register(new(initHostCmd), "host")
 	subcommands.Register(new(tapCmd), "host")
+	subcommands.Register(new(relayCmd), "host")
 	subcommands.Register(new(vmCreateCmd), "vm")
 	subcommands.Register(new(vmKillCmd), "vm")
 	subcommands.Register(new(vmPrintSSHCmd), "vm")

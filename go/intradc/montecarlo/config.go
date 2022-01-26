@@ -20,28 +20,30 @@ type Config struct {
 
 func (c Config) validateData() validateData {
 	return validateData{
-		hostVols:             c.HostUsages,
-		hostVolsName:         "HostUsages",
-		numHosts:             c.NumHosts,
-		aoe:                  c.ApprovalOverExpectedUsage,
-		aoeName:              "ApprovalOverExpectedUsage",
-		numSamplesAtApproval: c.NumSamplesAtApproval,
-		numPastPeriods:       c.NumPastPeriods,
-		checkNumPastPeriods:  true,
+		hostVols:                  c.HostUsages,
+		hostVolsName:              "HostUsages",
+		numHosts:                  c.NumHosts,
+		aoe:                       c.ApprovalOverExpectedUsage,
+		aoeName:                   "ApprovalOverExpectedUsage",
+		numSamplesAtApproval:      c.NumSamplesAtApproval,
+		checkNumSamplesAtApproval: true,
+		numPastPeriods:            c.NumPastPeriods,
+		checkNumPastPeriods:       true,
 	}
 }
 
 var _ EnumerableConfig = Config{}
 
 type validateData struct {
-	hostVols             []dists.ConfigDistGen
-	hostVolsName         string
-	numHosts             []int
-	aoe                  []float64
-	aoeName              string
-	numSamplesAtApproval []int
-	numPastPeriods       []int
-	checkNumPastPeriods  bool
+	hostVols                  []dists.ConfigDistGen
+	hostVolsName              string
+	numHosts                  []int
+	aoe                       []float64
+	aoeName                   string
+	numSamplesAtApproval      []int
+	checkNumSamplesAtApproval bool
+	numPastPeriods            []int
+	checkNumPastPeriods       bool
 }
 
 type EnumerableConfig interface {
@@ -74,12 +76,14 @@ func ValidateConfig(c EnumerableConfig) error {
 			return fmt.Errorf(data.aoeName+"[%d] must be positive (found %g)", i, aod)
 		}
 	}
-	if len(data.numSamplesAtApproval) == 0 {
-		return errors.New("NumSamplesAtApproval is empty")
-	}
-	for i, numSamples := range data.numSamplesAtApproval {
-		if numSamples <= 0 {
-			return fmt.Errorf("NumSamplesAtApproval[%d] must be positive (found %d)", i, numSamples)
+	if data.checkNumSamplesAtApproval {
+		if len(data.numSamplesAtApproval) == 0 {
+			return errors.New("NumSamplesAtApproval is empty")
+		}
+		for i, numSamples := range data.numSamplesAtApproval {
+			if numSamples <= 0 {
+				return fmt.Errorf("NumSamplesAtApproval[%d] must be positive (found %d)", i, numSamples)
+			}
 		}
 	}
 	if data.checkNumPastPeriods {

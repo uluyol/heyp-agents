@@ -19,10 +19,17 @@ class SimpleDowngradeAllocator : public PerAggAllocator {
       proto::DebugAllocRecord::DebugState* debug_state) override;
 
  private:
+  struct PerAggState {
+    double downgrade_frac = 0;
+    double ewma_max_child_usage = -1;
+    std::optional<DowngradeFracController> frac_controller;
+    DowngradeSelector selector;
+  };
+
   const proto::ClusterAllocatorConfig config_;
   const ClusterFlowMap<proto::FlowAlloc> agg_admissions_;
   spdlog::logger logger_;
-  ClusterFlowMap<DowngradeSelector> downgrade_selectors_;
+  ClusterFlowMap<PerAggState> agg_states_;
   const FVSource downgrade_fv_source_;
 };
 

@@ -2,7 +2,6 @@ package configgen
 
 import (
 	"bytes"
-	"encoding/xml"
 	"fmt"
 	"log"
 	"os"
@@ -20,24 +19,8 @@ import (
 	"google.golang.org/protobuf/reflect/protoregistry"
 )
 
-func ReadExternalAddrsMap(rspecPath, sshUser string) (map[string]string, error) {
+func GetCloudlabExternalAddrs(rspec *RSpec, sshUser string) map[string]string {
 	externalAddrForIP := make(map[string]string)
-	if rspecPath == "" {
-		return externalAddrForIP, nil
-	}
-
-	f, err := os.Open(rspecPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open cloudlab rspec: %w", err)
-	}
-	defer f.Close()
-
-	var rspec rspec
-	dec := xml.NewDecoder(f)
-	if err := dec.Decode(&rspec); err != nil {
-		return nil, fmt.Errorf("failed to decode cloudlab rspec: %w", err)
-	}
-
 	for _, n := range rspec.Node {
 		externalAddr := ""
 
@@ -54,8 +37,26 @@ func ReadExternalAddrsMap(rspecPath, sshUser string) (map[string]string, error) 
 			}
 		}
 	}
+	return externalAddrForIP
+}
 
-	return externalAddrForIP, nil
+func ReadExternalAddrsMap(rspecPath, sshUser string) (map[string]string, error) {
+	if rspecPath == "" {
+		return make(map[string]string), nil
+	}
+
+	f, err := os.Open(rspecPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open cloudlab rspec: %w", err)
+	}
+	defer f.Close()
+
+	rspec, err := DecodeRSpec(f)
+	if err != nil {
+		return nil, err
+	}
+
+	return GetCloudlabExternalAddrs(&rspec, sshUser), nil
 }
 
 func init() {

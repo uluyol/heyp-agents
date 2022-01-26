@@ -10,24 +10,35 @@ if (length(args) != 1) {
 }
 
 SYS_LONG <- new.env(hash=TRUE)
+SYS_LONG[["flipflop_nl"]] <- "MixedFlipFlop-NL"
+SYS_LONG[["flipflop_oversub"]] <- "MixedFlipFlop-RL"
+SYS_LONG[["flipflop_rl"]] <- "MixedFlipFlop-RLTight"
+SYS_LONG[["flipflop"]] <- "MixedFlipFlop"
+SYS_LONG[["hipri"]] <- "AllHIPRI"
 SYS_LONG[["hsc"]] <- "HSC20"
-SYS_LONG[["nl"]] <- "NoLimit"
+SYS_LONG[["lopri"]] <- "AllLOPRI"
 SYS_LONG[["nl_light"]] <- "NoLimit-LightAA"
+SYS_LONG[["nl"]] <- "NoLimit"
+SYS_LONG[["qd_fc"]] <- "QD+FC"
+SYS_LONG[["qd_hash"]] <- "Hash"
+SYS_LONG[["qd_knap"]] <- "Knapsack"
 SYS_LONG[["qd"]] <- "QD"
+SYS_LONG[["qdhrl_hash"]] <- "Hash+LimitHI"
+SYS_LONG[["qdhrl_knap"]] <- "Knapsack+LimitHI"
+SYS_LONG[["qdhrl"]] <- "QD+LimitHI"
+SYS_LONG[["qdlrl_fc"]] <- "QD+FC+LimitLO"
 SYS_LONG[["qdlrl"]] <- "QD+LimitLO"
 SYS_LONG[["qdlrlj"]] <- "QDJob+LimitLO"
-SYS_LONG[["rl"]] <- "RateLimit"
 SYS_LONG[["rl_light"]] <- "RateLimit-LightAA"
-SYS_LONG[["flipflop"]] <- "MixedFlipFlop"
-SYS_LONG[["stableqos"]] <- "MixedStable"
-SYS_LONG[["flipflop_nl"]] <- "MixedFlipFlop-NL"
+SYS_LONG[["rl"]] <- "RateLimit"
 SYS_LONG[["stableqos_nl"]] <- "MixedStable-NL"
-SYS_LONG[["flipflop_rl"]] <- "MixedFlipFlop-RLTight"
-SYS_LONG[["stableqos_rl"]] <- "MixedStable-RLTight"
-SYS_LONG[["flipflop_oversub"]] <- "MixedFlipFlop-RL"
 SYS_LONG[["stableqos_oversub"]] <- "MixedStable-RL"
-SYS_LONG[["hipri"]] <- "AllHIPRI"
-SYS_LONG[["lopri"]] <- "AllLOPRI"
+SYS_LONG[["stableqos_rl"]] <- "MixedStable-RLTight"
+SYS_LONG[["stableqos"]] <- "MixedStable"
+
+for (max_util in c("16.0", "16.5", "17.0", "17.5", "18.0", "18.5")) {
+    SYS_LONG[[paste0("nl_x_", gsub("\\.", "", max_util))]] <- paste0("NoLimit-MLU-", max_util)
+}
 
 PlotLatencyCumCountsTo <- function(ymax, subset, output) {
     if (nrow(subset) > 0) {

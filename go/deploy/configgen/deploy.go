@@ -12,32 +12,41 @@ import (
 	"github.com/uluyol/heyp-agents/go/pb"
 )
 
-type rspec struct {
+type RSpec struct {
 	XMLName xml.Name    `xml:"http://www.geni.net/resources/rspec/3 rspec"`
-	Node    []rspecNode `xml:"node"`
+	Node    []RSpecNode `xml:"node"`
 }
 
-type rspecNode struct {
-	Interface    []rspecInterface `xml:"interface"`
+type RSpecNode struct {
+	Interface    []RSpecInterface `xml:"interface"`
 	HardwareType struct {
 		Name string `xml:"name,attr"`
 	} `xml:"hardware_type"`
 	Services struct {
-		Login []rspecLogin `xml:"login"`
+		Login []RSpecLogin `xml:"login"`
 	} `xml:"services"`
 }
 
-type rspecInterface struct {
+type RSpecInterface struct {
 	IP []struct {
 		Address string `xml:"address,attr"`
 	} `xml:"ip"`
 }
 
-type rspecLogin struct {
+type RSpecLogin struct {
 	Authentication string `xml:"authentication,attr"`
 	Hostname       string `xml:"hostname,attr"`
 	Port           string `xml:"port,attr"`
 	Username       string `xml:"username,attr"`
+}
+
+func DecodeRSpec(r io.Reader) (RSpec, error) {
+	var rspec RSpec
+	dec := xml.NewDecoder(r)
+	if err := dec.Decode(&rspec); err != nil {
+		return RSpec{}, fmt.Errorf("failed to decode rspec: %w", err)
+	}
+	return rspec, nil
 }
 
 func randomBytes(buf []byte) error {
@@ -46,10 +55,9 @@ func randomBytes(buf []byte) error {
 }
 
 func UpdateDeploymentConfig(c *pb.DeploymentConfig, cbytes []byte, manifestReader io.Reader, sshUser, outfile string, perm os.FileMode) error {
-	var rspec rspec
-	dec := xml.NewDecoder(manifestReader)
-	if err := dec.Decode(&rspec); err != nil {
-		return fmt.Errorf("failed to decode rspec: %w", err)
+	rspec, err := DecodeRSpec(manifestReader)
+	if err != nil {
+		return err
 	}
 	var curBuf, newBuf bytes.Buffer
 

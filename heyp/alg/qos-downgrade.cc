@@ -86,18 +86,28 @@ DowngradeFracController::DowngradeFracController(
     const proto::DowngradeFracController& config)
     : config_(config), logger_(MakeLogger("downgrade-frac-controller")) {}
 
+constexpr static bool kDebugDowngradeFracController = true;
+
 // Translated from ../../go/intradc/feedbacksim/control.go
 double DowngradeFracController::TrafficFracToDowngradeRaw(double cur, double setpoint,
                                                           double input2output_conversion,
                                                           double max_task_usage_frac) {
   const double err = cur - setpoint;
   if (0 < err && err < config_.ignore_overage_below()) {
-    SPDLOG_LOGGER_DEBUG(&logger_, "overage in noise");
+    if (kDebugDowngradeFracController) {
+      SPDLOG_LOGGER_INFO(&logger_, "overage in noise [err = {} cur = {} setpoint = {}]",
+                         err, cur, setpoint);
+    }
     return 0;
   }
   if (0 < err &&
-      config_.ignore_overage_by_coarseness_multiplier() * max_task_usage_frac) {
-    SPDLOG_LOGGER_DEBUG(&logger_, "too coarse to response to overage");
+      err < config_.ignore_overage_by_coarseness_multiplier() * max_task_usage_frac) {
+    if (kDebugDowngradeFracController) {
+      SPDLOG_LOGGER_INFO(&logger_,
+                         "too coarse to response to overage [err = {} cur = {} setpoint "
+                         "= {} max_task_usage_frac = {}]",
+                         err, cur, setpoint, max_task_usage_frac);
+    }
     return 0;
   }
   double x = config_.prop_gain() * err;
@@ -111,9 +121,14 @@ double DowngradeFracController::TrafficFracToDowngradeRaw(double cur, double set
                            config_.ShortDebugString());
     DumpStackTraceAndExit(1);
   }
+  double xorig = x;
   x = copysign(fmin(fabs(x), config_.max_inc()), x);
-  SPDLOG_LOGGER_DEBUG(&logger_, "{} [cur = {} setpoint = {} i2o = {} max task = {}]", x,
-                      cur, setpoint, input2output_conversion, max_task_usage_frac);
+  if (kDebugDowngradeFracController) {
+    SPDLOG_LOGGER_INFO(
+        &logger_,
+        "inc = {} inc pre-clamping = {} [cur = {} setpoint = {} i2o = {} max task = {}]",
+        x, xorig, cur, setpoint, input2output_conversion, max_task_usage_frac);
+  }
   return x;
 }
 
@@ -121,6 +136,12 @@ double DowngradeFracController::TrafficFracToDowngrade(double hipri_usage_bps,
                                                        double lopri_usage_bps,
                                                        double hipri_rate_limit_bps,
                                                        double max_task_usage_bps) {
+  if (kDebugDowngradeFracController) {
+    SPDLOG_LOGGER_INFO(
+        &logger_,
+        "hipri_usage: {} lopri_usage: {} hipri_rate_limit: {} max_task_usage: {}",
+        hipri_usage_bps, lopri_usage_bps, hipri_rate_limit_bps, max_task_usage_bps);
+  }
   double total_usage_bps = hipri_usage_bps + lopri_usage_bps;
   double cur = hipri_usage_bps / total_usage_bps;
   double setpoint = hipri_rate_limit_bps / total_usage_bps;

@@ -148,20 +148,35 @@ TEST(AddRuleLinesToDeleteTest, Basic) {
 
   std::string expected_lines = R"(
     -D OUTPUT -o eth5 -p tcp -m tcp -d 10.0.0.2 -j CLASSIFY --set-class 1:99
+    -D FORWARD -o eth5 -p tcp -m tcp -d 10.0.0.2 -j CLASSIFY --set-class 1:99
     -D OUTPUT -o eth5 -p tcp -m tcp -d 10.0.0.2 -j DSCP --set-dscp-class AF41
+    -D FORWARD -o eth5 -p tcp -m tcp -d 10.0.0.2 -j DSCP --set-dscp-class AF41
     -D OUTPUT -o eth5 -p tcp -m tcp -d 10.0.0.2 -j RETURN
+    -D FORWARD -o eth5 -p tcp -m tcp -d 10.0.0.2 -j RETURN
     -D OUTPUT -o eth5 -p tcp -m tcp -d 10.0.0.1 --dport 555 -j CLASSIFY --set-class 1:100
+    -D FORWARD -o eth5 -p tcp -m tcp -d 10.0.0.1 --dport 555 -j CLASSIFY --set-class 1:100
     -D OUTPUT -o eth5 -p tcp -m tcp -d 10.0.0.1 --dport 555 -j DSCP --set-dscp-class AF31
+    -D FORWARD -o eth5 -p tcp -m tcp -d 10.0.0.1 --dport 555 -j DSCP --set-dscp-class AF31
     -D OUTPUT -o eth5 -p tcp -m tcp -d 10.0.0.1 --dport 555 -j RETURN
+    -D FORWARD -o eth5 -p tcp -m tcp -d 10.0.0.1 --dport 555 -j RETURN
     -D OUTPUT -o eth5 -p tcp -m tcp -d 10.0.0.1 --dport 20 -j CLASSIFY --set-class 1:101
+    -D FORWARD -o eth5 -p tcp -m tcp -d 10.0.0.1 --dport 20 -j CLASSIFY --set-class 1:101
     -D OUTPUT -o eth5 -p tcp -m tcp -d 10.0.0.1 --dport 20 -j DSCP --set-dscp-class AF41
+    -D FORWARD -o eth5 -p tcp -m tcp -d 10.0.0.1 --dport 20 -j DSCP --set-dscp-class AF41
     -D OUTPUT -o eth5 -p tcp -m tcp -d 10.0.0.1 --dport 20 -j RETURN
+    -D FORWARD -o eth5 -p tcp -m tcp -d 10.0.0.1 --dport 20 -j RETURN
     -D OUTPUT -o eth5 -p tcp -m tcp -d 127.0.0.1 --sport 12 --dport 20 -j CLASSIFY --set-class 1:102
+    -D FORWARD -o eth5 -p tcp -m tcp -d 127.0.0.1 --sport 12 --dport 20 -j CLASSIFY --set-class 1:102
     -D OUTPUT -o eth5 -p tcp -m tcp -d 127.0.0.1 --sport 12 --dport 20 -j DSCP --set-dscp-class AF41
+    -D FORWARD -o eth5 -p tcp -m tcp -d 127.0.0.1 --sport 12 --dport 20 -j DSCP --set-dscp-class AF41
     -D OUTPUT -o eth5 -p tcp -m tcp -d 127.0.0.1 --sport 12 --dport 20 -j RETURN
+    -D FORWARD -o eth5 -p tcp -m tcp -d 127.0.0.1 --sport 12 --dport 20 -j RETURN
     -D OUTPUT -o eth5 -p tcp -m tcp -d 127.0.0.1 --sport 13 --dport 20 -j CLASSIFY --set-class 1:103
+    -D FORWARD -o eth5 -p tcp -m tcp -d 127.0.0.1 --sport 13 --dport 20 -j CLASSIFY --set-class 1:103
     -D OUTPUT -o eth5 -p tcp -m tcp -d 127.0.0.1 --sport 13 --dport 20 -j DSCP --set-dscp-class AF31
+    -D FORWARD -o eth5 -p tcp -m tcp -d 127.0.0.1 --sport 13 --dport 20 -j DSCP --set-dscp-class AF31
     -D OUTPUT -o eth5 -p tcp -m tcp -d 127.0.0.1 --sport 13 --dport 20 -j RETURN
+    -D FORWARD -o eth5 -p tcp -m tcp -d 127.0.0.1 --sport 13 --dport 20 -j RETURN
   )";
 
   EXPECT_EQ(lines, CleanExpectedLines(expected_lines));
@@ -190,18 +205,31 @@ TEST(AddRuleLinesToAddTest, Basic) {
 
   std::string expected_lines = R"(
     -A OUTPUT -o eth5 -p tcp -m tcp -d 10.0.0.2 -j CLASSIFY --set-class 2:99
+    -A FORWARD -o eth5 -p tcp -m tcp -d 10.0.0.2 -j CLASSIFY --set-class 2:99
     -A OUTPUT -o eth5 -p tcp -m tcp -d 10.0.0.2 -j DSCP --set-dscp-class AF41
+    -A FORWARD -o eth5 -p tcp -m tcp -d 10.0.0.2 -j DSCP --set-dscp-class AF41
     -A OUTPUT -o eth5 -p tcp -m tcp -d 10.0.0.2 -j RETURN
+    -A FORWARD -o eth5 -p tcp -m tcp -d 10.0.0.2 -j RETURN
     -I OUTPUT -o eth5 -p tcp -m tcp -d 10.0.0.1 --dport 555 -j RETURN
+    -I FORWARD -o eth5 -p tcp -m tcp -d 10.0.0.1 --dport 555 -j RETURN
     -I OUTPUT -o eth5 -p tcp -m tcp -d 10.0.0.1 --dport 555 -j DSCP --set-dscp-class AF31
+    -I FORWARD -o eth5 -p tcp -m tcp -d 10.0.0.1 --dport 555 -j DSCP --set-dscp-class AF31
     -I OUTPUT -o eth5 -p tcp -m tcp -d 10.0.0.1 --dport 20 -j RETURN
+    -I FORWARD -o eth5 -p tcp -m tcp -d 10.0.0.1 --dport 20 -j RETURN
     -I OUTPUT -o eth5 -p tcp -m tcp -d 10.0.0.1 --dport 20 -j DSCP --set-dscp-class AF41
+    -I FORWARD -o eth5 -p tcp -m tcp -d 10.0.0.1 --dport 20 -j DSCP --set-dscp-class AF41
     -I OUTPUT -o eth5 -p tcp -m tcp -d 10.0.0.1 --dport 20 -j CLASSIFY --set-class 2:101
+    -I FORWARD -o eth5 -p tcp -m tcp -d 10.0.0.1 --dport 20 -j CLASSIFY --set-class 2:101
     -I OUTPUT -o eth5 -p tcp -m tcp -d 127.0.0.1 --sport 12 --dport 20 -j RETURN
+    -I FORWARD -o eth5 -p tcp -m tcp -d 127.0.0.1 --sport 12 --dport 20 -j RETURN
     -I OUTPUT -o eth5 -p tcp -m tcp -d 127.0.0.1 --sport 12 --dport 20 -j DSCP --set-dscp-class AF41
+    -I FORWARD -o eth5 -p tcp -m tcp -d 127.0.0.1 --sport 12 --dport 20 -j DSCP --set-dscp-class AF41
     -I OUTPUT -o eth5 -p tcp -m tcp -d 127.0.0.1 --sport 12 --dport 20 -j CLASSIFY --set-class 2:102
+    -I FORWARD -o eth5 -p tcp -m tcp -d 127.0.0.1 --sport 12 --dport 20 -j CLASSIFY --set-class 2:102
     -I OUTPUT -o eth5 -p tcp -m tcp -d 127.0.0.1 --sport 13 --dport 20 -j RETURN
+    -I FORWARD -o eth5 -p tcp -m tcp -d 127.0.0.1 --sport 13 --dport 20 -j RETURN
     -I OUTPUT -o eth5 -p tcp -m tcp -d 127.0.0.1 --sport 13 --dport 20 -j DSCP --set-dscp-class AF31
+    -I FORWARD -o eth5 -p tcp -m tcp -d 127.0.0.1 --sport 13 --dport 20 -j DSCP --set-dscp-class AF31
   )";
 
   EXPECT_EQ(lines, CleanExpectedLines(expected_lines));

@@ -89,32 +89,30 @@ std::unique_ptr<TestClient> MakeClient(std::shared_ptr<grpc::Channel> ch, int id
 TEST(ClusterAgentTest, NoCrash) {
   auto logger = MakeLogger("cluster-agent-test");
 
-  ClusterAgentService service(
-      std::make_unique<FullClusterController>(
-          NewHostToClusterAggregator(
-              std::make_unique<BweDemandPredictor>(absl::Milliseconds(500), 1.2, 30),
-              absl::Seconds(500)),
-          ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
-                                     type: CA_HEYP_SIGCOMM20
-                                     enable_burstiness: true
-                                     enable_bonus: true
-                                     oversub_factor: 1.0
-                                     heyp_acceptable_measured_ratio_over_intended_ratio:
-                                         1.0
-                                   )"),
-                                   ParseTextProto<proto::AllocBundle>(R"(
-                                     flow_allocs {
-                                       flow { src_dc: "A" dst_dc: "B" }
-                                       hipri_rate_limit_bps: 50
-                                     }
-                                     flow_allocs {
-                                       flow { src_dc: "A" dst_dc: "C" }
-                                       hipri_rate_limit_bps: 70
-                                     }
-                                   )"),
-                                   1.1)
-              .value()),
-      absl::Milliseconds(80));
+  auto controller = std::make_shared<FullClusterController>(
+      NewHostToClusterAggregator(
+          std::make_unique<BweDemandPredictor>(absl::Milliseconds(500), 1.2, 30),
+          absl::Seconds(500)),
+      ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+                                 type: CA_HEYP_SIGCOMM20
+                                 enable_burstiness: true
+                                 enable_bonus: true
+                                 oversub_factor: 1.0
+                                 heyp_acceptable_measured_ratio_over_intended_ratio: 1.0
+                               )"),
+                               ParseTextProto<proto::AllocBundle>(R"(
+                                 flow_allocs {
+                                   flow { src_dc: "A" dst_dc: "B" }
+                                   hipri_rate_limit_bps: 50
+                                 }
+                                 flow_allocs {
+                                   flow { src_dc: "A" dst_dc: "C" }
+                                   hipri_rate_limit_bps: 70
+                                 }
+                               )"),
+                               1.1)
+          .value());
+  ClusterAgentService service(controller, 0);
   SPDLOG_LOGGER_INFO(&logger, "starting server");
   std::unique_ptr<grpc::Server> server =
       grpc::ServerBuilder().RegisterService(&service).BuildAndStart();
@@ -136,7 +134,7 @@ TEST(ClusterAgentTest, NoCrash) {
   });
 
   SPDLOG_LOGGER_INFO(&logger, "run compute loop");
-  service.RunLoop(&should_exit);
+  RunLoop(controller, absl::Milliseconds(80), &should_exit, &logger);
   SPDLOG_LOGGER_INFO(&logger, "compute loop exited");
   exit_th.join();
 
@@ -158,32 +156,30 @@ TEST(ClusterAgentTest, NoCrash) {
 TEST(ClusterAgentTest, NoCrashManyResp) {
   auto logger = MakeLogger("cluster-agent-test");
 
-  ClusterAgentService service(
-      std::make_unique<FullClusterController>(
-          NewHostToClusterAggregator(
-              std::make_unique<BweDemandPredictor>(absl::Milliseconds(500), 1.2, 30),
-              absl::Seconds(500)),
-          ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
-                                     type: CA_HEYP_SIGCOMM20
-                                     enable_burstiness: true
-                                     enable_bonus: true
-                                     oversub_factor: 1.0
-                                     heyp_acceptable_measured_ratio_over_intended_ratio:
-                                         1.0
-                                   )"),
-                                   ParseTextProto<proto::AllocBundle>(R"(
-                                     flow_allocs {
-                                       flow { src_dc: "A" dst_dc: "B" }
-                                       hipri_rate_limit_bps: 50
-                                     }
-                                     flow_allocs {
-                                       flow { src_dc: "A" dst_dc: "C" }
-                                       hipri_rate_limit_bps: 70
-                                     }
-                                   )"),
-                                   1.1)
-              .value()),
-      absl::ZeroDuration());
+  auto controller = std::make_shared<FullClusterController>(
+      NewHostToClusterAggregator(
+          std::make_unique<BweDemandPredictor>(absl::Milliseconds(500), 1.2, 30),
+          absl::Seconds(500)),
+      ClusterAllocator::Create(ParseTextProto<proto::ClusterAllocatorConfig>(R"(
+                                 type: CA_HEYP_SIGCOMM20
+                                 enable_burstiness: true
+                                 enable_bonus: true
+                                 oversub_factor: 1.0
+                                 heyp_acceptable_measured_ratio_over_intended_ratio: 1.0
+                               )"),
+                               ParseTextProto<proto::AllocBundle>(R"(
+                                 flow_allocs {
+                                   flow { src_dc: "A" dst_dc: "B" }
+                                   hipri_rate_limit_bps: 50
+                                 }
+                                 flow_allocs {
+                                   flow { src_dc: "A" dst_dc: "C" }
+                                   hipri_rate_limit_bps: 70
+                                 }
+                               )"),
+                               1.1)
+          .value());
+  ClusterAgentService service(controller, 0);
   SPDLOG_LOGGER_INFO(&logger, "starting server");
   int selected_port = 0;
   std::unique_ptr<grpc::Server> server =
@@ -210,7 +206,7 @@ TEST(ClusterAgentTest, NoCrashManyResp) {
   });
 
   SPDLOG_LOGGER_INFO(&logger, "run compute loop");
-  service.RunLoop(&should_exit);
+  RunLoop(controller, absl::ZeroDuration(), &should_exit, &logger);
   SPDLOG_LOGGER_INFO(&logger, "compute loop exited");
   exit_th.join();
 

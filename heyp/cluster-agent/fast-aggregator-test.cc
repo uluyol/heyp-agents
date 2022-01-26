@@ -25,6 +25,14 @@ ClusterFlowMap<int64_t> TestAggFlowToIdMap() {
   };
 }
 
+std::vector<HashingDowngradeSelector> TestDowngradeSelectors() {
+  return std::vector<HashingDowngradeSelector>{
+      HashingDowngradeSelector(),
+      HashingDowngradeSelector(),
+      HashingDowngradeSelector(),
+  };
+}
+
 std::vector<ThresholdSampler> TestSamplers(int num_samples, int64_t approval0_bps,
                                            int64_t approval1_bps, int64_t approval2_bps) {
   return std::vector<ThresholdSampler>{
@@ -62,7 +70,8 @@ TEST(FastAggregatorTest, NoSamplingOneFG) {
   )"));
 
   Executor exec(4);
-  std::vector<FastAggInfo> agg_info = aggregator.CollectSnapshot(&exec);
+  std::vector<FastAggInfo> agg_info =
+      aggregator.CollectSnapshot(&exec, TestDowngradeSelectors());
 
   EXPECT_EQ(agg_info.size(), 3);
 
@@ -76,8 +85,8 @@ TEST(FastAggregatorTest, NoSamplingOneFG) {
   EXPECT_EQ(agg_info[1].agg_id(), 1);
   EXPECT_THAT(agg_info[1].parent().flow(), EqProto(TestAggFlow(1)));
   EXPECT_EQ(agg_info[1].parent().ewma_usage_bps(), 352);
-  EXPECT_EQ(agg_info[1].parent().ewma_hipri_usage_bps(), 302);
-  EXPECT_EQ(agg_info[1].parent().ewma_lopri_usage_bps(), 50);
+  EXPECT_EQ(agg_info[1].parent().ewma_hipri_usage_bps(), 352);
+  EXPECT_EQ(agg_info[1].parent().ewma_lopri_usage_bps(), 0);
   EXPECT_THAT(
       agg_info[1].children(),
       testing::UnorderedElementsAre(
@@ -121,15 +130,16 @@ TEST(FastAggregatorTest, NoSamplingMultiFG) {
   )"));
 
   Executor exec(4);
-  std::vector<FastAggInfo> agg_info = aggregator.CollectSnapshot(&exec);
+  std::vector<FastAggInfo> agg_info =
+      aggregator.CollectSnapshot(&exec, TestDowngradeSelectors());
 
   EXPECT_EQ(agg_info.size(), 3);
 
   EXPECT_EQ(agg_info[0].agg_id(), 0);
   EXPECT_THAT(agg_info[0].parent().flow(), EqProto(TestAggFlow(0)));
   EXPECT_EQ(agg_info[0].parent().ewma_usage_bps(), 50);
-  EXPECT_EQ(agg_info[0].parent().ewma_hipri_usage_bps(), 0);
-  EXPECT_EQ(agg_info[0].parent().ewma_lopri_usage_bps(), 50);
+  EXPECT_EQ(agg_info[0].parent().ewma_hipri_usage_bps(), 50);
+  EXPECT_EQ(agg_info[0].parent().ewma_lopri_usage_bps(), 0);
   EXPECT_THAT(agg_info[0].children(),
               testing::UnorderedElementsAre(ChildFlowInfo{
                   .child_id = 44, .volume_bps = 50, .currently_lopri = true}));
@@ -189,15 +199,16 @@ TEST(FastAggregatorTest, WithSamplingOneFG) {
   )"));
 
   Executor exec(4);
-  std::vector<FastAggInfo> agg_info = aggregator.CollectSnapshot(&exec);
+  std::vector<FastAggInfo> agg_info =
+      aggregator.CollectSnapshot(&exec, TestDowngradeSelectors());
 
   EXPECT_EQ(agg_info.size(), 3);
 
   EXPECT_EQ(agg_info[0].agg_id(), 0);
   EXPECT_THAT(agg_info[0].parent().flow(), EqProto(TestAggFlow(0)));
   EXPECT_EQ(agg_info[0].parent().ewma_usage_bps(), 362);
-  EXPECT_EQ(agg_info[0].parent().ewma_hipri_usage_bps(), 302);
-  EXPECT_EQ(agg_info[0].parent().ewma_lopri_usage_bps(), 60);
+  EXPECT_EQ(agg_info[0].parent().ewma_hipri_usage_bps(), 362);
+  EXPECT_EQ(agg_info[0].parent().ewma_lopri_usage_bps(), 0);
   EXPECT_THAT(
       agg_info[0].children(),
       testing::UnorderedElementsAre(

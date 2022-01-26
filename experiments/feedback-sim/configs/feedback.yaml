@@ -1,0 +1,119 @@
+hostDemands:
+  - uniform:
+      high: 4
+  - exponential:
+      mean: 2
+      max: 40
+  - elephantsMice:
+      elephants:
+        high: 30
+        low: 34
+        frac: 0.05
+      mice:
+        high: 0.842105263
+  - fb15:
+      mean: 2
+numHosts: [200]
+approvalOverExpectedDemand: [0.5]
+numFeedbackIters: 100
+feedbackScenarios:
+  - maxHostUsage: 40
+    lopriCapOverExpectedDemand: 0.25
+    samplerFactory:
+      kind: "threshold"
+      numSamplesAtApproval: 100
+    controller:
+      maxInc: 1
+      propGain: 0.1
+      ignoreErrBelow: 0.05
+      ignoreErrByCountMultiplier: 2
+  - maxHostUsage: 40
+    lopriCapOverExpectedDemand: 0.25
+    samplerFactory:
+      kind: "threshold"
+      numSamplesAtApproval: 100
+    controller:
+      maxInc: 1
+      propGain: 0.2
+      ignoreErrBelow: 0.05
+      ignoreErrByCountMultiplier: 2
+  - maxHostUsage: 40
+    lopriCapOverExpectedDemand: 0.25
+    samplerFactory:
+      kind: "threshold"
+      numSamplesAtApproval: 100
+    controller:
+      maxInc: 1
+      propGain: 0.3
+      ignoreErrBelow: 0.05
+      ignoreErrByCountMultiplier: 2
+  - maxHostUsage: 40
+    lopriCapOverExpectedDemand: 0.25
+    samplerFactory:
+      kind: "threshold"
+      numSamplesAtApproval: 100
+    controller:
+      maxInc: 1
+      propGain: 0.4
+      ignoreErrBelow: 0.05
+      ignoreErrByCountMultiplier: 2
+  - maxHostUsage: 40
+    lopriCapOverExpectedDemand: 0.25
+    samplerFactory:
+      kind: "threshold"
+      numSamplesAtApproval: 100
+    controller:
+      maxInc: 1
+      propGain: 0.5
+      ignoreErrBelow: 0.05
+      ignoreErrByCountMultiplier: 2
+  - maxHostUsage: 40
+    lopriCapOverExpectedDemand: 0.25
+    samplerFactory:
+      kind: "threshold"
+      numSamplesAtApproval: 100
+    controller:
+      maxInc: 1
+      propGain: 0.6
+      ignoreErrBelow: 0.05
+      ignoreErrByCountMultiplier: 2
+  - maxHostUsage: 40
+    lopriCapOverExpectedDemand: 0.25
+    samplerFactory:
+      kind: "threshold"
+      numSamplesAtApproval: 100
+    controller:
+      maxInc: 1
+      propGain: 0.7
+      ignoreErrBelow: 0.05
+      ignoreErrByCountMultiplier: 2
+  - maxHostUsage: 40
+    lopriCapOverExpectedDemand: 0.25
+    samplerFactory:
+      kind: "threshold"
+      numSamplesAtApproval: 100
+    controller:
+      maxInc: 1
+      propGain: 0.8
+      ignoreErrBelow: 0.05
+      ignoreErrByCountMultiplier: 2
+  - maxHostUsage: 40
+    lopriCapOverExpectedDemand: 0.25
+    samplerFactory:
+      kind: "threshold"
+      numSamplesAtApproval: 100
+    controller:
+      maxInc: 1
+      propGain: 0.9
+      ignoreErrBelow: 0.05
+      ignoreErrByCountMultiplier: 2
+  - maxHostUsage: 40
+    lopriCapOverExpectedDemand: 0.25
+    samplerFactory:
+      kind: "threshold"
+      numSamplesAtApproval: 100
+    controller:
+      maxInc: 1
+      propGain: 1.0
+      ignoreErrBelow: 0.05
+      ignoreErrByCountMultiplier: 2

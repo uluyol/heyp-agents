@@ -10,6 +10,7 @@
 namespace heyp {
 
 double ClampFracLOPRI(spdlog::logger* logger, double frac_lopri);
+double ClampFracLOPRISilent(double frac_lopri);
 
 template <typename ValueType>
 using ClusterFlowMap =
@@ -33,6 +34,18 @@ inline double ClampFracLOPRI(spdlog::logger* logger, double frac_lopri) {
   }
   if (!(frac_lopri <= 1)) {
     SPDLOG_LOGGER_WARN(logger, "frac_lopri [{}] > 1; clamping to 1", frac_lopri);
+    return 1;
+  }
+  return frac_lopri;
+}
+
+inline double ClampFracLOPRISilent(double frac_lopri) {
+  // Make sure frac_lopri >= 0. Use a double-negative condition to
+  // also capture the case where frac_lopri is NaN.
+  if (!(frac_lopri >= 0.0)) {
+    return 0;
+  }
+  if (!(frac_lopri <= 1)) {
     return 1;
   }
   return frac_lopri;

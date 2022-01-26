@@ -17,17 +17,19 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/uluyol/heyp-agents/go/cmd/flagtypes"
 	"github.com/uluyol/heyp-agents/go/cmd/graceful-stop/pidfiles"
 	"github.com/uluyol/heyp-agents/go/stats"
 )
 
 func main() {
 	var (
-		localAddr      = flag.String("me", "192.168.1.1", "address of this machine (used to find device)")
+		localAddrs     = flagtypes.StringList{Sep: ",", Vals: []string{"192.168.1.1"}}
 		outFile        = flag.String("out", "collect-host-stats.log", "file to write stats to`")
 		pidFile        = flag.String("pid", "collect-host-stats.pid", "file to write pid to")
 		stopCollecting = flag.Bool("stop", false, "if specified, use the pidFile to stop the current collector")
 	)
+	flag.Var(&localAddrs, "me", "csv of addresses of this machine (used to find devices)")
 
 	log.SetFlags(0)
 	log.SetPrefix("collect-host-stats: ")
@@ -39,16 +41,20 @@ func main() {
 			log.Fatal(err)
 		}
 	} else {
-		if err := collect(*localAddr, *outFile, *pidFile); err != nil {
+		if err := collect(localAddrs.Vals, *outFile, *pidFile); err != nil {
 			log.Fatal(err)
 		}
 	}
 }
 
-func collect(localAddr, outFile, pidFile string) error {
-	dev, err := findDev(localAddr)
-	if err != nil {
-		return fmt.Errorf("failed to find device name: %w", err)
+func collect(localAddrs []string, outFile, pidFile string) error {
+	devs := make(map[string]bool)
+	for _, addr := range localAddrs {
+		dev, err := findDev(addr)
+		if err != nil {
+			return fmt.Errorf("failed to find device name: %w", err)
+		}
+		devs[dev] = true
 	}
 
 	pid := os.Getpid()
@@ -68,7 +74,7 @@ func collect(localAddr, outFile, pidFile string) error {
 	for {
 		select {
 		case <-ticker.C:
-			appendTo(dev, f)
+			appendTo(devs, f)
 		case <-stopC:
 			return f.Close()
 		}
@@ -104,7 +110,7 @@ func findDev(localAddr string) (string, error) {
 var newlineBytes = []byte("\n")
 var tcpPrefixBytes = []byte("Tcp:")
 
-func appendTo(dev string, w io.Writer) {
+func appendTo(includeDevs map[string]bool, w io.Writer) {
 	var data stats.HostStats
 
 	data.Time = time.Now()
@@ -139,17 +145,19 @@ func appendTo(dev string, w io.Writer) {
 		var found *ipLinkStatsOut
 		if err := json.Unmarshal(out, &outData); err == nil {
 			for i := range outData {
-				if outData[i].IFName == dev {
+				if includeDevs[outData[i].IFName] {
 					found = &outData[i]
 				}
 			}
 		}
 		if found != nil {
-			data.MainDev = new(stats.HostDeviceStats)
-			data.MainDev.RX.Bytes = found.Stats64.RX.Bytes
-			data.MainDev.RX.Packets = found.Stats64.RX.Packets
-			data.MainDev.TX.Bytes = found.Stats64.TX.Bytes
-			data.MainDev.TX.Packets = found.Stats64.TX.Packets
+			if data.MainDev == nil {
+				data.MainDev = new(stats.HostDeviceStats)
+			}
+			data.MainDev.RX.Bytes += found.Stats64.RX.Bytes
+			data.MainDev.RX.Packets += found.Stats64.RX.Packets
+			data.MainDev.TX.Bytes += found.Stats64.TX.Bytes
+			data.MainDev.TX.Packets += found.Stats64.TX.Packets
 		}
 	}
 

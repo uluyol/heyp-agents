@@ -77,7 +77,9 @@ void FastAggregator::UpdateInfo(const proto::InfoBundle& info) {
 }
 
 std::pair<std::vector<FastAggInfo>, std::vector<FastAggregator::PrioEstimators>>
-FastAggregator::Aggregate(const FastAggregator::InfoShard& shard) {
+FastAggregator::Aggregate(
+    const FastAggregator::InfoShard& shard,
+    const std::vector<HashingDowngradeSelector>& downgrade_selectors) {
   std::vector<PrioEstimators> volume_bps;
   std::vector<FastAggInfo> agg;
   agg.reserve(template_agg_info_.size());
@@ -97,7 +99,7 @@ FastAggregator::Aggregate(const FastAggregator::InfoShard& shard) {
         .volume_bps = info.volume_bps,
         .currently_lopri = info.currently_lopri,
     });
-    if (info.currently_lopri) {
+    if (downgrade_selectors.at(info.agg_id).IsLOPRI(info.child_id)) {
       volume_bps[info.agg_id].lopri.RecordSample(info.volume_bps);
     } else {
       volume_bps[info.agg_id].hipri.RecordSample(info.volume_bps);
@@ -112,14 +114,15 @@ FastAggregator::Aggregate(const FastAggregator::InfoShard& shard) {
   return {agg, volume_bps};
 }
 
-std::vector<FastAggInfo> FastAggregator::CollectSnapshot(Executor* exec) {
+std::vector<FastAggInfo> FastAggregator::CollectSnapshot(
+    Executor* exec, const std::vector<HashingDowngradeSelector>& downgrade_selectors) {
   // Compute a std::vector<FastAggInfo> concurrently for each shard.
   // Aggregate into one final std::vector<FastAggInfo>.
   std::unique_ptr<TaskGroup> tasks = exec->NewTaskGroup();
   std::array<std::vector<FastAggInfo>, kNumInfoShards> parts;
   std::array<std::vector<PrioEstimators>, kNumInfoShards> parent_volume_bps;
   for (int i = 0; i < kNumInfoShards; ++i) {
-    tasks->AddTaskNoStatus([i, this, &parts, &parent_volume_bps] {
+    tasks->AddTaskNoStatus([i, this, &parts, &parent_volume_bps, &downgrade_selectors] {
       // First swap the existing shard data with the other buffer
       int cur_id = -2;
       while (true) {
@@ -134,7 +137,8 @@ std::vector<FastAggInfo> FastAggregator::CollectSnapshot(Executor* exec) {
       InfoShard& cur = info_shards_[i][cur_id];
 
       // cur contains the shard data
-      std::tie(parts[i], parent_volume_bps[i]) = this->Aggregate(cur);
+      std::tie(parts[i], parent_volume_bps[i]) =
+          this->Aggregate(cur, downgrade_selectors);
     });
   }
 

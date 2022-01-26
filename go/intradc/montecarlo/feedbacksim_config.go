@@ -17,19 +17,17 @@ type FeedbackConfig struct {
 	HostDemands                []dists.ConfigDistGen      `json:"hostDemands"`
 	NumHosts                   []int                      `json:"numHosts"`
 	ApprovalOverExpectedDemand []float64                  `json:"approvalOverExpectedDemand"`
-	NumSamplesAtApproval       []int                      `json:"numSamplesAtApproval"`
 	NumFeedbackIters           int                        `json:"numFeedbackIters"`
 	FeedbackScenarios          []FeedbackScenarioTemplate `json:"feedbackScenarios"`
 }
 
 func (c FeedbackConfig) validateData() validateData {
 	return validateData{
-		hostVols:             c.HostDemands,
-		hostVolsName:         "HostDemands",
-		numHosts:             c.NumHosts,
-		aoe:                  c.ApprovalOverExpectedDemand,
-		aoeName:              "ApprovalOverExpectedDemand",
-		numSamplesAtApproval: c.NumSamplesAtApproval,
+		hostVols:     c.HostDemands,
+		hostVolsName: "HostDemands",
+		numHosts:     c.NumHosts,
+		aoe:          c.ApprovalOverExpectedDemand,
+		aoeName:      "ApprovalOverExpectedDemand",
 	}
 }
 
@@ -41,21 +39,18 @@ func (c *FeedbackConfig) Enumerate() []FeedbackInstance {
 		for _, numHosts := range c.NumHosts {
 			distGen := dg.Gen.WithNumHosts(numHosts)
 			for _, aod := range c.ApprovalOverExpectedDemand {
-				for _, numSamples := range c.NumSamplesAtApproval {
-					id := ID(len(instances))
-					instances = append(instances, FeedbackInstance{
-						ID:                         id,
-						HostDemands:                distGen,
-						ApprovalOverExpectedDemand: aod,
-						NumSamplesAtApproval:       numSamples,
-						NumFeedbackIters:           c.NumFeedbackIters,
-						Scenarios: MultiScenario{
-							FeedbackScenarios:  c.FeedbackScenarios,
-							InitDowngradeFracs: []float64{0, 1},
-							ShiftTraffics:      []bool{false, true},
-						},
-					})
-				}
+				id := ID(len(instances))
+				instances = append(instances, FeedbackInstance{
+					ID:                         id,
+					HostDemands:                distGen,
+					ApprovalOverExpectedDemand: aod,
+					NumFeedbackIters:           c.NumFeedbackIters,
+					Scenarios: MultiScenario{
+						FeedbackScenarios:  c.FeedbackScenarios,
+						InitDowngradeFracs: []float64{0, 1},
+						ShiftTraffics:      []bool{false, true},
+					},
+				})
 			}
 		}
 	}
@@ -66,7 +61,6 @@ type FeedbackInstance struct {
 	ID                         ID
 	HostDemands                dists.DistGen
 	ApprovalOverExpectedDemand float64
-	NumSamplesAtApproval       int
 	NumFeedbackIters           int
 	Scenarios                  MultiScenario
 }
@@ -127,7 +121,6 @@ type FeedbackInstanceResult struct {
 	HostDemandsGen             string         `json:"hostDemandsGen"`
 	NumHosts                   int            `json:"numHosts"`
 	ApprovalOverExpectedDemand float64        `json:"approvalOverExpectedDemand"`
-	NumSamplesAtApproval       int            `json:"numSamplesAtApproval"`
 	NumFeedbackIters           int            `json:"numFeedbackIters"`
 	Result                     ScenarioResult `json:"result"`
 }

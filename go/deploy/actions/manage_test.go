@@ -54,9 +54,9 @@ func TestGetAndValidateHEYPNodeConfigs_NoVirt(t *testing.T) {
 		},
 		Clusters: []*pb.DeployedCluster{
 			{
-				Name:             strp("EDGE"),
-				NodeNames:        []string{"n1", "n2"},
-				ClusterAgentPort: i32p(4560),
+				Name:              strp("EDGE"),
+				NodeNames:         []string{"n1", "n2"},
+				ClusterAgentPorts: []int32{4560},
 			},
 			{
 				Name:      strp("AA"),
@@ -73,7 +73,7 @@ func TestGetAndValidateHEYPNodeConfigs_NoVirt(t *testing.T) {
 						},
 					},
 				},
-				ClusterAgentPort: i32p(4570),
+				ClusterAgentPorts: []int32{4570},
 			},
 		},
 		ClusterAgentConfig: &pb.ClusterAgentConfig{
@@ -194,9 +194,9 @@ func TestGetAndValidateHEYPNodeConfigs_MixedVirt(t *testing.T) {
 		},
 		Clusters: []*pb.DeployedCluster{
 			{
-				Name:             strp("EDGE"),
-				NodeNames:        []string{"n1", "n2"},
-				ClusterAgentPort: i32p(4560),
+				Name:              strp("EDGE"),
+				NodeNames:         []string{"n1", "n2"},
+				ClusterAgentPorts: []int32{4560},
 			},
 			{
 				Name:      strp("AA"),
@@ -213,7 +213,7 @@ func TestGetAndValidateHEYPNodeConfigs_MixedVirt(t *testing.T) {
 						},
 					},
 				},
-				ClusterAgentPort: i32p(4570),
+				ClusterAgentPorts: []int32{4570},
 			},
 		},
 		ClusterAgentConfig: &pb.ClusterAgentConfig{

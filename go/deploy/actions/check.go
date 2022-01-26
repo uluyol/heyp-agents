@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"strconv"
+	"strings"
 	"text/template"
 	"time"
 
@@ -35,6 +36,15 @@ const TOS_LOPRI = "0x00"    // BE
 const TOS_HIPRI = "0x48"    // AF21
 const TOS_CRITICAL = "0x68" // AF31
 
+func isFortioBackend(n *pb.DeployedNode) bool {
+	for _, role := range n.Roles {
+		if strings.HasPrefix(role, "fortio-") && strings.HasSuffix(role, "-server") {
+			return true
+		}
+	}
+	return false
+}
+
 func ReportPrioritizationBW(c *pb.DeploymentConfig, lohiTOS [2]string) (hipri float64, lopri float64, err error) {
 	if len(c.Nodes) < 3 {
 		return 0, 0, errors.New("fewer than 3 nodes")
@@ -43,6 +53,21 @@ func ReportPrioritizationBW(c *pb.DeploymentConfig, lohiTOS [2]string) (hipri fl
 	server := c.Nodes[0]
 	c1 := c.Nodes[1]
 	c2 := c.Nodes[2]
+
+	reassigned := 0
+	for _, n := range c.Nodes {
+		if isFortioBackend(n) {
+			switch reassigned {
+			case 0:
+				server = n
+			case 1:
+				c1 = n
+			case 2:
+				c2 = n
+			}
+			reassigned++
+		}
+	}
 
 	cmd := TracingCommand(LogWithPrefix("report-pri-bw: "),
 		"ssh", server.GetExternalAddr(), "iperf -s")
@@ -199,6 +224,28 @@ func CheckNodeConnectivity(c *pb.DeploymentConfig) error {
 	var eg multierrgroup.Group
 	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 
+	isSameNet := func(a, b string) (bool, error) {
+		const pre1 = "192.168.1."
+		const pre2 = "192.168.2."
+		aIn1 := strings.HasPrefix(a, pre1)
+		aIn2 := strings.HasPrefix(a, pre2)
+		bIn1 := strings.HasPrefix(b, pre1)
+		bIn2 := strings.HasPrefix(b, pre2)
+		if aIn1 && bIn1 {
+			return true, nil
+		}
+		if aIn2 && bIn2 {
+			return true, nil
+		}
+		if !(aIn1 || aIn2) {
+			return false, fmt.Errorf("ip has unknown prefix: %v", a)
+		}
+		if !(bIn1 || bIn2) {
+			return false, fmt.Errorf("ip has unknown prefix: %v", b)
+		}
+		return false, nil
+	}
+
 	for _, n := range c.Nodes {
 		n := n
 		eg.Go(func() error {
@@ -207,8 +254,14 @@ func CheckNodeConnectivity(c *pb.DeploymentConfig) error {
 				Dests []string
 			}
 			tmplData.Src = n.GetExperimentAddr()
-			for _, n := range c.Nodes {
-				tmplData.Dests = append(tmplData.Dests, n.GetExperimentAddr())
+			for _, n2 := range c.Nodes {
+				sameNet, err := isSameNet(n.GetExperimentAddr(), n2.GetExperimentAddr())
+				if err != nil {
+					return err
+				}
+				if sameNet {
+					tmplData.Dests = append(tmplData.Dests, n2.GetExperimentAddr())
+				}
 			}
 
 			var buf bytes.Buffer

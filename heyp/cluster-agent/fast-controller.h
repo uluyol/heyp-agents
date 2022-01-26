@@ -63,7 +63,8 @@ class FastClusterController : public ClusterController {
   };
 
  private:
-  FastClusterController(ClusterFlowMap<int64_t> agg_flow2id,
+  FastClusterController(const proto::FastClusterControllerConfig& config,
+                        ClusterFlowMap<int64_t> agg_flow2id,
                         std::vector<proto::FlowMarker> agg_id2flow,
                         std::vector<int64_t> approval_bps,
                         std::vector<ThresholdSampler> samplers, int num_threads);
@@ -76,6 +77,13 @@ class FastClusterController : public ClusterController {
   Executor exec_;
   FastAggregator aggregator_;
 
+  struct PerAggState {
+    double downgrade_frac = 0;
+    double ewma_max_child_usage = -1;
+    std::optional<DowngradeFracController> frac_controller;
+  };
+
+  std::vector<PerAggState> agg_states_;
   std::vector<HashingDowngradeSelector> agg_selectors_;
 
   std::atomic<uint64_t> next_lis_id_;

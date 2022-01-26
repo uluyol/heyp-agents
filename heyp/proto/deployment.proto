@@ -16,6 +16,7 @@ message DeployedNode {
   optional string name = 1;
   optional string external_addr = 2;
   optional string experiment_addr = 3;
+  repeated string all_experiment_addrs = 4;
 
   // Valid roles:
   // - host-agent
@@ -36,7 +37,7 @@ message DeployedCluster {
   repeated string node_names = 2;
 
   optional AllocBundle limits = 3;
-  optional int32 cluster_agent_port = 4;
+  repeated int32 cluster_agent_ports = 4;
 }
 
 message DeployedTestLopriInstance {

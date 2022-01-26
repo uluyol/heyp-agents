@@ -45,11 +45,20 @@ class FullClusterController : public ClusterController {
     friend class FullClusterController;
   };
 
+  // Exposed for testing
+  FlowAggregator& AggregatorForTesting() { return *aggregator_; }
+
  private:
   std::unique_ptr<FlowAggregator> aggregator_;
   TimedMutex state_mu_;
   std::unique_ptr<ClusterAllocator> allocator_ ABSL_GUARDED_BY(state_mu_);
   spdlog::logger logger_;
+
+  using LastBundleMap = absl::flat_hash_map<uint64_t, proto::AllocBundle>;
+
+  // Access atomically.
+  // Written to while holding broadcasting_mu_.
+  std::shared_ptr<const LastBundleMap> last_alloc_bundle_;
 
   TimedMutex broadcasting_mu_;
   uint64_t next_lis_id_ ABSL_GUARDED_BY(broadcasting_mu_);

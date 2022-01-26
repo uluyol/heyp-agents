@@ -173,16 +173,17 @@ type HEYPNodeConfigs struct {
 }
 
 type HostAgentNode struct {
-	Host                     *pb.DeployedNode
-	JobName                  string
-	ClusterAgentAddr         string
-	PatchHostAgentConfigFunc func(c *pb.HostAgentConfig)
+	Host                       *pb.DeployedNode
+	ControlledExperimentAddrID int
+	JobName                    string
+	ClusterAgentAddr           string
+	PatchHostAgentConfigFunc   func(c *pb.HostAgentConfig)
 }
 
 type ClusterAgentNode struct {
-	Node    *pb.DeployedNode
-	Cluster *pb.DeployedCluster
-	Address string
+	Node      *pb.DeployedNode
+	Cluster   *pb.DeployedCluster
+	Addresses []string
 }
 
 func checkNetem(dcPair *pb.SimulatedWanConfig_Pair, netem *pb.NetemConfig, fieldName string) error {
@@ -195,7 +196,11 @@ func checkNetem(dcPair *pb.SimulatedWanConfig_Pair, netem *pb.NetemConfig, field
 
 func (nodeConfigs *HEYPNodeConfigs) MakeHostAgentConfig(c *pb.DeploymentConfig, startConfig HEYPAgentsConfig, remoteTopdir string, n HostAgentNode) *pb.HostAgentConfig {
 	hostConfig := proto.Clone(c.HostAgentTemplate).(*pb.HostAgentConfig)
-	hostConfig.ThisHostAddrs = []string{n.Host.GetExperimentAddr()}
+	expAddr := n.Host.GetExperimentAddr()
+	if n.ControlledExperimentAddrID >= 0 {
+		expAddr = allExperimentAddrs(n.Host)[n.ControlledExperimentAddrID]
+	}
+	hostConfig.ThisHostAddrs = []string{expAddr}
 	if n.JobName != "" {
 		hostConfig.JobName = proto.String(n.JobName)
 	}
@@ -226,6 +231,21 @@ func (nodeConfigs *HEYPNodeConfigs) MakeHostAgentConfig(c *pb.DeploymentConfig, 
 	hostConfig.DcMapper = nodeConfigs.DCMapperConfig
 	n.PatchHostAgentConfigFunc(hostConfig)
 	return hostConfig
+}
+
+func allExperimentAddrs(n *pb.DeployedNode) []string {
+	if len(n.AllExperimentAddrs) == 0 {
+		return []string{n.GetExperimentAddr()}
+	}
+	return n.AllExperimentAddrs
+}
+
+func makeClusterAgentAddrs(addrWithoutPort string, ports []int32) []string {
+	addrs := make([]string, len(ports))
+	for pi, port := range ports {
+		addrs[pi] = addrWithoutPort + ":" + strconv.Itoa(int(port))
+	}
+	return addrs
 }
 
 func GetAndValidateHEYPNodeConfigs(c *pb.DeploymentConfig) (HEYPNodeConfigs, error) {
@@ -260,16 +280,18 @@ func GetAndValidateHEYPNodeConfigs(c *pb.DeploymentConfig) (HEYPNodeConfigs, err
 			if n == nil {
 				return nodeConfigs, fmt.Errorf("node not found: %s", nodeName)
 			}
-			if hasRole(n, "host-agent") || hasRolePrefix(n, "vhost-agents-") {
+			if hasRole(n, "host-agent") || hasRolePrefix(n, "host-agent-addr") || hasRolePrefix(n, "vhost-agents-") {
 				if nodeConfigs.DCMapperConfig.Mapping == nil {
 					nodeConfigs.DCMapperConfig.Mapping = new(pb.DCMapping)
 				}
-				nodeConfigs.DCMapperConfig.Mapping.Entries = append(
-					nodeConfigs.DCMapperConfig.Mapping.Entries,
-					&pb.DCMapping_Entry{
-						HostAddr: proto.String(n.GetExperimentAddr()),
-						Dc:       proto.String(cluster.GetName()),
-					})
+				for _, addr := range allExperimentAddrs(n) {
+					nodeConfigs.DCMapperConfig.Mapping.Entries = append(
+						nodeConfigs.DCMapperConfig.Mapping.Entries,
+						&pb.DCMapping_Entry{
+							HostAddr: proto.String(addr),
+							Dc:       proto.String(cluster.GetName()),
+						})
+				}
 			}
 			var (
 				hostAgentConfig HostAgentNode
@@ -277,19 +299,31 @@ func GetAndValidateHEYPNodeConfigs(c *pb.DeploymentConfig) (HEYPNodeConfigs, err
 				numVHostAgents  int
 				hasJobName      bool
 			)
+			hostAgentConfig.ControlledExperimentAddrID = -1
 			hostAgentConfig.PatchHostAgentConfigFunc = func(*pb.HostAgentConfig) {}
 			for _, role := range n.Roles {
 				switch {
 				case role == "cluster-agent":
 					nodeConfigs.ClusterAgentNodes = append(
 						nodeConfigs.ClusterAgentNodes,
-						ClusterAgentNode{n, cluster, "0.0.0.0:" + strconv.Itoa(int(cluster.GetClusterAgentPort()))})
+						ClusterAgentNode{n, cluster, makeClusterAgentAddrs("0.0.0.0", cluster.GetClusterAgentPorts())})
 					thisClusterAgentNode = n
 				case role == "cluster-agents":
 					return nodeConfigs, fmt.Errorf("node '%s': invalid role \"cluster-agents\", did you mean \"cluster-agent\"?", n.GetName())
 				case role == "host-agent":
 					hostAgentConfig.Host = n
 					isHostAgent = true
+				case strings.HasPrefix(role, "host-agent-addr"):
+					numStr := strings.TrimPrefix(role, "host-agent-addr")
+					num, err := strconv.Atoi(numStr)
+					if err != nil {
+						return nodeConfigs, fmt.Errorf("node '%s': invalid index for host agent address %q: %w", n.GetName(), numStr, err)
+					}
+					hostAgentConfig.Host = n
+					hostAgentConfig.ControlledExperimentAddrID = num
+					isHostAgent = true
+				case strings.HasPrefix(role, "host-agents-addr"):
+					return nodeConfigs, fmt.Errorf("node '%s': invalid role %q, did you mean host-agent-addr?", role, n.GetName())
 				case role == "host-agents":
 					return nodeConfigs, fmt.Errorf("node '%s': invalid role \"host-agents\", did you mean \"host-agent\"?", n.GetName())
 				case strings.HasPrefix(role, "vhost-agent-"):
@@ -373,16 +407,25 @@ func GetAndValidateHEYPNodeConfigs(c *pb.DeploymentConfig) (HEYPNodeConfigs, err
 					cluster.GetName())
 			}
 		} else {
+			clusterAgentAddrs := makeClusterAgentAddrs(
+				thisClusterAgentNode.GetExperimentAddr(),
+				cluster.GetClusterAgentPorts())
+
+			nextAddrID := 0
+			getNextClusterAgentAddr := func() string {
+				addr := clusterAgentAddrs[nextAddrID%len(clusterAgentAddrs)]
+				nextAddrID++
+				return addr
+			}
+
 			for i := numHostsFilled; i < len(nodeConfigs.HostAgentNodes); i++ {
-				nodeConfigs.HostAgentNodes[i].ClusterAgentAddr =
-					thisClusterAgentNode.GetExperimentAddr() + ":" + strconv.Itoa(int(cluster.GetClusterAgentPort()))
+				nodeConfigs.HostAgentNodes[i].ClusterAgentAddr = getNextClusterAgentAddr()
 			}
 			numHostsFilled = len(nodeConfigs.HostAgentNodes)
 			for nodeName := range nodesWithNewVHosts {
 				vhostAgents := nodeConfigs.NodeVHostAgents[nodeName]
 				for i := range vhostAgents {
-					vhostAgents[i].ClusterAgentAddr =
-						thisClusterAgentNode.GetExperimentAddr() + ":" + strconv.Itoa(int(cluster.GetClusterAgentPort()))
+					vhostAgents[i].ClusterAgentAddr = getNextClusterAgentAddr()
 				}
 			}
 		}
@@ -403,7 +446,7 @@ func StartHEYPAgents(c *pb.DeploymentConfig, remoteTopdir string, startConfig HE
 			n := n
 
 			t := c.ClusterAgentConfig
-			t.Server.Address = &n.Address
+			t.Server.Addresses = n.Addresses
 			clusterAgentConfigBytes, err := prototext.MarshalOptions{Indent: "  "}.Marshal(t)
 			if err != nil {
 				return fmt.Errorf("failed to marshal cluster-agent config: %w", err)
@@ -535,7 +578,10 @@ func StartCollectingHostStats(c *pb.DeploymentConfig, remoteTopdir string) error
 		eg.Go(func() error {
 			out, err := TracingCommand(LogWithPrefix("collect-host-stats: "),
 				"ssh", n.GetExternalAddr(),
-				fmt.Sprintf("mkdir -p %[1]s/logs/ && tmux kill-session -t collect-host-stats; tmux new-session -d -s collect-host-stats '%[1]s/aux/collect-host-stats -me %[2]s -out %[1]s/logs/host-stats.log -pid %[1]s/logs/host-stats.pid'", remoteTopdir, n.GetExperimentAddr())).CombinedOutput()
+				fmt.Sprintf("mkdir -p %[1]s/logs/ &&"+
+					"tmux kill-session -t collect-host-stats;"+
+					"tmux new-session -d -s collect-host-stats '%[1]s/aux/collect-host-stats -me %[2]s -out %[1]s/logs/host-stats.log -pid %[1]s/logs/host-stats.pid'",
+					remoteTopdir, strings.Join(allExperimentAddrs(n), ","))).CombinedOutput()
 			if err != nil {
 				return fmt.Errorf("failed to start collecting stats on Node %q: %w; output:\n%s", n.GetName(), err, out)
 			}

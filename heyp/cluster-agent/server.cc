@@ -141,22 +141,23 @@ class HostReactor
   ParID bundler_id_ = -1;
 };
 
-ClusterAgentService::ClusterAgentService(std::unique_ptr<ClusterController> controller,
-                                         absl::Duration control_period)
-    : control_period_(control_period),
-      controller_(std::move(controller)),
-      logger_(MakeLogger("cluster-agent-svc")) {}
+ClusterAgentService::ClusterAgentService(
+    const std::shared_ptr<ClusterController>& controller, int id)
+    : controller_(std::move(controller)),
+      logger_(MakeLogger(absl::StrCat("cluster-agent-svc-", id))) {}
 
 grpc::ServerBidiReactor<proto::InfoBundle, proto::AllocBundle>*
 ClusterAgentService::RegisterHost(grpc::CallbackServerContext* context) {
   return new HostReactor(this, context);
 }
 
-void ClusterAgentService::RunLoop(std::atomic<bool>* should_exit) {
+void RunLoop(const std::shared_ptr<ClusterController>& controller,
+             absl::Duration control_period, std::atomic<bool>* should_exit,
+             spdlog::logger* logger) {
   while (!should_exit->load()) {
-    SPDLOG_LOGGER_INFO(&logger_, "{}: compute new allocations", __func__);
-    controller_->ComputeAndBroadcast();
-    absl::SleepFor(control_period_);
+    SPDLOG_LOGGER_INFO(logger, "{}: compute new allocations", __func__);
+    controller->ComputeAndBroadcast();
+    absl::SleepFor(control_period);
   }
 }
 

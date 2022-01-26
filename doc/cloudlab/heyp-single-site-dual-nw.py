@@ -77,6 +77,9 @@ if auxNumNodes < 0:
                               ["auxNodeCountPairs"]))
 
 componentIds = params.nodeComponentIds.split(",")
+if not params.nodeComponentIds:
+    componentIds = []
+
 if len(componentIds) > 0:
     if len(nodeCounts) != 1:
         pc.reportError(
@@ -115,14 +118,14 @@ def createNodes(nodeType, count, componentIds, numNodes, auxOnly=False):
             iface = node.addInterface("eth1")
             # Specify the IPv4 address
             iface.addAddress(
-                pg.IPv4Address("192.168.1." + str(counter), "255.255.255.0"))
+                pg.IPv4Address("192.168.2." + str(counter), "255.255.255.0"))
             ifaces.append((iface, "iface-node-" + str(counter)))
 
         # Create auxnet iface and assign IP
         iface = node.addInterface("eth2")
         # Specify the IPv4 address
         iface.addAddress(
-            pg.IPv4Address("192.168.2." + str(counter), "255.255.255.0"))
+            pg.IPv4Address("192.168.1." + str(counter), "255.255.255.0"))
         auxnetIfaces.append((iface, "auxnet-iface-node-" + str(counter)))
 
         counter += 1
@@ -145,7 +148,7 @@ else:
     s3switch.hardware_type = params.switchType
     for iface, ifaceName in ifaces:
         siface = s3switch.addInterface()
-        siface.addAddress(pg.IPv4Address("192.168.1.254", "255.255.255.0"))
+        siface.addAddress(pg.IPv4Address("192.168.2.254", "255.255.255.0"))
 
         link = request.L1Link("link-" + ifaceName)
         link.addInterface(iface)
