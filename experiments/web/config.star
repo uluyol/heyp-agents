@@ -214,11 +214,19 @@ def GenWorkloadStagesJump(
         workload_stages_per_backend = [
             {
                 "target_average_bps": AA_per_be_bps_min,
-                "run_dur": "45s",
+                "run_dur": "35s",
             },
             {
                 "target_average_bps": AA_per_be_bps_max,
-                "run_dur": "150s",
+                "run_dur": "60s",
+            },
+            {
+                "target_average_bps": AA_per_be_bps_min,
+                "run_dur": "60s",
+            },
+            {
+                "target_average_bps": AA_per_be_bps_max,
+                "run_dur": "75s",
             },
         ],
         num_shards_per_backend = NumShards(AA_per_be_bps_max),
@@ -230,7 +238,7 @@ def GenWorkloadStagesJump(
         workload_stages_per_backend = [
             {
                 "target_average_bps": WA_bps,
-                "run_dur": "150s",
+                "run_dur": "230s",
             },
         ],
         num_shards_per_backend = NumShards(WA_bps),
@@ -1625,7 +1633,7 @@ def AddConfigsIncreasingBase(
     configs[prefix + "-nl_light"] = NoLimitConfig(**kwargs_lo)
     configs[prefix + "-rl_light"] = RateLimitConfig(**kwargs_lo)
 
-    for util in [float("16.5"), float("17"), float("17.5"), float("18")]:
+    for util in [float("15"), float("15.5"), float("16"), float("16.5"), float("17"), float("17.5"), float("18")]:
         wl_x_kwargs = GenWorkloadStagesIncDec(
             AA_bps = int(Gbps(12)),
             num_AA_backends = 1,
@@ -1662,6 +1670,19 @@ def AddConfigsIncreasing_LR_AC_WA(configs):
         enable_ac_WA = True,
     )
 
+def AddConfigsIncreasing_LR_AC_AA(configs):
+    tmp_configs = dict()
+    AddConfigsIncreasingBase(
+        tmp_configs,
+        name = "inc_lr_acAA",
+        lb_policy = "LEAST_REQUEST",
+        enable_ac_AA = True,
+        enable_ac_WA = False,
+    )
+    for k, c in tmp_configs.items():
+        if "-nl_x_" in k:
+            configs[k] = c
+
 def AddConfigsIncreasing_RR_AC_ALL(configs):
     AddConfigsIncreasingBase(
         configs,
@@ -1693,7 +1714,7 @@ def AddConfigsJumpBase(
         "AA_lopri_is_longer": True,
         "WA_approved_bps": int(Gbps(13)),
         "shard_key": "inc",
-        "cluster_control_period": "5s",
+        "cluster_control_period": "1s",
     }
     if enable_ac_AA or enable_ac_WA:
         ac_configs = dict()
@@ -1736,34 +1757,34 @@ def AddConfigsJumpBase(
     prefix = name
 
     # configs[prefix + "-hsc"] = HSC20Config(**kwargs)
-    configs[prefix + "-nl"] = NoLimitConfig(**kwargs)
+    # configs[prefix + "-nl"] = NoLimitConfig(**kwargs)
     configs[prefix + "-qd"] = QoSDowngradeConfig(**kwargs)
     configs[prefix + "-qdlrl"] = QoSDowngradeAndLimitLOPRIConfig(**kwargs)
     configs[prefix + "-qd_fc"] = QoSDowngradeFeedbackControlConfig(**kwargs)
     configs[prefix + "-qdlrl_fc"] = QoSDowngradeFeedbackControlAndLimitLOPRIConfig(**kwargs)
     configs[prefix + "-rl"] = RateLimitConfig(**kwargs)
 
-    configs[prefix + "-nl_light"] = NoLimitConfig(**kwargs_lo)
-    configs[prefix + "-rl_light"] = RateLimitConfig(**kwargs_lo)
+    # configs[prefix + "-nl_light"] = NoLimitConfig(**kwargs_lo)
+    # configs[prefix + "-rl_light"] = RateLimitConfig(**kwargs_lo)
 
-    for util in [float("16.5"), float("17"), float("17.5"), float("18")]:
-        wl_x_kwargs = GenWorkloadStagesJumpLimited(
-            AA_bps_min = int(Gbps(3)),
-            AA_bps_max = int(Gbps(9)),
-            num_AA_backends = 1,
-            AA_config = AAConfig(
-                servers_are_virt = True,
-                max_prop_delay_ms = _DEFAULT_AA_prop_delay_ms + _DEFAULT_AA_prop_delay_ms_extra_lopri,
-                num_servers_per_backend_host = AA_NUM_SERVERS_PER_BACKEND_HOST,
-                enable_timeout = enable_ac_AA,
-                lb_policy = lb_policy,
-            ),
-            WA_bps = int(Gbps(12)),
-            WA_config = WAConfig(enable_timeout = enable_ac_WA),
-            max_util = int(Gbps(util)),
-        )
-        kwargs_x = dict(base_kwargs, **wl_x_kwargs)
-        configs[prefix + "-nl_x_{0}".format(int(10 * util))] = NoLimitConfig(**kwargs_x)
+    # for util in [float("16.5"), float("17"), float("17.5"), float("18")]:
+    #     wl_x_kwargs = GenWorkloadStagesJumpLimited(
+    #         AA_bps_min = int(Gbps(3)),
+    #         AA_bps_max = int(Gbps(9)),
+    #         num_AA_backends = 1,
+    #         AA_config = AAConfig(
+    #             servers_are_virt = True,
+    #             max_prop_delay_ms = _DEFAULT_AA_prop_delay_ms + _DEFAULT_AA_prop_delay_ms_extra_lopri,
+    #             num_servers_per_backend_host = AA_NUM_SERVERS_PER_BACKEND_HOST,
+    #             enable_timeout = enable_ac_AA,
+    #             lb_policy = lb_policy,
+    #         ),
+    #         WA_bps = int(Gbps(12)),
+    #         WA_config = WAConfig(enable_timeout = enable_ac_WA),
+    #         max_util = int(Gbps(util)),
+    #     )
+    #     kwargs_x = dict(base_kwargs, **wl_x_kwargs)
+    #     configs[prefix + "-nl_x_{0}".format(int(10 * util))] = NoLimitConfig(**kwargs_x)
 
 def AddConfigsJump_LR_AC_ALL(configs):
     AddConfigsJumpBase(
@@ -1812,7 +1833,7 @@ def AddConfigsCongestedLOPRIBase(
         "AA_surplus_bps": int(Gbps(10)),
         "AA_servers_are_virt": True,
         "AA_lopri_is_longer": True,
-        "WA_approved_bps": int(Gbps(14)),
+        "WA_approved_bps": int(Gbps(15)),
         "shard_key": "inc",
         "cluster_control_period": "5s",
     }
@@ -1832,7 +1853,7 @@ def AddConfigsCongestedLOPRIBase(
             enable_timeout = enable_ac_AA,
             lb_policy = lb_policy,
         ),
-        WA_bps = int(Gbps(14)),
+        WA_bps = int(Gbps(15)),
         WA_config = WAConfig(enable_timeout = enable_ac_WA),
         run_dur = "150s",
     )
@@ -1845,7 +1866,7 @@ def AddConfigsCongestedLOPRIBase(
             enable_timeout = enable_ac_AA,
             lb_policy = lb_policy,
         ),
-        WA_bps = int(Gbps(14)),
+        WA_bps = int(Gbps(15)),
         WA_config = WAConfig(enable_timeout = enable_ac_WA),
     )
     kwargs = dict(base_kwargs, **wl_kwargs)
@@ -1866,7 +1887,7 @@ def AddConfigsCongestedLOPRIBase(
 
     for util in [float("16.5"), float("17"), float("17.5"), float("18")]:
         wl_x_kwargs = GenWorkloadStagesStatic(
-            AA_bps = int(Gbps(util) - Gbps(14)),
+            AA_bps = int(Gbps(util) - Gbps(15)),
             AA_config = AAConfig(
                 servers_are_virt = True,
                 max_prop_delay_ms = _DEFAULT_AA_prop_delay_ms + _DEFAULT_AA_prop_delay_ms_extra_lopri,
@@ -1874,7 +1895,7 @@ def AddConfigsCongestedLOPRIBase(
                 enable_timeout = enable_ac_AA,
                 lb_policy = lb_policy,
             ),
-            WA_bps = int(Gbps(14)),
+            WA_bps = int(Gbps(15)),
             WA_config = WAConfig(enable_timeout = enable_ac_WA),
         )
         kwargs_x = dict(base_kwargs, **wl_x_kwargs)
@@ -2204,6 +2225,7 @@ def GenConfigs():
         "demandsuppression": AddConfigsDemandSuppression,
         "inc_lr_acALL": AddConfigsIncreasing_LR_AC_ALL,
         "inc_lr_acWA": AddConfigsIncreasing_LR_AC_WA,
+        "inc_lr_acAA": AddConfigsIncreasing_LR_AC_AA,
         "inc_rr_acALL": AddConfigsIncreasing_RR_AC_ALL,
         "inc_rr_acWA": AddConfigsIncreasing_RR_AC_WA,
         "inc": MakeAddAll(
