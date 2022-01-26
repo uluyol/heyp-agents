@@ -736,7 +736,7 @@ def GenConfig(
         "EDGE": {
             "name": "EDGE",
             "node_names": [],
-            "cluster_agent_port": 4560,
+            "cluster_agent_ports": [4560],
         },
         "AA": {
             "name": "AA",
@@ -753,7 +753,7 @@ def GenConfig(
                     },
                 ],
             },
-            "cluster_agent_port": 4570,
+            "cluster_agent_ports": [4570],
         },
         "WA": {
             "name": "WA",
@@ -770,12 +770,12 @@ def GenConfig(
                     },
                 ],
             },
-            "cluster_agent_port": 4580,
+            "cluster_agent_ports": [4580],
         },
         "CLIENT": {
             "name": "CLIENT",
             "node_names": [],
-            "cluster_agent_port": 4590,
+            "cluster_agent_ports": [4590],
         },
     }
     if ca_limits_to_apply == "":
@@ -844,7 +844,7 @@ def GenConfig(
                 clusters["UNUSED"] = {
                     "name": "UNUSED",
                     "node_names": cluster_agent_nodes[:],
-                    "cluster_agent_port": 4600,
+                    "cluster_agent_ports": [4600],
                 }
             clusters["UNUSED"]["node_names"].append(name)
             #fail("got idx >= CLIENT upper bound index", idx, idx_ubs["CLIENT"])
