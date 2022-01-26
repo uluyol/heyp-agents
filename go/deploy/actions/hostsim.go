@@ -123,10 +123,10 @@ func RunHostAgentSims(c *pb.DeploymentConfig, remoteTopdir string, showOut bool)
 		numHosts := int32(0)
 		nProcesses := 1
 		
-		for _, n := range c.Nodes {
+		for nidx, n := range c.Nodes {
 			n := n
 			hostsPerProcess := hostsPerNode/nProcesses
-
+			clusterAgentAddr := c.ClusterAgentAddrs[nidx%len(c.ClusterAgentAddrs)]
 			for p:= 0; p < nProcesses; p++ {
 
 
@@ -157,7 +157,7 @@ func RunHostAgentSims(c *pb.DeploymentConfig, remoteTopdir string, showOut bool)
 						"ssh", n.GetExternalAddr(),
 						fmt.Sprintf("cat > %[1]s/configs/host-agent-sim-%[5]d.textproto && mkdir -p %[1]s/logs && ulimit -Sn unlimited && "+
 							"%[1]s/aux/host-agent-sim -m %[1]s/configs/host-agent-sim-%[5]d.mutex.out -c %[1]s/configs/host-agent-sim-%[5]d.textproto -o %[1]s/logs/host-agent-sim-%[5]d.csv -cluster-agent-addr %[2]s -dur %[4]s 2>&1 | tee %[1]s/logs/host-agent-sim-%[5]d.log; exit ${PIPESTATUS[0]}",
-							remoteTopdir, c.ClusterAgentAddr, startTimestamp, c.C.GetRunDur(),p))
+							remoteTopdir, clusterAgentAddr, startTimestamp, c.C.GetRunDur(),p))
 					cmd.SetStdin(fmt.Sprintf("host-agent-sim-%.textproto",p), bytes.NewReader(hostSimConfigBytes))
 					if showOut {
 						cmd.Stdout = os.Stdout
