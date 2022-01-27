@@ -78,7 +78,7 @@ func (h *SimulatedHost) trimGenTimes() {
 		ubID := sort.Search(len(h.genTimes), func(i int) bool {
 			return ubTime.Before(h.genTimes[i].Time)
 		})
-		if ubID < 0 || ubID > len(h.genTimes) {
+		if ubID < 0 || ubID >= len(h.genTimes) {
 			return
 		}
 		h.genTimes = h.genTimes[ubID:]
@@ -98,7 +98,7 @@ func (h *SimulatedHost) getGenTime(gen int64) (time.Time, bool) {
 	id := sort.Search(len(h.genTimes), func(i int) bool {
 		return gen <= h.genTimes[i].Gen
 	})
-	if id < 0 || id > len(h.genTimes) || h.genTimes[id].Gen != gen {
+	if id < 0 || id >= len(h.genTimes) || h.genTimes[id].Gen != gen {
 		return time.Time{}, false
 	}
 	return h.genTimes[id].Time, true
@@ -156,7 +156,6 @@ func (h *SimulatedHost) runEnforceLoop(ctx context.Context, isDone chan<- struct
 		if err != nil || ctx.Err() != nil {
 			return
 		}
-
 		if b.Gen <= 0 {
 			continue
 		}
@@ -176,11 +175,11 @@ func (h *SimulatedHost) runEnforceLoop(ctx context.Context, isDone chan<- struct
 
 func (h *SimulatedHost) runInformLoop(ctx context.Context, isDone chan<- struct{},
 	stream pb.ClusterAgent_RegisterHostClient, period time.Duration) {
-
+	
 	defer func() {
 		isDone <- struct{}{}
 	}()
-
+	
 	rng := rand.New(rand.NewSource(uint64(time.Now().UnixNano())))
 
 	time.Sleep(time.Duration(rng.Int63n(int64(period))))
@@ -190,13 +189,15 @@ func (h *SimulatedHost) runInformLoop(ctx context.Context, isDone chan<- struct{
 	for {
 		lastTime := time.Now()
 		pop.populateInfo(rng, &b, lastTime)
-		gen++
-		b.Gen = gen
-		if stream.Send(&b) != nil || ctx.Err() != nil {
-			return
+		if len(b.FlowInfos) != 0 {
+			gen++
+			b.Gen = gen
+			if stream.Send(&b) != nil || ctx.Err() != nil {
+				return
+			}
+			h.pushGenTime(gen, lastTime)
 		}
-		h.pushGenTime(gen, lastTime)
-
+		
 		toSleep := period - time.Since(lastTime)
 		if toSleep > 0 {
 			time.Sleep(toSleep)
