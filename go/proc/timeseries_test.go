@@ -5,6 +5,8 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 type simpleTSEntry struct {
@@ -133,7 +135,7 @@ func TestTSMerger(t *testing.T) {
 			t.Fatalf("case %d: got unexpected error: %v", i, err)
 		}
 		if !reflect.DeepEqual(result, tc.result) {
-			t.Errorf("case %d: got %+v, want %+v", i, result, tc.result)
+			t.Errorf("case %d: got - want %s", i, cmp.Diff(tc.result, result))
 		}
 	}
 }
