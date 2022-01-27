@@ -160,7 +160,7 @@ type HEYPAgentsConfig struct {
 func DefaultHEYPAgentsConfig() HEYPAgentsConfig {
 	return HEYPAgentsConfig{
 		LogClusterAllocState: true,
-		LogEnforcerState:     true,
+		LogEnforcerState:     false,
 		LogHostStats:         true,
 	}
 }
