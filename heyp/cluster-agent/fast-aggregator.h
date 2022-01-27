@@ -75,6 +75,7 @@ class FastAggregator {
   const ClusterFlowMap<int64_t>* agg_flow_to_id_;
   const std::vector<ThresholdSampler> samplers_;
   const std::vector<FastAggInfo> template_agg_info_;
+  spdlog::logger logger_;
 
   constexpr static int kNumInfoShards = 8;
   // Maintain a sharded queues of Infos.
