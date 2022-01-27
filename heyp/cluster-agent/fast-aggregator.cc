@@ -27,7 +27,8 @@ FastAggregator::FastAggregator(const ClusterFlowMap<int64_t>* agg_flow_to_id,
                                std::vector<ThresholdSampler> samplers)
     : agg_flow_to_id_(agg_flow_to_id),
       samplers_(std::move(samplers)),
-      template_agg_info_(ComputeTemplateAggInfo(agg_flow_to_id_)) {
+      template_agg_info_(ComputeTemplateAggInfo(agg_flow_to_id_)),
+      logger_(MakeLogger("fast-agg")) {
   for (int i = 0; i < kNumInfoShards; ++i) {
     active_info_shard_ids_[i].store(0);
   }
@@ -121,39 +122,46 @@ std::vector<FastAggInfo> FastAggregator::CollectSnapshot(
   std::unique_ptr<TaskGroup> tasks = exec->NewTaskGroup();
   std::array<std::vector<FastAggInfo>, kNumInfoShards> parts;
   std::array<std::vector<PrioEstimators>, kNumInfoShards> parent_volume_bps;
+  std::atomic<int64_t> num_infos;
   for (int i = 0; i < kNumInfoShards; ++i) {
-    tasks->AddTaskNoStatus([i, this, &parts, &parent_volume_bps, &downgrade_selectors] {
-      // First swap the existing shard data with the other buffer
-      int cur_id = -2;
-      while (true) {
-        cur_id = active_info_shard_ids_[i].load();
-        if (cur_id < 0) {
-          continue;  // try again
-        }
-        int next_id = (cur_id + 1) % 2;
-        info_shards_[i][next_id].gens.clear();
-        info_shards_[i][next_id].infos.clear();
-        if (active_info_shard_ids_[i].compare_exchange_strong(cur_id, next_id)) {
-          break;
-        }
-      }
-      InfoShard& cur = info_shards_[i][cur_id];
+    tasks->AddTaskNoStatus(
+        [i, this, &num_infos, &parts, &parent_volume_bps, &downgrade_selectors] {
+          // First swap the existing shard data with the other buffer
+          int cur_id = -2;
+          while (true) {
+            cur_id = active_info_shard_ids_[i].load();
+            if (cur_id < 0) {
+              continue;  // try again
+            }
+            int next_id = (cur_id + 1) % 2;
+            info_shards_[i][next_id].gens.clear();
+            info_shards_[i][next_id].infos.clear();
+            if (active_info_shard_ids_[i].compare_exchange_strong(cur_id, next_id)) {
+              break;
+            }
+          }
+          InfoShard& cur = info_shards_[i][cur_id];
+          num_infos.fetch_add(cur.infos.size());
 
-      // cur contains the shard data
-      std::tie(parts[i], parent_volume_bps[i]) =
-          this->Aggregate(cur, downgrade_selectors);
-    });
+          // cur contains the shard data
+          std::tie(parts[i], parent_volume_bps[i]) =
+              this->Aggregate(cur, downgrade_selectors);
+        });
   }
 
   tasks->WaitAllNoStatus();
+  SPDLOG_LOGGER_INFO(&logger_, "processed {} infos from host-agents", num_infos.load());
 
   std::vector<FastAggInfo> combined = parts[0];
+  int64_t num_agg = combined.size();
+  int64_t num_all_agg_children = 0;
   for (int i = 0; i < combined.size(); ++i) {
     size_t num_children = 0;
     for (int part = 0; part < parts.size(); ++part) {
       num_children += parts[part][i].children_.size();
     }
     combined[i].children_.reserve(num_children);
+    num_all_agg_children += num_children;
 
     // TODO finish and what about sampling again?
     for (int part = 1; part < parts.size(); ++part) {
@@ -181,6 +189,8 @@ std::vector<FastAggInfo> FastAggregator::CollectSnapshot(
     combined[i].parent_.set_ewma_lopri_usage_bps(sum_lopri_bps);
     combined[i].parent_.set_predicted_demand_bps(sum_bps);
   }
+  SPDLOG_LOGGER_INFO(&logger_, "produced {} aggregates with a combined {} children",
+                     num_agg, num_all_agg_children);
   return combined;
 }
 
