@@ -1,7 +1,22 @@
 load("@rules_cc//cc:defs.bzl", "cc_library", "cc_test")
+load("//bazel:cc_defs.bzl", "heyp_cc_binary")
 
 package(
     default_visibility = ["//heyp:__subpackages__"],
+)
+
+heyp_cc_binary(
+    name = "downgrade-knapsack-manual",
+    srcs = ["downgrade-knapsack-manual.cc"],
+    deps = [
+        ":formatters",
+        ":impl-knapsack-solver",
+        "//heyp/alg:agg-info-views",
+        "//heyp/init",
+        "//heyp/proto:heyp_cc_proto",
+        "//third_party/xxhash",
+        "@com_google_absl//absl/strings",
+    ],
 )
 
 cc_library(
