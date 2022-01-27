@@ -135,6 +135,10 @@ message DowngradeSelector {
   // Otherwise, it will select hosts without looking at which job a host belongs to.
   optional bool downgrade_jobs = 3 [default = false];
 
+  // If >0, the solver will stop computing after time_limit_sec.
+  // Useful for computationally-expensive solvers.
+  optional double time_limit_sec = 4 [default = -1];
+
   message HybridHashingConfig {
     // num_demand_aware is the number of hosts that will have their QoS set
     // explicitly based on demand data.
@@ -147,7 +151,7 @@ message DowngradeSelector {
   }
 
   // Used when type == DS_HYBRID_HASHING
-  optional HybridHashingConfig hybrid_hashing = 4;
+  optional HybridHashingConfig hybrid_hashing = 5;
 }
 
 // DowngradeFracController is a feedback controller that computes

@@ -30,7 +30,9 @@ func LoadDeploymentConfigData(data []byte, dataPath string) (*DeploymentConfig, 
 	var cfg DeploymentConfig
 
 	cfg.C = new(pb.DeploymentConfig)
-	err := prototext.Unmarshal(data, cfg.C)
+	err := prototext.UnmarshalOptions{
+		DiscardUnknown: true,
+	}.Unmarshal(data, cfg.C)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse config: %w", err)
 	}

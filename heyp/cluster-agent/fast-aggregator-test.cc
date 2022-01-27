@@ -232,5 +232,140 @@ TEST(FastAggregatorTest, WithSamplingOneFG) {
   EXPECT_THAT(agg_info[2].children(), testing::IsEmpty());
 }
 
+// Checks that FastAggregator clears buffers before reuse.
+TEST(FastAggregatorTest, WithSamplingOneFG_CollectMulti) {
+  const ClusterFlowMap<int64_t> agg_flow_to_id = TestAggFlowToIdMap();
+
+  proto::InfoBundle info1 = ParseTextProto<proto::InfoBundle>(R"(
+    bundler { host_id: 101 }
+    flow_infos {
+      flow { src_dc: "A" dst_dc: "B-0" job: "web" host_id: 101 }
+      ewma_usage_bps: 100
+    }
+  )");
+  proto::InfoBundle info2 = ParseTextProto<proto::InfoBundle>(R"(
+    bundler { host_id: 999 }
+    flow_infos {
+      flow { src_dc: "A" dst_dc: "B-0" job: "web" host_id: 999 }
+      ewma_usage_bps: 202
+    }
+  )");
+  proto::InfoBundle info3 = ParseTextProto<proto::InfoBundle>(R"(
+    bundler { host_id: 44 }
+    flow_infos {
+      flow { src_dc: "A" dst_dc: "B-0" job: "web" host_id: 44 }
+      ewma_usage_bps: 50
+      currently_lopri: true
+    }
+  )");
+  proto::InfoBundle info4 = ParseTextProto<proto::InfoBundle>(R"(
+    bundler { host_id: 4 }
+    flow_infos {
+      flow { src_dc: "A" dst_dc: "B-0" job: "web" host_id: 4 }
+      ewma_usage_bps: 4
+      currently_lopri: true
+    }
+  )");
+
+  FastAggregator aggregator(&agg_flow_to_id, TestSamplers(10, 100, 0, 0));
+  aggregator.UpdateInfo(info1);
+  aggregator.UpdateInfo(info2);
+  aggregator.UpdateInfo(info3);
+  aggregator.UpdateInfo(info4);
+
+  Executor exec(4);
+  std::vector<FastAggInfo> agg_info =
+      aggregator.CollectSnapshot(&exec, TestDowngradeSelectors());
+
+  EXPECT_EQ(agg_info.size(), 3);
+
+  EXPECT_EQ(agg_info[0].agg_id(), 0);
+  EXPECT_THAT(agg_info[0].parent().flow(), EqProto(TestAggFlow(0)));
+  EXPECT_EQ(agg_info[0].parent().ewma_usage_bps(), 362);
+  EXPECT_EQ(agg_info[0].parent().ewma_hipri_usage_bps(), 362);
+  EXPECT_EQ(agg_info[0].parent().ewma_lopri_usage_bps(), 0);
+  EXPECT_THAT(
+      agg_info[0].children(),
+      testing::UnorderedElementsAre(
+          ChildFlowInfo{.child_id = 101, .volume_bps = 100, .currently_lopri = false},
+          ChildFlowInfo{.child_id = 999, .volume_bps = 202, .currently_lopri = false},
+          ChildFlowInfo{.child_id = 44, .volume_bps = 50, .currently_lopri = true},
+          ChildFlowInfo{.child_id = 4, .volume_bps = 4, .currently_lopri = true}));
+
+  EXPECT_EQ(agg_info[1].agg_id(), 1);
+  EXPECT_THAT(agg_info[1].parent().flow(), EqProto(TestAggFlow(1)));
+  EXPECT_EQ(agg_info[1].parent().ewma_usage_bps(), 0);
+  EXPECT_EQ(agg_info[1].parent().ewma_hipri_usage_bps(), 0);
+  EXPECT_EQ(agg_info[1].parent().ewma_lopri_usage_bps(), 0);
+  EXPECT_THAT(agg_info[1].children(), testing::IsEmpty());
+
+  EXPECT_EQ(agg_info[2].agg_id(), 2);
+  EXPECT_THAT(agg_info[2].parent().flow(), EqProto(TestAggFlow(2)));
+  EXPECT_EQ(agg_info[2].parent().ewma_usage_bps(), 0);
+  EXPECT_EQ(agg_info[2].parent().ewma_hipri_usage_bps(), 0);
+  EXPECT_EQ(agg_info[2].parent().ewma_lopri_usage_bps(), 0);
+  EXPECT_THAT(agg_info[2].children(), testing::IsEmpty());
+
+  agg_info = aggregator.CollectSnapshot(&exec, TestDowngradeSelectors());
+  EXPECT_EQ(agg_info.size(), 3);
+
+  EXPECT_EQ(agg_info[0].agg_id(), 0);
+  EXPECT_THAT(agg_info[0].parent().flow(), EqProto(TestAggFlow(0)));
+  EXPECT_EQ(agg_info[0].parent().ewma_usage_bps(), 0);
+  EXPECT_EQ(agg_info[0].parent().ewma_hipri_usage_bps(), 0);
+  EXPECT_EQ(agg_info[0].parent().ewma_lopri_usage_bps(), 0);
+  EXPECT_THAT(agg_info[0].children(), testing::IsEmpty());
+
+  EXPECT_EQ(agg_info[1].agg_id(), 1);
+  EXPECT_THAT(agg_info[1].parent().flow(), EqProto(TestAggFlow(1)));
+  EXPECT_EQ(agg_info[1].parent().ewma_usage_bps(), 0);
+  EXPECT_EQ(agg_info[1].parent().ewma_hipri_usage_bps(), 0);
+  EXPECT_EQ(agg_info[1].parent().ewma_lopri_usage_bps(), 0);
+  EXPECT_THAT(agg_info[1].children(), testing::IsEmpty());
+
+  EXPECT_EQ(agg_info[2].agg_id(), 2);
+  EXPECT_THAT(agg_info[2].parent().flow(), EqProto(TestAggFlow(2)));
+  EXPECT_EQ(agg_info[2].parent().ewma_usage_bps(), 0);
+  EXPECT_EQ(agg_info[2].parent().ewma_hipri_usage_bps(), 0);
+  EXPECT_EQ(agg_info[2].parent().ewma_lopri_usage_bps(), 0);
+  EXPECT_THAT(agg_info[2].children(), testing::IsEmpty());
+
+  aggregator.UpdateInfo(info1);
+  aggregator.UpdateInfo(info2);
+  aggregator.UpdateInfo(info3);
+  aggregator.UpdateInfo(info4);
+
+  agg_info = aggregator.CollectSnapshot(&exec, TestDowngradeSelectors());
+
+  EXPECT_EQ(agg_info.size(), 3);
+
+  EXPECT_EQ(agg_info[0].agg_id(), 0);
+  EXPECT_THAT(agg_info[0].parent().flow(), EqProto(TestAggFlow(0)));
+  EXPECT_EQ(agg_info[0].parent().ewma_usage_bps(), 362);
+  EXPECT_EQ(agg_info[0].parent().ewma_hipri_usage_bps(), 362);
+  EXPECT_EQ(agg_info[0].parent().ewma_lopri_usage_bps(), 0);
+  EXPECT_THAT(
+      agg_info[0].children(),
+      testing::UnorderedElementsAre(
+          ChildFlowInfo{.child_id = 101, .volume_bps = 100, .currently_lopri = false},
+          ChildFlowInfo{.child_id = 999, .volume_bps = 202, .currently_lopri = false},
+          ChildFlowInfo{.child_id = 44, .volume_bps = 50, .currently_lopri = true},
+          ChildFlowInfo{.child_id = 4, .volume_bps = 4, .currently_lopri = true}));
+
+  EXPECT_EQ(agg_info[1].agg_id(), 1);
+  EXPECT_THAT(agg_info[1].parent().flow(), EqProto(TestAggFlow(1)));
+  EXPECT_EQ(agg_info[1].parent().ewma_usage_bps(), 0);
+  EXPECT_EQ(agg_info[1].parent().ewma_hipri_usage_bps(), 0);
+  EXPECT_EQ(agg_info[1].parent().ewma_lopri_usage_bps(), 0);
+  EXPECT_THAT(agg_info[1].children(), testing::IsEmpty());
+
+  EXPECT_EQ(agg_info[2].agg_id(), 2);
+  EXPECT_THAT(agg_info[2].parent().flow(), EqProto(TestAggFlow(2)));
+  EXPECT_EQ(agg_info[2].parent().ewma_usage_bps(), 0);
+  EXPECT_EQ(agg_info[2].parent().ewma_hipri_usage_bps(), 0);
+  EXPECT_EQ(agg_info[2].parent().ewma_lopri_usage_bps(), 0);
+  EXPECT_THAT(agg_info[2].children(), testing::IsEmpty());
+}
+
 }  // namespace
 }  // namespace heyp

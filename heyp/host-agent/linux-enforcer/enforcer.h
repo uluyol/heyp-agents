@@ -88,12 +88,11 @@ class LinuxHostEnforcer : public HostEnforcer {
       int64_t cur_rate_limit_bps = 0;
       bool did_create_class = false;
       bool update_after_ipt_change = false;
+      MatchedHostFlows::Vec matched;
     };
 
     Priority hipri;
     Priority lopri;
-
-    MatchedHostFlows matched;
   };
 
   struct StageTrafficControlForFlowArgs {

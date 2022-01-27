@@ -38,7 +38,10 @@ func (c *approvalsCmd) Execute(ctx context.Context, fs *flag.FlagSet, args ...in
 	}
 
 	cfg := new(pb.DeploymentConfig)
-	if err := prototext.Unmarshal(data, cfg); err != nil {
+	err = prototext.UnmarshalOptions{
+		DiscardUnknown: true,
+	}.Unmarshal(data, cfg)
+	if err != nil {
 		log.Fatalf("failed to parse config: %v", err)
 	}
 

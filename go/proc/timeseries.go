@@ -14,19 +14,101 @@ import (
 )
 
 type tsBatch struct {
-	times [64]time.Time
-	data  [64]interface{}
-	i     int
-	num   int
+	// buf stores the data we've buffered.
+	// times[i] and data[i] are populated for i < n-1 and OK
+	// to return to clients.
+	// When sawEOF == true, times[n-1] and data[n-1] are also
+	// OK to return to clients.
+	// However, when !sawEOF, time[n-1] and data[n-1] hold an
+	// entry that should be carried over so that we can eliminate
+	// compare its timestamp and dedup it against other, newer data
+	// with the same timestamp.
+	buf struct {
+		times  [64]time.Time
+		data   [64]interface{}
+		i      int
+		num    int
+		sawEOF bool
+	}
 
 	last    interface{}
 	hasLast bool
-
-	done bool
 }
 
-func (b *tsBatch) curTime() time.Time {
-	return b.times[b.i]
+func (b *tsBatch) ReadIfNeeded(r TSBatchReader, precision time.Duration, readerID int, err *error) {
+	if *err != nil {
+		return
+	}
+	// We have additional entries, no need to read.
+	if b.buf.i < b.buf.num-1 {
+		return
+	}
+	// We are done or on the last entry, but we also know that there is no more data.
+	if b.buf.i >= b.buf.num-1 && b.buf.sawEOF {
+		return
+	}
+	// Otherwise, we have no data or we are on the last one
+	start := 0
+	if b.buf.num > 0 {
+		if b.buf.num-1 != b.buf.i {
+			panic(fmt.Errorf("impossible state: num = %d but i = %d", b.buf.num, b.buf.i))
+		}
+		b.buf.times[0], b.buf.data[0] = b.buf.times[b.buf.i], b.buf.data[b.buf.i]
+		start = 1
+	}
+	num, e := r.Read(b.buf.times[start:], b.buf.data[start:])
+	if e != nil {
+		if errors.Is(e, io.EOF) {
+			b.buf.sawEOF = true
+		} else {
+			*err = fmt.Errorf("failure in reader %d: %w", readerID, e)
+			return
+		}
+	}
+	num += start
+	for i := range b.buf.times[:num] {
+		b.buf.times[i] = b.buf.times[i].Round(precision)
+	}
+	last := -1
+	for i := 0; i < num; i++ {
+		if last < 0 || !b.buf.times[last].Equal(b.buf.times[i]) {
+			last++
+		}
+		b.buf.times[last] = b.buf.times[i]
+		b.buf.data[last] = b.buf.data[i]
+	}
+	b.buf.i = 0
+	b.buf.num = last + 1
+}
+
+func (b *tsBatch) checkIndex() {
+	if b.buf.i >= b.buf.num-1 {
+		if b.buf.i == b.buf.num-1 {
+			if !b.buf.sawEOF {
+				panic("called CurData on last entry but haven't seen EOF, should call ReadIfNeeded first")
+			}
+		} else {
+			panic("i >= num")
+		}
+	}
+}
+
+func (b *tsBatch) CurData() interface{} {
+	b.checkIndex()
+	return b.buf.data[b.buf.i]
+}
+
+func (b *tsBatch) CurTime() time.Time {
+	b.checkIndex()
+	return b.buf.times[b.buf.i]
+}
+
+func (b *tsBatch) Advance() {
+	b.buf.i++
+}
+
+func (b *tsBatch) Done() bool {
+	return b.buf.i >= b.buf.num && b.buf.sawEOF
 }
 
 type TSBatchReader interface {
@@ -61,31 +143,6 @@ func NewTSMerger(precision time.Duration, r []TSBatchReader, debug bool) *TSMerg
 	return m
 }
 
-func (m *TSMerger) read(ri int) {
-	b := &m.cur[ri]
-	if m.err != nil || b.done {
-		b.done = true
-		return
-	}
-	b.i = 0
-	var e error
-	b.num, e = m.readers[ri].Read(b.times[:], b.data[:])
-	if e != nil {
-		m.err = fmt.Errorf("failure in reader %d: %w", ri, e)
-	}
-	if b.num > 0 {
-		m.readerLastTime[ri] = b.times[b.num-1]
-		m.readerHasLastTime[ri] = true
-	}
-	for ti := range b.times[0:b.num] {
-		b.times[ti] = b.times[ti].Round(m.precision)
-	}
-	if errors.Is(m.err, io.EOF) {
-		m.err = nil
-		b.done = true
-	}
-}
-
 func (m *TSMerger) Next(gotTime *time.Time, data []interface{}) bool {
 	if len(m.cur) < 1 {
 		return false
@@ -93,24 +150,15 @@ func (m *TSMerger) Next(gotTime *time.Time, data []interface{}) bool {
 
 	for {
 		for i := range m.cur {
-			if m.cur[i].i >= m.cur[i].num {
-				m.read(i)
-			}
-			if m.err != nil || m.cur[i].i >= m.cur[i].num {
-				if m.debug {
-					var elapsed time.Duration
-					if m.readerHasLastTime[i] && m.hasFirstTime {
-						elapsed = m.readerLastTime[i].Sub(m.firstTime)
-					}
-					log.Printf("TSMerger.Next: reader %v was the first to end after %v", m.readers[i], elapsed)
-				}
+			m.cur[i].ReadIfNeeded(m.readers[i], m.precision, i, &m.err)
+			if m.err != nil || m.cur[i].Done() {
 				return false
 			}
 		}
 
-		minTime := m.cur[0].curTime()
+		minTime := m.cur[0].CurTime()
 		for i := range m.cur {
-			t := m.cur[i].curTime()
+			t := m.cur[i].CurTime()
 			if t.Before(minTime) {
 				minTime = t
 			}
@@ -126,11 +174,11 @@ func (m *TSMerger) Next(gotTime *time.Time, data []interface{}) bool {
 		for i := range m.cur {
 			b := &m.cur[i]
 			foundExact := false
-			for b.i < b.num && b.curTime().Equal(minTime) {
-				data[i] = b.data[b.i]
+			if b.CurTime().Equal(minTime) {
+				data[i] = b.CurData()
 				b.last = data[i]
 				b.hasLast = true
-				b.i++
+				b.Advance()
 				foundExact = true
 			}
 			if !foundExact {

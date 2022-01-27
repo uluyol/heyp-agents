@@ -130,7 +130,10 @@ std::vector<FastAggInfo> FastAggregator::CollectSnapshot(
         if (cur_id < 0) {
           continue;  // try again
         }
-        if (active_info_shard_ids_[i].compare_exchange_strong(cur_id, (cur_id + 1) % 2)) {
+        int next_id = (cur_id + 1) % 2;
+        info_shards_[i][next_id].gens.clear();
+        info_shards_[i][next_id].infos.clear();
+        if (active_info_shard_ids_[i].compare_exchange_strong(cur_id, next_id)) {
           break;
         }
       }

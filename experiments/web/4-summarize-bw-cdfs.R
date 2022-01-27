@@ -26,6 +26,7 @@ SYS_LONG[["qd"]] <- "QD"
 SYS_LONG[["qdhrl_hash"]] <- "Hash+LimitHI"
 SYS_LONG[["qdhrl_knap"]] <- "Knapsack+LimitHI"
 SYS_LONG[["qdhrl"]] <- "QD+LimitHI"
+SYS_LONG[["qdlrl_fc_aggressive"]] <- "QD+FC+VeryLO"
 SYS_LONG[["qdlrl_fc"]] <- "QD+FC+LimitLO"
 SYS_LONG[["qdlrl"]] <- "QD+LimitLO"
 SYS_LONG[["qdlrlj"]] <- "QDJob+LimitLO"
@@ -36,7 +37,7 @@ SYS_LONG[["stableqos_oversub"]] <- "MixedStable-RL"
 SYS_LONG[["stableqos_rl"]] <- "MixedStable-RLTight"
 SYS_LONG[["stableqos"]] <- "MixedStable"
 
-for (max_util in c("16.0", "16.5", "17.0", "17.5", "18.0", "18.5")) {
+for (max_util in c("15.0", "15.5", "16.0", "16.5", "17.0", "17.5", "18.0", "18.5")) {
     SYS_LONG[[paste0("nl_x_", gsub("\\.", "", max_util))]] <- paste0("NoLimit-MLU-", max_util)
 }
 
@@ -625,20 +626,21 @@ for (cfgGroup in cfgGroups) {
                     Sys=rep.int(sys_name, nrow(qos.retained.ts)))))
 
         hostchanges.ts$NumQoSChanges <- hostchanges.ts$Update == "AllChange"
-        qos.num.change.this <- aggregate(NumQoSChanges ~ FG, data=hostchanges.ts, FUN=sum)
-        qos.num.change.this$Sys <- rep.int(sys_name, nrow(qos.num.change.this))
-        qos.num.change <- rbind(qos.num.change, qos.num.change.this)
+        if (nrow(hostchanges.ts) > 0) {
+            qos.num.change.this <- aggregate(NumQoSChanges ~ FG, data=hostchanges.ts, FUN=sum)
+            qos.num.change.this$Sys <- rep.int(sys_name, nrow(qos.num.change.this))
+            qos.num.change <- rbind(qos.num.change, qos.num.change.this)
+            hostchanges.ts.tab <- as.data.table(hostchanges.ts)
+            hostchanges.ts.tab$FG_Host <- paste(hostchanges.ts.tab$FG, hostchanges.ts.tab$Host)
+            last <- hostchanges.ts.tab[hostchanges.ts.tab[, .I[UnixTime == max(UnixTime)], by=FG_Host]$V1]
+            last <- last[last$Update != "AllChange",] # don't double count 
+            qos.time.no.change.this <- rbind(
+                hostchanges.ts[hostchanges.ts$Update == "AllChange", c("FG", "Host", "SecondsSinceLastAllChange")],
+                as.data.frame(last)[,c("FG", "Host", "SecondsSinceLastAllChange")])
+            qos.time.no.change.this$Sys <- rep.int(sys_name, nrow(qos.time.no.change.this))
 
-        hostchanges.ts.tab <- as.data.table(hostchanges.ts)
-        hostchanges.ts.tab$FG_Host <- paste(hostchanges.ts.tab$FG, hostchanges.ts.tab$Host)
-        last <- hostchanges.ts.tab[hostchanges.ts.tab[, .I[UnixTime == max(UnixTime)], by=FG_Host]$V1]
-        last <- last[last$Update != "AllChange",] # don't double count 
-        qos.time.no.change.this <- rbind(
-            hostchanges.ts[hostchanges.ts$Update == "AllChange", c("FG", "Host", "SecondsSinceLastAllChange")],
-            as.data.frame(last)[,c("FG", "Host", "SecondsSinceLastAllChange")])
-        qos.time.no.change.this$Sys <- rep.int(sys_name, nrow(qos.time.no.change.this))
-
-        qos.time.no.change <- rbind(qos.time.no.change, qos.time.no.change.this)
+            qos.time.no.change <- rbind(qos.time.no.change, qos.time.no.change.this)
+        }
     }
 
     write.csv(goodput, file.path(summarydir, paste0(cfgGroup, "-goodput.csv")), quote=FALSE, row.names=FALSE)

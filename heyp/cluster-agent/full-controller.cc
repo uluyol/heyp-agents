@@ -109,6 +109,9 @@ ParID FullClusterController::GetBundlerID(const proto::FlowMarker& bundler) {
 }
 
 void FullClusterController::ComputeAndBroadcast() {
+  auto start_time = std::chrono::steady_clock::now();
+  SPDLOG_LOGGER_INFO(&logger_, "starting compute+bcast");
+
   const bool should_debug = DebugQosAndRateLimitSelection();
   state_mu_.Lock(kLongStateLockDur, &logger_, "state_mu_ in ComputeAndBroadcast");
   allocator_->Reset();
@@ -145,6 +148,10 @@ void FullClusterController::ComputeAndBroadcast() {
   }
   std::atomic_store(&last_alloc_bundle_, alloc_bundles);
   broadcasting_mu_.Unlock();
+
+  absl::Duration elapsed =
+      absl::FromChrono(std::chrono::steady_clock::now() - start_time);
+  SPDLOG_LOGGER_INFO(&logger_, "compute+bcast time = {}", elapsed);
 }
 
 }  // namespace heyp

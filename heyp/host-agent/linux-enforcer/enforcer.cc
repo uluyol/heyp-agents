@@ -264,8 +264,8 @@ absl::Status LinuxHostEnforcer::InitSimulatedWan(std::vector<FlowNetemConfig> co
     sys->hipri.did_create_class = true;
     sys->lopri.did_create_class = true;
 
-    sys->matched.hipri = {c.matched_flows.begin(), c.matched_flows.end()};
-    StageIptablesForFlow(sys->matched.hipri, config_.dscp_hipri(), sys->hipri.class_id);
+    sys->hipri.matched = {c.matched_flows.begin(), c.matched_flows.end()};
+    StageIptablesForFlow(sys->hipri.matched, config_.dscp_hipri(), sys->hipri.class_id);
   }
 
   st = ipt_controller_.CommitChanges();
@@ -386,7 +386,7 @@ void LinuxHostEnforcer::StageTrafficControlForFlow(StageTrafficControlForFlowArg
       args.classes_to_create->push_back(args.sys);
     }
     (*args.create_count)++;
-  } else {
+  } else if (!args.sys->matched.empty()) {
     tc_batch_input_.Append(
         absl::StrFormat("class change dev %s parent 1: classid %s htb rate %fmbit%s\n",
                         device_, args.sys->class_id, rate_limit_mbps, burst_arg));
@@ -416,10 +416,15 @@ void LinuxHostEnforcer::EnforceAllocs(const FlowStateProvider& flow_state_provid
   std::vector<std::string> flows_with_created_classes;  // for logging
   for (const proto::FlowAlloc& flow_alloc : bundle.flow_allocs()) {
     FlowSys* sys = GetOrCreateSysInfo(flow_alloc.flow());
-    sys->matched = match_host_flows_fn_(flow_state_provider, flow_alloc, &logger_);
+    {
+      MatchedHostFlows matched =
+          match_host_flows_fn_(flow_state_provider, flow_alloc, &logger_);
+      sys->hipri.matched = std::move(matched.hipri);
+      sys->lopri.matched = std::move(matched.lopri);
+    }
 
     // Early update for traffic control (HIPRI)
-    bool must_create = sys->hipri.class_id.empty() && !sys->matched.hipri.empty();
+    bool must_create = sys->hipri.class_id.empty() && !sys->hipri.matched.empty();
     int64_t new_hipri_limit = flow_alloc.hipri_rate_limit_bps();
     if (!config_.limit_hipri()) {
       new_hipri_limit = kMaxBandwidthBps;
@@ -448,7 +453,7 @@ void LinuxHostEnforcer::EnforceAllocs(const FlowStateProvider& flow_state_provid
     sys->hipri.cur_rate_limit_bps = new_hipri_limit;
 
     // Early update for traffic control (LOPRI)
-    must_create = sys->lopri.class_id.empty() && !sys->matched.lopri.empty();
+    must_create = sys->lopri.class_id.empty() && !sys->lopri.matched.empty();
     int64_t new_lopri_limit = flow_alloc.lopri_rate_limit_bps();
     if (!config_.limit_lopri()) {
       new_lopri_limit = kMaxBandwidthBps;
@@ -530,24 +535,24 @@ void LinuxHostEnforcer::EnforceAllocs(const FlowStateProvider& flow_state_provid
   for (const proto::FlowAlloc& flow_alloc : bundle.flow_allocs()) {
     FlowSys* sys = GetSysInfo(flow_alloc.flow());
 
-    if (!sys->matched.hipri.empty() && !sys->hipri.did_create_class) {
+    if (!sys->hipri.matched.empty() && !sys->hipri.did_create_class) {
       SPDLOG_LOGGER_ERROR(&logger_,
                           "failed to create rate limiter for flow (HIPRI): alloc = {}",
                           flow_alloc.ShortDebugString());
       SPDLOG_LOGGER_WARN(&logger_, "will not change iptables config for flow");
       continue;
     } else {
-      StageIptablesForFlow(sys->matched.hipri, config_.dscp_hipri(), sys->hipri.class_id);
+      StageIptablesForFlow(sys->hipri.matched, config_.dscp_hipri(), sys->hipri.class_id);
     }
 
-    if (!sys->matched.lopri.empty() && !sys->lopri.did_create_class) {
+    if (!sys->lopri.matched.empty() && !sys->lopri.did_create_class) {
       SPDLOG_LOGGER_ERROR(&logger_,
                           "failed to create rate limiter for flow (LOPRI): alloc = {}",
                           flow_alloc.ShortDebugString());
       SPDLOG_LOGGER_WARN(&logger_, "will not change iptables config for flow");
       continue;
     } else {
-      StageIptablesForFlow(sys->matched.lopri, config_.dscp_lopri(), sys->lopri.class_id);
+      StageIptablesForFlow(sys->lopri.matched, config_.dscp_lopri(), sys->lopri.class_id);
     }
   }
 

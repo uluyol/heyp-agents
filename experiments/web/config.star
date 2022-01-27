@@ -930,8 +930,8 @@ def GenConfig(
                 "pacing_burst_bytes": 0,
             },
             "daemon": {
-                "collect_stats_period": "500ms",
-                "inform_period_dur": "2s",
+                "collect_stats_period": "250ms",
+                "inform_period_dur": "500ms",
                 # cluster_agent_addr is automatically filled
                 "cluster_agent_connection_timeout_dur": "10s",
                 # stats_log_file is automatically filled
@@ -1114,7 +1114,7 @@ def RateLimitConfig(**kwargs):
 def QoSDowngradeConfig(ds_selector_type = "DS_KNAPSACK_SOLVER", **kwargs):
     allocator = config_pb.ClusterAllocatorConfig(
         type = "CA_SIMPLE_DOWNGRADE",
-        downgrade_selector = {"type": ds_selector_type, "downgrade_usage": True},
+        downgrade_selector = {"type": ds_selector_type, "downgrade_usage": True, "time_limit_sec": 5},
         enable_burstiness = True,
         enable_bonus = True,
         oversub_factor = OVERSUB_FACTOR,
@@ -1154,7 +1154,7 @@ def QoSDowngradeFeedbackControlConfig(ds_selector_type = "DS_HASHING", **kwargs)
 def QoSDowngradeAndLimitMixedHIPRIConfig(ds_selector_type = "DS_KNAPSACK_SOLVER", **kwargs):
     allocator = config_pb.ClusterAllocatorConfig(
         type = "CA_SIMPLE_DOWNGRADE",
-        downgrade_selector = {"type": ds_selector_type, "downgrade_usage": True},
+        downgrade_selector = {"type": ds_selector_type, "downgrade_usage": True, "time_limit_sec": 5},
         enable_burstiness = True,
         enable_bonus = True,
         oversub_factor = OVERSUB_FACTOR,
@@ -1172,7 +1172,7 @@ def QoSDowngradeAndLimitMixedHIPRIConfig(ds_selector_type = "DS_KNAPSACK_SOLVER"
 def QoSDowngradeAndLimitLOPRIConfig(**kwargs):
     allocator = config_pb.ClusterAllocatorConfig(
         type = "CA_SIMPLE_DOWNGRADE",
-        downgrade_selector = {"type": "DS_KNAPSACK_SOLVER", "downgrade_usage": True},
+        downgrade_selector = {"type": "DS_KNAPSACK_SOLVER", "downgrade_usage": True, "time_limit_sec": 5},
         enable_burstiness = True,
         enable_bonus = True,
         oversub_factor = OVERSUB_FACTOR,
@@ -1212,7 +1212,7 @@ def QoSDowngradeFeedbackControlAndLimitLOPRIConfig(ds_selector_type = "DS_HASHIN
 def QoSDowngradeAndLimitLOPRIConfigJobLevel(**kwargs):
     allocator = config_pb.ClusterAllocatorConfig(
         type = "CA_SIMPLE_DOWNGRADE",
-        downgrade_selector = {"type": "DS_KNAPSACK_SOLVER", "downgrade_usage": True, "downgrade_jobs": True},
+        downgrade_selector = {"type": "DS_KNAPSACK_SOLVER", "downgrade_usage": True, "downgrade_jobs": True, "time_limit_sec": 5},
         enable_burstiness = True,
         enable_bonus = True,
         oversub_factor = OVERSUB_FACTOR,
@@ -1630,10 +1630,10 @@ def AddConfigsIncreasingBase(
     configs[prefix + "-qdlrl_fc"] = QoSDowngradeFeedbackControlAndLimitLOPRIConfig(**kwargs)
     configs[prefix + "-rl"] = RateLimitConfig(**kwargs)
 
-    configs[prefix + "-nl_light"] = NoLimitConfig(**kwargs_lo)
-    configs[prefix + "-rl_light"] = RateLimitConfig(**kwargs_lo)
+    # configs[prefix + "-nl_light"] = NoLimitConfig(**kwargs_lo)
+    # configs[prefix + "-rl_light"] = RateLimitConfig(**kwargs_lo)
 
-    for util in [float("15"), float("15.5"), float("16"), float("16.5"), float("17"), float("17.5"), float("18")]:
+    for util in [float("15.5"), float("16"), float("16.5"), float("17"), float("17.5")]:
         wl_x_kwargs = GenWorkloadStagesIncDec(
             AA_bps = int(Gbps(12)),
             num_AA_backends = 1,
@@ -1713,7 +1713,7 @@ def AddConfigsJumpBase(
         "AA_servers_are_virt": True,
         "AA_lopri_is_longer": True,
         "WA_approved_bps": int(Gbps(13)),
-        "shard_key": "inc",
+        "shard_key": "jump",
         "cluster_control_period": "1s",
     }
     if enable_ac_AA or enable_ac_WA:
@@ -1834,9 +1834,11 @@ def AddConfigsCongestedLOPRIBase(
         "AA_servers_are_virt": True,
         "AA_lopri_is_longer": True,
         "WA_approved_bps": int(Gbps(15)),
-        "shard_key": "inc",
+        "shard_key": "congestedlp",
         "cluster_control_period": "5s",
     }
+    base_kwargs_aggressive_limit = dict(base_kwargs)
+    base_kwargs_aggressive_limit["AA_surplus_bps"] = int(Gbps(1))
     if enable_ac_AA or enable_ac_WA:
         ac_configs = dict()
         if enable_ac_AA:
@@ -1870,20 +1872,23 @@ def AddConfigsCongestedLOPRIBase(
         WA_config = WAConfig(enable_timeout = enable_ac_WA),
     )
     kwargs = dict(base_kwargs, **wl_kwargs)
+    kwargs_aggressive_limit = dict(base_kwargs_aggressive_limit, **wl_kwargs)
     kwargs_lo = dict(base_kwargs, **wl_lo_kwargs)
 
     prefix = name
 
     # configs[prefix + "-hsc"] = HSC20Config(**kwargs)
-    configs[prefix + "-nl"] = NoLimitConfig(**kwargs)
+    # configs[prefix + "-nl"] = NoLimitConfig(**kwargs)
     configs[prefix + "-qd"] = QoSDowngradeConfig(**kwargs)
     configs[prefix + "-qdlrl"] = QoSDowngradeAndLimitLOPRIConfig(**kwargs)
     configs[prefix + "-qd_fc"] = QoSDowngradeFeedbackControlConfig(**kwargs)
     configs[prefix + "-qdlrl_fc"] = QoSDowngradeFeedbackControlAndLimitLOPRIConfig(**kwargs)
+    configs[prefix + "-qdlrl_fc_aggressive"] = \
+        QoSDowngradeFeedbackControlAndLimitLOPRIConfig(**kwargs_aggressive_limit)
     configs[prefix + "-rl"] = RateLimitConfig(**kwargs)
 
     configs[prefix + "-nl_light"] = NoLimitConfig(**kwargs_lo)
-    configs[prefix + "-rl_light"] = RateLimitConfig(**kwargs_lo)
+    # configs[prefix + "-rl_light"] = RateLimitConfig(**kwargs_lo)
 
     for util in [float("16.5"), float("17"), float("17.5"), float("18")]:
         wl_x_kwargs = GenWorkloadStagesStatic(
@@ -1953,8 +1958,8 @@ def AddConfigsRateLimitHIPRI(configs):
     ))
 
     prefix = "rlhipri"
-    configs[prefix + "-qd_knap"] = QoSDowngradeConfig(ds_selector_type = "DS_KNAPSACK_SOLVER", **kwargs)
-    configs[prefix + "-qdhrl_knap"] = QoSDowngradeAndLimitMixedHIPRIConfig(ds_selector_type = "DS_KNAPSACK_SOLVER", **kwargs)
+    configs[prefix + "-qd_knap"] = QoSDowngradeConfig(**kwargs)
+    configs[prefix + "-qdhrl_knap"] = QoSDowngradeAndLimitMixedHIPRIConfig(**kwargs)
     configs[prefix + "-qd_hash"] = QoSDowngradeConfig(ds_selector_type = "DS_HASHING", **kwargs)
     configs[prefix + "-qdhrl_hash"] = QoSDowngradeAndLimitMixedHIPRIConfig(ds_selector_type = "DS_HASHING", **kwargs)
 
