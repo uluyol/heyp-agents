@@ -1713,7 +1713,7 @@ def AddConfigsJumpBase(
         "AA_servers_are_virt": True,
         "AA_lopri_is_longer": True,
         "WA_approved_bps": int(Gbps(13)),
-        "shard_key": "inc",
+        "shard_key": "jump",
         "cluster_control_period": "1s",
     }
     if enable_ac_AA or enable_ac_WA:
@@ -1834,9 +1834,11 @@ def AddConfigsCongestedLOPRIBase(
         "AA_servers_are_virt": True,
         "AA_lopri_is_longer": True,
         "WA_approved_bps": int(Gbps(15)),
-        "shard_key": "inc",
+        "shard_key": "congestedlp",
         "cluster_control_period": "5s",
     }
+    base_kwargs_aggressive_limit = dict(base_kwargs)
+    base_kwargs_aggressive_limit["AA_surplus_bps"] = int(Gbps(1))
     if enable_ac_AA or enable_ac_WA:
         ac_configs = dict()
         if enable_ac_AA:
@@ -1870,20 +1872,23 @@ def AddConfigsCongestedLOPRIBase(
         WA_config = WAConfig(enable_timeout = enable_ac_WA),
     )
     kwargs = dict(base_kwargs, **wl_kwargs)
+    kwargs_aggressive_limit = dict(base_kwargs_aggressive_limit, **wl_kwargs)
     kwargs_lo = dict(base_kwargs, **wl_lo_kwargs)
 
     prefix = name
 
     # configs[prefix + "-hsc"] = HSC20Config(**kwargs)
-    configs[prefix + "-nl"] = NoLimitConfig(**kwargs)
+    # configs[prefix + "-nl"] = NoLimitConfig(**kwargs)
     configs[prefix + "-qd"] = QoSDowngradeConfig(**kwargs)
     configs[prefix + "-qdlrl"] = QoSDowngradeAndLimitLOPRIConfig(**kwargs)
     configs[prefix + "-qd_fc"] = QoSDowngradeFeedbackControlConfig(**kwargs)
     configs[prefix + "-qdlrl_fc"] = QoSDowngradeFeedbackControlAndLimitLOPRIConfig(**kwargs)
+    configs[prefix + "-qdlrl_fc_aggressive"] = \
+        QoSDowngradeFeedbackControlAndLimitLOPRIConfig(**kwargs_aggressive_limit)
     configs[prefix + "-rl"] = RateLimitConfig(**kwargs)
 
     configs[prefix + "-nl_light"] = NoLimitConfig(**kwargs_lo)
-    configs[prefix + "-rl_light"] = RateLimitConfig(**kwargs_lo)
+    # configs[prefix + "-rl_light"] = RateLimitConfig(**kwargs_lo)
 
     for util in [float("16.5"), float("17"), float("17.5"), float("18")]:
         wl_x_kwargs = GenWorkloadStagesStatic(
