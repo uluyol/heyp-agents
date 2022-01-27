@@ -115,13 +115,13 @@ func RunHostAgentSims(c *pb.DeploymentConfig, remoteTopdir string, showOut bool)
 				MinHostUsage:     proto.Int64(c.C.FakeFgs[j].GetMinFgUsage() / int64(c.C.GetNumHostsPerFg())),
 				MaxHostUsage:     proto.Int64(c.C.FakeFgs[j].GetMaxFgUsage() / int64(c.C.GetNumHostsPerFg())),
 				ApprovalBps:      proto.Int64(c.C.FakeFgs[j].GetApprovalBps()),
-				TargetNumSamples: proto.Int32(c.C.FakeFgs[j].GetTargetNumSamples() / int32(len(c.Nodes))),
+				TargetNumSamples: proto.Int32(c.C.FakeFgs[j].GetTargetNumSamples()),
 			}
 		}
 
 		const startHostID = 100001
 		numHosts := int32(0)
-		nProcesses := 1
+		nProcesses := 10
 		
 		for nidx, n := range c.Nodes {
 			n := n
