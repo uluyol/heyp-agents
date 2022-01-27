@@ -19,13 +19,9 @@ std::vector<bool> KnapsackSolverDowngradeSelector::PickLOPRIChildren(
                        absl::StrJoin(agg_children, "\n", absl::StreamFormatter()));
   }
 
-  absl::optional<operations_research::KnapsackSolver> solver;
-
-  if (agg_children.size() <= 64) {
-    solver.emplace(operations_research::KnapsackSolver::KNAPSACK_64ITEMS_SOLVER,
-                   "pick-lopri");
-  } else {
-    solver.emplace("pick-lopri");
+  operations_research::KnapsackSolver solver("pick-lopri");
+  if (time_limit_sec_ > 0) {
+    solver.set_time_limit(time_limit_sec_);
   }
 
   int64_t total_demand = 0;
@@ -38,16 +34,20 @@ std::vector<bool> KnapsackSolverDowngradeSelector::PickLOPRIChildren(
 
   int64_t want_demand = want_frac_lopri * total_demand;
 
-  solver->Init(demands, {demands}, {want_demand});
-  int64_t got_total_demand = solver->Solve();
+  solver.Init(demands, {demands}, {want_demand});
+  int64_t got_total_demand = solver.Solve();
 
   int64_t double_check_total_demand = 0;
   std::vector<bool> lopri_children(agg_children.size(), false);
   for (size_t i = 0; i < agg_children.size(); ++i) {
-    if (solver->BestSolutionContains(i)) {
+    if (solver.BestSolutionContains(i)) {
       lopri_children[i] = true;
       double_check_total_demand += demands[i];
     }
+  }
+
+  if (!solver.IsSolutionOptimal()) {
+    SPDLOG_LOGGER_INFO(logger, "did not find an optimal solution");
   }
 
   H_SPDLOG_CHECK_LE(logger, got_total_demand, want_demand);

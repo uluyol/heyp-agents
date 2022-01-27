@@ -29,7 +29,7 @@ std::unique_ptr<DowngradeSelectorImpl> GetSelector(
       return std::make_unique<HeypSigcomm20DowngradeSelector>();
       break;
     case proto::DS_KNAPSACK_SOLVER:
-      return std::make_unique<KnapsackSolverDowngradeSelector>();
+      return std::make_unique<KnapsackSolverDowngradeSelector>(selector.time_limit_sec());
       break;
     case proto::DS_LARGEST_FIRST:
       return std::make_unique<LargestFirstDowngradeSelector>();
