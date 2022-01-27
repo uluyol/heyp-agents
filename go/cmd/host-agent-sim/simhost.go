@@ -168,7 +168,7 @@ func (h *SimulatedHost) runEnforceLoop(ctx context.Context, isDone chan<- struct
 				Job:   alloc.GetFlow().Job,
 			}
 
-			h.RecordGotAlloc(fg, b.Gen, now, then)
+			h.RecordGotAlloc(fg, b.Gen, now)
 		}
 	}
 }
