@@ -1580,7 +1580,7 @@ def AddConfigsIncreasingBase(
         "AA_lopri_is_longer": True,
         "WA_approved_bps": int(Gbps(13)),
         "shard_key": "inc",
-        "cluster_control_period": "5s",
+        "cluster_control_period": "1s",
     }
     if enable_ac_AA or enable_ac_WA:
         ac_configs = dict()
