@@ -121,10 +121,13 @@ func RunHostAgentSims(c *pb.DeploymentConfig, remoteTopdir string, showOut bool)
 
 		const startHostID = 100001
 		numHosts := int32(0)
-		nProcesses := 10
+		nProcesses := 1
 		
 		for nidx, n := range c.Nodes {
 			n := n
+			if hostsPerNode % nProcesses != 0 {
+				return fmt.Errorf("Failed to evenly divide hosts into processes")
+			}
 			hostsPerProcess := hostsPerNode/nProcesses
 			clusterAgentAddr := c.ClusterAgentAddrs[nidx%len(c.ClusterAgentAddrs)]
 			for p:= 0; p < nProcesses; p++ {
@@ -156,7 +159,7 @@ func RunHostAgentSims(c *pb.DeploymentConfig, remoteTopdir string, showOut bool)
 						LogWithPrefix("run-host-agent-sims: "),
 						"ssh", n.GetExternalAddr(),
 						fmt.Sprintf("cat > %[1]s/configs/host-agent-sim-%[5]d.textproto && mkdir -p %[1]s/logs && ulimit -Sn unlimited && "+
-							"%[1]s/aux/host-agent-sim -m %[1]s/configs/host-agent-sim-%[5]d.mutex.out -c %[1]s/configs/host-agent-sim-%[5]d.textproto -o %[1]s/logs/host-agent-sim-%[5]d.csv -cluster-agent-addr %[2]s -dur %[4]s 2>&1 | tee %[1]s/logs/host-agent-sim-%[5]d.log; exit ${PIPESTATUS[0]}",
+							"%[1]s/aux/host-agent-sim -m %[1]s/configs/host-agent-sim-%[5]d.mutex.out -c %[1]s/configs/host-agent-sim-%[5]d.textproto -o %[1]s/logs/host-agent-sim-%[5]d.csv -cluster-agent-addr %[2]s -start-time %[3]s -dur %[4]s 2>&1 | tee %[1]s/logs/host-agent-sim-%[5]d.log; exit ${PIPESTATUS[0]}",
 							remoteTopdir, clusterAgentAddr, startTimestamp, c.C.GetRunDur(),p))
 					cmd.SetStdin(fmt.Sprintf("host-agent-sim-%.textproto",p), bytes.NewReader(hostSimConfigBytes))
 					if showOut {
