@@ -83,6 +83,8 @@ class FastAggregator {
   // *if* active_info_shard_id_[i] > 0. If it is < 0, a write is in progress.
   std::array<std::atomic<int>, kNumInfoShards> active_info_shard_ids_;
   std::array<std::array<InfoShard, 2>, kNumInfoShards> info_shards_;
+  std::array<std::atomic<int64_t>, kNumInfoShards> update_counters_;
+  std::array<int64_t, kNumInfoShards> last_update_counters_;
 };
 
 }  // namespace heyp
