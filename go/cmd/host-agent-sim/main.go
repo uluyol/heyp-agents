@@ -36,7 +36,9 @@ func main() {
 
 	flag.Parse()
 
-	runtime.SetMutexProfileFraction(1)
+	if *mutexProfPath != "" {
+		runtime.SetMutexProfileFraction(1)
+	}
 
 	configBytes, err := os.ReadFile(*configPath)
 	if err != nil {
@@ -117,13 +119,14 @@ func main() {
 		log.Fatalf("failed to create mutex out file: %v", err)
 	}
 
-	mp := pprof.Lookup("mutex")
-	mp.WriteTo(m,1)
+	if *mutexProfPath != "" {
+		mp := pprof.Lookup("mutex")
+		mp.WriteTo(m,1)
 
-	if err := m.Close(); err != nil {
-		log.Fatalf("failed to close output: %v", err)
+		if err := m.Close(); err != nil {
+			log.Fatalf("failed to close output: %v", err)
+		}
 	}
-	
 	f, err := os.Create(*outPath)
 	if err != nil {
 		log.Fatalf("failed to create output file: %v", err)

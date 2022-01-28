@@ -35,6 +35,9 @@ FastAggregator::FastAggregator(const ClusterFlowMap<int64_t>* agg_flow_to_id,
 }
 
 void FastAggregator::UpdateInfo(const proto::InfoBundle& info) {
+  const int shard = static_cast<uint>(info.bundler().host_id()) % kNumInfoShards;
+  update_counters_[shard].fetch_add(1);
+
   std::vector<Info> got;
   got.reserve(agg_flow_to_id_->size());
   for (const proto::FlowInfo& fi : info.flow_infos()) {
@@ -49,8 +52,6 @@ void FastAggregator::UpdateInfo(const proto::InfoBundle& info) {
         .currently_lopri = fi.currently_lopri(),
     });
   }
-
-  int shard = static_cast<uint>(info.bundler().host_id()) % kNumInfoShards;
 
   int cur_id = 0;
   while (true) {
@@ -117,6 +118,18 @@ FastAggregator::Aggregate(
 
 std::vector<FastAggInfo> FastAggregator::CollectSnapshot(
     Executor* exec, const std::vector<HashingDowngradeSelector>& downgrade_selectors) {
+  std::string buf;
+  for (int i = 0; i < kNumInfoShards; ++i) {
+    int64_t cum = update_counters_[i].load();
+    if (i == 0) {
+      buf += absl::StrCat(cum - last_update_counters_[i]);
+    } else {
+      buf += absl::StrCat(", ", cum - last_update_counters_[i]);
+    }
+    last_update_counters_[i] = cum;
+  }
+  SPDLOG_LOGGER_INFO(&logger_, "early num infos per shard [{}]", buf);
+
   // Compute a std::vector<FastAggInfo> concurrently for each shard.
   // Aggregate into one final std::vector<FastAggInfo>.
   std::unique_ptr<TaskGroup> tasks = exec->NewTaskGroup();
