@@ -85,8 +85,8 @@ StatMyecdf <- ggproto("StatMyecdf", Stat,
 )
 
 SumClientGoodput <- function(subset) {
-    subset$Timestamp <- round(subset$Timestamp)
-    aggregate(MeanBps ~ Timestamp + Group + Instance,
+    subset$CutTimestamp <- round(subset$CutTimestamp)
+    aggregate(MeanBps ~ CutTimestamp + Group + Instance,
         FUN=sum,
         data=subset)
 }
@@ -493,11 +493,13 @@ for (cfgGroup in cfgGroups) {
         qos.retained.ts <- Trim(qos.retained.ts, "UnixTime", startUnix, endUnix)
         hostchanges.ts <- Trim(hostchanges.ts, "UnixTime", startUnix, endUnix)
 
+        client.ts$CutTimestamp <- client.ts$Timestamp - (startUnix + START_END_TRIM_SEC)
         goodput.summed <- SumClientGoodput(client.ts)
         goodput <- rbind(
             goodput,
             data.frame(
                 Sys=rep.int(sys_name, nrow(goodput.summed)),
+                CutTimestamp=goodput.summed$CutTimestamp,
                 GoodputGbps=goodput.summed$MeanBps / (2^30),
                 Kind=paste0(goodput.summed$Group, "/", goodput.summed$Instance)))
 
