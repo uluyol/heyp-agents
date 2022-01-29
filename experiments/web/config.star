@@ -1630,10 +1630,10 @@ def AddConfigsIncreasingBase(
     configs[prefix + "-qdlrl_fc"] = QoSDowngradeFeedbackControlAndLimitLOPRIConfig(**kwargs)
     configs[prefix + "-rl"] = RateLimitConfig(**kwargs)
 
-    # configs[prefix + "-nl_light"] = NoLimitConfig(**kwargs_lo)
-    # configs[prefix + "-rl_light"] = RateLimitConfig(**kwargs_lo)
+    configs[prefix + "-nl_light"] = NoLimitConfig(**kwargs_lo)
+    configs[prefix + "-rl_light"] = RateLimitConfig(**kwargs_lo)
 
-    for util in [float("15.5"), float("16"), float("16.5"), float("17"), float("17.5")]:
+    for util in [float("16"), float("16.5"), float("17")]:
         wl_x_kwargs = GenWorkloadStagesIncDec(
             AA_bps = int(Gbps(12)),
             num_AA_backends = 1,
@@ -2112,10 +2112,14 @@ def AddConfigsFlipQoS(configs):
                 ))
                 # enable_timeout = True,
 
+                printcp = cp
+                if cp == "5s":
+                    printcp = "05s"
+
                 # configs[prefix + "-hipri"] = FixedHostPatternHIPRIConfig(**kwargs)
                 # configs[prefix + "-flipflop_rl"] = FixedHostPatternAlternatingQoSConfig(AA_admission_bps = AA_approval, **kwargs)
                 # configs[prefix + "-stableqos_rl"] = FixedHostPatternStableQoSConfig(AA_admission_bps = AA_approval, **kwargs)
-                prefix = "qflip_lr_cp_{0}_lat_{1}_{2}_{3}_fg{4}".format(cp, AA_lat, WA_lat, AA_lopri_lat, AA_approval_gbps)
+                prefix = "qflip_lr_cp_{0}_lat_{1}_{2}_{3}_fg{4}".format(printcp, AA_lat, WA_lat, AA_lopri_lat, AA_approval_gbps)
                 configs[prefix + "-lopri"] = FixedHostPatternLOPRIConfig(**kwargs)
                 configs[prefix + "-flipflop_nl"] = FixedHostPatternAlternatingQoSConfig(**kwargs)
                 configs[prefix + "-stableqos_nl"] = FixedHostPatternStableQoSConfig(**kwargs)
@@ -2163,12 +2167,12 @@ def AddConfigsFlipQoS(configs):
                 # configs[prefix + "-hipri"] = FixedHostPatternHIPRIConfig(**kwargs)
                 # configs[prefix + "-flipflop_rl"] = FixedHostPatternAlternatingQoSConfig(AA_admission_bps = AA_approval, **kwargs)
                 # configs[prefix + "-stableqos_rl"] = FixedHostPatternStableQoSConfig(AA_admission_bps = AA_approval, **kwargs)
-                prefix = "qflip_rr_cp_{0}_lat_{1}_{2}_{3}_fg{4}".format(cp, AA_lat, WA_lat, AA_lopri_lat, AA_approval_gbps)
-                configs[prefix + "-lopri"] = FixedHostPatternLOPRIConfig(**kwargs)
-                configs[prefix + "-flipflop_nl"] = FixedHostPatternAlternatingQoSConfig(**kwargs)
-                configs[prefix + "-stableqos_nl"] = FixedHostPatternStableQoSConfig(**kwargs)
-                configs[prefix + "-flipflop_oversub"] = FixedHostPatternAlternatingQoSConfig(AA_admission_bps = int(OVERSUB_FACTOR * AA_approval), **kwargs)
-                configs[prefix + "-stableqos_oversub"] = FixedHostPatternStableQoSConfig(AA_admission_bps = int(OVERSUB_FACTOR * AA_approval), **kwargs)
+                # prefix = "qflip_rr_cp_{0}_lat_{1}_{2}_{3}_fg{4}".format(cp, AA_lat, WA_lat, AA_lopri_lat, AA_approval_gbps)
+                # configs[prefix + "-lopri"] = FixedHostPatternLOPRIConfig(**kwargs)
+                # configs[prefix + "-flipflop_nl"] = FixedHostPatternAlternatingQoSConfig(**kwargs)
+                # configs[prefix + "-stableqos_nl"] = FixedHostPatternStableQoSConfig(**kwargs)
+                # configs[prefix + "-flipflop_oversub"] = FixedHostPatternAlternatingQoSConfig(AA_admission_bps = int(OVERSUB_FACTOR * AA_approval), **kwargs)
+                # configs[prefix + "-stableqos_oversub"] = FixedHostPatternStableQoSConfig(AA_admission_bps = int(OVERSUB_FACTOR * AA_approval), **kwargs)
 
 def AddConfigsTestAdmissionControl(configs):
     # for aa_bps in [int(Gbps(1)), int(Gbps(4)), int(Gbps(5)), int(Gbps(6)), int(Gbps(7)), int(Gbps(8)), int(Gbps(9))]:
