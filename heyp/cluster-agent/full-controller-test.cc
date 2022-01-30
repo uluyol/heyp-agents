@@ -154,7 +154,7 @@ TEST(FullClusterControllerTest, RemoveListener) {
 TEST(FullClusterControllerTest, PlumbsDataCompletely) {
   auto controller = MakeFullClusterController();
 
-  std::atomic<int> call_count = 0;
+  std::atomic<int> call_count(0);
   auto lis1 = controller.RegisterListener(1, [&call_count](const proto::AllocBundle& b1,
                                                            const SendBundleAux& aux) {
     EXPECT_THAT(b1, AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(
@@ -214,7 +214,7 @@ TEST(FullClusterControllerTest, PlumbsDataCompletely) {
 TEST(FullClusterControllerTest, PlumbsDataCompletely_And_OverridesQoS) {
   auto controller = MakeFullClusterController();
 
-  std::atomic<int> call_count = 0;
+  std::atomic<int> call_count(0);
   auto lis1 = controller.RegisterListener(1, [&call_count](const proto::AllocBundle& b1,
                                                            const SendBundleAux& aux) {
     EXPECT_THAT(b1, AllocBundleEq(ParseTextProto<proto::AllocBundle>(R"(

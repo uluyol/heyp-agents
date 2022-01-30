@@ -30,7 +30,12 @@ FastAggregator::FastAggregator(const ClusterFlowMap<int64_t>* agg_flow_to_id,
       template_agg_info_(ComputeTemplateAggInfo(agg_flow_to_id_)),
       logger_(MakeLogger("fast-agg")) {
   for (int i = 0; i < kNumInfoShards; ++i) {
+    for (int j = 0; j < info_shards_[i].size(); ++j) {
+      info_shards_[i][j] = InfoShard();
+    }
     active_info_shard_ids_[i].store(0);
+    update_counters_[i].store(0);
+    last_update_counters_[i] = 0;
   }
 }
 
@@ -135,7 +140,7 @@ std::vector<FastAggInfo> FastAggregator::CollectSnapshot(
   std::unique_ptr<TaskGroup> tasks = exec->NewTaskGroup();
   std::array<std::vector<FastAggInfo>, kNumInfoShards> parts;
   std::array<std::vector<PrioEstimators>, kNumInfoShards> parent_volume_bps;
-  std::atomic<int64_t> num_infos;
+  std::atomic<int64_t> num_infos(0);
   for (int i = 0; i < kNumInfoShards; ++i) {
     tasks->AddTaskNoStatus(
         [i, this, &num_infos, &parts, &parent_volume_bps, &downgrade_selectors] {

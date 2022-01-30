@@ -47,7 +47,7 @@ proto::InfoBundle MakeBundle(int id) {
 
 struct TestClient {
   TestClient(std::unique_ptr<proto::ClusterAgent::Stub> stub, int id)
-      : ch_(std::move(stub)), id_(id), period_(absl::Milliseconds(50)) {
+      : dying_(false), ch_(std::move(stub)), id_(id), period_(absl::Milliseconds(50)) {
     ch_.Write(MakeBundle(id_));
 
     inform_th_ = std::thread([this] {
@@ -126,7 +126,7 @@ TEST(ClusterAgentTest, NoCrash) {
       MakeClient(server->InProcessChannel({}), 3),
   };
 
-  std::atomic<bool> should_exit;
+  std::atomic<bool> should_exit(false);
   std::thread exit_th([&should_exit, &logger] {
     absl::SleepFor(absl::Seconds(3));
     SPDLOG_LOGGER_INFO(&logger, "kill compute loop");
@@ -198,7 +198,7 @@ TEST(ClusterAgentTest, NoCrashManyResp) {
                  0),
   };
 
-  std::atomic<bool> should_exit;
+  std::atomic<bool> should_exit(false);
   std::thread exit_th([&should_exit, &logger] {
     absl::SleepFor(absl::Seconds(3));
     SPDLOG_LOGGER_INFO(&logger, "kill compute loop");
