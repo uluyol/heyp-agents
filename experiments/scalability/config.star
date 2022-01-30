@@ -27,7 +27,7 @@ def GenConfig(
             "limits": {
                 "flow_allocs": [],
             },
-            "cluster_agent_ports": [4570],
+            "cluster_agent_ports": [4560, 4570, 4580, 4590],
         },
     }
 
