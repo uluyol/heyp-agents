@@ -21,7 +21,8 @@ class HostReactor
         wip_write_(false),
         has_staged_(false),
         finished_(false) {
-    SPDLOG_LOGGER_INFO(&service->logger_, "{}: new connection from {}", __func__, peer_);
+    // SPDLOG_LOGGER_INFO(&service->logger_, "{}: new connection from {}", __func__,
+    // peer_);
     DoReadLoop();
   }
 
@@ -37,8 +38,8 @@ class HostReactor
       finished_ = true;
       return;
     }
-    SPDLOG_LOGGER_INFO(&service_->logger_, "got info from {} with {} FGs", peer_,
-                       info_.flow_infos_size());
+    // SPDLOG_LOGGER_INFO(&service_->logger_, "got info from {} with {} FGs", peer_,
+    //                    info_.flow_infos_size());
 
     if (lis_ == nullptr) {
       // Unlock mu_ to avoid a lock cycle.
@@ -57,8 +58,8 @@ class HostReactor
       lis_ = service_->controller_->RegisterListener(
           info_.bundler().host_id(),
           [this](const proto::AllocBundle& alloc, const SendBundleAux& aux) {
-            SPDLOG_LOGGER_INFO(&service_->logger_, "sending allocs for {} FGs to {}",
-                               alloc.flow_allocs_size(), peer_);
+            // SPDLOG_LOGGER_INFO(&service_->logger_, "sending allocs for {} FGs to {}",
+            //                    alloc.flow_allocs_size(), peer_);
             UpdateAlloc(alloc, aux);
           });
       bundler_id_ = service_->controller_->GetBundlerID(info_.bundler());
