@@ -102,6 +102,12 @@ def GenConfig(
             "fast_controller_config": {
                 "target_num_samples": fast_target_num_samples,
                 "num_threads": fast_num_threads,
+                "downgrade_frac_controller": {
+                    "max_inc": 1,
+                    "prop_gain": float("0.5"),
+                    "ignore_overage_below": float("0.05"),
+                    "ignore_overage_by_coarseness_multiplier": 2,
+                },
             },
         },
         host_agent_sim = host_agent_sim,
