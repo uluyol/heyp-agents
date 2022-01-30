@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"sync"
-	"time"
 	"runtime"
 	"runtime/pprof"
+	"sync"
+	"time"
 
 	"github.com/uluyol/heyp-agents/go/cmd/flagtypes"
 	"github.com/uluyol/heyp-agents/go/pb"
@@ -22,7 +22,7 @@ func main() {
 	var (
 		configPath       = flag.String("c", "config.textproto", "path to HostSimulatorConfig")
 		outPath          = flag.String("o", "out.csv", "path to output")
-		mutexProfPath	 = flag.String("m", "mut.out", "path to mutex profile")
+		mutexProfPath    = flag.String("m", "mut.out", "path to mutex profile")
 		runDur           = flagtypes.Duration{D: 10 * time.Second}
 		startTime        = flagtypes.RFC3339NanoTime{T: time.Now().Add(5 * time.Second), OK: true}
 		clusterAgentAddr = flag.String("cluster-agent-addr", "127.0.0.1:3000", "address of cluster agent")
@@ -75,11 +75,6 @@ func main() {
 		fakeHosts[i] = NewSimulatedHost(hc, config.Fgs)
 	}
 
-	time.Sleep(time.Until(startTime.T))
-
-	log.Print("starting run")
-	log.Printf("start-time: %s start-time-unix-ms: %d", startTime.T.In(time.UTC).Format(time.RFC3339Nano), unixMillis(startTime.T.In(time.UTC)))
-
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
 	wg.Add(len(fakeHosts))
@@ -87,6 +82,8 @@ func main() {
 	// create new grpc connections for every hostsPerConn, currently disabled
 	// hostsPerConn := 500
 	// hostCounter := 0
+
+	startSig := make(chan struct{})
 
 	for _, h := range fakeHosts {
 		// hostCounter++
@@ -101,9 +98,15 @@ func main() {
 		// }
 		go func(h *SimulatedHost) {
 			defer wg.Done()
-			h.RunLoop(ctx, client, reportDur)
+			h.RunLoop(ctx, client, startSig, reportDur)
 		}(h)
 	}
+
+	time.Sleep(time.Until(startTime.T))
+
+	log.Print("starting run")
+	log.Printf("start-time: %s start-time-unix-ms: %d", startTime.T.In(time.UTC).Format(time.RFC3339Nano), unixMillis(startTime.T.In(time.UTC)))
+	close(startSig)
 
 	time.Sleep(runDur.D)
 	log.Print("stopping fake hosts")
@@ -121,7 +124,7 @@ func main() {
 
 	if *mutexProfPath != "" {
 		mp := pprof.Lookup("mutex")
-		mp.WriteTo(m,1)
+		mp.WriteTo(m, 1)
 
 		if err := m.Close(); err != nil {
 			log.Fatalf("failed to close output: %v", err)
@@ -131,8 +134,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to create output file: %v", err)
 	}
+	numLateStart := 0
 	bw := bufio.NewWriter(f)
 	for _, h := range fakeHosts {
+		if h.LateStart {
+			numLateStart++
+		}
 		hostID := h.HostID
 		for fg, fgStats := range h.FGStats {
 			for _, dur := range fgStats.Durs {
@@ -151,6 +158,10 @@ func main() {
 	}
 	if err := f.Close(); err != nil {
 		log.Fatalf("failed to close output: %v", err)
+	}
+
+	if numLateStart > 0 {
+		log.Fatalf("failed to start %d hosts by start time", numLateStart)
 	}
 }
 

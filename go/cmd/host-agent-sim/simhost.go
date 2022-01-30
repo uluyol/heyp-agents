@@ -32,9 +32,10 @@ type fgConfig struct {
 }
 
 type SimulatedHost struct {
-	HostID  uint64
-	FGs     []fgConfig
-	FGStats map[FG]*FGStats
+	HostID    uint64
+	FGs       []fgConfig
+	FGStats   map[FG]*FGStats
+	LateStart bool
 
 	mu       sync.Mutex
 	genTimes []genAndTime
@@ -118,7 +119,7 @@ func (h *SimulatedHost) RecordGotAlloc(fg FG, gen int64, t time.Time) {
 }
 
 func (h *SimulatedHost) RunLoop(ctx context.Context,
-	client pb.ClusterAgentClient, reportDur time.Duration) {
+	client pb.ClusterAgentClient, startSig <-chan struct{}, reportDur time.Duration) {
 	for {
 		stream, err := client.RegisterHost(context.Background())
 		if err != nil {
@@ -128,6 +129,14 @@ func (h *SimulatedHost) RunLoop(ctx context.Context,
 		}
 		log.Printf("host %d: connected to cluster agent", h.HostID)
 
+		// Make sure we connect before startSig fires, otherwise mark
+		// this as a late start
+		select {
+		case <-startSig:
+			h.LateStart = true
+		default:
+		}
+		<-startSig
 		isDone := make(chan struct{})
 		go h.runInformLoop(ctx, isDone, stream, reportDur)
 		go h.runEnforceLoop(ctx, isDone, stream)
@@ -175,11 +184,11 @@ func (h *SimulatedHost) runEnforceLoop(ctx context.Context, isDone chan<- struct
 
 func (h *SimulatedHost) runInformLoop(ctx context.Context, isDone chan<- struct{},
 	stream pb.ClusterAgent_RegisterHostClient, period time.Duration) {
-	
+
 	defer func() {
 		isDone <- struct{}{}
 	}()
-	
+
 	rng := rand.New(rand.NewSource(uint64(time.Now().UnixNano())))
 
 	time.Sleep(time.Duration(rng.Int63n(int64(period))))
@@ -197,7 +206,7 @@ func (h *SimulatedHost) runInformLoop(ctx context.Context, isDone chan<- struct{
 			}
 			h.pushGenTime(gen, lastTime)
 		}
-		
+
 		toSleep := period - time.Since(lastTime)
 		if toSleep > 0 {
 			time.Sleep(toSleep)
