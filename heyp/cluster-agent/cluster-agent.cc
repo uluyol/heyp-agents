@@ -18,6 +18,7 @@
 #include "heyp/log/spdlog.h"
 #include "heyp/proto/fileio.h"
 #include "heyp/proto/ndjson-logger.h"
+#include "heyp/threads/set-name.h"
 
 static std::atomic<bool> should_exit_flag{false};
 
@@ -96,6 +97,7 @@ absl::Status Run(const proto::ClusterAgentConfig& c, const proto::AllocBundle& a
     SPDLOG_LOGGER_INFO(&logger, "Server listening on {}", address);
   }
 
+  SetCurThreadName("ctl-loop");
   RunLoop(controller, *control_period_or, &should_exit_flag, &logger);
   if (alloc_recorder != nullptr) {
     alloc_recorder->Close().IgnoreError();

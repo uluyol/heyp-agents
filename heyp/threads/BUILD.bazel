@@ -10,6 +10,7 @@ cc_library(
     hdrs = ["executor.h"],
     linkopts = ["-pthread"],
     deps = [
+        ":set-name",
         ":waitgroup",
         "//heyp/log:spdlog",
         "@com_google_absl//absl/base",
@@ -47,6 +48,13 @@ cc_library(
         "@com_google_absl//absl/strings",
         "@com_google_absl//absl/synchronization",
     ],
+)
+
+cc_library(
+    name = "set-name",
+    srcs = ["set-name.cc"],
+    hdrs = ["set-name.h"],
+    linkopts = ["-pthread"],
 )
 
 cc_library(

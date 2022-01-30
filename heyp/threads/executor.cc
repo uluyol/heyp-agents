@@ -2,36 +2,42 @@
 
 #include "absl/memory/memory.h"
 #include "heyp/log/spdlog.h"
+#include "heyp/threads/set-name.h"
 
 namespace heyp {
 
-Executor::Executor(int num_workers) {
+Executor::Executor(int num_workers, const char* name_for_threads) {
   workers_.reserve(num_workers);
-  workers_.push_back(std::thread([this] {
-    bool is_dead = false;
-    std::function<void()> next_fn;
-    while (!is_dead) {
-      // Wait for data
-      mu_.LockWhen(absl::Condition(
-          +[](Status* st) -> bool { return (!st->tasks.empty()) || st->is_dead; },
-          &this->st_));
-      // Read data
-      is_dead = this->st_.is_dead;
-      if (!this->st_.tasks.empty()) {
-        next_fn = this->st_.tasks.back();
-        this->st_.tasks.pop_back();
-      }
-      mu_.Unlock();
+  for (int i = 0; i < num_workers; ++i) {
+    workers_.push_back(std::thread([this] {
+      bool is_dead = false;
+      std::function<void()> next_fn;
+      while (!is_dead) {
+        // Wait for data
+        mu_.LockWhen(absl::Condition(
+            +[](Status* st) -> bool { return (!st->tasks.empty()) || st->is_dead; },
+            &this->st_));
+        // Read data
+        is_dead = this->st_.is_dead;
+        if (!this->st_.tasks.empty()) {
+          next_fn = this->st_.tasks.back();
+          this->st_.tasks.pop_back();
+        }
+        mu_.Unlock();
 
-      // Execute or exit.
-      if (next_fn != nullptr) {
-        next_fn();
-        next_fn = nullptr;
-      } else {
-        ABSL_ASSERT(is_dead);
+        // Execute or exit.
+        if (next_fn != nullptr) {
+          next_fn();
+          next_fn = nullptr;
+        } else {
+          ABSL_ASSERT(is_dead);
+        }
       }
+    }));
+    if (name_for_threads != nullptr) {
+      SetThreadName(workers_.back().native_handle(), name_for_threads);
     }
-  }));
+  }
 }
 
 Executor::~Executor() {

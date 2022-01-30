@@ -18,7 +18,7 @@ class TaskGroup;
 
 class Executor {
  public:
-  explicit Executor(int num_workers);
+  explicit Executor(int num_workers, const char* name_for_threads = nullptr);
   ~Executor();
 
   std::unique_ptr<TaskGroup> NewTaskGroup();

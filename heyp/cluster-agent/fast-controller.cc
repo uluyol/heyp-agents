@@ -46,7 +46,7 @@ FastClusterController::FastClusterController(
       agg_id2flow_(std::move(agg_id2flow)),
       approval_bps_(std::move(approval_bps)),
       logger_(MakeLogger("fast-cluster-ctlr")),
-      exec_(num_threads),
+      exec_(num_threads, "ctl-work"),
       aggregator_(&agg_flow2id_, std::move(samplers)),
       agg_selectors_(approval_bps_.size(), HashingDowngradeSelector{}),
       next_lis_id_(1) {
