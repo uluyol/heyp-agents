@@ -140,8 +140,8 @@ std::unique_ptr<ClusterController::Listener> FastClusterController::RegisterList
 
   child_states_.OnID(res.id, [&](ChildState& state) {
     state.lis_new_bundle_funcs[lis->lis_id_] = on_new_bundle_func;
-    SPDLOG_LOGGER_INFO(&logger_, "add lis {} for host id = {} (par id = {})",
-                       lis->lis_id_, host_id, lis->host_par_id_);
+    // SPDLOG_LOGGER_INFO(&logger_, "add lis {} for host id = {} (par id = {})",
+    //                    lis->lis_id_, host_id, lis->host_par_id_);
   });
   return lis;
 }
@@ -154,8 +154,9 @@ FastClusterController::Listener::~Listener() {
     controller_->child_states_.OnID(
         host_par_id_, [&](FastClusterController::ChildState& state) {
           ABSL_ASSERT(state.lis_new_bundle_funcs.contains(lis_id_));
-          SPDLOG_LOGGER_INFO(&controller_->logger_, "remove lis {} for host par id = {}",
-                             lis_id_, host_par_id_);
+          // SPDLOG_LOGGER_INFO(&controller_->logger_, "remove lis {} for host par id =
+          // {}",
+          //                    lis_id_, host_par_id_);
           state.lis_new_bundle_funcs.erase(lis_id_);
         });
   }
