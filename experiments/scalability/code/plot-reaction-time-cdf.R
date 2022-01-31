@@ -52,7 +52,7 @@ input <- args[1]
 output <- args[2]
 
 data <- read.csv(input, header=TRUE, stringsAsFactors=FALSE)
-data$TimeSinceLastAllocMillis <- data$TimeSinceLastAllocSec * 1e3
+data$E2EDelaySecMillis <- data$E2EDelaySec * 1e3
 
 if (nrow(data) == 0) {
   quit()
@@ -60,11 +60,11 @@ if (nrow(data) == 0) {
 
 PlotCDF <- function(subset, output, ylabel, ylimits) {
   pdf(output, height=2.5, width=5)
-  p <- ggplot(subset, aes(x=TimeSinceLastAllocMillis)) +
+  p <- ggplot(subset, aes(x=E2EDelaySecMillis)) +
       stat_myecdf(size=1) +
-      xlab("Time between host receiving enforcement configs (ms)") +
+      xlab("End-to-end reaction time (ms)") +
       ylab("CDF across (host, FG, time) triplets") +
-      coord_cartesian(xlim=c(0, max(ceiling(subset$TimeSinceLastAllocMillis))), ylim=c(0, 1)) +
+      coord_cartesian(xlim=c(0, max(ceiling(subset$E2EDelaySecMillis))), ylim=c(0, 1)) +
       theme_bw() +
       theme(
           legend.title=element_blank(),

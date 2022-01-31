@@ -31,7 +31,7 @@ mkdir -p "$procdir/cluster-alloc"
 
 HOST_AGENT_SIM_PATH=logs/host-agent-sim-1.csv
 (
-  echo HostID,FG,TimeSinceLastAllocSec
+  echo HostID,FG,E2EDelaySec
   for zipf in "$outdir"/*.zip; do
     if zipinfo -1 "$zipf" "$HOST_AGENT_SIM_PATH" &>/dev/null; then
       # have sim output
