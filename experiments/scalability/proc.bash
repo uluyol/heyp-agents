@@ -17,19 +17,19 @@ mkdir -p "$procdir/cluster-alloc"
 ./bin/proc-heyp cluster-alloc-changes -out "$procdir/cluster-alloc-changes.csv" "$outdir" &
 
 (
-  ./bin/proc-heyp align-host-stats -deploy-config "$config" -summary "$procdir/host-stats-summary.csv" -diff -workload host-agent-sim -prec 1s -out "$procdir/global-host-stats.json" "$outdir" && \
-  echo UnixTime,Node,RetransSegs,IngressBps,EgressBps,CPUUsage > "$procdir/global-host-ts.csv" && \
-  jq -r '
+  ./bin/proc-heyp align-host-stats -deploy-config "$config" -summary "$procdir/host-stats-summary.csv" -diff -workload host-agent-sim -prec 1s -out "$procdir/global-host-stats.json" "$outdir" &&
+    echo UnixTime,Node,RetransSegs,IngressBps,EgressBps,CPUUsage >"$procdir/global-host-ts.csv" &&
+    jq -r '
       .unixSec as $time |
       .data |
       to_entries[] |
       .key as $key |
       "\($time),\($key),\(.value.Global.TCP.RetransSegs // 0),\(.value.MainDev.RX.Bytes * 8),\(.value.MainDev.TX.Bytes * 8),\( (.value.CPUCounters.Total - .value.CPUCounters.Idle) / .value.CPUCounters.Total )"' \
-    "$procdir/global-host-stats.json" \
-    >> "$procdir/global-host-ts.csv"
+      "$procdir/global-host-stats.json" \
+      >>"$procdir/global-host-ts.csv"
 ) &
 
-HOST_AGENT_SIM_PATH=logs/host-agent-sim.csv
+HOST_AGENT_SIM_PATH=logs/host-agent-sim-1.csv
 (
   echo HostID,FG,TimeSinceLastAllocSec
   for zipf in "$outdir"/*.zip; do
@@ -38,10 +38,10 @@ HOST_AGENT_SIM_PATH=logs/host-agent-sim.csv
       unzip -p "$zipf" "$HOST_AGENT_SIM_PATH"
     fi
   done
-) > "$procdir/host-agent-sim.csv"
+) >"$procdir/host-agent-sim.csv"
 
 ret=0
-for p in `jobs -p`; do
+for p in $(jobs -p); do
   wait $p || ret=1
 done
 
@@ -59,7 +59,7 @@ done
   "$procdir/host-agent-sim-time-between-enforcements.pdf" &
 
 # ret=0
-for p in `jobs -p`; do
+for p in $(jobs -p); do
   wait $p || ret=1
 done
 

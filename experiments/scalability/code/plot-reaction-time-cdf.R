@@ -54,6 +54,10 @@ output <- args[2]
 data <- read.csv(input, header=TRUE, stringsAsFactors=FALSE)
 data$TimeSinceLastAllocMillis <- data$TimeSinceLastAllocSec * 1e3
 
+if (nrow(data) == 0) {
+  quit()
+}
+
 PlotCDF <- function(subset, output, ylabel, ylimits) {
   pdf(output, height=2.5, width=5)
   p <- ggplot(subset, aes(x=TimeSinceLastAllocMillis)) +

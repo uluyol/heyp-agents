@@ -8,7 +8,7 @@ import (
 )
 
 var hostAgentSimLogsRegex = regexp.MustCompile(
-	`(^|.*/)host-agent-sim\.log$`)
+	`(^|.*/)host-agent-sim-?.*\.log$`)
 
 func GetStartEndHostAgentSim(fsys fs.FS) (time.Time, time.Time, error) {
 	logs, err := regGlobFiles(fsys, hostAgentSimLogsRegex)
