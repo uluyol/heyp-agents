@@ -97,9 +97,10 @@ message DeployedHostAgentSimConfig {
 
     optional int64 min_fg_usage = 3;
     optional int64 max_fg_usage = 4;
+    optional int64 cycle_dur_sec = 5;
 
-    optional int64 approval_bps = 5;
-    optional int32 target_num_samples = 6 [default = 200];
+    optional int64 approval_bps = 6;
+    optional int32 target_num_samples = 7 [default = 200];
   }
 
   repeated FakeFGConfig fake_fgs = 1;

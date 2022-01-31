@@ -15,9 +15,10 @@ message FakeFG {
 
     optional int64 min_host_usage = 4;
     optional int64 max_host_usage = 5;
+    optional int64 cycle_dur_sec = 6;
 
-    optional int64 approval_bps = 6;
-    optional int32 target_num_samples = 7 [default = 200];
+    optional int64 approval_bps = 7;
+    optional int32 target_num_samples = 8 [default = 200];
 }
 
 message FakeHost {

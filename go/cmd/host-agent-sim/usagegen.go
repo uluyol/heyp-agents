@@ -10,7 +10,7 @@ type UsageGen struct {
 	Period time.Duration
 }
 
-func (g *UsageGen) GetUsage(elapsed time.Duration) int64 {
+func (g UsageGen) GetUsage(elapsed time.Duration) int64 {
 	urange := g.Max - g.Min
 	periodIndex := int64(elapsed / g.Period)
 	uOff := int64(elapsed%g.Period) * urange / int64(g.Period)

@@ -192,7 +192,7 @@ func (h *SimulatedHost) runInformLoop(ctx context.Context, isDone chan<- struct{
 	rng := rand.New(rand.NewSource(uint64(time.Now().UnixNano())))
 
 	time.Sleep(time.Duration(rng.Int63n(int64(period))))
-	pop := infoPopulator{h: h}
+	pop := infoPopulator{h: h, start: time.Now()}
 	var b pb.InfoBundle
 	var gen int64
 	for {
@@ -218,6 +218,7 @@ func (h *SimulatedHost) runInformLoop(ctx context.Context, isDone chan<- struct{
 type infoPopulator struct {
 	h         *SimulatedHost
 	infoState []pb.FlowInfo
+	start     time.Time
 }
 
 // populateInfo generates usage data for each FG and assigns the result to b
@@ -249,7 +250,11 @@ func (pop *infoPopulator) populateInfo(rng *rand.Rand, b *pb.InfoBundle, now tim
 	b.Timestamp = timestamppb.New(now)
 	b.FlowInfos = b.FlowInfos[:0]
 	for i, fg := range pop.h.FGs {
-		usage := fg.c.GetMinHostUsage() + rng.Int63n(fg.c.GetMaxHostUsage()-fg.c.GetMinHostUsage())
+		usage := UsageGen{
+			Min:    fg.c.GetMinHostUsage(),
+			Max:    fg.c.GetMaxHostUsage(),
+			Period: time.Duration(fg.c.GetCycleDurSec()) * time.Second,
+		}.GetUsage(now.Sub(pop.start))
 		usageBytes := usage / 8
 		usage = usageBytes * 8
 

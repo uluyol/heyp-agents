@@ -114,6 +114,7 @@ func RunHostAgentSims(c *pb.DeploymentConfig, remoteTopdir string, showOut bool)
 				Job:              c.C.FakeFgs[j].Job,
 				MinHostUsage:     proto.Int64(c.C.FakeFgs[j].GetMinFgUsage() / int64(c.C.GetNumHostsPerFg())),
 				MaxHostUsage:     proto.Int64(c.C.FakeFgs[j].GetMaxFgUsage() / int64(c.C.GetNumHostsPerFg())),
+				CycleDurSec:      proto.Int64(c.C.FakeFgs[j].GetCycleDurSec()),
 				ApprovalBps:      proto.Int64(c.C.FakeFgs[j].GetApprovalBps()),
 				TargetNumSamples: proto.Int32(c.C.FakeFgs[j].GetTargetNumSamples()),
 			}
