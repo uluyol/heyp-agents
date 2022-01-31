@@ -5,6 +5,7 @@ go 1.17
 require (
 	fortio.org/fortio v1.16.1
 	github.com/HdrHistogram/hdrhistogram-go v1.1.0
+	github.com/RoaringBitmap/roaring v0.9.4
 	github.com/cespare/xxhash/v2 v2.1.2
 	github.com/ghodss/yaml v1.0.0
 	github.com/google/go-cmp v0.5.6
@@ -23,7 +24,6 @@ require (
 )
 
 require (
-	github.com/RoaringBitmap/roaring v0.9.4 // indirect
 	github.com/bits-and-blooms/bitset v1.2.0 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/mschoch/smat v0.2.0 // indirect

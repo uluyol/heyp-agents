@@ -2,11 +2,13 @@ package actions
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"log"
 	"os"
 	"time"
 
+	"github.com/cespare/xxhash/v2"
 	"github.com/uluyol/heyp-agents/go/deploy/periodic"
 	"github.com/uluyol/heyp-agents/go/multierrgroup"
 	"github.com/uluyol/heyp-agents/go/pb"
@@ -63,6 +65,12 @@ func GetAndValidateHostAgentSimConfigs(c *pb.DeploymentConfig) ([]HostAgentSimCo
 		simConfigs = append(simConfigs, simConfig)
 	}
 	return simConfigs, nil
+}
+
+func getHash(x uint64) uint64 {
+	var buf [8]byte
+	binary.LittleEndian.PutUint64(buf[:], x)
+	return xxhash.Sum64(buf[:])
 }
 
 func RunHostAgentSims(c *pb.DeploymentConfig, remoteTopdir string, showOut bool) error {
@@ -143,7 +151,7 @@ func RunHostAgentSims(c *pb.DeploymentConfig, remoteTopdir string, showOut bool)
 						break
 					}
 					hostSimConfig.Hosts = append(hostSimConfig.Hosts, &pb.FakeHost{
-						HostId: proto.Uint64(uint64(numHosts) + startHostID),
+						HostId: proto.Uint64(getHash(uint64(numHosts) + startHostID)),
 						FgIds:  []int32{-1},
 					})
 					numHosts++
