@@ -293,21 +293,25 @@ void FastClusterController::ComputeAndBroadcast() {
 
   // Step 3: Notify (affected) children about any changes.
   tasks = exec_.NewTaskGroup();
-  for (int vec_i = 0; vec_i < par_ids_to_bcast.size(); ++vec_i) {
-    constexpr int kBroadcastChunkSize = 512;  // arbitrary
-    for (int i = 0; i < par_ids_to_bcast[vec_i].size(); i += kBroadcastChunkSize) {
-      int start = i;
-      int end = std::min<int>(par_ids_to_bcast[vec_i].size(), i + kBroadcastChunkSize);
-      tasks->AddTaskNoStatus([&aux, start, end, &par_ids_to_bcast, vec_i, this] {
+  const int num_bcast_shard = exec_.num_workers();
+  for (int bcast_shard = 0; bcast_shard < num_bcast_shard; ++bcast_shard) {
+    tasks->AddTaskNoStatus([&aux, num_bcast_shard, bcast_shard, &par_ids_to_bcast, this] {
+      for (int vec_i = 0; vec_i < par_ids_to_bcast.size(); ++vec_i) {
         proto::AllocBundle base_bundle = CreateBroadcastBundle(agg_id2flow_);
         auto bcast_func = [&aux, &base_bundle, this](ChildState& state) {
           this->BroadcastStateIfUpdated(aux, &base_bundle, state);
         };
-        for (int j = start; j < end; ++j) {
+        for (int i = 0;
+             i < (par_ids_to_bcast[vec_i].size() + num_bcast_shard - 1) / num_bcast_shard;
+             ++i) {
+          int j = bcast_shard + i * num_bcast_shard;
+          if (j >= par_ids_to_bcast[vec_i].size()) {
+            break;
+          }
           child_states_.OnID(par_ids_to_bcast[vec_i][j], bcast_func);
         }
-      });
-    }
+      }
+    });
   }
   tasks->WaitAllNoStatus();
 

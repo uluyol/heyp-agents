@@ -22,6 +22,7 @@ class Executor {
   ~Executor();
 
   std::unique_ptr<TaskGroup> NewTaskGroup();
+  size_t num_workers() const { return workers_.size(); }
 
  private:
   std::vector<std::thread> workers_;
