@@ -63,8 +63,9 @@ PlotCDF <- function(subset, output, ylabel, ylimits) {
   p <- ggplot(subset, aes(x=E2EDelaySecMillis)) +
       stat_myecdf(size=1) +
       xlab("End-to-end reaction time (ms)") +
-      ylab("CDF across (host, FG, time) triplets") +
-      coord_cartesian(xlim=c(0, max(ceiling(subset$E2EDelaySecMillis))), ylim=c(0, 1)) +
+      ylab("CDF across (host,time) pairs") +
+      # coord_cartesian(xlim=c(0, max(ceiling(subset$E2EDelaySecMillis))), ylim=c(0, 1)) +
+      coord_cartesian(xlim=c(0, 600), ylim=c(0, 1)) +
       theme_bw() +
       theme(
           legend.title=element_blank(),
