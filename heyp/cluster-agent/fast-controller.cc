@@ -315,6 +315,24 @@ void FastClusterController::ComputeAndBroadcast() {
   }
   tasks->WaitAllNoStatus();
 
+  // Step 4: Reset saw_data_this_run to false
+  tasks = exec_.NewTaskGroup();
+  for (int agg_id = 0; agg_id < snap_infos.size(); ++agg_id) {
+    tasks->AddTaskNoStatus([&snap_infos , this, agg_id] {
+
+      const FastAggInfo& info = snap_infos[agg_id];
+      for (const auto& hg : info.info_gen()) {
+        auto iter = host2par_.find(hg.host_id);
+        if (iter != host2par_.end()) {
+          child_states_.OnID(iter->second, [&](ChildState& state) {
+            state.saw_data_this_run = false;
+          });
+        }
+      }
+    });
+  }
+  tasks->WaitAllNoStatus();
+
   absl::Duration elapsed =
       absl::FromChrono(std::chrono::steady_clock::now() - start_time);
   SPDLOG_LOGGER_INFO(&logger_, "compute+bcast time = {}", elapsed);
