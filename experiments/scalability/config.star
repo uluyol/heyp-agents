@@ -5,7 +5,7 @@ heyp_pb = proto.file("heyp/proto/heyp.proto")
 # Work around cloudlab issues.
 # Enter the integer ID for the bad node and we will skip it.
 # E.g. if "n8" is faulty, enter 8.
-_BAD_NODE_IDS = set([9])
+_BAD_NODE_IDS = set([2, 3, 4, 5, 6])
 
 def GenConfig(
         ca_type = "CC_FULL",
@@ -224,9 +224,9 @@ def AddConfigsSweep(configs):
             fake_fgs.append({
                 "dst_dc": dst_dc,
                 "job": "app",
-                "min_fg_usage": limit // 10,
+                "min_fg_usage": limit // 2,
                 "max_fg_usage": (15 * limit) // 10,
-                "cycle_dur_sec": 10,
+                "cycle_dur_sec": 5,
                 "approval_bps": limit,
                 "target_num_samples": target_num_samples,
             })
@@ -245,7 +245,7 @@ def AddConfigsSweep(configs):
         }
 
     tuples = [
-        ("0.4s", 1, 2000000, 32768),
+        ("0.4s", 1, 1000000, 16000),
         # ("0.4s", 1, 200000, 3276),
         # ("0.2s", 10, 10000),
         # ("0.1s", 10, 10000),
